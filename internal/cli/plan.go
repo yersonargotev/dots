@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
 
 	"github.com/spf13/cobra"
@@ -32,16 +29,9 @@ func newPlanCommand() *cobra.Command {
 				return err
 			}
 
-			if home == "" {
-				resolved, err := os.UserHomeDir()
-				if err != nil {
-					return fmt.Errorf("resolve home directory: %w", err)
-				}
-				home = resolved
-			}
-
-			if sourceRoot == "" {
-				sourceRoot = defaultSourceRoot(home)
+			paths, err := resolvePaths(home, sourceRoot)
+			if err != nil {
+				return err
 			}
 
 			// TODO: add an --os flag to preview a cross-platform install
@@ -50,8 +40,8 @@ func newPlanCommand() *cobra.Command {
 			p, err := plan.Build(*m, plan.Options{
 				Profile:    profile,
 				OS:         runtime.GOOS,
-				SourceRoot: sourceRoot,
-				Home:       home,
+				SourceRoot: paths.SourceRoot,
+				Home:       paths.Home,
 			})
 			if err != nil {
 				return err
@@ -67,10 +57,4 @@ func newPlanCommand() *cobra.Command {
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to plan against (default: the current user's home); use a sandbox path to preview without touching real config")
 	return cmd
-}
-
-// defaultSourceRoot is the default location of the Installed Repository: the
-// checked-out copy of the dotfiles source that the installer reads from.
-func defaultSourceRoot(home string) string {
-	return filepath.Join(home, ".local", "share", "dots")
 }

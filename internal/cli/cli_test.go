@@ -230,3 +230,266 @@ entries:
 		t.Fatalf("output = %q, want %q", got, "manifest is valid")
 	}
 }
+
+func TestInstallCommandAppliesPlanAgainstSandboxHome(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	srcPath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte("export A=1\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	manifestPath := filepath.Join(home, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	target := filepath.Join(home, ".zshrc")
+	gotDest, err := os.Readlink(target)
+	if err != nil {
+		t.Fatalf("readlink installed target: %v", err)
+	}
+	if gotDest != srcPath {
+		t.Fatalf("symlink target = %q, want %q", gotDest, srcPath)
+	}
+	if !strings.Contains(out.String(), `Plan for profile "default"`) {
+		t.Fatalf("install output did not include plan\noutput:\n%s", out.String())
+	}
+}
+
+func TestInstallDryRunRendersPlanWithoutCreatingTarget(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	srcPath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte("export A=1\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	manifestPath := filepath.Join(home, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--dry-run", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	target := filepath.Join(home, ".zshrc")
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Fatalf("dry-run created target; lstat err = %v", err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		`Plan for profile "default"`,
+		"create",
+		"Summary: 1 create, 0 conflict, 0 unchanged, 0 missing-source",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("dry-run output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
+func TestInstallCommandRejectsAbsoluteTargetWithoutCreatingOutsidePath(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside")
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "export A=1\n")
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: `+outside+`
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("Execute() error = nil, want unsafe target error")
+	}
+	if _, err := os.Lstat(outside); !os.IsNotExist(err) {
+		t.Fatalf("outside target exists after rejected install; lstat err = %v", err)
+	}
+}
+
+func TestInstallCommandRejectsTargetTraversalWithoutCreatingOutsidePath(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	outside := filepath.Join(filepath.Dir(home), "outside")
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "export A=1\n")
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/../outside
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("Execute() error = nil, want unsafe target error")
+	}
+	if _, err := os.Lstat(outside); !os.IsNotExist(err) {
+		t.Fatalf("outside target exists after rejected install; lstat err = %v", err)
+	}
+}
+
+func TestInstallCommandRejectsSourceTraversalWithoutCopyingOutsideFile(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	outsideSource := filepath.Join(filepath.Dir(sourceRoot), "outside")
+	if err := os.WriteFile(outsideSource, []byte("outside\n"), 0o600); err != nil {
+		t.Fatalf("write outside source: %v", err)
+	}
+	target := filepath.Join(home, ".zshrc")
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: ../outside
+    target: ~/.zshrc
+    strategy: copy
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("Execute() error = nil, want unsafe source error")
+	}
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Fatalf("target exists after rejected install; lstat err = %v", err)
+	}
+}
+
+func TestInstallCommandRejectsUnsafeActionBeforeEarlierSafeCreate(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "export A=1\n")
+
+	safeTarget := filepath.Join(home, ".zshrc")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+  - source: configs/zsh/zshrc
+    target: ~/../outside
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("Execute() error = nil, want unsafe target error")
+	}
+	if _, err := os.Lstat(safeTarget); !os.IsNotExist(err) {
+		t.Fatalf("safe target exists after rejected install; lstat err = %v", err)
+	}
+}
+
+func writeCLISource(t *testing.T, sourceRoot, rel, content string) {
+	t.Helper()
+	srcPath := filepath.Join(sourceRoot, rel)
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+}
+
+func writeCLIManifest(t *testing.T, dir, content string) string {
+	t.Helper()
+	manifestPath := filepath.Join(dir, "dots.yaml")
+	if err := os.WriteFile(manifestPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	return manifestPath
+}

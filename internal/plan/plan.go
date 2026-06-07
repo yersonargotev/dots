@@ -22,10 +22,11 @@ const (
 
 // Action is a single planned filesystem change for a Managed Entry.
 type Action struct {
-	Source   string
-	Target   string
-	Strategy string
-	Status   Status
+	Source         string
+	ResolvedSource string
+	Target         string
+	Strategy       string
+	Status         Status
 }
 
 // Plan is the preview of changes the installer would apply for a Profile.
@@ -61,13 +62,24 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			continue
 		}
 
-		target := resolveTarget(entry.Target, opts.Home)
-		sourceAbs := filepath.Join(opts.SourceRoot, entry.Source)
+		target, err := ResolveTarget(entry.Target, opts.Home)
+		if err != nil {
+			return Plan{}, err
+		}
+		sourceAbs, err := ResolveSource(entry.Source, opts.SourceRoot)
+		if err != nil {
+			return Plan{}, err
+		}
+		actionStatus, err := status(entry.Strategy, target, sourceAbs, opts.SourceRoot)
+		if err != nil {
+			return Plan{}, err
+		}
 		plan.Actions = append(plan.Actions, Action{
-			Source:   entry.Source,
-			Target:   target,
-			Strategy: entry.Strategy,
-			Status:   status(entry.Strategy, target, sourceAbs),
+			Source:         entry.Source,
+			ResolvedSource: sourceAbs,
+			Target:         target,
+			Strategy:       entry.Strategy,
+			Status:         actionStatus,
 		})
 	}
 
@@ -97,53 +109,138 @@ func matchesOS(entryOS []string, current string) bool {
 	return false
 }
 
-func resolveTarget(target, home string) string {
+// ResolveTarget resolves a manifest target inside home. Targets are deliberately
+// limited to "~" and "~/" forms so a manifest cannot escape a sandboxed --home.
+func ResolveTarget(target, home string) (string, error) {
+	resolvedHome, err := filepath.Abs(home)
+	if err != nil {
+		return "", fmt.Errorf("resolve home: %w", err)
+	}
+	resolvedHome = filepath.Clean(resolvedHome)
+
 	if target == "~" {
-		return home
+		return resolvedHome, nil
 	}
-	if strings.HasPrefix(target, "~/") {
-		return filepath.Join(home, target[2:])
+	if !strings.HasPrefix(target, "~/") {
+		return "", fmt.Errorf("unsafe target %q: target must be ~ or ~/...", target)
 	}
-	return target
+	resolvedTarget := filepath.Clean(filepath.Join(resolvedHome, target[2:]))
+	if !InsideRoot(resolvedTarget, resolvedHome) {
+		return "", fmt.Errorf("unsafe target %q: resolved target escapes home %q", target, resolvedHome)
+	}
+	return resolvedTarget, nil
 }
 
-func status(strategy, target, sourceAbs string) Status {
+// ValidateResolvedTarget verifies that an already-resolved plan target remains
+// inside home before install writes to it.
+func ValidateResolvedTarget(target, home string) error {
+	resolvedHome, err := filepath.Abs(home)
+	if err != nil {
+		return fmt.Errorf("resolve home: %w", err)
+	}
+	resolvedTarget, err := filepath.Abs(target)
+	if err != nil {
+		return fmt.Errorf("resolve target %q: %w", target, err)
+	}
+	resolvedHome = filepath.Clean(resolvedHome)
+	resolvedTarget = filepath.Clean(resolvedTarget)
+	if !InsideRoot(resolvedTarget, resolvedHome) {
+		return fmt.Errorf("unsafe target %q: resolved target escapes home %q", target, resolvedHome)
+	}
+	return nil
+}
+
+// ResolveSource resolves a manifest source inside sourceRoot. Sources must be
+// repository-relative so a manifest cannot escape a sandboxed --source-root.
+func ResolveSource(source, sourceRoot string) (string, error) {
+	if filepath.IsAbs(source) {
+		return "", fmt.Errorf("unsafe source %q: source must be relative", source)
+	}
+	resolvedRoot, err := filepath.Abs(sourceRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve source root: %w", err)
+	}
+	resolvedRoot = filepath.Clean(resolvedRoot)
+	resolvedSource := filepath.Clean(filepath.Join(resolvedRoot, source))
+	if !InsideRoot(resolvedSource, resolvedRoot) {
+		return "", fmt.Errorf("unsafe source %q: resolved source escapes source root %q", source, resolvedRoot)
+	}
+	return resolvedSource, nil
+}
+
+// InsideRoot reports whether path is root or is contained beneath root.
+func InsideRoot(path, root string) bool {
+	path = filepath.Clean(path)
+	root = filepath.Clean(root)
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+func status(strategy, target, sourceAbs, sourceRoot string) (Status, error) {
 	// The managed source must exist before any target comparison is
 	// meaningful: a missing source cannot be installed, and a symlink that
 	// still points at a deleted source is broken, not unchanged.
-	if _, err := os.Stat(sourceAbs); err != nil {
-		return StatusMissingSource
+	if exists, err := safeSourceExists(sourceAbs, sourceRoot); err != nil {
+		return "", err
+	} else if !exists {
+		return StatusMissingSource, nil
 	}
 
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
-		return StatusCreate
+		return StatusCreate, nil
 	}
 	if err != nil {
-		return StatusConflict
+		return StatusConflict, nil
 	}
 
 	switch strategy {
 	case "symlink":
 		if info.Mode()&os.ModeSymlink == 0 {
-			return StatusConflict
+			return StatusConflict, nil
 		}
 		dest, err := os.Readlink(target)
 		if err != nil || dest != sourceAbs {
-			return StatusConflict
+			return StatusConflict, nil
 		}
-		return StatusUnchanged
+		return StatusUnchanged, nil
 	case "copy":
 		if !info.Mode().IsRegular() {
-			return StatusConflict
+			return StatusConflict, nil
 		}
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
-			return StatusConflict
+			return StatusConflict, nil
 		}
-		return StatusUnchanged
+		return StatusUnchanged, nil
 	default:
-		return StatusConflict
+		return StatusConflict, nil
 	}
+}
+
+func safeSourceExists(sourceAbs, sourceRoot string) (bool, error) {
+	sourceReal, err := filepath.EvalSymlinks(sourceAbs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("resolve source %q: %w", sourceAbs, err)
+	}
+	rootReal, err := filepath.EvalSymlinks(sourceRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("resolve source root %q: %w", sourceRoot, err)
+	}
+	sourceReal = filepath.Clean(sourceReal)
+	rootReal = filepath.Clean(rootReal)
+	if !InsideRoot(sourceReal, rootReal) {
+		return false, fmt.Errorf("unsafe source %q: symlink resolves outside source root %q", sourceAbs, sourceRoot)
+	}
+	return true, nil
 }
 
 func sameContent(a, b string) (bool, error) {

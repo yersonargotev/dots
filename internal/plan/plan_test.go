@@ -191,11 +191,6 @@ func TestBuildResolvesTarget(t *testing.T) {
 			target: "~",
 			want:   func(home string) string { return home },
 		},
-		{
-			name:   "absolute path is passed through",
-			target: "/etc/dots/zshrc",
-			want:   func(string) string { return "/etc/dots/zshrc" },
-		},
 	}
 
 	for _, tt := range tests {
@@ -215,6 +210,142 @@ func TestBuildResolvesTarget(t *testing.T) {
 				t.Fatalf("Target = %q, want %q", action.Target, want)
 			}
 		})
+	}
+}
+
+func TestBuildRejectsAbsoluteTarget(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "zshrc", "x\n")
+
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source:   "zshrc",
+			Target:   filepath.Join(t.TempDir(), "outside"),
+			Strategy: "symlink",
+			Tags:     []string{"core"},
+		}},
+	}
+
+	_, err := plan.Build(m, plan.Options{
+		Profile:    "default",
+		OS:         "darwin",
+		SourceRoot: sourceRoot,
+		Home:       home,
+	})
+	if err == nil {
+		t.Fatal("Build() error = nil, want unsafe target error")
+	}
+}
+
+func TestBuildRejectsTargetTraversal(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "zshrc", "x\n")
+
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source:   "zshrc",
+			Target:   "~/../outside",
+			Strategy: "symlink",
+			Tags:     []string{"core"},
+		}},
+	}
+
+	_, err := plan.Build(m, plan.Options{
+		Profile:    "default",
+		OS:         "darwin",
+		SourceRoot: sourceRoot,
+		Home:       home,
+	})
+	if err == nil {
+		t.Fatal("Build() error = nil, want unsafe target error")
+	}
+}
+
+func TestBuildRejectsUnsafeSource(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+	}{
+		{
+			name:   "absolute source",
+			source: filepath.Join(t.TempDir(), "outside"),
+		},
+		{
+			name:   "source traversal",
+			source: "../outside",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sourceRoot := t.TempDir()
+			home := t.TempDir()
+
+			m := manifest.Manifest{
+				Version:  1,
+				Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+				Entries: []manifest.Entry{{
+					Source:   tt.source,
+					Target:   "~/.zshrc",
+					Strategy: "symlink",
+					Tags:     []string{"core"},
+				}},
+			}
+
+			_, err := plan.Build(m, plan.Options{
+				Profile:    "default",
+				OS:         "darwin",
+				SourceRoot: sourceRoot,
+				Home:       home,
+			})
+			if err == nil {
+				t.Fatal("Build() error = nil, want unsafe source error")
+			}
+		})
+	}
+}
+
+func TestBuildRejectsSourceSymlinkEscape(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	outsideRoot := t.TempDir()
+
+	outsideSecret := filepath.Join(outsideRoot, "secret")
+	if err := os.WriteFile(outsideSecret, []byte("secret\n"), 0o600); err != nil {
+		t.Fatalf("write outside secret: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(sourceRoot, "configs"), 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+	if err := os.Symlink(outsideSecret, filepath.Join(sourceRoot, "configs", "link")); err != nil {
+		t.Fatalf("symlink source: %v", err)
+	}
+
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source:   "configs/link",
+			Target:   "~/.secret",
+			Strategy: "copy",
+			Tags:     []string{"core"},
+		}},
+	}
+
+	_, err := plan.Build(m, plan.Options{
+		Profile:    "default",
+		OS:         "darwin",
+		SourceRoot: sourceRoot,
+		Home:       home,
+	})
+	if err == nil {
+		t.Fatal("Build() error = nil, want source symlink escape error")
 	}
 }
 
