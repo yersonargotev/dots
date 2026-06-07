@@ -15,6 +15,7 @@ func newInstallCommand() *cobra.Command {
 		profile    string
 		sourceRoot string
 		home       string
+		stateRoot  string
 		dryRun     bool
 	)
 
@@ -30,7 +31,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
-			paths, err := resolvePaths(home, sourceRoot)
+			paths, err := resolvePaths(home, sourceRoot, stateRoot)
 			if err != nil {
 				return err
 			}
@@ -50,7 +51,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			return install.Apply(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home})
+			return install.Apply(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot})
 		},
 	}
 
@@ -58,6 +59,7 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to install")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
+	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show the Install Plan without modifying files")
 	return cmd
 }

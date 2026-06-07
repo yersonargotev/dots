@@ -474,6 +474,197 @@ entries:
 	}
 }
 
+func TestStatusCommandReportsOKAfterInstall(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "export A=1\n")
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+
+	install := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	install.SetOut(&installOut)
+	install.SetErr(&installOut)
+	install.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := install.Execute(); err != nil {
+		t.Fatalf("install Execute() error = %v\noutput:\n%s", err, installOut.String())
+	}
+
+	statusCmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	statusCmd.SetOut(&out)
+	statusCmd.SetErr(&out)
+	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := statusCmd.Execute(); err != nil {
+		t.Fatalf("status Execute() error = %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`Status for profile "default"`,
+		"ok",
+		"configs/zsh/zshrc -> " + filepath.Join(home, ".zshrc"),
+		"Summary: 1 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
+func TestStatusCommandReportsConflictForForeignTarget(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "[user]\n\tname = Source\n")
+
+	// A pre-existing foreign file dots never installed: no metadata, content
+	// differs from the Source of Truth, so status must report a conflict.
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("foreign\n"), 0o600); err != nil {
+		t.Fatalf("write foreign target: %v", err)
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	statusCmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	statusCmd.SetOut(&out)
+	statusCmd.SetErr(&out)
+	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := statusCmd.Execute(); err != nil {
+		t.Fatalf("status Execute() error = %v", err)
+	}
+
+	if got := out.String(); !strings.Contains(got, "Summary: 0 ok, 0 missing, 1 conflict, 0 skipped, 0 drifted, 0 unsupported") {
+		t.Fatalf("status output missing expected conflict summary\noutput:\n%s", got)
+	}
+}
+
+func TestStatusCommandRejectsDefaultStateRootSymlinkEscapeBeforeReadingMetadata(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	outsideState := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "[user]\n")
+
+	stateParent := filepath.Join(home, ".local", "state")
+	if err := os.MkdirAll(stateParent, 0o755); err != nil {
+		t.Fatalf("mkdir state parent: %v", err)
+	}
+	if err := os.Symlink(outsideState, filepath.Join(stateParent, "dots")); err != nil {
+		t.Fatalf("symlink default state root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outsideState, "installed.json"), []byte(`{"version":1,"entries":[]}`), 0o600); err != nil {
+		t.Fatalf("write outside metadata: %v", err)
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	statusCmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	statusCmd.SetOut(&out)
+	statusCmd.SetErr(&out)
+	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	if err := statusCmd.Execute(); err == nil {
+		t.Fatal("status Execute() error = nil, want default state-root symlink escape error")
+	}
+}
+
+func TestStatusCommandRejectsDefaultMetadataLeafSymlinkEscapeBeforeReadingMetadata(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	outsideState := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "[user]\n")
+
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
+		t.Fatalf("mkdir state root: %v", err)
+	}
+	outsideMetadata := filepath.Join(outsideState, "installed.json")
+	if err := os.WriteFile(outsideMetadata, []byte(`{"version":1,"entries":[]}`), 0o600); err != nil {
+		t.Fatalf("write outside metadata: %v", err)
+	}
+	if err := os.Symlink(outsideMetadata, filepath.Join(stateRoot, "installed.json")); err != nil {
+		t.Fatalf("symlink metadata leaf: %v", err)
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	statusCmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	statusCmd.SetOut(&out)
+	statusCmd.SetErr(&out)
+	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	if err := statusCmd.Execute(); err == nil {
+		t.Fatal("status Execute() error = nil, want metadata leaf symlink escape error")
+	}
+}
+
+func TestStatusCommandFailsOnUnknownProfile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`)
+
+	statusCmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	statusCmd.SetOut(&out)
+	statusCmd.SetErr(&out)
+	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--profile", "missing"})
+	if err := statusCmd.Execute(); err == nil {
+		t.Fatal("status Execute() error = nil, want error for unknown profile")
+	}
+}
+
 func writeCLISource(t *testing.T, sourceRoot, rel, content string) {
 	t.Helper()
 	srcPath := filepath.Join(sourceRoot, rel)

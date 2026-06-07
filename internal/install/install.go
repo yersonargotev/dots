@@ -4,15 +4,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"time"
 
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 // Options carries resolved inputs needed to apply an Install Plan.
 type Options struct {
 	SourceRoot string
 	Home       string
+	// StateRoot is the directory where Installation Metadata is recorded so
+	// dots status can later detect Drift. When empty, metadata is not written.
+	StateRoot string
 }
 
 // Apply performs safe filesystem changes described by an Install Plan.
@@ -32,7 +36,54 @@ func Apply(p plan.Plan, opts Options) error {
 			}
 		}
 	}
-	return nil
+
+	return recordMetadata(p, resolvedSources, opts)
+}
+
+// recordMetadata upserts Installation Metadata for every managed target the plan
+// installed or confirmed unchanged, so dots status has an authoritative record
+// of what dots owns and what each target's Source of Truth hashed to.
+func recordMetadata(p plan.Plan, resolvedSources []string, opts Options) error {
+	if opts.StateRoot == "" {
+		return nil
+	}
+
+	path := state.Path(opts.StateRoot)
+	meta, err := state.Load(path)
+	if err != nil {
+		return err
+	}
+	meta.Version = 1
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for i, action := range p.Actions {
+		if action.Status != plan.StatusCreate && action.Status != plan.StatusUnchanged {
+			continue
+		}
+		hash, err := state.HashFile(resolvedSources[i])
+		if err != nil {
+			return err
+		}
+		upsertRecord(&meta, state.Record{
+			Target:      action.Target,
+			Source:      action.Source,
+			Strategy:    action.Strategy,
+			Hash:        hash,
+			InstalledAt: now,
+		})
+	}
+
+	return state.Save(path, meta)
+}
+
+func upsertRecord(meta *state.Metadata, rec state.Record) {
+	for i := range meta.Entries {
+		if meta.Entries[i].Target == rec.Target {
+			meta.Entries[i] = rec
+			return
+		}
+	}
+	meta.Entries = append(meta.Entries, rec)
 }
 
 func validatePlan(p plan.Plan, opts Options) ([]string, error) {
@@ -50,12 +101,24 @@ func validatePlan(p plan.Plan, opts Options) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve source root: %w", err)
 	}
+	if err := validateStateRoot(opts.StateRoot, home); err != nil {
+		return nil, err
+	}
 
+	seenTargets := map[string]struct{}{}
 	resolvedSources := make([]string, len(p.Actions))
 	for i, action := range p.Actions {
 		if err := plan.ValidateResolvedTarget(action.Target, home); err != nil {
 			return nil, err
 		}
+		targetKey, err := cleanAbs(action.Target)
+		if err != nil {
+			return nil, fmt.Errorf("resolve target %s: %w", action.Target, err)
+		}
+		if _, ok := seenTargets[targetKey]; ok {
+			return nil, fmt.Errorf("install plan contains duplicate target %s", targetKey)
+		}
+		seenTargets[targetKey] = struct{}{}
 		source, err := plan.ResolveSource(action.Source, sourceRoot)
 		if err != nil {
 			return nil, err
@@ -82,6 +145,35 @@ func validatePlan(p plan.Plan, opts Options) ([]string, error) {
 		}
 	}
 	return resolvedSources, nil
+}
+
+func validateStateRoot(stateRoot, home string) error {
+	if stateRoot == "" {
+		return nil
+	}
+	stateAbs, err := cleanAbs(stateRoot)
+	if err != nil {
+		return fmt.Errorf("resolve state root %s: %w", stateRoot, err)
+	}
+	homeAbs, err := cleanAbs(home)
+	if err != nil {
+		return fmt.Errorf("resolve home: %w", err)
+	}
+	// Explicit state roots outside home are trusted caller-controlled storage.
+	// State roots inside home, including the CLI default, must not escape home
+	// through symlinks because that would write default metadata outside the
+	// sandbox selected by --home.
+	if !plan.InsideRoot(stateAbs, homeAbs) {
+		return nil
+	}
+	return validateStatePathInsideHome(stateAbs, homeAbs)
+}
+
+func validateStatePathInsideHome(stateAbs, homeAbs string) error {
+	if err := plan.ValidatePathInsideHomeNoSymlinkEscape(stateAbs, homeAbs, "state root"); err != nil {
+		return err
+	}
+	return plan.ValidateFilePathInsideHomeNoSymlinkEscape(state.Path(stateAbs), homeAbs, "installation metadata")
 }
 
 func cleanAbs(path string) (string, error) {
@@ -115,77 +207,12 @@ func validateTargetStillAbsent(target string) error {
 }
 
 func validateTargetParentInsideHome(target, home string) error {
-	homeReal, err := filepath.EvalSymlinks(home)
-	if err != nil {
-		return fmt.Errorf("resolve real home %s: %w", home, err)
-	}
-	homeReal = filepath.Clean(homeReal)
-
-	targetAbs, err := cleanAbs(target)
-	if err != nil {
-		return fmt.Errorf("resolve target %s: %w", target, err)
-	}
-	parent := filepath.Dir(targetAbs)
-	rel, err := filepath.Rel(home, parent)
-	if err != nil {
-		return fmt.Errorf("resolve target parent %s relative to home %s: %w", parent, home, err)
-	}
-	if rel == "." {
-		return nil
-	}
-	if rel == ".." || filepath.IsAbs(rel) || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
-		return fmt.Errorf("unsafe target parent %q: resolved parent escapes home %q", parent, home)
-	}
-
-	current := home
-	for _, part := range splitPath(rel) {
-		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("stat target parent %s: %w", current, err)
-		}
-		if info.Mode()&os.ModeSymlink == 0 && !info.IsDir() {
-			return fmt.Errorf("target parent %s is not a directory", current)
-		}
-		realParent, err := filepath.EvalSymlinks(current)
-		if err != nil {
-			return fmt.Errorf("resolve target parent %s: %w", current, err)
-		}
-		if !plan.InsideRoot(realParent, homeReal) {
-			return fmt.Errorf("unsafe target parent %q: symlink resolves outside home %q", current, home)
-		}
-	}
-	return nil
-}
-
-func splitPath(path string) []string {
-	parts := []string{}
-	separator := string(filepath.Separator)
-	for _, part := range strings.Split(path, separator) {
-		if part != "" && part != "." {
-			parts = append(parts, part)
-		}
-	}
-	return parts
+	return plan.ValidateTargetParentInsideHome(target, home)
 }
 
 func validateSource(strategy, source, sourceRoot string) error {
-	rootReal, err := filepath.EvalSymlinks(sourceRoot)
-	if err != nil {
-		return fmt.Errorf("resolve real source root %s: %w", sourceRoot, err)
-	}
-	rootReal = filepath.Clean(rootReal)
-
-	sourceReal, err := filepath.EvalSymlinks(source)
-	if err != nil {
-		return fmt.Errorf("resolve source %s: %w", source, err)
-	}
-	sourceReal = filepath.Clean(sourceReal)
-	if !plan.InsideRoot(sourceReal, rootReal) {
-		return fmt.Errorf("unsafe source %q: symlink resolves outside source root %q", source, sourceRoot)
+	if err := plan.ValidateResolvedSource(source, sourceRoot); err != nil {
+		return err
 	}
 
 	info, err := os.Stat(source)

@@ -2,6 +2,7 @@ package plan
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -150,6 +151,102 @@ func ValidateResolvedTarget(target, home string) error {
 	return nil
 }
 
+// ValidateTargetParentInsideHome verifies that a resolved target's existing
+// parent path does not escape home through symlinks before callers inspect or
+// mutate target contents.
+func ValidateTargetParentInsideHome(target, home string) error {
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return fmt.Errorf("resolve target %s: %w", target, err)
+	}
+	return ValidatePathInsideHomeNoSymlinkEscape(filepath.Dir(targetAbs), home, "target parent")
+}
+
+// ValidatePathInsideHomeNoSymlinkEscape verifies that path is lexically inside
+// home and that every existing component resolves through symlinks to a path
+// still contained by home. Missing suffixes are safe because they cannot yet
+// redirect filesystem reads or writes.
+func ValidatePathInsideHomeNoSymlinkEscape(path, home, label string) error {
+	return validatePathInsideHomeNoSymlinkEscape(path, home, label, false)
+}
+
+// ValidateFilePathInsideHomeNoSymlinkEscape verifies that a file path is
+// lexically inside home, existing parent components do not escape home through
+// symlinks, and an existing file leaf is not a symlink. A missing file leaf is
+// safe because callers may create it after validating the parent path.
+func ValidateFilePathInsideHomeNoSymlinkEscape(path, home, label string) error {
+	return validatePathInsideHomeNoSymlinkEscape(path, home, label, true)
+}
+
+func validatePathInsideHomeNoSymlinkEscape(path, home, label string, finalMayBeFile bool) error {
+	homeAbs, err := filepath.Abs(home)
+	if err != nil {
+		return fmt.Errorf("resolve home: %w", err)
+	}
+	pathAbs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve %s %s: %w", label, path, err)
+	}
+	homeAbs = filepath.Clean(homeAbs)
+	pathAbs = filepath.Clean(pathAbs)
+
+	if !InsideRoot(pathAbs, homeAbs) {
+		return fmt.Errorf("unsafe %s %q: resolved path escapes home %q", label, pathAbs, homeAbs)
+	}
+
+	homeReal, err := filepath.EvalSymlinks(homeAbs)
+	if err != nil {
+		return fmt.Errorf("resolve real home %s: %w", homeAbs, err)
+	}
+	homeReal = filepath.Clean(homeReal)
+
+	rel, err := filepath.Rel(homeAbs, pathAbs)
+	if err != nil {
+		return fmt.Errorf("resolve %s %s relative to home %s: %w", label, pathAbs, homeAbs, err)
+	}
+	current := homeAbs
+	parts := splitPath(rel)
+	for i, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("stat %s %s: %w", label, current, err)
+		}
+		isFinal := i == len(parts)-1
+		if info.Mode()&os.ModeSymlink == 0 && !info.IsDir() {
+			if finalMayBeFile && isFinal && info.Mode().IsRegular() {
+				return nil
+			}
+			return fmt.Errorf("%s %s is not a directory", label, current)
+		}
+		if finalMayBeFile && isFinal && info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("unsafe %s %q: file leaf must not be a symlink", label, current)
+		}
+		realPath, err := filepath.EvalSymlinks(current)
+		if err != nil {
+			return fmt.Errorf("resolve %s %s: %w", label, current, err)
+		}
+		if !InsideRoot(realPath, homeReal) {
+			return fmt.Errorf("unsafe %s %q: symlink resolves outside home %q", label, current, homeAbs)
+		}
+	}
+	return nil
+}
+
+func splitPath(path string) []string {
+	parts := []string{}
+	separator := string(filepath.Separator)
+	for _, part := range strings.Split(path, separator) {
+		if part != "" && part != "." {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
 // ResolveSource resolves a manifest source inside sourceRoot. Sources must be
 // repository-relative so a manifest cannot escape a sandboxed --source-root.
 func ResolveSource(source, sourceRoot string) (string, error) {
@@ -221,26 +318,32 @@ func status(strategy, target, sourceAbs, sourceRoot string) (Status, error) {
 }
 
 func safeSourceExists(sourceAbs, sourceRoot string) (bool, error) {
-	sourceReal, err := filepath.EvalSymlinks(sourceAbs)
-	if err != nil {
-		if os.IsNotExist(err) {
+	if err := ValidateResolvedSource(sourceAbs, sourceRoot); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
-		return false, fmt.Errorf("resolve source %q: %w", sourceAbs, err)
+		return false, err
+	}
+	return true, nil
+}
+
+// ValidateResolvedSource verifies that an already-resolved source path exists
+// and resolves through symlinks to a file contained by sourceRoot.
+func ValidateResolvedSource(sourceAbs, sourceRoot string) error {
+	sourceReal, err := filepath.EvalSymlinks(sourceAbs)
+	if err != nil {
+		return fmt.Errorf("resolve source %q: %w", sourceAbs, err)
 	}
 	rootReal, err := filepath.EvalSymlinks(sourceRoot)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("resolve source root %q: %w", sourceRoot, err)
+		return fmt.Errorf("resolve source root %q: %w", sourceRoot, err)
 	}
 	sourceReal = filepath.Clean(sourceReal)
 	rootReal = filepath.Clean(rootReal)
 	if !InsideRoot(sourceReal, rootReal) {
-		return false, fmt.Errorf("unsafe source %q: symlink resolves outside source root %q", sourceAbs, sourceRoot)
+		return fmt.Errorf("unsafe source %q: symlink resolves outside source root %q", sourceAbs, sourceRoot)
 	}
-	return true, nil
+	return nil
 }
 
 func sameContent(a, b string) (bool, error) {

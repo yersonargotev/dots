@@ -29,7 +29,7 @@ func newPlanCommand() *cobra.Command {
 				return err
 			}
 
-			paths, err := resolvePaths(home, sourceRoot)
+			paths, err := resolvePaths(home, sourceRoot, "")
 			if err != nil {
 				return err
 			}
