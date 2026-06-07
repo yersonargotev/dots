@@ -1,0 +1,8 @@
+Plan for profile "work"
+
+  create          symlink   configs/zsh/zshrc -> /home/user/.zshrc
+  conflict        symlink   configs/git/gitconfig -> /home/user/.gitconfig
+  unchanged       copy      configs/starship.toml -> /home/user/.config/starship.toml
+  missing-source  template  configs/nvim/init.lua -> /home/user/.config/nvim/init.lua
+
+Summary: 1 create, 1 conflict, 1 unchanged, 1 missing-source

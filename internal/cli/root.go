@@ -15,6 +15,7 @@ func NewRootCommand() *cobra.Command {
 	}
 
 	root.AddCommand(newManifestCommand())
+	root.AddCommand(newPlanCommand())
 	return root
 }
 

@@ -27,6 +27,179 @@ func TestRootHelpIdentifiesDotsCLI(t *testing.T) {
 	}
 }
 
+func TestPlanCommandRendersPreviewForResolvedEnvironment(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// The managed source must exist under the resolved Installed Repository so
+	// the plan reports a real create against a clean home.
+	srcPath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte("export A=1\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	manifestPath := filepath.Join(home, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plan", "--file", manifestPath, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := out.String()
+	wantTarget := filepath.Join(home, ".zshrc")
+	for _, want := range []string{
+		`Plan for profile "default"`,
+		"create",
+		"symlink",
+		"configs/zsh/zshrc -> " + wantTarget,
+		"Summary: 1 create, 0 conflict, 0 unchanged, 0 missing-source",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("plan output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
+func TestPlanCommandHomeFlagOverridesRealHome(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	// Point the real HOME elsewhere to prove --home wins and the user's actual
+	// configuration is never read.
+	t.Setenv("HOME", t.TempDir())
+
+	srcPath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte("export A=1\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	manifestPath := filepath.Join(sandboxHome, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plan", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := out.String()
+	wantTarget := filepath.Join(sandboxHome, ".zshrc")
+	if !strings.Contains(got, "configs/zsh/zshrc -> "+wantTarget) {
+		t.Fatalf("plan did not resolve target under --home\nwant target %q\noutput:\n%s", wantTarget, got)
+	}
+	if !strings.Contains(got, "Summary: 1 create, 0 conflict, 0 unchanged, 0 missing-source") {
+		t.Fatalf("plan output missing expected create summary against sandbox home\noutput:\n%s", got)
+	}
+}
+
+func TestPlanCommandDefaultsSourceRootUnderHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// No --source-root and no installed repository on disk: the default
+	// (~/.local/share/dots) does not exist, so the managed source is absent.
+	manifestPath := filepath.Join(home, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plan", "--file", manifestPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if got := out.String(); !strings.Contains(got, "Summary: 0 create, 0 conflict, 0 unchanged, 1 missing-source") {
+		t.Fatalf("plan output missing expected missing-source summary\noutput:\n%s", got)
+	}
+}
+
+func TestPlanCommandFailsOnUnknownProfile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	manifestPath := filepath.Join(home, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plan", "--file", manifestPath, "--profile", "missing"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("Execute() error = nil, want error for unknown profile")
+	}
+}
+
 func TestManifestValidateCommandAcceptsValidManifest(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "dots.yaml")
