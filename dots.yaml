@@ -1,0 +1,14 @@
+version: 1
+profiles:
+  default:
+    tags:
+      - core
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
