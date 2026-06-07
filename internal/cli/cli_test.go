@@ -457,6 +457,234 @@ entries:
 	}
 }
 
+func TestInstallNoTUIPromptCanReplaceConflict(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("local\n"), 0o600); err != nil {
+		t.Fatalf("write local target: %v", err)
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("r\n"))
+	cmd.SetArgs([]string{"install", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	target := filepath.Join(home, ".gitconfig")
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != "managed\n" {
+		t.Fatalf("target contents = %q, want managed source", got)
+	}
+	meta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Backup Metadata: %v", err)
+	}
+	if len(meta.Sets) != 1 {
+		t.Fatalf("Backup Sets = %d, want 1", len(meta.Sets))
+	}
+	if !strings.Contains(out.String(), "Resolve conflict") {
+		t.Fatalf("install output missing conflict prompt\noutput:\n%s", out.String())
+	}
+}
+
+func TestInstallNoTUIPromptCanShowDiffThenSkipConflict(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
+	target := filepath.Join(home, ".gitconfig")
+	if err := os.WriteFile(target, []byte("local\n"), 0o600); err != nil {
+		t.Fatalf("write local target: %v", err)
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("d\ns\n"))
+	cmd.SetArgs([]string{"install", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != "local\n" {
+		t.Fatalf("target contents = %q, want skipped local content", got)
+	}
+	for _, want := range []string{"--- target: " + target, "local\n", "--- source: configs/git/gitconfig", "managed\n"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("install output missing diff text %q\noutput:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestInstallNoTUIPromptDiffDoesNotLeakTargetThroughParentSymlinkEscape(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	outsideHome := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/nvim/init.lua", "managed\n")
+
+	if err := os.MkdirAll(filepath.Join(outsideHome, "nvim"), 0o755); err != nil {
+		t.Fatalf("mkdir outside nvim: %v", err)
+	}
+	outsideSecret := "outside-home-secret\n"
+	if err := os.WriteFile(filepath.Join(outsideHome, "nvim", "init.lua"), []byte(outsideSecret), 0o600); err != nil {
+		t.Fatalf("write outside target: %v", err)
+	}
+	if err := os.Symlink(outsideHome, filepath.Join(home, ".config")); err != nil {
+		t.Fatalf("symlink parent escape: %v", err)
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/nvim/init.lua
+    target: ~/.config/nvim/init.lua
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("d\ns\n"))
+	cmd.SetArgs([]string{"install", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	if strings.Contains(out.String(), outsideSecret) {
+		t.Fatalf("prompt diff leaked outside-home target contents\noutput:\n%s", out.String())
+	}
+}
+
+func TestInstallNoTUIPromptCanAdoptConflict(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	sourcePath := filepath.Join(sourceRoot, "configs/git/gitconfig")
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("local\n"), 0o600); err != nil {
+		t.Fatalf("write local target: %v", err)
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("a\n"))
+	cmd.SetArgs([]string{"install", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("read source: %v", err)
+	}
+	if string(got) != "local\n" {
+		t.Fatalf("source contents = %q, want adopted local content", got)
+	}
+}
+
+func TestInstallYesDefaultsConflictToSkipWithoutPrompting(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
+	target := filepath.Join(home, ".gitconfig")
+	if err := os.WriteFile(target, []byte("local\n"), 0o600); err != nil {
+		t.Fatalf("write local target: %v", err)
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("r\n"))
+	cmd.SetArgs([]string{"install", "--yes", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != "local\n" {
+		t.Fatalf("target contents = %q, want confirmed install to skip conflict", got)
+	}
+	if strings.Contains(out.String(), "Resolve conflict") {
+		t.Fatalf("confirmed install prompted for conflict\noutput:\n%s", out.String())
+	}
+}
+
 func TestInstallCommandRejectsAbsoluteTargetWithoutCreatingOutsidePath(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
