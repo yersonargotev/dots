@@ -47,6 +47,70 @@ entries:
 	}
 }
 
+func TestLoadFileParsesEntryDependencies(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/tmux/tmux.conf
+    target: ~/.tmux.conf
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: tmux
+        brew: tmux
+        apt: tmux
+        dnf: tmux
+        pacman: tmux
+      - name: ripgrep
+        command: rg
+        brew: ripgrep
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	deps := got.Entries[0].Dependencies
+	if len(deps) != 2 {
+		t.Fatalf("Dependencies len = %d, want 2", len(deps))
+	}
+	if deps[0].Name != "tmux" || deps[0].Brew != "tmux" || deps[0].Apt != "tmux" || deps[0].Dnf != "tmux" || deps[0].Pacman != "tmux" {
+		t.Fatalf("Dependencies[0] = %#v, want fully mapped tmux dependency", deps[0])
+	}
+	if deps[1].Name != "ripgrep" || deps[1].Command != "rg" || deps[1].Brew != "ripgrep" {
+		t.Fatalf("Dependencies[1] = %#v, want ripgrep with rg command", deps[1])
+	}
+}
+
+func TestDependencyProbeTrimsWhitespace(t *testing.T) {
+	tests := []struct {
+		name string
+		dep  manifest.Dependency
+		want string
+	}{
+		{name: "defaults to name", dep: manifest.Dependency{Name: "tmux"}, want: "tmux"},
+		{name: "command overrides name", dep: manifest.Dependency{Name: "ripgrep", Command: "rg"}, want: "rg"},
+		{name: "trims padded command", dep: manifest.Dependency{Name: "ripgrep", Command: " rg "}, want: "rg"},
+		{name: "trims padded name", dep: manifest.Dependency{Name: " neovim "}, want: "neovim"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.dep.Probe(); got != tt.want {
+				t.Fatalf("Probe() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadFileRejectsUnknownFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")
@@ -190,6 +254,56 @@ entries:
     tags: ["  ", core]
 `,
 			want: "entries[0].tags[0] must not be empty",
+		},
+		{
+			name: "dependency without name",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/tmux/tmux.conf
+    target: ~/.tmux.conf
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - brew: tmux
+`,
+			want: "entries[0].dependencies[0].name is required",
+		},
+		{
+			name: "dependency with whitespace-only name",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/tmux/tmux.conf
+    target: ~/.tmux.conf
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: "  "
+        brew: tmux
+`,
+			want: "entries[0].dependencies[0].name is required",
+		},
+		{
+			name: "dependency with whitespace-only command",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/tmux/tmux.conf
+    target: ~/.tmux.conf
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: tmux
+        command: "  "
+`,
+			want: `entries[0].dependencies[0].command must not be empty`,
 		},
 		{
 			name: "missing entry target",

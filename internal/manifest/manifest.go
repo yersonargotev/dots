@@ -21,11 +21,34 @@ type Profile struct {
 }
 
 type Entry struct {
-	Source   string   `yaml:"source"`
-	Target   string   `yaml:"target"`
-	Strategy string   `yaml:"strategy"`
-	Tags     []string `yaml:"tags"`
-	OS       []string `yaml:"os,omitempty"`
+	Source       string       `yaml:"source"`
+	Target       string       `yaml:"target"`
+	Strategy     string       `yaml:"strategy"`
+	Tags         []string     `yaml:"tags"`
+	OS           []string     `yaml:"os,omitempty"`
+	Dependencies []Dependency `yaml:"dependencies,omitempty"`
+}
+
+// Dependency is an external tool a Managed Entry needs to work correctly. dots
+// checks for it and offers OS-aware installation guidance but never installs it
+// automatically in v1. The package fields (Brew/Apt/Dnf/Pacman) carry the
+// per-platform package identifier used to build advisory install guidance.
+type Dependency struct {
+	Name    string `yaml:"name"`
+	Command string `yaml:"command,omitempty"`
+	Brew    string `yaml:"brew,omitempty"`
+	Apt     string `yaml:"apt,omitempty"`
+	Dnf     string `yaml:"dnf,omitempty"`
+	Pacman  string `yaml:"pacman,omitempty"`
+}
+
+// Probe is the command name used to detect a Dependency's presence in PATH. It
+// defaults to Name when an entry does not declare an explicit command.
+func (d Dependency) Probe() string {
+	if command := strings.TrimSpace(d.Command); command != "" {
+		return command
+	}
+	return strings.TrimSpace(d.Name)
 }
 
 func LoadFile(path string) (*Manifest, error) {
@@ -95,6 +118,14 @@ func (m Manifest) Validate() error {
 		for j, osName := range entry.OS {
 			if !allowedOS(osName) {
 				return fmt.Errorf("entries[%d].os[%d] must be one of darwin, linux", i, j)
+			}
+		}
+		for j, dep := range entry.Dependencies {
+			if strings.TrimSpace(dep.Name) == "" {
+				return fmt.Errorf("entries[%d].dependencies[%d].name is required", i, j)
+			}
+			if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
+				return fmt.Errorf("entries[%d].dependencies[%d].command must not be empty", i, j)
 			}
 		}
 	}

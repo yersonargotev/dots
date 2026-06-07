@@ -665,6 +665,167 @@ entries:
 	}
 }
 
+func TestDepsCheckCommandReportsPresentAndMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Build an isolated PATH so dependency presence is deterministic: only
+	// "presenttool" resolves; "absenttool" is nowhere on PATH.
+	binDir := t.TempDir()
+	writeFakeExecutable(t, binDir, "presenttool")
+	t.Setenv("PATH", binDir)
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: presenttool
+      - name: absenttool
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`Dependencies for profile "default"`,
+		"present  presenttool",
+		"missing  absenttool",
+		"Summary: 1 present, 1 missing",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("deps check output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
+func TestDepsPlanCommandRendersTierGuidanceForMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// No tools on PATH: the dependency is missing and must appear in the plan.
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir)
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: starship
+        brew: starship
+        apt: starship
+        dnf: starship
+        pacman: starship
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	// --tier makes the guidance deterministic regardless of the test host.
+	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "debian"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`Dependency plan for profile "default" (debian)`,
+		"starship",
+		"sudo apt-get install starship",
+		"Summary: 1 dependency to install",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("deps plan output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
+func TestDepsPlanCommandAcceptsMixedCaseTier(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir)
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: starship
+        apt: starship
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "Debian"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got := out.String()
+	if !strings.Contains(got, `(debian)`) || !strings.Contains(got, "sudo apt-get install starship") {
+		t.Fatalf("deps plan did not normalize mixed-case tier\noutput:\n%s", got)
+	}
+}
+
+func TestDepsPlanCommandRejectsUnknownTier(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "windows"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("Execute() error = nil, want error for unknown tier")
+	}
+}
+
+func writeFakeExecutable(t *testing.T, dir, name string) {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write fake executable: %v", err)
+	}
+}
+
 func writeCLISource(t *testing.T, sourceRoot, rel, content string) {
 	t.Helper()
 	srcPath := filepath.Join(sourceRoot, rel)

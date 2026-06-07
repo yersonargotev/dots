@@ -12,3 +12,14 @@ entries:
     os:
       - darwin
       - linux
+    dependencies:
+      - name: zsh
+        brew: zsh
+        apt: zsh
+        dnf: zsh
+        pacman: zsh
+      - name: starship
+        brew: starship
+        apt: starship
+        dnf: starship
+        pacman: starship
