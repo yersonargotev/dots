@@ -338,3 +338,24 @@ entries:
 		})
 	}
 }
+
+func TestRepositoryManifestSourcesExist(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	for i, entry := range got.Entries {
+		sourcePath := filepath.Join(root, entry.Source)
+		info, err := os.Stat(sourcePath)
+		if err != nil {
+			t.Fatalf("entries[%d].source %q does not exist at %s: %v", i, entry.Source, sourcePath, err)
+		}
+		if info.IsDir() {
+			t.Fatalf("entries[%d].source %q points to a directory, want a file", i, entry.Source)
+		}
+	}
+}

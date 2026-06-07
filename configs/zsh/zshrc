@@ -1,0 +1,7 @@
+# Repository-managed zsh configuration.
+# Keep this file safe to source on new machines.
+
+# Starship is optional at runtime; initialize it only when available.
+if command -v starship >/dev/null 2>&1; then
+  eval "$(starship init zsh)"
+fi
