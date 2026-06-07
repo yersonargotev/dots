@@ -1,8 +1,11 @@
 package manifest
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,7 +35,9 @@ func LoadFile(path string) (*Manifest, error) {
 	}
 
 	var manifest Manifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&manifest); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	if err := manifest.Validate(); err != nil {
@@ -56,6 +61,21 @@ func (m Manifest) Validate() error {
 		return fmt.Errorf("entries is required")
 	}
 
+	names := make([]string, 0, len(m.Profiles))
+	for name := range m.Profiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		tags := m.Profiles[name].Tags
+		if len(tags) == 0 {
+			return fmt.Errorf("profiles[%q].tags is required", name)
+		}
+		if i, ok := indexOfEmptyTag(tags); ok {
+			return fmt.Errorf("profiles[%q].tags[%d] must not be empty", name, i)
+		}
+	}
+
 	for i, entry := range m.Entries {
 		if entry.Source == "" {
 			return fmt.Errorf("entries[%d].source is required", i)
@@ -69,6 +89,9 @@ func (m Manifest) Validate() error {
 		if len(entry.Tags) == 0 {
 			return fmt.Errorf("entries[%d].tags is required", i)
 		}
+		if j, ok := indexOfEmptyTag(entry.Tags); ok {
+			return fmt.Errorf("entries[%d].tags[%d] must not be empty", i, j)
+		}
 		for j, osName := range entry.OS {
 			if !allowedOS(osName) {
 				return fmt.Errorf("entries[%d].os[%d] must be one of darwin, linux", i, j)
@@ -77,6 +100,15 @@ func (m Manifest) Validate() error {
 	}
 
 	return nil
+}
+
+func indexOfEmptyTag(tags []string) (int, bool) {
+	for i, tag := range tags {
+		if strings.TrimSpace(tag) == "" {
+			return i, true
+		}
+	}
+	return -1, false
 }
 
 func allowedStrategy(strategy string) bool {

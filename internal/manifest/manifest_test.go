@@ -3,6 +3,7 @@ package manifest_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -46,6 +47,32 @@ entries:
 	}
 }
 
+func TestLoadFileRejectsUnknownFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategey: symlink
+    tags: [core]
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err := manifest.LoadFile(path)
+	if err == nil {
+		t.Fatal("LoadFile() error = nil, want error for unknown field")
+	}
+	if !strings.Contains(err.Error(), "strategey") {
+		t.Fatalf("LoadFile() error = %q, want it to name the unknown field %q", err.Error(), "strategey")
+	}
+}
+
 func TestLoadFileRejectsInvalidManifests(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -64,6 +91,48 @@ entries:
     tags: [core]
 `,
 			want: "version is required",
+		},
+		{
+			name: "profile without tags",
+			content: `version: 1
+profiles:
+  default:
+    tags: []
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`,
+			want: `profiles["default"].tags is required`,
+		},
+		{
+			name: "profile with empty tag",
+			content: `version: 1
+profiles:
+  default:
+    tags: ["", core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`,
+			want: `profiles["default"].tags[0] must not be empty`,
+		},
+		{
+			name: "profile with whitespace-only tag",
+			content: `version: 1
+profiles:
+  default:
+    tags: ["  ", core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`,
+			want: `profiles["default"].tags[0] must not be empty`,
 		},
 		{
 			name: "unsupported strategy",
@@ -93,6 +162,34 @@ entries:
     os: [windows]
 `,
 			want: "entries[0].os[0] must be one of darwin, linux",
+		},
+		{
+			name: "entry with empty tag",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: copy
+    tags: ["", core]
+`,
+			want: "entries[0].tags[0] must not be empty",
+		},
+		{
+			name: "entry with whitespace-only tag",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: copy
+    tags: ["  ", core]
+`,
+			want: "entries[0].tags[0] must not be empty",
 		},
 		{
 			name: "missing entry target",
