@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
@@ -50,30 +51,165 @@ func TestApplyCreatesSymlinkForCreateAction(t *testing.T) {
 	}
 }
 
-func TestApplyRejectsConflictWithoutMutatingAnyAction(t *testing.T) {
+func TestApplyDefaultsConflictActionsToSkipAndContinuesSafeCreates(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()
 
-	sourcePath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	createSource := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	if err := os.MkdirAll(filepath.Dir(createSource), 0o755); err != nil {
+		t.Fatalf("mkdir create source: %v", err)
+	}
+	if err := os.WriteFile(createSource, []byte("export A=1\n"), 0o600); err != nil {
+		t.Fatalf("write create source: %v", err)
+	}
+	conflictSource := filepath.Join(sourceRoot, "configs/git/gitconfig")
+	if err := os.MkdirAll(filepath.Dir(conflictSource), 0o755); err != nil {
+		t.Fatalf("mkdir conflict source: %v", err)
+	}
+	if err := os.WriteFile(conflictSource, []byte("managed\n"), 0o600); err != nil {
+		t.Fatalf("write conflict source: %v", err)
+	}
+
+	createdTarget := filepath.Join(home, ".zshrc")
+	conflictingTarget := filepath.Join(home, ".gitconfig")
+	if err := os.WriteFile(conflictingTarget, []byte("local\n"), 0o600); err != nil {
+		t.Fatalf("write conflicting target: %v", err)
+	}
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{
+		{Source: "configs/zsh/zshrc", Target: createdTarget, Strategy: "symlink", Status: plan.StatusCreate},
+		{Source: "configs/git/gitconfig", Target: conflictingTarget, Strategy: "copy", Status: plan.StatusConflict},
+	}}
+
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if _, err := os.Lstat(createdTarget); err != nil {
+		t.Fatalf("created target missing after conflict skip default: %v", err)
+	}
+	got, err := os.ReadFile(conflictingTarget)
+	if err != nil {
+		t.Fatalf("read conflicting target: %v", err)
+	}
+	if string(got) != "local\n" {
+		t.Fatalf("conflicting target = %q, want original local content", got)
+	}
+}
+
+func TestApplyReplaceConflictCreatesBackupSetBeforeChangingTarget(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+
+	sourcePath := filepath.Join(sourceRoot, "configs/git/gitconfig")
 	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		t.Fatalf("mkdir source: %v", err)
 	}
-	if err := os.WriteFile(sourcePath, []byte("export A=1\n"), 0o600); err != nil {
+	if err := os.WriteFile(sourcePath, []byte("managed\n"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-
-	wouldCreate := filepath.Join(home, ".zshrc")
-	conflictingTarget := filepath.Join(home, ".gitconfig")
-	p := plan.Plan{Profile: "default", Actions: []plan.Action{
-		{Source: "configs/zsh/zshrc", Target: wouldCreate, Strategy: "symlink", Status: plan.StatusCreate},
-		{Source: "configs/git/gitconfig", Target: conflictingTarget, Strategy: "symlink", Status: plan.StatusConflict},
-	}}
-
-	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home}); err == nil {
-		t.Fatal("Apply() error = nil, want conflict error")
+	target := filepath.Join(home, ".gitconfig")
+	if err := os.WriteFile(target, []byte("local\n"), 0o640); err != nil {
+		t.Fatalf("write local target: %v", err)
 	}
-	if _, err := os.Lstat(wouldCreate); !os.IsNotExist(err) {
-		t.Fatalf("would-create target exists after rejected install; lstat err = %v", err)
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:   "configs/git/gitconfig",
+		Target:   target,
+		Strategy: "copy",
+		Status:   plan.StatusConflict,
+	}}}
+
+	if err := install.Apply(p, install.Options{
+		SourceRoot: sourceRoot,
+		Home:       home,
+		StateRoot:  stateRoot,
+		ConflictDecisions: map[string]install.ConflictDecision{
+			target: install.DecisionReplace,
+		},
+	}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read replaced target: %v", err)
+	}
+	if string(got) != "managed\n" {
+		t.Fatalf("target contents = %q, want managed source", got)
+	}
+	meta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Backup Metadata: %v", err)
+	}
+	if len(meta.Sets) != 1 {
+		t.Fatalf("Backup Sets = %d, want 1", len(meta.Sets))
+	}
+	if len(meta.Sets[0].Targets) != 1 || meta.Sets[0].Targets[0] != target {
+		t.Fatalf("Backup Set targets = %v, want [%s]", meta.Sets[0].Targets, target)
+	}
+}
+
+func TestApplyAdoptConflictCopiesTargetIntoSourceAndRecordsMetadata(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+
+	sourcePath := filepath.Join(sourceRoot, "configs/git/gitconfig")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(sourcePath, []byte("managed\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	target := filepath.Join(home, ".gitconfig")
+	if err := os.WriteFile(target, []byte("local\n"), 0o640); err != nil {
+		t.Fatalf("write local target: %v", err)
+	}
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:   "configs/git/gitconfig",
+		Target:   target,
+		Strategy: "copy",
+		Status:   plan.StatusConflict,
+	}}}
+
+	if err := install.Apply(p, install.Options{
+		SourceRoot: sourceRoot,
+		Home:       home,
+		StateRoot:  stateRoot,
+		ConflictDecisions: map[string]install.ConflictDecision{
+			target: install.DecisionAdopt,
+		},
+	}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	gotSource, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("read adopted source: %v", err)
+	}
+	if string(gotSource) != "local\n" {
+		t.Fatalf("source contents = %q, want adopted local target", gotSource)
+	}
+	gotTarget, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(gotTarget) != "local\n" {
+		t.Fatalf("target contents = %q, want local target left in place", gotTarget)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Installation Metadata: %v", err)
+	}
+	rec, ok := meta.FindByTarget(target)
+	if !ok {
+		t.Fatalf("Installation Metadata missing adopted target %s", target)
+	}
+	wantHash, err := state.HashFile(sourcePath)
+	if err != nil {
+		t.Fatalf("hash adopted source: %v", err)
+	}
+	if rec.Hash != wantHash {
+		t.Fatalf("record hash = %q, want adopted source hash %q", rec.Hash, wantHash)
 	}
 }
 

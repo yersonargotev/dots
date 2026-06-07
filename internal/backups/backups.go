@@ -49,3 +49,19 @@ func Load(path string) (Metadata, error) {
 	}
 	return meta, nil
 }
+
+// Save writes Backup Metadata to path, creating parent directories as needed.
+func Save(path string, meta Metadata) error {
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode Backup Metadata: %w", err)
+	}
+	data = append(data, '\n')
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create Backup Metadata directory: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("write Backup Metadata: %w", err)
+	}
+	return nil
+}
