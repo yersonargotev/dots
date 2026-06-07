@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/cli"
 )
 
@@ -962,4 +963,168 @@ func writeCLIManifest(t *testing.T, dir, content string) string {
 		t.Fatalf("write manifest: %v", err)
 	}
 	return manifestPath
+}
+
+func TestBackupsListCommandHandlesMissingHistory(t *testing.T) {
+	stateRoot := t.TempDir()
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"backups", "list", "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	want := "No Backup Sets recorded in state root: " + stateRoot + "\n"
+	if got := out.String(); got != want {
+		t.Fatalf("backups list output mismatch\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestBackupsListCommandRendersBackupSetsFromStateRoot(t *testing.T) {
+	stateRoot := t.TempDir()
+	metadata := []byte(`{
+  "version": 1,
+  "sets": [
+    {
+      "id": "backup-001",
+      "createdAt": "2026-01-02T03:04:05Z",
+      "reason": "pre-install conflict protection",
+      "targets": ["/home/user/.zshrc", "/home/user/.gitconfig"]
+    },
+    {
+      "id": "backup-002",
+      "createdAt": "2026-01-03T04:05:06Z",
+      "reason": "manual safety snapshot",
+      "targets": ["/home/user/.config/nvim/init.lua"]
+    }
+  ]
+}
+`)
+	if err := os.MkdirAll(filepath.Dir(backups.Path(stateRoot)), 0o755); err != nil {
+		t.Fatalf("create Backup Metadata directory: %v", err)
+	}
+	if err := os.WriteFile(backups.Path(stateRoot), metadata, 0o600); err != nil {
+		t.Fatalf("write Backup Metadata: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"backups", "list", "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	want := `Backup Sets
+
+  ID: backup-001
+  Created: 2026-01-02T03:04:05Z
+  Reason: pre-install conflict protection
+  Protected targets:
+    - /home/user/.zshrc
+    - /home/user/.gitconfig
+
+  ID: backup-002
+  Created: 2026-01-03T04:05:06Z
+  Reason: manual safety snapshot
+  Protected targets:
+    - /home/user/.config/nvim/init.lua
+
+Summary: 2 Backup Sets
+`
+	if got := out.String(); got != want {
+		t.Fatalf("backups list output mismatch\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestBackupsListCommandHandlesEmptyHistory(t *testing.T) {
+	stateRoot := t.TempDir()
+	metadata := []byte(`{"version":1,"sets":[]}` + "\n")
+	if err := os.MkdirAll(filepath.Dir(backups.Path(stateRoot)), 0o755); err != nil {
+		t.Fatalf("create Backup Metadata directory: %v", err)
+	}
+	if err := os.WriteFile(backups.Path(stateRoot), metadata, 0o600); err != nil {
+		t.Fatalf("write empty Backup Metadata: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"backups", "list", "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	want := "No Backup Sets recorded in state root: " + stateRoot + "\n"
+	if got := out.String(); got != want {
+		t.Fatalf("backups list output mismatch\n got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestBackupsListCommandRejectsDefaultStateRootSymlinkEscapeBeforeReadingMetadata(t *testing.T) {
+	home := t.TempDir()
+	outsideState := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	stateParent := filepath.Join(home, ".local", "state")
+	if err := os.MkdirAll(stateParent, 0o755); err != nil {
+		t.Fatalf("mkdir state parent: %v", err)
+	}
+	if err := os.Symlink(outsideState, filepath.Join(stateParent, "dots")); err != nil {
+		t.Fatalf("symlink default state root: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(backups.Path(outsideState)), 0o755); err != nil {
+		t.Fatalf("mkdir outside Backup Metadata directory: %v", err)
+	}
+	if err := os.WriteFile(backups.Path(outsideState), []byte(`{"version":1,"sets":[]}`), 0o600); err != nil {
+		t.Fatalf("write outside Backup Metadata: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"backups", "list", "--home", home})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("backups list Execute() error = nil, want default state-root symlink escape error")
+	}
+}
+
+func TestBackupsListCommandRejectsDefaultMetadataLeafSymlinkEscapeBeforeReadingMetadata(t *testing.T) {
+	home := t.TempDir()
+	outsideState := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	metadataDir := filepath.Dir(backups.Path(stateRoot))
+	if err := os.MkdirAll(metadataDir, 0o755); err != nil {
+		t.Fatalf("mkdir Backup Metadata directory: %v", err)
+	}
+	outsideMetadata := backups.Path(outsideState)
+	if err := os.MkdirAll(filepath.Dir(outsideMetadata), 0o755); err != nil {
+		t.Fatalf("mkdir outside Backup Metadata directory: %v", err)
+	}
+	if err := os.WriteFile(outsideMetadata, []byte(`{"version":1,"sets":[]}`), 0o600); err != nil {
+		t.Fatalf("write outside Backup Metadata: %v", err)
+	}
+	if err := os.Symlink(outsideMetadata, backups.Path(stateRoot)); err != nil {
+		t.Fatalf("symlink Backup Metadata leaf: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"backups", "list", "--home", home})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("backups list Execute() error = nil, want Backup Metadata leaf symlink escape error")
+	}
 }
