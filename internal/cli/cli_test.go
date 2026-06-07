@@ -171,6 +171,124 @@ entries:
 	}
 }
 
+func TestDoctorCommandRendersConsolidatedDiagnostics(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srcPath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte("export A=1\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := os.Symlink(srcPath, filepath.Join(home, ".zshrc")); err != nil {
+		t.Fatalf("symlink target: %v", err)
+	}
+
+	manifestPath := filepath.Join(home, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"doctor", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`Doctor for profile "default"`,
+		"Platform: ok",
+		"Dependencies: ok (no dependencies declared)",
+		"Configuration: ok (1 ok, 0 concerns)",
+		"Secret Scan: ok (0 findings)",
+		"Guardrail: Secret Scan catches obvious credential and private-key patterns only; it is not proof this repository is safe.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("doctor output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
+func TestDoctorCommandRendersWarningDiagnostics(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srcPath := filepath.Join(sourceRoot, "configs/git/config")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte("[credential]\napi_key = live-secret-value\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	manifestPath := filepath.Join(home, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/config
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+    os: [darwin, linux]
+    dependencies:
+      - name: definitely-missing-dots-test-tool
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"doctor", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`Doctor for profile "default"`,
+		"Dependencies: warn (1 missing)",
+		"missing dependency: definitely-missing-dots-test-tool",
+		"Configuration: warn (1 concerns)",
+		"missing: configs/git/config -> " + filepath.Join(home, ".gitconfig"),
+		"Secret Scan: warn (1 findings)",
+		"configs/git/config:2 credential-assignment",
+		"Guardrail: Secret Scan catches obvious credential and private-key patterns only; it is not proof this repository is safe.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("doctor warning output missing %q\noutput:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "live-secret-value") {
+		t.Fatalf("doctor warning output leaked secret value\noutput:\n%s", got)
+	}
+}
+
 func TestPlanCommandFailsOnUnknownProfile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

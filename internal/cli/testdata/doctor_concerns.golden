@@ -1,0 +1,10 @@
+Doctor for profile "default"
+
+Platform: ok (linux)
+Dependencies: warn (1 missing)
+  missing dependency: starship
+Configuration: warn (1 concerns)
+  missing: configs/zsh/zshrc -> /home/user/.zshrc
+Secret Scan: warn (1 findings)
+  configs/git/config:3 credential-assignment
+Guardrail: Secret Scan catches obvious credential and private-key patterns only; it is not proof this repository is safe.

@@ -1,0 +1,7 @@
+Doctor for profile "minimal"
+
+Platform: ok (darwin)
+Dependencies: ok (no dependencies declared)
+Configuration: ok (1 ok, 0 concerns)
+Secret Scan: ok (0 findings)
+Guardrail: Secret Scan catches obvious credential and private-key patterns only; it is not proof this repository is safe.
