@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -11,6 +13,7 @@ import (
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/tui"
 )
 
 func newInstallCommand() *cobra.Command {
@@ -58,8 +61,20 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			var decisions map[string]install.ConflictDecision
-			if noTUI && !yes {
+			switch {
+			case yes:
+				// Non-interactive: conflicts deliberately default to skip.
+			case noTUI:
 				decisions, err = promptConflictDecisions(cmd, p, paths.Home, paths.SourceRoot)
+				if err != nil {
+					return err
+				}
+			default:
+				decisions, err = resolveConflictsTUI(cmd, p, paths.Home, paths.SourceRoot)
+				if errors.Is(err, tui.ErrCanceled) {
+					fmt.Fprintln(cmd.OutOrStdout(), "Conflict resolution canceled; no changes applied.")
+					return nil
+				}
 				if err != nil {
 					return err
 				}
@@ -80,13 +95,60 @@ func newInstallCommand() *cobra.Command {
 	return cmd
 }
 
+// resolveConflictsTUI launches the Bubble Tea conflict resolver for the plan's
+// conflicts. The diff provider reuses the same path-safety-validated rendering
+// as the text prompt, so the TUI never reads files itself.
+func resolveConflictsTUI(cmd *cobra.Command, p plan.Plan, home, sourceRoot string) (map[string]install.ConflictDecision, error) {
+	actions := conflictActions(p)
+	if len(actions) == 0 {
+		return nil, nil
+	}
+
+	conflicts := make([]tui.Conflict, len(actions))
+	for i, action := range actions {
+		conflicts[i] = tui.Conflict{
+			Target:   action.Target,
+			Source:   action.Source,
+			Strategy: action.Strategy,
+		}
+	}
+
+	diff := conflictDiffProvider(actions, home, sourceRoot)
+	return tui.ResolveConflicts(cmd.InOrStdin(), cmd.OutOrStdout(), conflicts, diff)
+}
+
+// conflictDiffProvider returns a tui.DiffFunc that renders the path-safety
+// validated diff for a conflict by looking up its plan action. Keeping it
+// separate makes the Conflict-to-Action mapping unit testable without driving
+// the frame-throttled Bubble Tea renderer.
+func conflictDiffProvider(actions []plan.Action, home, sourceRoot string) tui.DiffFunc {
+	actionByTarget := make(map[string]plan.Action, len(actions))
+	for _, action := range actions {
+		actionByTarget[action.Target] = action
+	}
+	return func(c tui.Conflict) string {
+		var buf bytes.Buffer
+		renderConflictDiff(&buf, actionByTarget[c.Target], home, sourceRoot)
+		return buf.String()
+	}
+}
+
+// conflictActions returns the plan actions that require a conflict decision, so
+// both the TUI and text-prompt resolution paths filter conflicts identically.
+func conflictActions(p plan.Plan) []plan.Action {
+	var actions []plan.Action
+	for _, action := range p.Actions {
+		if action.Status == plan.StatusConflict {
+			actions = append(actions, action)
+		}
+	}
+	return actions
+}
+
 func promptConflictDecisions(cmd *cobra.Command, p plan.Plan, home, sourceRoot string) (map[string]install.ConflictDecision, error) {
 	decisions := map[string]install.ConflictDecision{}
 	reader := bufio.NewReader(cmd.InOrStdin())
-	for _, action := range p.Actions {
-		if action.Status != plan.StatusConflict {
-			continue
-		}
+	for _, action := range conflictActions(p) {
 		decision, err := promptConflictDecision(cmd, reader, action, home, sourceRoot)
 		if err != nil {
 			return nil, err
