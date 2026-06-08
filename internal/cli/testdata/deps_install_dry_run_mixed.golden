@@ -3,4 +3,4 @@ Dependency install dry-run for profile "default" (debian)
   would-install starship                 sudo apt-get install starship
   manual        neovim                   no debian package declared for "neovim"; install it manually
 
-Summary: 2 dependencies to install
+Summary: 1 installable, 1 manual

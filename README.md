@@ -52,12 +52,17 @@ dots status
 dots doctor
 ```
 
-Check Dependencies without letting `dots` mutate your package managers:
+Inspect and install missing Dependencies deliberately:
 
 ```bash
-dots deps check
-dots deps plan
+dots deps check          # report present and missing tools
+dots deps plan           # show OS-aware guidance only
+dots deps install --dry-run  # preview installable and manual actions
+dots deps install        # preview, then ask before executing package managers
+dots deps install --yes  # execute installable actions without prompting
 ```
+
+`dots deps install` executes package managers with direct argv only after confirmation. It does not bypass `sudo`, does not run manual-only guidance, and does not promise rollback, version constraints, reinstall, or upgrade behavior.
 
 List Backup Metadata created by safe installs or restores:
 
@@ -81,7 +86,8 @@ dots install
 | Install Plan | The preview of create, replace, skip, or conflict actions before install applies changes. |
 | Installation Metadata | Local state used to remember what `dots` installed. |
 | Backup Set | A preserved copy of user-owned files before a restore or overwrite path changes them. |
-| Dependency Plan | Guidance for missing tools; `dots` reports, but does not install, system packages. |
+| Dependency Plan | OS-aware guidance for missing tools, including which actions are installable and which remain manual. |
+| Dependency Install | A guarded workflow that previews missing Dependency actions, asks for confirmation by default, and executes only installable package-manager actions. |
 
 ## Supported platforms
 
@@ -94,7 +100,7 @@ Release artifacts are published for:
 
 ## v1 scope boundary
 
-The v1 scope focuses on the MVP Configuration Set: zsh, git, starship, and tmux. It does not include Windows, official WSL support, NixOS-specific behavior, Alpine/musl specialization, automatic dependency installation, Neovim configuration, or arbitrary manifest hooks.
+The v1 scope focuses on the MVP Configuration Set: zsh, git, starship, and tmux. It includes guarded dependency inspection and installation for supported package-manager tiers, but does not include Windows, official WSL support, NixOS-specific behavior, Alpine/musl specialization, Neovim configuration, arbitrary manifest hooks, dependency rollback, version constraints, reinstall, or upgrade orchestration.
 
 ## Canonical docs
 
