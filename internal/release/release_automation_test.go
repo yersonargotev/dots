@@ -48,14 +48,97 @@ func TestReleaseWorkflowPublishesBootstrapperConsumableArtifacts(t *testing.T) {
 		"scripts/build-release-artifacts.sh",
 		"gh release upload",
 		"checksums.txt",
+		"scripts/generate-homebrew-formula.sh",
+		"HOMEBREW_TAP_TOKEN",
+		"yersonargotev/homebrew-tap",
+		"Formula/dots.rb",
 	} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("release workflow should contain %q so GitHub Releases get versioned assets plus checksums", want)
+			t.Fatalf("release workflow should contain %q so GitHub Releases and the Homebrew tap stay in sync", want)
 		}
 	}
-	if strings.Contains(strings.ToLower(text), "homebrew") {
-		t.Fatalf("release workflow should not configure Homebrew distribution in this slice")
-	}
+}
+
+func TestReleaseWorkflowProvesTapAccessBeforePublishingReleaseAssets(t *testing.T) {
+	root := repoRoot(t)
+	workflow := readWorkflow(t, filepath.Join(root, ".github", "workflows", "release.yml"))
+	steps := workflowSteps(t, workflow)
+
+	buildIndex := workflowStepIndex(t, steps, "build release artifacts and checksums", func(step map[string]any) bool {
+		run := stepRun(step)
+		return strings.Contains(run, "scripts/build-release-artifacts.sh") &&
+			strings.Contains(run, "--out-dir dist")
+	})
+	requireTapTokenIndex := workflowStepIndex(t, steps, "required Homebrew tap token guard", func(step map[string]any) bool {
+		run := stepRun(step)
+		return strings.Contains(fmt.Sprint(stepEnv(step)["HOMEBREW_TAP_TOKEN"]), "HOMEBREW_TAP_TOKEN") &&
+			strings.Contains(run, "HOMEBREW_TAP_TOKEN is required") &&
+			strings.Contains(run, "yersonargotev/homebrew-tap")
+	})
+	tapCheckoutIndex := workflowStepIndex(t, steps, "token-backed Homebrew tap checkout", func(step map[string]any) bool {
+		with := stepWith(step)
+		return stepUses(step) == "actions/checkout@v5" &&
+			with["repository"] == "yersonargotev/homebrew-tap" &&
+			with["path"] == "homebrew-tap" &&
+			strings.Contains(fmt.Sprint(with["token"]), "HOMEBREW_TAP_TOKEN")
+	})
+	formulaIndex := workflowStepIndex(t, steps, "Homebrew formula generation from release checksums", func(step map[string]any) bool {
+		run := stepRun(step)
+		return strings.Contains(run, "scripts/generate-homebrew-formula.sh") &&
+			strings.Contains(run, "--checksums dist/checksums.txt") &&
+			strings.Contains(run, "--out homebrew-tap/Formula/dots.rb")
+	})
+	prepareTapIndex := workflowStepIndex(t, steps, "local Homebrew tap formula commit preparation", func(step map[string]any) bool {
+		run := stepRun(step)
+		return stepWorkingDirectory(step) == "homebrew-tap" &&
+			strings.Contains(run, `git config user.name "github-actions[bot]"`) &&
+			strings.Contains(run, `git config user.email "github-actions[bot]@users.noreply.github.com"`) &&
+			strings.Contains(run, "git add Formula/dots.rb") &&
+			strings.Contains(run, "git diff --cached --quiet") &&
+			strings.Contains(run, `echo "changed=false" >> "$GITHUB_OUTPUT"`) &&
+			strings.Contains(run, `echo "changed=true" >> "$GITHUB_OUTPUT"`) &&
+			strings.Contains(run, `git commit -m "feat: update dots formula to ${RELEASE_TAG}"`)
+	})
+	tapPushAccessProofIndex := workflowStepIndex(t, steps, "non-mutating Homebrew tap push permission proof against prepared local state", func(step map[string]any) bool {
+		run := stepRun(step)
+		return stepWorkingDirectory(step) == "homebrew-tap" &&
+			strings.Contains(run, "git push --dry-run origin HEAD:main") &&
+			!strings.Contains(run, "git commit") &&
+			!strings.Contains(run, "git add Formula/dots.rb")
+	})
+	createReleaseIndex := workflowStepIndex(t, steps, "GitHub Release creation", func(step map[string]any) bool {
+		run := stepRun(step)
+		return strings.Contains(run, "gh release create") &&
+			strings.Contains(fmt.Sprint(stepEnv(step)["GH_TOKEN"]), "github.token")
+	})
+	uploadIndex := workflowStepIndex(t, steps, "GitHub Release asset upload", func(step map[string]any) bool {
+		run := stepRun(step)
+		return strings.Contains(run, "gh release upload") &&
+			strings.Contains(run, "dist/*") &&
+			strings.Contains(run, "--clobber")
+	})
+	pushTapIndex := workflowStepIndex(t, steps, "final Homebrew tap formula push", func(step map[string]any) bool {
+		run := stepRun(step)
+		return stepWorkingDirectory(step) == "homebrew-tap" &&
+			strings.Contains(fmt.Sprint(stepEnv(step)["TAP_UPDATE_CHANGED"]), "prepare_tap.outputs.changed") &&
+			strings.Contains(run, `[[ "$TAP_UPDATE_CHANGED" != "true" ]]`) &&
+			strings.Contains(run, "git push origin HEAD:main") &&
+			!strings.Contains(run, "git push --dry-run") &&
+			!strings.Contains(run, "git commit")
+	})
+
+	assertStepBefore(t, steps, buildIndex, formulaIndex, "formula generation must consume freshly built artifacts and dist/checksums.txt")
+	assertStepBefore(t, steps, requireTapTokenIndex, tapCheckoutIndex, "the workflow must reject a missing HOMEBREW_TAP_TOKEN before falling back to anonymous tap checkout")
+	assertStepBefore(t, steps, requireTapTokenIndex, createReleaseIndex, "a missing HOMEBREW_TAP_TOKEN must fail before creating a GitHub Release")
+	assertStepBefore(t, steps, requireTapTokenIndex, uploadIndex, "a missing HOMEBREW_TAP_TOKEN must fail before re-uploading release assets")
+	assertStepBefore(t, steps, tapCheckoutIndex, formulaIndex, "the tap checkout must exist before writing Formula/dots.rb into it")
+	assertStepBefore(t, steps, formulaIndex, prepareTapIndex, "the generated formula must be staged before preparing a local tap commit")
+	assertStepBefore(t, steps, prepareTapIndex, tapPushAccessProofIndex, "the workflow must dry-run push the already-prepared local tap state, not the untouched checkout")
+	assertStepBefore(t, steps, tapPushAccessProofIndex, createReleaseIndex, "token-backed tap push permission must be proven before creating a GitHub Release")
+	assertStepBefore(t, steps, tapPushAccessProofIndex, uploadIndex, "token-backed tap push permission must be proven before re-uploading release assets")
+	assertStepBefore(t, steps, uploadIndex, pushTapIndex, "the tap update must not be published until release assets exist")
+	assertStepBefore(t, steps, tapPushAccessProofIndex, pushTapIndex, "token-backed tap push permission must be proven before the mutating tap push")
+	assertStepBefore(t, steps, prepareTapIndex, pushTapIndex, "the final tap push must publish the already-prepared commit instead of creating a new commit after assets upload")
 }
 
 func TestBuildReleaseArtifactsCreatesChecksummedSupportedPlatforms(t *testing.T) {
@@ -159,6 +242,157 @@ func TestBuildReleaseArtifactsValidatesReleaseVersionLikeWorkflow(t *testing.T) 
 	})
 }
 
+func TestGenerateHomebrewFormulaUsesChecksummedReleaseArtifacts(t *testing.T) {
+	root := repoRoot(t)
+	checksumsPath := filepath.Join(t.TempDir(), "checksums.txt")
+	checksums := strings.Join([]string{
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dots_v0.99.0_darwin_amd64",
+		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  dots_v0.99.0_darwin_arm64",
+		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc  dots_v0.99.0_linux_amd64",
+		"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd  dots_v0.99.0_linux_arm64",
+	}, "\n") + "\n"
+	if err := os.WriteFile(checksumsPath, []byte(checksums), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outputPath := filepath.Join(t.TempDir(), "Formula", "dots.rb")
+
+	cmd := exec.Command(
+		"bash",
+		filepath.Join(root, "scripts", "generate-homebrew-formula.sh"),
+		"--version", "v0.99.0",
+		"--checksums", checksumsPath,
+		"--out", outputPath,
+		"--repo", "yersonargotev/dots",
+		"--homepage", "https://github.com/yersonargotev/dots",
+		"--desc", "Safe dotfiles installer",
+	)
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("generate formula: %v\n%s", err, output)
+	}
+
+	formula, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(formula)
+	for _, want := range []string{
+		"class Dots < Formula",
+		`desc "Safe dotfiles installer"`,
+		`homepage "https://github.com/yersonargotev/dots"`,
+		`version "0.99.0"`,
+		`url "https://github.com/yersonargotev/dots/releases/download/v0.99.0/dots_v0.99.0_darwin_amd64", using: :nounzip`,
+		`sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`,
+		`url "https://github.com/yersonargotev/dots/releases/download/v0.99.0/dots_v0.99.0_darwin_arm64", using: :nounzip`,
+		`sha256 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"`,
+		`url "https://github.com/yersonargotev/dots/releases/download/v0.99.0/dots_v0.99.0_linux_amd64", using: :nounzip`,
+		`sha256 "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"`,
+		`url "https://github.com/yersonargotev/dots/releases/download/v0.99.0/dots_v0.99.0_linux_arm64", using: :nounzip`,
+		`sha256 "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"`,
+		`bin.install downloaded_binary => "dots"`,
+		`system "#{bin}/dots", "--help"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("formula should contain %q\nformula:\n%s", want, text)
+		}
+	}
+	if got := strings.Count(text, "using: :nounzip"); got != len(supportedReleasePlatforms) {
+		t.Fatalf("formula should mark every raw executable URL as using: :nounzip; got %d occurrences in:\n%s", got, text)
+	}
+}
+
+func TestGenerateHomebrewFormulaFailsClearlyWhenChecksumEntryIsMissing(t *testing.T) {
+	root := repoRoot(t)
+	checksumsPath := filepath.Join(t.TempDir(), "checksums.txt")
+	checksums := strings.Join([]string{
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dots_v0.99.0_darwin_amd64",
+		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  dots_v0.99.0_darwin_arm64",
+		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc  dots_v0.99.0_linux_amd64",
+	}, "\n") + "\n"
+	if err := os.WriteFile(checksumsPath, []byte(checksums), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outputPath := filepath.Join(t.TempDir(), "Formula", "dots.rb")
+
+	cmd := exec.Command(
+		"bash",
+		filepath.Join(root, "scripts", "generate-homebrew-formula.sh"),
+		"--version", "v0.99.0",
+		"--checksums", checksumsPath,
+		"--out", outputPath,
+	)
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("generate formula should fail when a checksum entry is missing\n%s", output)
+	}
+	if !strings.Contains(string(output), "missing checksum entry for dots_v0.99.0_linux_arm64") {
+		t.Fatalf("failure should name the missing artifact, got:\n%s", output)
+	}
+	if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
+		t.Fatalf("formula should not be written with incomplete checksums; stat error: %v", err)
+	}
+}
+
+func TestGenerateHomebrewFormulaFailsClearlyWhenChecksumManifestIsNotExact(t *testing.T) {
+	root := repoRoot(t)
+
+	baseChecksums := []string{
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dots_v0.99.0_darwin_amd64",
+		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  dots_v0.99.0_darwin_arm64",
+		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc  dots_v0.99.0_linux_amd64",
+		"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd  dots_v0.99.0_linux_arm64",
+	}
+
+	tests := []struct {
+		name      string
+		extraLine string
+		wantError string
+	}{
+		{
+			name:      "rejects unexpected release artifact",
+			extraLine: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee  dots_v0.99.0_linux_386",
+			wantError: "unexpected checksum entry for dots_v0.99.0_linux_386",
+		},
+		{
+			name:      "rejects duplicate expected artifact",
+			extraLine: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  dots_v0.99.0_darwin_amd64",
+			wantError: "duplicate checksum entry for dots_v0.99.0_darwin_amd64",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checksumsPath := filepath.Join(t.TempDir(), "checksums.txt")
+			checksums := strings.Join(append(baseChecksums, tt.extraLine), "\n") + "\n"
+			if err := os.WriteFile(checksumsPath, []byte(checksums), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			outputPath := filepath.Join(t.TempDir(), "Formula", "dots.rb")
+
+			cmd := exec.Command(
+				"bash",
+				filepath.Join(root, "scripts", "generate-homebrew-formula.sh"),
+				"--version", "v0.99.0",
+				"--checksums", checksumsPath,
+				"--out", outputPath,
+			)
+			cmd.Dir = root
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				t.Fatalf("generate formula should fail when the checksum manifest is not exact\n%s", output)
+			}
+			if !strings.Contains(string(output), tt.wantError) {
+				t.Fatalf("failure should explain the manifest mismatch, got:\n%s", output)
+			}
+			if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
+				t.Fatalf("formula should not be written with invalid checksum manifest; stat error: %v", err)
+			}
+		})
+	}
+}
+
 func fakeGoBuild(t *testing.T) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -216,6 +450,92 @@ func readWorkflow(t *testing.T, path string) map[string]any {
 		t.Fatalf("parse workflow YAML: %v", err)
 	}
 	return workflow
+}
+
+func workflowSteps(t *testing.T, workflow map[string]any) []map[string]any {
+	t.Helper()
+	jobs := mapAt(t, workflow, "jobs")
+	release := mapAt(t, jobs, "release")
+	value, ok := release["steps"]
+	if !ok {
+		t.Fatal("release job should define steps")
+	}
+	items, ok := value.([]any)
+	if !ok {
+		t.Fatalf("release steps should be a list, got %T", value)
+	}
+
+	steps := make([]map[string]any, 0, len(items))
+	for index, item := range items {
+		step, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("release step %d should be a map, got %T", index, item)
+		}
+		steps = append(steps, step)
+	}
+	return steps
+}
+
+func workflowStepIndex(t *testing.T, steps []map[string]any, description string, match func(map[string]any) bool) int {
+	t.Helper()
+	for index, step := range steps {
+		if match(step) {
+			return index
+		}
+	}
+	t.Fatalf("release workflow missing step for %s", description)
+	return -1
+}
+
+func assertStepBefore(t *testing.T, steps []map[string]any, before, after int, reason string) {
+	t.Helper()
+	if before >= after {
+		t.Fatalf("%s: step %q should appear before %q", reason, stepName(steps[before]), stepName(steps[after]))
+	}
+}
+
+func stepName(step map[string]any) string {
+	if name, ok := step["name"].(string); ok {
+		return name
+	}
+	return "<unnamed>"
+}
+
+func stepRun(step map[string]any) string {
+	if run, ok := step["run"].(string); ok {
+		return run
+	}
+	return ""
+}
+
+func stepUses(step map[string]any) string {
+	if uses, ok := step["uses"].(string); ok {
+		return uses
+	}
+	return ""
+}
+
+func stepWith(step map[string]any) map[string]any {
+	with, ok := step["with"].(map[string]any)
+	if !ok {
+		return map[string]any{}
+	}
+	return with
+}
+
+func stepEnv(step map[string]any) map[string]any {
+	env, ok := step["env"].(map[string]any)
+	if !ok {
+		return map[string]any{}
+	}
+	return env
+}
+
+func stepWorkingDirectory(step map[string]any) string {
+	if dir, ok := step["working-directory"].(string); ok {
+		return dir
+	}
+	return ""
 }
 
 func mapAt(t *testing.T, m map[string]any, key string) map[string]any {

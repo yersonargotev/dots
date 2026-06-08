@@ -20,13 +20,13 @@ v1 proves that the Dotfiles CLI can install repository-owned configuration safel
 | Backups list | `dots backups list` exposes Backup Sets and Backup Metadata so preserved files can be audited after installation. |
 | Release artifacts | GitHub Releases publish platform-specific Release Artifacts for macOS amd64/arm64 and Linux amd64/arm64. |
 | Bootstrapper support | The Bootstrapper downloads the matching Release Artifact, performs Checksum Verification, installs or locates `dots`, and delegates setup to the Dotfiles CLI. |
+| Homebrew Distribution | The release workflow generates a tap formula from the same Release Artifacts and checksum manifest, then publishes it to `yersonargotev/homebrew-tap`. |
 | MVP Configuration Set | v1 proves the installer with zsh, git, starship, and tmux before migrating larger application configurations. |
 
 ## Deferred to v1.1 or later
 
 | Deferred item | Earliest target | Why it is deferred |
 |---------------|-----------------|--------------------|
-| Homebrew Distribution | v1.1 or phase 2 | GitHub Releases and checksum-based bootstrapping must be stable before adding tap, formula, or bottle maintenance. |
 | Automatic dependency installation | Later than v1 | Installing packages introduces package-manager selection, sudo behavior, distro differences, repositories, taps, version constraints, and higher operational risk. |
 | `dots update` | v1.1 — **shipped** | Updating the Installed Repository introduces Git state, local changes, versioning, and post-update conflict handling. Delivered in v1.1; see [`docs/update.md`](update.md). |
 | Neovim and larger application configurations | Later than v1 | Larger app configs introduce plugin, language-server, and dependency complexity that distracts from proving installer correctness. |
@@ -53,7 +53,7 @@ A Dependency Plan helps the user understand missing tools without allowing v1 to
 
 ### Distribution starts with verifiable artifacts
 
-v1 distribution starts with GitHub Release Artifacts plus Checksum Verification because the Bootstrapper can verify exactly what it downloads. Homebrew Distribution is valuable, but it adds packaging maintenance after the artifact contract is already proven.
+v1 distribution starts with GitHub Release Artifacts plus Checksum Verification because every install path can verify exactly what it downloads. Homebrew Distribution now uses that same artifact contract: the formula is generated from `checksums.txt`, selects the correct macOS/Linux amd64/arm64 binary, and delegates all setup behavior to the installed `dots` CLI.
 
 ### The MVP Configuration Set keeps the feedback loop tight
 
@@ -70,7 +70,7 @@ zsh, git, starship, and tmux are enough to prove symlink, template, copy, Local 
 
 Use this checklist when reviewing v1 issues or PRs:
 
-- [ ] The change strengthens safe installation, status, diagnostics, dependency guidance, backups, release artifacts, or checksum Bootstrapper support.
-- [ ] The change does not add Homebrew Distribution, automatic dependency installation, `dots update`, or larger Deferred Configuration to v1.
+- [ ] The change strengthens safe installation, status, diagnostics, dependency guidance, backups, release artifacts, checksum Bootstrapper support, or Homebrew Distribution.
+- [ ] The change does not add automatic dependency installation, larger Deferred Configuration, or unsupported platform behavior to v1.
 - [ ] The change preserves Source of Truth integrity and does not make Machine-Specific Configuration part of shared Managed Configuration.
 - [ ] The change uses the project vocabulary from `CONTEXT.md` and the tradeoffs recorded in the ADR.
