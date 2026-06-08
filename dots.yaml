@@ -18,8 +18,45 @@ entries:
         apt: zsh
         dnf: zsh
         pacman: zsh
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: git
+        brew: git
+        apt: git
+        dnf: git
+        pacman: git
+  - source: configs/starship/starship.toml
+    target: ~/.config/starship.toml
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: starship
         brew: starship
         apt: starship
         dnf: starship
         pacman: starship
+  - source: configs/tmux/tmux.conf
+    target: ~/.tmux.conf
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: tmux
+        brew: tmux
+        apt: tmux
+        dnf: tmux
+        pacman: tmux

@@ -5,3 +5,8 @@
 if command -v starship >/dev/null 2>&1; then
   eval "$(starship init zsh)"
 fi
+
+# Local Extension Point: ~/.zshrc.local is private and machine-specific.
+if [ -r "${HOME}/.zshrc.local" ]; then
+  . "${HOME}/.zshrc.local"
+fi
