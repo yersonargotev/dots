@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/deps"
 )
@@ -58,4 +59,84 @@ func pluralizeDeps(n int) string {
 		return "1 dependency to install"
 	}
 	return fmt.Sprintf("%d dependencies to install", n)
+}
+
+// renderDepsInstallDryRun writes a deterministic preview of dependency install
+// actions without executing package managers.
+func renderDepsInstallDryRun(w io.Writer, report deps.InstallDryRunReport) {
+	renderDepsInstallPreviewWithTitle(w, "Dependency install dry-run", report)
+}
+
+func renderDepsInstallPreview(w io.Writer, report deps.InstallDryRunReport) {
+	renderDepsInstallPreviewWithTitle(w, "Dependency install preview", report)
+}
+
+func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.InstallDryRunReport) {
+	fmt.Fprintf(w, "%s for profile %q (%s)\n\n", title, report.Profile, report.Tier)
+
+	if len(report.Items) == 0 {
+		fmt.Fprintln(w, "All declared dependencies are already installed.")
+		return
+	}
+
+	for _, item := range report.Items {
+		hint := item.Manual
+		if item.Executable != "" {
+			parts := append([]string{item.Executable}, item.Args...)
+			hint = strings.Join(parts, " ")
+		}
+		fmt.Fprintf(w, "  %-13s %-24s %s\n", item.Status, item.Dependency, hint)
+	}
+
+	installable, manual := countInstallPreviewActions(report)
+	fmt.Fprintf(w, "\nSummary: %d installable, %d manual\n", installable, manual)
+}
+
+func hasInstallablePreviewAction(report deps.InstallDryRunReport) bool {
+	installable, _ := countInstallPreviewActions(report)
+	return installable > 0
+}
+
+func countInstallPreviewActions(report deps.InstallDryRunReport) (installable int, manual int) {
+	for _, item := range report.Items {
+		if item.Executable == "" {
+			manual++
+			continue
+		}
+		installable++
+	}
+	return installable, manual
+}
+
+// renderDepsInstall writes the stable dots summary after real package-manager
+// execution has already streamed through the command's stdio handles.
+func renderDepsInstall(w io.Writer, report deps.InstallReport) {
+	fmt.Fprintf(w, "\nDependency install for profile %q (%s)\n\n", report.Profile, report.Tier)
+
+	if len(report.Items) == 0 {
+		fmt.Fprintln(w, "All declared dependencies are already installed.")
+		return
+	}
+
+	var installed, manual, unresolved, failed int
+	for _, item := range report.Items {
+		hint := item.Manual
+		if item.Executable != "" {
+			parts := append([]string{item.Executable}, item.Args...)
+			hint = strings.Join(parts, " ")
+		}
+		fmt.Fprintf(w, "  %-10s %-24s %s\n", item.Status, item.Dependency, hint)
+		switch item.Status {
+		case deps.InstallStatusInstalled:
+			installed++
+		case deps.InstallStatusManual:
+			manual++
+		case deps.InstallStatusUnresolved:
+			unresolved++
+		case deps.InstallStatusFailed:
+			failed++
+		}
+	}
+
+	fmt.Fprintf(w, "\nSummary: %d installed, %d manual, %d unresolved, %d failed\n", installed, manual, unresolved, failed)
 }
