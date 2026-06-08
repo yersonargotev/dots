@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -17,7 +19,7 @@ func newDepsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deps",
 		Short: "Inspect external tool Dependencies declared by managed entries",
-		Long:  "deps reports which external Dependencies a profile needs and offers OS-aware installation guidance. dots never installs packages automatically in v1.",
+		Long:  "deps reports which external Dependencies a profile needs, offers OS-aware installation guidance, and can execute missing install actions with explicit confirmation.",
 	}
 	cmd.AddCommand(newDepsCheckCommand())
 	cmd.AddCommand(newDepsPlanCommand())
@@ -111,17 +113,18 @@ func newDepsInstallCommand() *cobra.Command {
 		profile string
 		tier    string
 		dryRun  bool
+		yes     bool
 	)
 
 	cmd := &cobra.Command{
 		Use:          "install",
-		Short:        "Preview dependency install actions",
-		Long:         "install previews dependency install actions with --dry-run. Real package-manager execution is not implemented yet.",
+		Short:        "Install missing Dependencies with explicit confirmation",
+		Long:         "install previews dependency install actions with --dry-run or executes them with --yes. The default interactive confirmation flow is not implemented yet.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !dryRun {
-				return errors.New("deps install is not implemented yet; --dry-run is required in this release")
+			if !dryRun && !yes {
+				return errors.New("deps install requires --dry-run or --yes in this release")
 			}
 
 			m, err := manifest.LoadFile(file)
@@ -134,10 +137,25 @@ func newDepsInstallCommand() *cobra.Command {
 				return err
 			}
 
-			report, err := deps.InstallDryRun(*m, deps.Options{
+			options := deps.Options{
 				Profile: profile,
 				OS:      runtime.GOOS,
-			}, lookupCommand, resolvedTier)
+			}
+
+			if yes && !dryRun {
+				report, err := deps.Install(*m, options, lookupCommand, resolvedTier, depsExecRunner{
+					ctx:    cmd.Context(),
+					stdin:  cmd.InOrStdin(),
+					stdout: cmd.OutOrStdout(),
+					stderr: cmd.ErrOrStderr(),
+				})
+				if report.Profile != "" || len(report.Items) > 0 {
+					renderDepsInstall(cmd.OutOrStdout(), report)
+				}
+				return err
+			}
+
+			report, err := deps.InstallDryRun(*m, options, lookupCommand, resolvedTier)
 			if err != nil {
 				return err
 			}
@@ -151,7 +169,23 @@ func newDepsInstallCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
 	cmd.Flags().StringVar(&tier, "tier", "", "override the dependency install tier (homebrew, debian, fedora, arch, generic); default: auto-detect from the host")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview dependency install actions without executing package managers")
+	cmd.Flags().BoolVar(&yes, "yes", false, "execute dependency install actions without interactive confirmation")
 	return cmd
+}
+
+type depsExecRunner struct {
+	ctx    context.Context
+	stdin  io.Reader
+	stdout io.Writer
+	stderr io.Writer
+}
+
+func (r depsExecRunner) Run(executable string, args []string) error {
+	cmd := exec.CommandContext(r.ctx, executable, args...)
+	cmd.Stdin = r.stdin
+	cmd.Stdout = r.stdout
+	cmd.Stderr = r.stderr
+	return cmd.Run()
 }
 
 // lookupCommand reports whether a command resolves on the current PATH. It is

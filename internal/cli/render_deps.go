@@ -82,3 +82,36 @@ func renderDepsInstallDryRun(w io.Writer, report deps.InstallDryRunReport) {
 
 	fmt.Fprintf(w, "\nSummary: %s\n", pluralizeDeps(len(report.Items)))
 }
+
+// renderDepsInstall writes the stable dots summary after real package-manager
+// execution has already streamed through the command's stdio handles.
+func renderDepsInstall(w io.Writer, report deps.InstallReport) {
+	fmt.Fprintf(w, "\nDependency install for profile %q (%s)\n\n", report.Profile, report.Tier)
+
+	if len(report.Items) == 0 {
+		fmt.Fprintln(w, "All declared dependencies are already installed.")
+		return
+	}
+
+	var installed, manual, unresolved, failed int
+	for _, item := range report.Items {
+		hint := item.Manual
+		if item.Executable != "" {
+			parts := append([]string{item.Executable}, item.Args...)
+			hint = strings.Join(parts, " ")
+		}
+		fmt.Fprintf(w, "  %-10s %-24s %s\n", item.Status, item.Dependency, hint)
+		switch item.Status {
+		case deps.InstallStatusInstalled:
+			installed++
+		case deps.InstallStatusManual:
+			manual++
+		case deps.InstallStatusUnresolved:
+			unresolved++
+		case deps.InstallStatusFailed:
+			failed++
+		}
+	}
+
+	fmt.Fprintf(w, "\nSummary: %d installed, %d manual, %d unresolved, %d failed\n", installed, manual, unresolved, failed)
+}
