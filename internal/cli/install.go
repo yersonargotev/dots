@@ -60,27 +60,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			var decisions map[string]install.ConflictDecision
-			switch {
-			case yes:
-				// Non-interactive: conflicts deliberately default to skip.
-			case noTUI:
-				decisions, err = promptConflictDecisions(cmd, p, paths.Home, paths.SourceRoot)
-				if err != nil {
-					return err
-				}
-			default:
-				decisions, err = resolveConflictsTUI(cmd, p, paths.Home, paths.SourceRoot)
-				if errors.Is(err, tui.ErrCanceled) {
-					fmt.Fprintln(cmd.OutOrStdout(), "Conflict resolution canceled; no changes applied.")
-					return nil
-				}
-				if err != nil {
-					return err
-				}
-			}
-
-			return install.Apply(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
+			return resolveAndApply(cmd, p, paths, yes, noTUI)
 		},
 	}
 
@@ -93,6 +73,37 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&yes, "yes", false, "apply safe install actions without prompting; conflicts default to skip")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
 	return cmd
+}
+
+// resolveAndApply resolves the plan's conflicts (via the TUI, text prompts, or
+// the conservative --yes default) and applies it with Backup Set protection. It
+// is shared by install and update so post-update installation reuses identical
+// Conflict Resolution and filesystem machinery instead of reimplementing it.
+func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI bool) error {
+	var (
+		decisions map[string]install.ConflictDecision
+		err       error
+	)
+	switch {
+	case yes:
+		// Non-interactive: conflicts deliberately default to skip.
+	case noTUI:
+		decisions, err = promptConflictDecisions(cmd, p, paths.Home, paths.SourceRoot)
+		if err != nil {
+			return err
+		}
+	default:
+		decisions, err = resolveConflictsTUI(cmd, p, paths.Home, paths.SourceRoot)
+		if errors.Is(err, tui.ErrCanceled) {
+			fmt.Fprintln(cmd.OutOrStdout(), "Conflict resolution canceled; no changes applied.")
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return install.Apply(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
 }
 
 // resolveConflictsTUI launches the Bubble Tea conflict resolver for the plan's

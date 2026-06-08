@@ -28,7 +28,7 @@ v1 proves that the Dotfiles CLI can install repository-owned configuration safel
 |---------------|-----------------|--------------------|
 | Homebrew Distribution | v1.1 or phase 2 | GitHub Releases and checksum-based bootstrapping must be stable before adding tap, formula, or bottle maintenance. |
 | Automatic dependency installation | Later than v1 | Installing packages introduces package-manager selection, sudo behavior, distro differences, repositories, taps, version constraints, and higher operational risk. |
-| `dots update` | v1.1 | Updating the Installed Repository introduces Git state, local changes, versioning, and post-update conflict handling. |
+| `dots update` | v1.1 — **shipped** | Updating the Installed Repository introduces Git state, local changes, versioning, and post-update conflict handling. Delivered in v1.1; see [`docs/update.md`](update.md). |
 | Neovim and larger application configurations | Later than v1 | Larger app configs introduce plugin, language-server, and dependency complexity that distracts from proving installer correctness. |
 | Windows support | Later than v1 | v1 focuses on macOS and Linux Supported Platforms only. Windows needs separate path, shell, package, and platform behavior decisions. |
 | Official WSL support | Later than v1 | WSL has mixed Windows/Linux filesystem and dependency concerns that should not be treated as generic Linux during the first release. |
