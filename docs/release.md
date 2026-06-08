@@ -48,6 +48,26 @@ shasum -a 256 -c checksums.txt
 
 On Linux, `sha256sum -c checksums.txt` is equivalent.
 
+## Bootstrapper install
+
+Install a published v0.x release with the checksum-verified Bootstrapper:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | DOTS_VERSION=v0.1.0 bash
+```
+
+The Bootstrapper downloads `checksums.txt` and the matching platform artifact from GitHub Releases, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, and then delegates setup to:
+
+```bash
+~/.local/bin/dots install
+```
+
+For development checkouts, pass the Installed Repository override through the Bootstrapper instead of duplicating install behavior in shell:
+
+```bash
+DOTS_VERSION=v0.1.0 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
+```
+
 ## Release details
 
 | Topic | Decision |
@@ -64,5 +84,5 @@ On Linux, `sha256sum -c checksums.txt` is equivalent.
 - [ ] The workflow completed from the tag commit.
 - [ ] All four platform artifacts are attached to the GitHub Release.
 - [ ] `checksums.txt` contains one SHA-256 entry for each artifact.
-- [ ] The Bootstrapper can later map its detected `goos/goarch` to the matching artifact name.
+- [ ] The Bootstrapper maps its detected `goos/goarch` to the matching artifact name.
 - [ ] No Homebrew Distribution step was added.
