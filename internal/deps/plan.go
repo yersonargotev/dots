@@ -2,17 +2,32 @@ package deps
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 )
 
+// InstallAction is the structured installation intent for one missing
+// Dependency. Executable and Args are safe argv-shaped data for future runners;
+// Manual is set when the dependency has no executable package-manager action for
+// the active Tier.
+type InstallAction struct {
+	Dependency string
+	Package    string
+	Executable string
+	Args       []string
+	Manual     string
+}
+
 // Guidance is the advisory installation hint for one missing Dependency. Command
-// is a ready-to-run install command when the Dependency has a package mapping for
-// the active Tier; otherwise Manual carries a fallback note and Command is empty.
+// is a human-rendered install command when the Dependency has a package mapping
+// for the active Tier; otherwise Manual carries a fallback note and Command is
+// empty. Action carries the structured model that Command renders from.
 type Guidance struct {
 	Name    string
 	Command string
 	Manual  string
+	Action  InstallAction
 }
 
 // PlanReport is the Dependency Plan for a Profile: OS-aware guidance for the
@@ -20,6 +35,7 @@ type Guidance struct {
 type PlanReport struct {
 	Profile string
 	Tier    Tier
+	Actions []InstallAction
 	Items   []Guidance
 }
 
@@ -36,37 +52,56 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, tier Tier) (PlanReport
 		if look(dep.Probe()) {
 			continue
 		}
-		report.Items = append(report.Items, guidanceFor(dep, tier))
+		action := actionFor(dep, tier)
+		report.Actions = append(report.Actions, action)
+		report.Items = append(report.Items, guidanceFor(action))
 	}
 	return report, nil
 }
 
-// guidanceFor builds the install hint for a single missing Dependency under a
-// Tier. When the Dependency declares a package for that Tier, the hint is a
-// concrete install command; otherwise it is a manual fallback note.
-func guidanceFor(dep manifest.Dependency, tier Tier) Guidance {
-	pkg, template := tierPackage(dep, tier)
+// actionFor builds the structured install action for a single missing
+// Dependency under a Tier.
+func actionFor(dep manifest.Dependency, tier Tier) InstallAction {
+	pkg, executable, args := tierPackage(dep, tier)
 	if pkg == "" {
-		return Guidance{Name: dep.Name, Manual: manualNote(dep, tier)}
+		return InstallAction{Dependency: dep.Name, Manual: manualNote(dep, tier)}
 	}
-	return Guidance{Name: dep.Name, Command: fmt.Sprintf(template, pkg)}
+	return InstallAction{
+		Dependency: dep.Name,
+		Package:    pkg,
+		Executable: executable,
+		Args:       append(args, pkg),
+	}
 }
 
-// tierPackage returns the package identifier and the install command template
-// for a Dependency under a Tier. A blank package means there is no mapping and
-// the caller must fall back to manual guidance.
-func tierPackage(dep manifest.Dependency, tier Tier) (pkg, template string) {
+// guidanceFor renders advisory compatibility fields from the structured action.
+func guidanceFor(action InstallAction) Guidance {
+	if action.Executable == "" {
+		return Guidance{Name: action.Dependency, Manual: action.Manual, Action: action}
+	}
+	return Guidance{Name: action.Dependency, Command: action.commandHint(), Action: action}
+}
+
+func (a InstallAction) commandHint() string {
+	parts := append([]string{a.Executable}, a.Args...)
+	return strings.Join(parts, " ")
+}
+
+// tierPackage returns the package identifier and argv prefix for a Dependency
+// under a Tier. A blank package means there is no mapping and the caller must
+// fall back to manual guidance.
+func tierPackage(dep manifest.Dependency, tier Tier) (pkg, executable string, args []string) {
 	switch tier {
 	case TierHomebrew:
-		return dep.Brew, "brew install %s"
+		return dep.Brew, "brew", []string{"install"}
 	case TierDebian:
-		return dep.Apt, "sudo apt-get install %s"
+		return dep.Apt, "sudo", []string{"apt-get", "install"}
 	case TierFedora:
-		return dep.Dnf, "sudo dnf install %s"
+		return dep.Dnf, "sudo", []string{"dnf", "install"}
 	case TierArch:
-		return dep.Pacman, "sudo pacman -S %s"
+		return dep.Pacman, "sudo", []string{"pacman", "-S"}
 	default:
-		return "", ""
+		return "", "", nil
 	}
 }
 
