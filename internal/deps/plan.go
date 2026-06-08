@@ -13,6 +13,7 @@ import (
 // the active Tier.
 type InstallAction struct {
 	Dependency string
+	Probe      string
 	Package    string
 	Executable string
 	Args       []string
@@ -64,10 +65,11 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, tier Tier) (PlanReport
 func actionFor(dep manifest.Dependency, tier Tier) InstallAction {
 	pkg, executable, args := tierPackage(dep, tier)
 	if pkg == "" {
-		return InstallAction{Dependency: dep.Name, Manual: manualNote(dep, tier)}
+		return InstallAction{Dependency: dep.Name, Probe: dep.Probe(), Manual: manualNote(dep, tier)}
 	}
 	return InstallAction{
 		Dependency: dep.Name,
+		Probe:      dep.Probe(),
 		Package:    pkg,
 		Executable: executable,
 		Args:       append(args, pkg),

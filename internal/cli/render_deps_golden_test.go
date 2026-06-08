@@ -77,6 +77,40 @@ func TestRenderDepsPlanGolden(t *testing.T) {
 	}
 }
 
+func TestRenderDepsInstallDryRunGolden(t *testing.T) {
+	tests := []struct {
+		name   string
+		report deps.InstallDryRunReport
+		golden string
+	}{
+		{
+			name: "would-install and manual previews",
+			report: deps.InstallDryRunReport{
+				Profile: "default",
+				Tier:    deps.TierDebian,
+				Items: []deps.InstallPreview{
+					{Dependency: "starship", Status: deps.InstallPreviewWouldInstall, Package: "starship", Executable: "sudo", Args: []string{"apt-get", "install", "starship"}},
+					{Dependency: "neovim", Status: deps.InstallPreviewManual, Manual: `no debian package declared for "neovim"; install it manually`},
+				},
+			},
+			golden: "deps_install_dry_run_mixed.golden",
+		},
+		{
+			name:   "nothing to install",
+			report: deps.InstallDryRunReport{Profile: "default", Tier: deps.TierHomebrew},
+			golden: "deps_install_dry_run_empty.golden",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			renderDepsInstallDryRun(&out, tt.report)
+			assertGolden(t, tt.golden, out.Bytes())
+		})
+	}
+}
+
 func assertGolden(t *testing.T, golden string, got []byte) {
 	t.Helper()
 	goldenPath := filepath.Join("testdata", golden)

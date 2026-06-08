@@ -1,7 +1,7 @@
 // Package deps computes Dependency findings for a Profile: which external tools
-// a workstation needs for its Managed Entries, whether they are present, and
-// OS-aware advisory guidance for installing the missing ones. dots never
-// installs packages itself in v1; this package only inspects and advises.
+// a workstation needs for its Managed Entries, whether they are present,
+// OS-aware advisory guidance for installing the missing ones, and explicitly
+// confirmed package-manager execution.
 package deps
 
 import (
