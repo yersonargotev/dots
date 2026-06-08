@@ -369,7 +369,7 @@ func applyCreate(action plan.Action, source string) error {
 }
 
 func applyReplace(action plan.Action, source string, opts Options) error {
-	if err := createBackupSet(opts.StateRoot, action.Target); err != nil {
+	if err := createBackupSet(opts, action.Target); err != nil {
 		return err
 	}
 	if err := os.Remove(action.Target); err != nil {
@@ -388,7 +388,7 @@ func applyAdopt(action plan.Action, source string, opts Options) error {
 	if action.Strategy != "symlink" {
 		return nil
 	}
-	if err := createBackupSet(opts.StateRoot, action.Target); err != nil {
+	if err := createBackupSet(opts, action.Target); err != nil {
 		return err
 	}
 	if err := os.Remove(action.Target); err != nil {
@@ -454,58 +454,24 @@ func copyAdoptedTargetToSource(target, source string) error {
 	return nil
 }
 
-func createBackupSet(stateRoot, target string) error {
-	now := time.Now().UTC()
-	set := backups.BackupSet{
-		ID:        "backup-" + now.Format("20060102T150405.000000000Z"),
-		CreatedAt: now.Format(time.RFC3339),
-		Reason:    "pre-install conflict protection",
-		Targets:   []string{target},
-	}
-	backupFile := filepath.Join(stateRoot, "backups", set.ID, "files", "000001-"+filepath.Base(target))
-	if err := copyBackupTarget(target, backupFile); err != nil {
-		return err
-	}
-
-	metadataPath := backups.Path(stateRoot)
-	meta, err := backups.Load(metadataPath)
-	if err != nil {
-		return err
-	}
-	meta.Version = 1
-	meta.Sets = append(meta.Sets, set)
-	return backups.Save(metadataPath, meta)
+func createBackupSet(opts Options, target string) error {
+	_, err := backups.CreateSet(opts.StateRoot, []string{target}, backups.CreateOptions{
+		Reason:  "pre-install conflict protection",
+		Machine: machineName(),
+		Repo:    opts.SourceRoot,
+	})
+	return err
 }
 
-func copyBackupTarget(target, backupFile string) error {
-	info, err := os.Lstat(target)
+// machineName identifies the workstation a Backup Set was created on so restore
+// can refuse to write a set captured elsewhere. An unknown hostname is recorded
+// as an empty string rather than failing the install.
+func machineName() string {
+	name, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("stat backup target %s: %w", target, err)
+		return ""
 	}
-	if err := os.MkdirAll(filepath.Dir(backupFile), 0o755); err != nil {
-		return fmt.Errorf("create Backup Set directory: %w", err)
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		dest, err := os.Readlink(target)
-		if err != nil {
-			return fmt.Errorf("read backup symlink %s: %w", target, err)
-		}
-		if err := os.Symlink(dest, backupFile); err != nil {
-			return fmt.Errorf("backup symlink %s: %w", target, err)
-		}
-		return nil
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("backup target %s is not a regular file or symlink", target)
-	}
-	data, err := os.ReadFile(target)
-	if err != nil {
-		return fmt.Errorf("read backup target %s: %w", target, err)
-	}
-	if err := os.WriteFile(backupFile, data, info.Mode().Perm()); err != nil {
-		return fmt.Errorf("write backup target %s: %w", backupFile, err)
-	}
-	return nil
+	return name
 }
 
 func copyRegularFile(source, target string) error {

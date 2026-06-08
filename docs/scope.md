@@ -34,7 +34,7 @@ v1 proves that the Dotfiles CLI can install repository-owned configuration safel
 | Official WSL support | Later than v1 | WSL has mixed Windows/Linux filesystem and dependency concerns that should not be treated as generic Linux during the first release. |
 | NixOS specialization | Later than v1 | NixOS requires specialized package and system-configuration assumptions that do not fit the v1 advisory Dependency Plan. |
 | Alpine/musl specialization | Later than v1 | Alpine and musl introduce distribution and binary compatibility concerns outside the initial Linux amd64/arm64 release target. |
-| Automatic backup restore | Optional or later | v1 must make Backup Sets visible and reliable first; restore behavior can be added after backup metadata and status behavior are proven. |
+| Automatic backup restore | v1.1 — **shipped** | v1 made Backup Sets visible and reliable via `dots backups list`; with Backup Metadata proven, `dots backups restore` returns targets to a preserved Backup Set, refuses sets from another machine without `--force`, supports `--dry-run`, and backs up overwritten targets first. Delivered in v1.1; see [`docs/backups.md`](backups.md). |
 | Full visual TUI snapshot testing | Later than v1 | v1 tests TUI state transitions, but installer correctness matters more than pixel-perfect terminal rendering. |
 
 ## Why these boundaries exist
