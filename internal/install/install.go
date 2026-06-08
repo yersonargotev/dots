@@ -457,21 +457,10 @@ func copyAdoptedTargetToSource(target, source string) error {
 func createBackupSet(opts Options, target string) error {
 	_, err := backups.CreateSet(opts.StateRoot, []string{target}, backups.CreateOptions{
 		Reason:  "pre-install conflict protection",
-		Machine: machineName(),
+		Machine: backups.MachineName(),
 		Repo:    opts.SourceRoot,
 	})
 	return err
-}
-
-// machineName identifies the workstation a Backup Set was created on so restore
-// can refuse to write a set captured elsewhere. An unknown hostname is recorded
-// as an empty string rather than failing the install.
-func machineName() string {
-	name, err := os.Hostname()
-	if err != nil {
-		return ""
-	}
-	return name
 }
 
 func copyRegularFile(source, target string) error {

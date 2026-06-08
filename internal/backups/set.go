@@ -14,6 +14,17 @@ type CreateOptions struct {
 	Repo    string
 }
 
+// MachineName identifies the workstation a Backup Set is created on so restore
+// can refuse to write a set captured elsewhere. An unknown hostname is reported
+// as an empty string rather than failing, letting callers decide how to treat it.
+func MachineName() string {
+	name, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	return name
+}
+
 // CreateSet copies each target into a new Backup Set and appends it to the
 // Backup Metadata under stateRoot. Targets are preserved by content: regular
 // files keep their permissions and symlinks keep their destination. The created
@@ -144,8 +155,19 @@ func restoreItem(item RestoreItem) error {
 	if err := os.MkdirAll(filepath.Dir(item.Target), 0o755); err != nil {
 		return fmt.Errorf("create parent directory for %s: %w", item.Target, err)
 	}
-	if err := os.RemoveAll(item.Target); err != nil {
-		return fmt.Errorf("remove current target %s: %w", item.Target, err)
+	// A Backup Set only ever preserves regular files and symlinks, so restoring
+	// one must never recursively delete a directory tree that now sits at the
+	// target. Refuse a directory and remove only a file or symlink, which fails
+	// closed (os.Remove will not delete a non-empty directory).
+	if current, err := os.Lstat(item.Target); err == nil {
+		if current.IsDir() {
+			return fmt.Errorf("refusing to restore over directory %s", item.Target)
+		}
+		if err := os.Remove(item.Target); err != nil {
+			return fmt.Errorf("remove current target %s: %w", item.Target, err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat current target %s: %w", item.Target, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		dest, err := os.Readlink(item.BackupFile)

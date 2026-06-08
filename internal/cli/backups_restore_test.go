@@ -206,6 +206,47 @@ func TestBackupsRestoreBacksUpOverwrittenTargetFirst(t *testing.T) {
 	}
 }
 
+func TestBackupsRestoreRejectsTargetOutsideHome(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir() // explicit external state root, outside home
+	outside := t.TempDir()
+	victim := filepath.Join(outside, ".victim")
+	if err := os.WriteFile(victim, []byte("do not touch\n"), 0o600); err != nil {
+		t.Fatalf("write victim: %v", err)
+	}
+
+	// Hand-crafted metadata whose target escapes the home sandbox. Trusting the
+	// external state root's location must not extend to trusting this target.
+	if err := os.MkdirAll(filepath.Join(stateRoot, "backups", "backup-evil", "files"), 0o755); err != nil {
+		t.Fatalf("mkdir set: %v", err)
+	}
+	preserved := backups.FilePath(stateRoot, "backup-evil", 1, victim)
+	if err := os.WriteFile(preserved, []byte("payload\n"), 0o600); err != nil {
+		t.Fatalf("write preserved: %v", err)
+	}
+	meta := backups.Metadata{Version: 1, Sets: []backups.BackupSet{{
+		ID: "backup-evil", CreatedAt: "2026-06-08T10:00:00Z", Reason: "x", Targets: []string{victim},
+	}}}
+	if err := backups.Save(backups.Path(stateRoot), meta); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+
+	out, err := runRestore(t, "backup-evil", "--home", home, "--state-root", stateRoot)
+	if err == nil {
+		t.Fatalf("restore Execute() error = nil, want out-of-home rejection\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "escapes home") && !strings.Contains(err.Error(), "restore target") {
+		t.Fatalf("error %q does not report the out-of-home target", err)
+	}
+	got, err := os.ReadFile(victim)
+	if err != nil {
+		t.Fatalf("read victim: %v", err)
+	}
+	if string(got) != "do not touch\n" {
+		t.Fatalf("out-of-home target was modified: %q", got)
+	}
+}
+
 func TestBackupsRestoreUnknownSetReports(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := t.TempDir()

@@ -3,6 +3,7 @@ package backups
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -135,6 +136,48 @@ func TestApplyRestoreReturnsTargetsToPreservedContent(t *testing.T) {
 	}
 	if string(got) != "original\n" {
 		t.Fatalf("restored content = %q, want original", got)
+	}
+}
+
+func TestApplyRestoreRefusesDirectoryTarget(t *testing.T) {
+	stateRoot := t.TempDir()
+	home := t.TempDir()
+	target := filepath.Join(home, ".config")
+	if err := os.WriteFile(target, []byte("was a file\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	set, err := CreateSet(stateRoot, []string{target}, CreateOptions{Reason: "x"})
+	if err != nil {
+		t.Fatalf("CreateSet() error = %v", err)
+	}
+
+	// The target is now a non-empty directory; restoring a preserved file must
+	// never recursively delete it.
+	if err := os.Remove(target); err != nil {
+		t.Fatalf("remove file target: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(target, "nested"), 0o755); err != nil {
+		t.Fatalf("mkdir dir target: %v", err)
+	}
+	canary := filepath.Join(target, "nested", "keep")
+	if err := os.WriteFile(canary, []byte("important\n"), 0o600); err != nil {
+		t.Fatalf("write canary: %v", err)
+	}
+
+	items, err := PlanRestore(stateRoot, set)
+	if err != nil {
+		t.Fatalf("PlanRestore() error = %v", err)
+	}
+	err = ApplyRestore(items)
+	if err == nil {
+		t.Fatal("ApplyRestore() error = nil, want directory refusal")
+	}
+	if !strings.Contains(err.Error(), "directory") {
+		t.Fatalf("error %q does not mention directory", err)
+	}
+	if _, statErr := os.Stat(canary); statErr != nil {
+		t.Fatalf("directory tree was destroyed: %v", statErr)
 	}
 }
 

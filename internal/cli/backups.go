@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/backups"
@@ -114,11 +113,13 @@ func newBackupsRestoreCommand() *cobra.Command {
 				return err
 			}
 
-			if validatePaths {
-				for _, target := range set.Targets {
-					if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(target, paths.Home, "restore target"); err != nil {
-						return err
-					}
+			// Restore writes to the recorded targets, so they must always be
+			// inside the home sandbox regardless of where the state root lives.
+			// Trusting an explicit external state root's *location* must never
+			// extend to trusting the *targets* recorded in its metadata.
+			for _, target := range set.Targets {
+				if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(target, paths.Home, "restore target"); err != nil {
+					return err
 				}
 			}
 
@@ -139,7 +140,7 @@ func newBackupsRestoreCommand() *cobra.Command {
 			if len(overwritten) > 0 {
 				safety, err := backups.CreateSet(paths.StateRoot, overwritten, backups.CreateOptions{
 					Reason:  "pre-restore safety backup",
-					Machine: machineName(),
+					Machine: backups.MachineName(),
 					Repo:    set.Repo,
 				})
 				if err != nil {
@@ -166,13 +167,18 @@ func newBackupsRestoreCommand() *cobra.Command {
 
 // ensureMachineMatch refuses a Backup Set captured on a different machine unless
 // the operator forces it. A set with no recorded machine (created before
-// provenance tracking) is allowed because there is nothing to mismatch.
+// provenance tracking) is allowed because there is nothing to mismatch. If the
+// current machine name cannot be determined it fails closed, requiring --force,
+// rather than silently treating an unknown machine as a match.
 func ensureMachineMatch(set backups.BackupSet, force bool) error {
 	if force || set.Machine == "" {
 		return nil
 	}
-	current := machineName()
-	if current == "" || set.Machine == current {
+	current := backups.MachineName()
+	if current == "" {
+		return fmt.Errorf("cannot determine current machine to verify Backup Set %s captured on %q; re-run with --force to restore anyway", set.ID, set.Machine)
+	}
+	if set.Machine == current {
 		return nil
 	}
 	return fmt.Errorf("Backup Set %s was captured on machine %q but this machine is %q; re-run with --force to restore anyway", set.ID, set.Machine, current)
@@ -186,13 +192,4 @@ func overwriteTargets(items []backups.RestoreItem) []string {
 		}
 	}
 	return targets
-}
-
-// machineName identifies the current workstation for Backup Set provenance.
-func machineName() string {
-	name, err := os.Hostname()
-	if err != nil {
-		return ""
-	}
-	return name
 }
