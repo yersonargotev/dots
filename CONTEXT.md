@@ -101,7 +101,7 @@ A workstation state where a managed target no longer matches the repository-owne
 _Avoid_: local change, mismatch, dirty config
 
 **Dotfiles Update**:
-The future workflow that updates the Installed Repository and reapplies or rechecks managed configuration. It is documented for v1.1 rather than required for the first v1 MVP.
+The `dots update` workflow that fast-forwards the Installed Repository to its upstream and re-runs the safe install flow so managed configuration stays aligned with the Source of Truth. It refuses to touch a repository with local changes and only ever applies a clean fast-forward, never a merge or rebase. Shipped in v1.1.
 _Avoid_: sync, pull, upgrade
 
 **Repository Layout**:
