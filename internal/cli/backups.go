@@ -136,24 +136,19 @@ func newBackupsRestoreCommand() *cobra.Command {
 				return nil
 			}
 
-			overwritten := overwriteTargets(items)
-			if len(overwritten) > 0 {
-				safety, err := backups.CreateSet(paths.StateRoot, overwritten, backups.CreateOptions{
-					Reason:  "pre-restore safety backup",
-					Machine: backups.MachineName(),
-					Repo:    set.Repo,
-				})
-				if err != nil {
-					return err
-				}
-				fmt.Fprintf(out, "\nBacked up %s to Backup Set %s before restoring.\n", pluralizeTargets(len(overwritten)), safety.ID)
-			}
-
-			if err := backups.ApplyRestore(items); err != nil {
+			result, err := backups.Restore(paths.StateRoot, set, backups.RestoreOptions{
+				Machine: backups.MachineName(),
+				Repo:    set.Repo,
+			})
+			if err != nil {
 				return err
 			}
 
-			fmt.Fprintf(out, "Restored %s from Backup Set %s.\n", pluralizeTargets(len(items)), set.ID)
+			if result.SafetySet != nil {
+				fmt.Fprintf(out, "\nBacked up %s to Backup Set %s before restoring.\n", pluralizeTargets(len(result.SafetySet.Targets)), result.SafetySet.ID)
+			}
+
+			fmt.Fprintf(out, "Restored %s from Backup Set %s.\n", pluralizeTargets(len(result.Items)), set.ID)
 			return nil
 		},
 	}
@@ -182,14 +177,4 @@ func ensureMachineMatch(set backups.BackupSet, force bool) error {
 		return nil
 	}
 	return fmt.Errorf("Backup Set %s was captured on machine %q but this machine is %q; re-run with --force to restore anyway", set.ID, set.Machine, current)
-}
-
-func overwriteTargets(items []backups.RestoreItem) []string {
-	targets := make([]string, 0, len(items))
-	for _, item := range items {
-		if item.Action == backups.RestoreOverwrite {
-			targets = append(targets, item.Target)
-		}
-	}
-	return targets
 }

@@ -126,8 +126,8 @@ func TestApplyRestoreReturnsTargetsToPreservedContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanRestore() error = %v", err)
 	}
-	if err := ApplyRestore(items); err != nil {
-		t.Fatalf("ApplyRestore() error = %v", err)
+	if err := applyRestore(items); err != nil {
+		t.Fatalf("applyRestore() error = %v", err)
 	}
 
 	got, err := os.ReadFile(target)
@@ -169,15 +169,84 @@ func TestApplyRestoreRefusesDirectoryTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanRestore() error = %v", err)
 	}
-	err = ApplyRestore(items)
+	err = applyRestore(items)
 	if err == nil {
-		t.Fatal("ApplyRestore() error = nil, want directory refusal")
+		t.Fatal("applyRestore() error = nil, want directory refusal")
 	}
 	if !strings.Contains(err.Error(), "directory") {
 		t.Fatalf("error %q does not mention directory", err)
 	}
 	if _, statErr := os.Stat(canary); statErr != nil {
 		t.Fatalf("directory tree was destroyed: %v", statErr)
+	}
+}
+
+func TestRestoreRecordsSafetyBackupBeforeOverwriting(t *testing.T) {
+	stateRoot := t.TempDir()
+	home := t.TempDir()
+	target := filepath.Join(home, ".zshrc")
+	if err := os.WriteFile(target, []byte("original\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	set, err := CreateSet(stateRoot, []string{target}, CreateOptions{Reason: "x"})
+	if err != nil {
+		t.Fatalf("CreateSet() error = %v", err)
+	}
+	if err := os.WriteFile(target, []byte("drifted\n"), 0o600); err != nil {
+		t.Fatalf("drift target: %v", err)
+	}
+
+	result, err := Restore(stateRoot, set, RestoreOptions{Machine: "m", Repo: "r"})
+	if err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if result.SafetySet == nil {
+		t.Fatal("Restore() recorded no safety Backup Set for an overwrite")
+	}
+	if result.SafetySet.Reason != RestoreSafetyReason {
+		t.Fatalf("safety reason = %q, want %q", result.SafetySet.Reason, RestoreSafetyReason)
+	}
+
+	// Target is restored.
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != "original\n" {
+		t.Fatalf("restored content = %q, want original", got)
+	}
+	// The safety set preserved the drifted content, so the restore is reversible.
+	preserved, err := os.ReadFile(FilePath(stateRoot, result.SafetySet.ID, 1, target))
+	if err != nil {
+		t.Fatalf("read safety preserved: %v", err)
+	}
+	if string(preserved) != "drifted\n" {
+		t.Fatalf("safety preserved %q, want drifted", preserved)
+	}
+}
+
+func TestRestoreSkipsSafetyBackupWhenNothingOverwritten(t *testing.T) {
+	stateRoot := t.TempDir()
+	home := t.TempDir()
+	target := filepath.Join(home, ".zshrc")
+	if err := os.WriteFile(target, []byte("original\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	set, err := CreateSet(stateRoot, []string{target}, CreateOptions{Reason: "x"})
+	if err != nil {
+		t.Fatalf("CreateSet() error = %v", err)
+	}
+	if err := os.Remove(target); err != nil { // absent -> create, not overwrite
+		t.Fatalf("remove target: %v", err)
+	}
+
+	result, err := Restore(stateRoot, set, RestoreOptions{})
+	if err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if result.SafetySet != nil {
+		t.Fatalf("Restore() recorded an unnecessary safety Backup Set: %s", result.SafetySet.ID)
 	}
 }
 
@@ -201,8 +270,8 @@ func TestApplyRestoreRecreatesSymlinkTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanRestore() error = %v", err)
 	}
-	if err := ApplyRestore(items); err != nil {
-		t.Fatalf("ApplyRestore() error = %v", err)
+	if err := applyRestore(items); err != nil {
+		t.Fatalf("applyRestore() error = %v", err)
 	}
 
 	dest, err := os.Readlink(target)

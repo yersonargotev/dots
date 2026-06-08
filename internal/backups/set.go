@@ -135,10 +135,73 @@ func PlanRestore(stateRoot string, set BackupSet) ([]RestoreItem, error) {
 	return items, nil
 }
 
-// ApplyRestore writes each preserved file back to its target, replacing any file
-// currently at that path. Callers are responsible for backing up overwritten
-// targets first via CreateSet; ApplyRestore performs only the write.
-func ApplyRestore(items []RestoreItem) error {
+// RestoreSafetyReason is the reason recorded on the Backup Set that Restore
+// captures for any target it would overwrite, so a restore is never one-way.
+const RestoreSafetyReason = "pre-restore safety backup"
+
+// RestoreOptions carries the provenance recorded on the pre-restore safety
+// Backup Set taken before overwriting existing targets.
+type RestoreOptions struct {
+	Machine string
+	Repo    string
+}
+
+// RestoreResult reports what Restore did: the per-target plan it executed and,
+// when any existing target was overwritten, the safety Backup Set it recorded
+// first (nil when nothing needed overwriting).
+type RestoreResult struct {
+	Items     []RestoreItem
+	SafetySet *BackupSet
+}
+
+// Restore returns the targets recorded in set to their preserved content. It is
+// the single safe entry point for writing a restore: it plans against the
+// current filesystem, records a pre-restore safety Backup Set for every target
+// it would overwrite, and only then writes the preserved files back. Bundling
+// the safety backup with the write here makes the "never overwrite without a
+// backup" invariant impossible for callers to skip — the write primitive is not
+// exported on its own.
+func Restore(stateRoot string, set BackupSet, opts RestoreOptions) (RestoreResult, error) {
+	items, err := PlanRestore(stateRoot, set)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	result := RestoreResult{Items: items}
+
+	if overwritten := overwriteTargets(items); len(overwritten) > 0 {
+		safety, err := CreateSet(stateRoot, overwritten, CreateOptions{
+			Reason:  RestoreSafetyReason,
+			Machine: opts.Machine,
+			Repo:    opts.Repo,
+		})
+		if err != nil {
+			return RestoreResult{}, err
+		}
+		result.SafetySet = &safety
+	}
+
+	if err := applyRestore(items); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+// overwriteTargets returns the targets whose current content Restore must back
+// up before replacing them.
+func overwriteTargets(items []RestoreItem) []string {
+	targets := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Action == RestoreOverwrite {
+			targets = append(targets, item.Target)
+		}
+	}
+	return targets
+}
+
+// applyRestore writes each preserved file back to its target. It is unexported
+// on purpose: callers reach it only through Restore, which takes the safety
+// backup first.
+func applyRestore(items []RestoreItem) error {
 	for _, item := range items {
 		if err := restoreItem(item); err != nil {
 			return err
