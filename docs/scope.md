@@ -1,6 +1,6 @@
 # v1 Scope and Deferred Work
 
-v1 proves that the Dotfiles CLI can install repository-owned configuration safely before the project expands into package management, update orchestration, or larger application configuration. These boundaries protect installer correctness, preserve the Source of Truth, and prevent Machine-Specific Configuration from leaking into shared Managed Configuration.
+v1 proves that the Dotfiles CLI can install repository-owned configuration safely and handle missing Dependencies with explicit guardrails before the project expands into update orchestration or larger application configuration. These boundaries protect installer correctness, preserve the Source of Truth, and prevent Machine-Specific Configuration from leaking into shared Managed Configuration.
 
 ## Quick review path
 
@@ -16,7 +16,7 @@ v1 proves that the Dotfiles CLI can install repository-owned configuration safel
 | Conflict safety | Conflict Resolution supports explicit choices such as `skip`, `replace`, `adopt`, and `diff`; replacement requires a Backup Set first, and adoption must be explicit to avoid contaminating the Source of Truth. |
 | Status | `dots status` reports Dotfiles Status, including whether Managed Entries are installed, missing, conflicting, skipped, drifted, or unsupported. |
 | Diagnostics | `dots doctor` reports platform, dependency, secret, and configuration concerns without pretending that guardrails are a complete audit. |
-| Dependency guidance | `dots deps check` and `dots deps plan` detect missing Dependencies and produce an OS-aware Dependency Plan. v1 gives guidance only; it does not install packages. |
+| Dependency management | `dots deps check`, `dots deps plan`, and `dots deps install` detect missing Dependencies, show OS-aware guidance, preview installable actions, and execute package-manager commands only after `--yes` or interactive confirmation. Manual-only Dependencies remain manual. |
 | Backups list | `dots backups list` exposes Backup Sets and Backup Metadata so preserved files can be audited after installation. |
 | Release artifacts | GitHub Releases publish platform-specific Release Artifacts for macOS amd64/arm64 and Linux amd64/arm64. |
 | Bootstrapper support | The Bootstrapper downloads the matching Release Artifact, performs Checksum Verification, installs or locates `dots`, and delegates setup to the Dotfiles CLI. |
@@ -27,7 +27,7 @@ v1 proves that the Dotfiles CLI can install repository-owned configuration safel
 
 | Deferred item | Earliest target | Why it is deferred |
 |---------------|-----------------|--------------------|
-| Automatic dependency installation | Later than v1 | Installing packages introduces package-manager selection, sudo behavior, distro differences, repositories, taps, version constraints, and higher operational risk. |
+| Advanced dependency orchestration | Later than v1 | Rollback, version constraints, repository/tap/index refresh, reinstall, and upgrade behavior introduce package-manager state decisions beyond the guarded v1 install flow. |
 | `dots update` | v1.1 — **shipped** | Updating the Installed Repository introduces Git state, local changes, versioning, and post-update conflict handling. Delivered in v1.1; see [`docs/update.md`](update.md). |
 | Neovim and larger application configurations | Later than v1 | Larger app configs introduce plugin, language-server, and dependency complexity that distracts from proving installer correctness. |
 | Windows support | Later than v1 | v1 focuses on macOS and Linux Supported Platforms only. Windows needs separate path, shell, package, and platform behavior decisions. |
@@ -47,9 +47,9 @@ The Bootstrapper is intentionally thin. It downloads, verifies, and launches the
 
 The repository-owned Source of Truth must not absorb accidental local state. Adoption exists for explicit migrations only. Machine-Specific Configuration belongs in Local Extension Points, ignored files, or external secret stores, not in shared Managed Configuration.
 
-### Dependency guidance is safer than dependency mutation
+### Dependency installation stays behind explicit consent
 
-A Dependency Plan helps the user understand missing tools without allowing v1 to mutate package-manager state. That boundary avoids surprise installs, sudo prompts, repository changes, and distro-specific behavior before the installer foundation is stable.
+A Dependency Plan helps the user understand missing tools before any package-manager command runs. `dots deps install` uses the same preview, asks for confirmation by default, and executes direct argv-shaped package-manager actions only for installable Dependencies. It does not bypass `sudo`, does not execute manual guidance, and does not claim rollback, version constraints, reinstall, or upgrade behavior.
 
 ### Distribution starts with verifiable artifacts
 
@@ -70,7 +70,7 @@ zsh, git, starship, and tmux are enough to prove symlink, template, copy, Local 
 
 Use this checklist when reviewing v1 issues or PRs:
 
-- [ ] The change strengthens safe installation, status, diagnostics, dependency guidance, backups, release artifacts, checksum Bootstrapper support, or Homebrew Distribution.
-- [ ] The change does not add automatic dependency installation, larger Deferred Configuration, or unsupported platform behavior to v1.
+- [ ] The change strengthens safe installation, status, diagnostics, guarded dependency management, backups, release artifacts, checksum Bootstrapper support, or Homebrew Distribution.
+- [ ] The change does not add advanced dependency orchestration, larger Deferred Configuration, or unsupported platform behavior to v1.
 - [ ] The change preserves Source of Truth integrity and does not make Machine-Specific Configuration part of shared Managed Configuration.
 - [ ] The change uses the project vocabulary from `CONTEXT.md` and the tradeoffs recorded in the ADR.

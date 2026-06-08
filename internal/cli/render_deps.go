@@ -64,7 +64,15 @@ func pluralizeDeps(n int) string {
 // renderDepsInstallDryRun writes a deterministic preview of dependency install
 // actions without executing package managers.
 func renderDepsInstallDryRun(w io.Writer, report deps.InstallDryRunReport) {
-	fmt.Fprintf(w, "Dependency install dry-run for profile %q (%s)\n\n", report.Profile, report.Tier)
+	renderDepsInstallPreviewWithTitle(w, "Dependency install dry-run", report)
+}
+
+func renderDepsInstallPreview(w io.Writer, report deps.InstallDryRunReport) {
+	renderDepsInstallPreviewWithTitle(w, "Dependency install preview", report)
+}
+
+func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.InstallDryRunReport) {
+	fmt.Fprintf(w, "%s for profile %q (%s)\n\n", title, report.Profile, report.Tier)
 
 	if len(report.Items) == 0 {
 		fmt.Fprintln(w, "All declared dependencies are already installed.")
@@ -80,7 +88,24 @@ func renderDepsInstallDryRun(w io.Writer, report deps.InstallDryRunReport) {
 		fmt.Fprintf(w, "  %-13s %-24s %s\n", item.Status, item.Dependency, hint)
 	}
 
-	fmt.Fprintf(w, "\nSummary: %s\n", pluralizeDeps(len(report.Items)))
+	installable, manual := countInstallPreviewActions(report)
+	fmt.Fprintf(w, "\nSummary: %d installable, %d manual\n", installable, manual)
+}
+
+func hasInstallablePreviewAction(report deps.InstallDryRunReport) bool {
+	installable, _ := countInstallPreviewActions(report)
+	return installable > 0
+}
+
+func countInstallPreviewActions(report deps.InstallDryRunReport) (installable int, manual int) {
+	for _, item := range report.Items {
+		if item.Executable == "" {
+			manual++
+			continue
+		}
+		installable++
+	}
+	return installable, manual
 }
 
 // renderDepsInstall writes the stable dots summary after real package-manager
