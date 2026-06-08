@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,6 +21,7 @@ func newDepsCommand() *cobra.Command {
 	}
 	cmd.AddCommand(newDepsCheckCommand())
 	cmd.AddCommand(newDepsPlanCommand())
+	cmd.AddCommand(newDepsInstallCommand())
 	return cmd
 }
 
@@ -100,6 +102,55 @@ func newDepsPlanCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
 	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
 	cmd.Flags().StringVar(&tier, "tier", "", "override the dependency plan tier (homebrew, debian, fedora, arch, generic); default: auto-detect from the host")
+	return cmd
+}
+
+func newDepsInstallCommand() *cobra.Command {
+	var (
+		file    string
+		profile string
+		tier    string
+		dryRun  bool
+	)
+
+	cmd := &cobra.Command{
+		Use:          "install",
+		Short:        "Preview dependency install actions",
+		Long:         "install previews dependency install actions with --dry-run. Real package-manager execution is not implemented yet.",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !dryRun {
+				return errors.New("deps install is not implemented yet; --dry-run is required in this release")
+			}
+
+			m, err := manifest.LoadFile(file)
+			if err != nil {
+				return err
+			}
+
+			resolvedTier, err := resolveTier(tier)
+			if err != nil {
+				return err
+			}
+
+			report, err := deps.InstallDryRun(*m, deps.Options{
+				Profile: profile,
+				OS:      runtime.GOOS,
+			}, lookupCommand, resolvedTier)
+			if err != nil {
+				return err
+			}
+
+			renderDepsInstallDryRun(cmd.OutOrStdout(), report)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
+	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
+	cmd.Flags().StringVar(&tier, "tier", "", "override the dependency install tier (homebrew, debian, fedora, arch, generic); default: auto-detect from the host")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview dependency install actions without executing package managers")
 	return cmd
 }
 

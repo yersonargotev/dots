@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/deps"
 )
@@ -58,4 +59,26 @@ func pluralizeDeps(n int) string {
 		return "1 dependency to install"
 	}
 	return fmt.Sprintf("%d dependencies to install", n)
+}
+
+// renderDepsInstallDryRun writes a deterministic preview of dependency install
+// actions without executing package managers.
+func renderDepsInstallDryRun(w io.Writer, report deps.InstallDryRunReport) {
+	fmt.Fprintf(w, "Dependency install dry-run for profile %q (%s)\n\n", report.Profile, report.Tier)
+
+	if len(report.Items) == 0 {
+		fmt.Fprintln(w, "All declared dependencies are already installed.")
+		return
+	}
+
+	for _, item := range report.Items {
+		hint := item.Manual
+		if item.Executable != "" {
+			parts := append([]string{item.Executable}, item.Args...)
+			hint = strings.Join(parts, " ")
+		}
+		fmt.Fprintf(w, "  %-13s %-24s %s\n", item.Status, item.Dependency, hint)
+	}
+
+	fmt.Fprintf(w, "\nSummary: %s\n", pluralizeDeps(len(report.Items)))
 }
