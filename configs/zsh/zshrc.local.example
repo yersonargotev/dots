@@ -21,6 +21,3 @@
 
 # OpenSpec completions:
 # fpath=("${HOME}/.zsh/completions" ${fpath})
-
-# yarn global bin (spawns a subprocess at startup; opt in only if you need it):
-# command -v yarn >/dev/null 2>&1 && export PATH="$(yarn global bin):${PATH}"
