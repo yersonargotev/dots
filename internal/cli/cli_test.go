@@ -871,6 +871,67 @@ entries:
 	}
 }
 
+func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	sourceRoot, err := filepath.Abs(filepath.Clean(filepath.Join("..", "..")))
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	manifestPath := filepath.Join(sourceRoot, "dots.yaml")
+
+	install := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	install.SetOut(&installOut)
+	install.SetErr(&installOut)
+	install.SetArgs([]string{
+		"install",
+		"--yes",
+		"--file", manifestPath,
+		"--home", home,
+		"--source-root", sourceRoot,
+		"--state-root", stateRoot,
+	})
+	if err := install.Execute(); err != nil {
+		t.Fatalf("install Execute() error = %v\noutput:\n%s", err, installOut.String())
+	}
+
+	gitconfigTarget := filepath.Join(home, ".gitconfig")
+	if target, err := os.Readlink(gitconfigTarget); err != nil {
+		t.Fatalf("sandbox gitconfig target is not a symlink: %v", err)
+	} else if want := filepath.Join(sourceRoot, "configs/git/gitconfig"); target != want {
+		t.Fatalf("sandbox gitconfig symlink = %q, want %q", target, want)
+	}
+
+	statusCmd := cli.NewRootCommand()
+	var statusOut bytes.Buffer
+	statusCmd.SetOut(&statusOut)
+	statusCmd.SetErr(&statusOut)
+	statusCmd.SetArgs([]string{
+		"status",
+		"--file", manifestPath,
+		"--home", home,
+		"--source-root", sourceRoot,
+		"--state-root", stateRoot,
+	})
+	if err := statusCmd.Execute(); err != nil {
+		t.Fatalf("status Execute() error = %v\noutput:\n%s", err, statusOut.String())
+	}
+
+	got := statusOut.String()
+	for _, want := range []string{
+		"ok",
+		"configs/git/gitconfig -> " + gitconfigTarget,
+		"Summary: 6 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
 func TestStatusCommandReportsConflictForForeignTarget(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
