@@ -1,12 +1,42 @@
-# Repository-managed zsh configuration.
-# Keep this file safe to source on new machines.
+# Repository-managed Zsh entry point.
+# Portable, modular, and safe to source on a fresh machine.
+# Machine-specific values and secrets live in ~/.zshrc.local (not managed).
 
-# Starship is optional at runtime; initialize it only when available.
-if command -v starship >/dev/null 2>&1; then
-  eval "$(starship init zsh)"
+# Resolve this file's real directory even when sourced through a symlink, so the
+# modular config and the Zim runtime can be located relative to the repository.
+# This requires the symlink install strategy (see configs/zsh/README.md).
+ZSH_CONFIG_DIR="${${(%):-%x}:A:h}"
+
+# Pre-init modular config: must run before Zim loads its modules, because some
+# modules read these settings at load time.
+for _zrc in "${ZSH_CONFIG_DIR}"/rc.d/pre/*.zsh(N); do
+  source "${_zrc}"
+done
+unset _zrc
+
+# --- Zim Framework ---------------------------------------------------------
+# Installing or bootstrapping Zim is intentionally out of scope for this slice.
+# We only use Zim when it is already present; a missing runtime degrades to a
+# usable, module-less shell instead of breaking the session.
+ZIM_HOME="${ZDOTDIR:-${HOME}}/.zim"
+if [[ -e "${ZIM_HOME}/init.zsh" ]]; then
+  # Recompile init.zsh when ~/.zimrc is newer than the compiled init.
+  if [[ ! "${ZIM_HOME}/init.zsh" -nt "${ZIM_CONFIG_FILE:-${ZDOTDIR:-${HOME}}/.zimrc}" ]]; then
+    source "${ZIM_HOME}/zimfw.zsh" init -q
+  fi
+  source "${ZIM_HOME}/init.zsh"
+else
+  print -u2 "dots: Zim not found at ${ZIM_HOME}; continuing without modules."
+  print -u2 "dots: install it, then restart your shell — see configs/zsh/README.md."
 fi
 
-# Local Extension Point: ~/.zshrc.local is private and machine-specific.
-if [ -r "${HOME}/.zshrc.local" ]; then
-  . "${HOME}/.zshrc.local"
+# Post-init modular config: PATH, tool integrations, aliases, AI hooks.
+for _zrc in "${ZSH_CONFIG_DIR}"/rc.d/post/*.zsh(N); do
+  source "${_zrc}"
+done
+unset _zrc
+
+# Machine-specific overrides and secrets — never managed by dots.
+if [[ -r "${ZDOTDIR:-${HOME}}/.zshrc.local" ]]; then
+  source "${ZDOTDIR:-${HOME}}/.zshrc.local"
 fi
