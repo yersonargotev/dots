@@ -2,6 +2,31 @@
 
 v1 proves that the Dotfiles CLI can install repository-owned configuration safely and handle missing Dependencies with explicit guardrails before the project expands into update orchestration or larger application configuration. These boundaries protect installer correctness, preserve the Source of Truth, and prevent Machine-Specific Configuration from leaking into shared Managed Configuration.
 
+## The opinionated-tool litmus test (read this before adding anything)
+
+`dots` exists as a **personal, opinionated tool**, not as a generic dotfiles framework. It is not trying to match chezmoi feature-for-feature, and it should never try. Generic frameworks earn their complexity by serving thousands of unknown users; a personal tool earns its value by fitting **one** workflow exactly, with zero configuration friction and a codebase its author fully understands.
+
+Before adding ANY feature, it must pass this test:
+
+> **Do I need this feature, on MY machines, today? If the honest answer is "it would be nice" or "chezmoi has it", it does NOT go in.**
+
+Features that fail this test by default — do not build them as a personal tool:
+
+| Tempting feature | Why it is rejected | Use this instead |
+|------------------|--------------------|------------------|
+| A templating engine | One user does not need per-machine template logic. | Local Extension Points + ignored `.local` files. |
+| Built-in secret management / encryption | Reimplementing encryption for a single user is a security liability, not a feature. | `age`, `gpg`, or an existing password manager directly. |
+| Windows / WSL / NixOS / Alpine support | Support only the platforms actually in use. | Add a platform the day a real machine needs it, never speculatively. |
+| "Bring your own dotfiles" generality | That turns `dots` into chezmoi, where chezmoi already wins. | Keep the curated Source of Truth opinionated. |
+
+What genuinely justifies `dots` existing instead of adopting chezmoi — protect these:
+
+- **Safety rails by default** (Install Plan, dry-run, mandatory Backup Sets before overwrite). They protect the author from breaking their own environment.
+- **Guarded Dependency Install** (`dots deps install`). Bootstrapping a fresh machine in one command is something generic managers handle poorly.
+- **Curated configuration as a distribution.** `dots` delivers a known-good opinionated setup, it does not manage arbitrary user files.
+
+Migration trigger: the day a genuinely hard, broad capability is needed (serious multi-user secret management, heavy cross-platform support) — that day, and only that day, evaluate migrating to chezmoi. Until then, the personal opinionated tool is the correct choice precisely because it is personal.
+
 ## Quick review path
 
 1. Use **v1 includes** to confirm what the first usable release must support.
@@ -70,6 +95,7 @@ zsh, git, starship, and tmux are enough to prove symlink, template, copy, Local 
 
 Use this checklist when reviewing v1 issues or PRs:
 
+- [ ] The change passes the opinionated-tool litmus test: it is needed on a real machine today, not added because "it would be nice" or "chezmoi has it".
 - [ ] The change strengthens safe installation, status, diagnostics, guarded dependency management, backups, release artifacts, checksum Bootstrapper support, or Homebrew Distribution.
 - [ ] The change does not add advanced dependency orchestration, larger Deferred Configuration, or unsupported platform behavior to v1.
 - [ ] The change preserves Source of Truth integrity and does not make Machine-Specific Configuration part of shared Managed Configuration.
