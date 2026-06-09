@@ -1,0 +1,29 @@
+# Copy this file to ~/.gitconfig.local and fill in machine-specific values.
+# Do not commit the real ~/.gitconfig.local file.
+
+[user]
+	name = Your Name
+	email = you@example.com
+	# signingKey = YOUR_SIGNING_KEY_ID
+
+[commit]
+	# gpgsign = true
+
+[credential]
+	# Prefer an OS-backed credential helper when available. Do not use the
+	# plaintext `store` helper for tokens or passwords.
+	# helper = osxkeychain
+	# helper = cache
+
+# Work- or client-specific overrides belong behind local includeIf rules.
+# Keep real organization names, paths, and credentials out of repository-managed config.
+[includeIf "gitdir:~/work/"]
+	path = ~/.gitconfig.work
+
+# Optional local tooling such as delta belongs here unless the repository also
+# manages that tool as a dependency.
+#[core]
+#	pager = delta
+#
+#[interactive]
+#	diffFilter = delta --color-only

@@ -471,6 +471,94 @@ func TestRepositoryManagedConfigsExposeLocalExtensionPoints(t *testing.T) {
 	}
 }
 
+func TestRepositoryGitConfigClassifiesPortableAndLocalConcerns(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+
+	managedPath := filepath.Join(root, "configs/git/gitconfig")
+	managedBytes, err := os.ReadFile(managedPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", managedPath, err)
+	}
+	managed := string(managedBytes)
+
+	for _, want := range []string{
+		"defaultBranch = main",
+		"rebase = false",
+		"conflictStyle = diff3",
+		"path = ~/.gitconfig.local",
+	} {
+		if !strings.Contains(managed, want) {
+			t.Fatalf("managed gitconfig missing portable/local boundary %q:\n%s", want, managed)
+		}
+	}
+
+	normalizedManaged := strings.ToLower(managed)
+	for _, forbidden := range []string{
+		"[user]",
+		"signingkey",
+		"gpgsign",
+		"[credential]",
+		"credential.helper",
+		"[credential ",
+		"includeif \"gitdir:~/",
+		"includeif.gitdir:",
+		"/users/",
+		"/home/",
+		"~/documents/",
+	} {
+		if strings.Contains(normalizedManaged, forbidden) {
+			t.Fatalf("managed gitconfig contains local/private concern %q:\n%s", forbidden, managed)
+		}
+	}
+
+	docPath := filepath.Join(root, "configs/git/README.md")
+	docBytes, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", docPath, err)
+	}
+	doc := string(docBytes)
+	for _, want := range []string{
+		"Portable",
+		"Local/private",
+		"Generated",
+		"Machine-specific",
+		"gitconfig.local.example",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("git config documentation missing %q:\n%s", want, doc)
+		}
+	}
+
+	examplePath := filepath.Join(root, "configs/git/gitconfig.local.example")
+	exampleBytes, err := os.ReadFile(examplePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", examplePath, err)
+	}
+	example := string(exampleBytes)
+	for _, want := range []string{
+		"[user]",
+		"name =",
+		"email =",
+		"signingKey =",
+		"[credential]",
+		"[includeIf \"gitdir:~/work/\"]",
+	} {
+		if !strings.Contains(example, want) {
+			t.Fatalf("gitconfig.local.example missing %q:\n%s", want, example)
+		}
+	}
+	for _, line := range strings.Split(example, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		normalized := strings.ToLower(strings.ReplaceAll(trimmed, " ", ""))
+		if strings.Contains(normalized, "helper=store") || strings.Contains(normalized, "credential.helper=store") {
+			t.Fatalf("gitconfig.local.example contains uncommented plaintext credential store guidance: %q", line)
+		}
+	}
+}
+
 func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 	root, err := filepath.Abs(filepath.Clean(filepath.Join("..", "..")))
 	if err != nil {
