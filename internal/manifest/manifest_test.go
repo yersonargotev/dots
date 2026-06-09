@@ -442,8 +442,8 @@ func TestRepositoryManagedConfigsExposeLocalExtensionPoints(t *testing.T) {
 			name: "zsh has private local include",
 			path: "configs/zsh/zshrc",
 			contains: []string{
-				"Local Extension Point",
-				"${HOME}/.zshrc.local",
+				"Machine-specific overrides and secrets",
+				".zshrc.local",
 			},
 		},
 		{
@@ -493,8 +493,8 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 		t.Fatalf("Build() error = %v", err)
 	}
 
-	if len(p.Actions) != 4 {
-		t.Fatalf("len(Actions) = %d, want 4", len(p.Actions))
+	if len(p.Actions) != 6 {
+		t.Fatalf("len(Actions) = %d, want 6", len(p.Actions))
 	}
 	for _, action := range p.Actions {
 		if action.Status != plan.StatusCreate {

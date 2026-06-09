@@ -18,6 +18,34 @@ entries:
         apt: zsh
         dnf: zsh
         pacman: zsh
+  - source: configs/zsh/zimrc
+    target: ~/.zimrc
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: zsh
+        brew: zsh
+        apt: zsh
+        dnf: zsh
+        pacman: zsh
+  - source: configs/zsh/zshenv
+    target: ~/.zshenv
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: zsh
+        brew: zsh
+        apt: zsh
+        dnf: zsh
+        pacman: zsh
   - source: configs/git/gitconfig
     target: ~/.gitconfig
     strategy: symlink

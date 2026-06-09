@@ -1,0 +1,26 @@
+# Example machine-specific Zsh overrides.
+#
+# Copy this to ~/.zshrc.local and edit. The managed ~/.zshrc sources that file
+# last. ~/.zshrc.local is NEVER tracked by dots — put secrets and per-machine
+# paths here.
+
+# --- Secrets ---------------------------------------------------------------
+# export ENGRAM_CLOUD_TOKEN="your-token-here"
+
+# --- Machine-specific PATH -------------------------------------------------
+# export PATH="${HOME}/.antigravity/antigravity/bin:${PATH}"
+# export PATH="${HOME}/Documents/dev/yersonargotev/hippo/bin:${PATH}"
+# export PATH="${HOME}/.local/bin:${PATH}"
+
+# Pin a specific fnm-managed Node version on PATH:
+# export PATH="${HOME}/.local/share/fnm/node-versions/v24.12.0/installation/bin:${PATH}"
+
+# --- Tool shell integrations (machine-specific) ----------------------------
+# Kiro IDE shell integration:
+# [[ "${TERM_PROGRAM}" == "kiro" ]] && source "$(kiro --locate-shell-integration-path zsh)"
+
+# OpenSpec completions:
+# fpath=("${HOME}/.zsh/completions" ${fpath})
+
+# yarn global bin (spawns a subprocess at startup; opt in only if you need it):
+# command -v yarn >/dev/null 2>&1 && export PATH="$(yarn global bin):${PATH}"
