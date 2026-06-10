@@ -559,6 +559,88 @@ func TestRepositoryGitConfigClassifiesPortableAndLocalConcerns(t *testing.T) {
 	}
 }
 
+func TestRepositoryStarshipConfigClassifiesPortablePromptSafely(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+
+	managedPath := filepath.Join(root, "configs/starship/starship.toml")
+	managedBytes, err := os.ReadFile(managedPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", managedPath, err)
+	}
+	managed := string(managedBytes)
+
+	if strings.TrimSpace(managed) == "" {
+		t.Fatalf("managed starship config is empty")
+	}
+
+	for _, want := range []string{
+		`palette = "catppuccin_mocha"`,
+		"[palettes.catppuccin_mocha]",
+		"format = ",
+		"[character]",
+		"[cmd_duration]",
+		"[time]",
+	} {
+		if !strings.Contains(managed, want) {
+			t.Fatalf("managed starship config missing portable prompt segment %q:\n%s", want, managed)
+		}
+	}
+
+	// Guard against committing machine-specific paths or private values. The
+	// [username] module renders Starship's own $user variable at runtime, so a
+	// literal username must never appear in the tracked file.
+	normalizedManaged := strings.ToLower(managed)
+	for _, forbidden := range []string{
+		"/users/",
+		"/home/",
+		"argote",
+		"yerson",
+		"[custom",
+		"env_var",
+		"password",
+		"secret",
+		"token",
+		"api_key",
+		"localhost",
+	} {
+		if strings.Contains(normalizedManaged, forbidden) {
+			t.Fatalf("managed starship config contains machine-specific/private concern %q:\n%s", forbidden, managed)
+		}
+	}
+
+	docPath := filepath.Join(root, "configs/starship/README.md")
+	docBytes, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", docPath, err)
+	}
+	doc := string(docBytes)
+	for _, want := range []string{
+		"Portable",
+		"Machine-specific",
+		"Private",
+		"Nerd Font",
+		// Starship has no native include; the README must say so honestly
+		// instead of documenting a broken local-override file.
+		"no native include",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("starship config documentation missing %q:\n%s", want, doc)
+		}
+	}
+
+	// Starship has no include mechanism, so the repository must NOT ship a
+	// local-override file that Starship would silently ignore.
+	for _, stray := range []string{
+		"configs/starship/starship.local.toml",
+		"configs/starship/starship.local.example",
+		"configs/starship/starship.toml.local",
+	} {
+		if _, err := os.Stat(filepath.Join(root, stray)); err == nil {
+			t.Fatalf("repository ships a broken Starship local-override file Starship cannot read: %s", stray)
+		}
+	}
+}
+
 func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 	root, err := filepath.Abs(filepath.Clean(filepath.Join("..", "..")))
 	if err != nil {
