@@ -112,6 +112,10 @@ _Avoid_: folder structure, project tree, repo organization
 The repository-owned files, directories, templates, or assets that become workstation configuration through the Install Manifest. Managed Configuration lives under `configs/` or `templates/` rather than being mixed with CLI implementation code.
 _Avoid_: dotfiles, config files, installed files
 
+**Portable Terminal Preference**:
+A terminal preference that can follow the user across machines without encoding host-specific ergonomics, such as theme, intentional keybindings, cursor behavior, scrollback, copy/paste behavior, or close confirmations.
+_Avoid_: terminal setup, my terminal config, machine terminal preference
+
 **Project Name**:
 The public repository name for the dotfiles project. The canonical repository name is `dotfiles`, while the command-line binary remains `dots`.
 _Avoid_: repo name, product name, tool name
