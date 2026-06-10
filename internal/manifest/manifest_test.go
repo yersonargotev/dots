@@ -454,6 +454,14 @@ func TestRepositoryManagedConfigsExposeLocalExtensionPoints(t *testing.T) {
 				"path = ~/.gitconfig.local",
 			},
 		},
+		{
+			name: "tmux has private local include",
+			path: "configs/tmux/tmux.conf",
+			contains: []string{
+				"Machine-specific overrides and secrets",
+				"source-file ~/.tmux.conf.local",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -637,6 +645,113 @@ func TestRepositoryStarshipConfigClassifiesPortablePromptSafely(t *testing.T) {
 	} {
 		if _, err := os.Stat(filepath.Join(root, stray)); err == nil {
 			t.Fatalf("repository ships a broken Starship local-override file Starship cannot read: %s", stray)
+		}
+	}
+}
+
+func TestRepositoryTmuxConfigClassifiesPortableConfigSafely(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+
+	managedPath := filepath.Join(root, "configs/tmux/tmux.conf")
+	managedBytes, err := os.ReadFile(managedPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", managedPath, err)
+	}
+	managed := string(managedBytes)
+
+	if strings.TrimSpace(managed) == "" {
+		t.Fatalf("managed tmux config is empty")
+	}
+
+	for _, want := range []string{
+		"set -g @plugin 'tmux-plugins/tpm'",
+		"set -g @plugin 'catppuccin/tmux#v2.3.0'",
+		"set -g prefix C-a",
+		"set -g mode-keys vi",
+		"set -g status-position top",
+		"display-popup",
+		"source-file ~/.tmux.conf.local",
+	} {
+		if !strings.Contains(managed, want) {
+			t.Fatalf("managed tmux config missing portable segment %q:\n%s", want, managed)
+		}
+	}
+
+	// Guard against committing active machine-specific shell wiring or private
+	// values. Comments may explain why those concerns are excluded, so only
+	// non-comment configuration lines are checked for shell commands.
+	for _, line := range strings.Split(managed, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		for _, forbidden := range []string{
+			"default-command",
+			"default-shell",
+		} {
+			if strings.Contains(trimmed, forbidden) {
+				t.Fatalf("managed tmux config contains active machine-specific shell setting %q:\n%s", line, managed)
+			}
+		}
+	}
+
+	activeTmuxConfig := make([]string, 0)
+	for _, line := range strings.Split(managed, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		activeTmuxConfig = append(activeTmuxConfig, trimmed)
+	}
+	normalizedManaged := strings.ToLower(strings.Join(activeTmuxConfig, "\n"))
+	for _, forbidden := range []string{
+		"/users/",
+		"/bin/zsh",
+		"argote",
+		"yerson",
+		"password",
+		"secret",
+		"token",
+		"api_key",
+	} {
+		if strings.Contains(normalizedManaged, forbidden) {
+			t.Fatalf("managed tmux config contains machine-specific/private concern %q:\n%s", forbidden, managed)
+		}
+	}
+
+	tmuxDir := filepath.Join(root, "configs/tmux")
+	if err := filepath.WalkDir(tmuxDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if d.Name() == "plugins" || d.Name() == ".tmux" {
+			t.Fatalf("repository ships generated tmux plugin state under %s", path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkDir(%q) error = %v", tmuxDir, err)
+	}
+
+	docPath := filepath.Join(root, "configs/tmux/README.md")
+	docBytes, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", docPath, err)
+	}
+	doc := string(docBytes)
+	for _, want := range []string{
+		"Portable",
+		"Machine-specific",
+		"Generated",
+		"Private",
+		"Tmux Plugin Manager",
+		"~/.tmux.conf.local",
+		"Sandbox validation",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("tmux config documentation missing %q:\n%s", want, doc)
 		}
 	}
 }
