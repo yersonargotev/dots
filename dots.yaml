@@ -3,6 +3,10 @@ profiles:
   default:
     tags:
       - core
+  desktop:
+    tags:
+      - core
+      - desktop
 entries:
   - source: configs/zsh/zshrc
     target: ~/.zshrc
@@ -116,3 +120,15 @@ entries:
         apt: zellij
         dnf: zellij
         pacman: zellij
+  - source: configs/ghostty/config.ghostty
+    target: ~/.config/ghostty/config.ghostty
+    strategy: symlink
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: ghostty
+        command: ghostty
+        brew: ghostty
