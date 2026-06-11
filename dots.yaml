@@ -88,3 +88,31 @@ entries:
         apt: tmux
         dnf: tmux
         pacman: tmux
+  - source: configs/zellij/config.kdl
+    target: ~/.config/zellij/config.kdl
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: zellij
+        brew: zellij
+        apt: zellij
+        dnf: zellij
+        pacman: zellij
+  - source: configs/zellij/layouts/default.kdl
+    target: ~/.config/zellij/layouts/default.kdl
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: zellij
+        brew: zellij
+        apt: zellij
+        dnf: zellij
+        pacman: zellij

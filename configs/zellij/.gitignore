@@ -1,0 +1,11 @@
+# Generated Zellij runtime/plugin artifacts are intentionally excluded.
+# Portable config lives in config.kdl and layouts/*.kdl.
+plugins/
+cache/
+logs/
+sessions/
+*.wasm
+*.bak
+*.log
+plugexit
+plugin-manager
