@@ -958,8 +958,8 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 		t.Fatalf("Build() error = %v", err)
 	}
 
-	if len(p.Actions) != 8 {
-		t.Fatalf("len(Actions) = %d, want 8", len(p.Actions))
+	if len(p.Actions) != 10 {
+		t.Fatalf("len(Actions) = %d, want 10", len(p.Actions))
 	}
 	for _, action := range p.Actions {
 		if action.Status != plan.StatusCreate {

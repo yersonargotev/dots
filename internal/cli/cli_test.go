@@ -938,7 +938,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		"configs/git/gitconfig -> " + gitconfigTarget,
 		"configs/zellij/config.kdl -> " + zellijConfigTarget,
 		"configs/zellij/layouts/default.kdl -> " + zellijLayoutTarget,
-		"Summary: 8 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
+		"Summary: 10 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status output missing %q\noutput:\n%s", want, got)

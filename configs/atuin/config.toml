@@ -1,0 +1,27 @@
+# Atuin portable preferences managed by dots.
+#
+# Atuin has no native include mechanism. Settings are layered: built-in defaults,
+# then this file, then ATUIN_* environment variables (highest priority). Nested
+# keys use a double underscore, e.g. ATUIN_SEARCH__MODE. Machine-specific values
+# (db_path, key_path, session_path, data_dir, sync_address, timezone, daemon
+# socket) and any secrets belong in ~/.zshrc.local via ATUIN_* env vars, never in
+# this shared file.
+#
+# Shell history, encryption key, session/auth token, host id, and sync records
+# live in ~/.local/share/atuin/ (the data dir), which dots never manages.
+
+# Immediately run the highlighted command on Enter; press Tab to edit it first.
+enter_accept = true
+
+# Up-arrow scopes history to the current shell session instead of global history.
+filter_mode_shell_up_key_binding = "session"
+
+[sync]
+# Use record-based sync (v2). Enabling sync and the server/account itself are
+# machine concerns handled by `atuin login` plus ATUIN_* env vars, not this file.
+records = true
+
+[theme]
+# Portable Catppuccin Mocha theme shipped in ./themes/catppuccin-mocha.toml and
+# installed alongside this file as ~/.config/atuin/themes/catppuccin-mocha.toml.
+name = "catppuccin-mocha"
