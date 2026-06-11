@@ -1,0 +1,29 @@
+# Keep Atuin history, sync/auth state, machine identity, and generated files out
+# of the repository. Atuin stores these in ~/.local/share/atuin/ (the data dir)
+# by default, but guard the config directory too in case ATUIN_CONFIG_DIR or a
+# custom data_dir points here.
+
+# Shell history database and write-ahead/shared-memory sidecars.
+history.db
+history.db-*
+
+# Sync record store and its sidecars.
+records.db
+records.db-*
+
+# Encryption key, auth session token, and machine identity.
+key
+session
+host_id
+
+# Generated runtime/update state.
+last_version_check_time
+latest_version
+atuin-receipt.json
+*.sock
+
+# Machine-local override file (when used) and transient artifacts.
+config.local.toml
+*.log
+*.bak
+*.tmp

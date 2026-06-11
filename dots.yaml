@@ -132,3 +132,27 @@ entries:
       - name: ghostty
         command: ghostty
         brew: ghostty
+  - source: configs/atuin/config.toml
+    target: ~/.config/atuin/config.toml
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: atuin
+        command: atuin
+        brew: atuin
+  - source: configs/atuin/themes/catppuccin-mocha.toml
+    target: ~/.config/atuin/themes/catppuccin-mocha.toml
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: atuin
+        command: atuin
+        brew: atuin
