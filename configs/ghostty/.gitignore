@@ -1,0 +1,10 @@
+# Keep machine-local overrides and generated Ghostty state out of the repository.
+config.local.ghostty
+*.log
+*.bak
+*.tmp
+cache/
+logs/
+sessions/
+state/
+shaders/

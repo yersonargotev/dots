@@ -1,0 +1,29 @@
+# Copy to ~/.config/ghostty/config.local.ghostty for machine-specific Ghostty
+# settings. The shared config loads this file with:
+#
+#   config-file = ?config.local.ghostty
+#
+# Keep this file local unless a setting is explicitly reviewed as portable.
+
+# Fonts are machine-specific because installed font names and comfortable sizes
+# differ across hosts, displays, and operating systems.
+# font-family = "CaskaydiaCove Nerd Font Mono"
+# font-size = 20
+
+# Window and rendering ergonomics depend on monitor size, compositor/GPU, and
+# personal workspace layout.
+# background-opacity = 0.95
+# background-blur-radius = 20
+# unfocused-split-opacity = 0.85
+# window-padding-color = extend
+# window-step-resize = false
+# window-padding-balance = true
+# window-height = 100
+# window-width = 100
+
+# Platform or integration settings must be reviewed before promotion to the
+# shared Source of Truth.
+# macos-option-as-alt = left
+# gtk-tabs-location = hidden
+# command = /path/to/local/shell-or-multiplexer
+# working-directory = ~/projects
