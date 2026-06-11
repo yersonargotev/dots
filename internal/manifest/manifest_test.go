@@ -756,6 +756,186 @@ func TestRepositoryTmuxConfigClassifiesPortableConfigSafely(t *testing.T) {
 	}
 }
 
+func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	entriesByTarget := map[string]manifest.Entry{}
+	for _, entry := range got.Entries {
+		entriesByTarget[entry.Target] = entry
+	}
+
+	tests := []struct {
+		name   string
+		target string
+		source string
+	}{
+		{
+			name:   "config",
+			target: "~/.config/zellij/config.kdl",
+			source: "configs/zellij/config.kdl",
+		},
+		{
+			name:   "default layout",
+			target: "~/.config/zellij/layouts/default.kdl",
+			source: "configs/zellij/layouts/default.kdl",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry, ok := entriesByTarget[tt.target]
+			if !ok {
+				t.Fatalf("repository manifest missing Zellij entry for target %q", tt.target)
+			}
+			if entry.Source != tt.source {
+				t.Errorf("Source = %q, want %q", entry.Source, tt.source)
+			}
+			if entry.Strategy != "symlink" {
+				t.Errorf("Strategy = %q, want symlink", entry.Strategy)
+			}
+			if !hasString(entry.Tags, "core") {
+				t.Errorf("Tags = %#v, want core tag", entry.Tags)
+			}
+			if !sameStrings(entry.OS, []string{"darwin", "linux"}) {
+				t.Errorf("OS = %#v, want [darwin linux]", entry.OS)
+			}
+			if !hasDependency(entry.Dependencies, "zellij") {
+				t.Errorf("Dependencies = %#v, want zellij", entry.Dependencies)
+			}
+		})
+	}
+
+	configPath := filepath.Join(root, "configs/zellij/config.kdl")
+	configBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", configPath, err)
+	}
+	config := string(configBytes)
+
+	if strings.TrimSpace(config) == "" {
+		t.Fatalf("managed Zellij config is empty")
+	}
+
+	for _, want := range []string{
+		`keybinds clear-defaults=true`,
+		`bind "Ctrl g" { SwitchToMode "normal"; }`,
+		`bind "Ctrl g" { SwitchToMode "locked"; }`,
+		`theme "catppuccin-mocha"`,
+		`default_mode "locked"`,
+		`mouse_mode true`,
+		`scroll_buffer_size 10000`,
+		`default_layout "default"`,
+		`scrollback_editor "nvim"`,
+		`plugins {`,
+		`session-manager location="zellij:session-manager"`,
+		`plugin-manager location="zellij:plugin-manager"`,
+		`pane_frames {`,
+		`rounded_corners true`,
+	} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("managed Zellij config missing portable segment %q:\n%s", want, config)
+		}
+	}
+
+	layoutPath := filepath.Join(root, "configs/zellij/layouts/default.kdl")
+	layoutBytes, err := os.ReadFile(layoutPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", layoutPath, err)
+	}
+	layout := string(layoutBytes)
+	for _, want := range []string{
+		`layout {`,
+		`default_tab_template {`,
+		`plugin location="file:~/.config/zellij/plugins/zjstatus.wasm"`,
+		`datetime_timezone "America/Bogota"`,
+	} {
+		if !strings.Contains(layout, want) {
+			t.Fatalf("managed Zellij layout missing portable segment %q:\n%s", want, layout)
+		}
+	}
+
+	for name, content := range map[string]string{
+		"config": config,
+		"layout": layout,
+	} {
+		normalized := strings.ToLower(content)
+		for _, forbidden := range []string{
+			"/users/",
+			"/home/",
+			"argote",
+			"yerson",
+			"password",
+			"secret",
+			"token",
+			"api_key",
+			"hostname",
+		} {
+			if strings.Contains(normalized, forbidden) {
+				t.Fatalf("managed Zellij %s contains machine-specific/private concern %q:\n%s", name, forbidden, content)
+			}
+		}
+	}
+
+	zellijDir := filepath.Join(root, "configs/zellij")
+	if err := filepath.WalkDir(zellijDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case "plugins", "cache", "logs", "sessions":
+				t.Fatalf("repository ships generated Zellij runtime state under %s", path)
+			}
+			return nil
+		}
+		name := strings.ToLower(d.Name())
+		for _, forbiddenSuffix := range []string{".wasm", ".bak", ".log"} {
+			if strings.HasSuffix(name, forbiddenSuffix) {
+				t.Fatalf("repository ships generated Zellij runtime file %s", path)
+			}
+		}
+		for _, forbiddenName := range []string{"plugexit", "plugin-manager"} {
+			if name == forbiddenName {
+				t.Fatalf("repository ships generated Zellij runtime file %s", path)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkDir(%q) error = %v", zellijDir, err)
+	}
+
+	docPath := filepath.Join(root, "configs/zellij/README.md")
+	docBytes, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", docPath, err)
+	}
+	doc := string(docBytes)
+	for _, want := range []string{
+		"Portable",
+		"Machine-specific",
+		"Generated",
+		"Private",
+		"ZELLIJ_CONFIG_FILE",
+		"ZELLIJ_CONFIG_DIR",
+		"zellij --config",
+		"zellij --config-dir",
+		"zjstatus",
+		"manual prerequisite",
+		"America/Bogota",
+		"Sandbox validation",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("Zellij config documentation missing %q:\n%s", want, doc)
+		}
+	}
+}
+
 func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 	root, err := filepath.Abs(filepath.Clean(filepath.Join("..", "..")))
 	if err != nil {
@@ -778,8 +958,8 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 		t.Fatalf("Build() error = %v", err)
 	}
 
-	if len(p.Actions) != 6 {
-		t.Fatalf("len(Actions) = %d, want 6", len(p.Actions))
+	if len(p.Actions) != 8 {
+		t.Fatalf("len(Actions) = %d, want 8", len(p.Actions))
 	}
 	for _, action := range p.Actions {
 		if action.Status != plan.StatusCreate {

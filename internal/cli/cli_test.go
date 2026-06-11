@@ -904,6 +904,18 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	} else if want := filepath.Join(sourceRoot, "configs/git/gitconfig"); target != want {
 		t.Fatalf("sandbox gitconfig symlink = %q, want %q", target, want)
 	}
+	zellijConfigTarget := filepath.Join(home, ".config/zellij/config.kdl")
+	if target, err := os.Readlink(zellijConfigTarget); err != nil {
+		t.Fatalf("sandbox Zellij config target is not a symlink: %v", err)
+	} else if want := filepath.Join(sourceRoot, "configs/zellij/config.kdl"); target != want {
+		t.Fatalf("sandbox Zellij config symlink = %q, want %q", target, want)
+	}
+	zellijLayoutTarget := filepath.Join(home, ".config/zellij/layouts/default.kdl")
+	if target, err := os.Readlink(zellijLayoutTarget); err != nil {
+		t.Fatalf("sandbox Zellij default layout target is not a symlink: %v", err)
+	} else if want := filepath.Join(sourceRoot, "configs/zellij/layouts/default.kdl"); target != want {
+		t.Fatalf("sandbox Zellij default layout symlink = %q, want %q", target, want)
+	}
 
 	statusCmd := cli.NewRootCommand()
 	var statusOut bytes.Buffer
@@ -924,7 +936,9 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	for _, want := range []string{
 		"ok",
 		"configs/git/gitconfig -> " + gitconfigTarget,
-		"Summary: 6 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
+		"configs/zellij/config.kdl -> " + zellijConfigTarget,
+		"configs/zellij/layouts/default.kdl -> " + zellijLayoutTarget,
+		"Summary: 8 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status output missing %q\noutput:\n%s", want, got)
