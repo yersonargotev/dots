@@ -932,13 +932,21 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("status Execute() error = %v\noutput:\n%s", err, statusOut.String())
 	}
 
+	nvimTarget := filepath.Join(home, ".config/nvim")
+	if target, err := os.Readlink(nvimTarget); err != nil {
+		t.Fatalf("sandbox nvim target is not a symlink: %v", err)
+	} else if want := filepath.Join(sourceRoot, "configs/nvim"); target != want {
+		t.Fatalf("sandbox nvim symlink = %q, want %q", target, want)
+	}
+
 	got := statusOut.String()
 	for _, want := range []string{
 		"ok",
 		"configs/git/gitconfig -> " + gitconfigTarget,
 		"configs/zellij/config.kdl -> " + zellijConfigTarget,
 		"configs/zellij/layouts/default.kdl -> " + zellijLayoutTarget,
-		"Summary: 11 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
+		"configs/nvim -> " + nvimTarget,
+		"Summary: 12 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status output missing %q\noutput:\n%s", want, got)

@@ -20,8 +20,9 @@ type Metadata struct {
 	Entries []Record `json:"entries"`
 }
 
-// Record describes a single managed target the CLI installed, including the
-// source content hash captured at install time so later runs can detect Drift.
+// Record describes a single managed target the CLI installed. Copy-like
+// strategies may record a source content hash; symlink records leave Hash empty
+// because drift is detected from the link destination.
 type Record struct {
 	Target      string `json:"target"`
 	Source      string `json:"source"`
@@ -81,8 +82,16 @@ func (m Metadata) FindByTarget(target string) (Record, bool) {
 	return Record{}, false
 }
 
-// HashFile returns the hex-encoded SHA-256 of a file's content.
+// HashFile returns the hex-encoded SHA-256 of a regular file's content.
 func HashFile(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("stat source for hashing %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("hash source %s: directories are not supported", path)
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("open source for hashing %s: %w", path, err)

@@ -2,6 +2,8 @@ package backups
 
 import (
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -27,8 +29,9 @@ func MachineName() string {
 
 // CreateSet copies each target into a new Backup Set and appends it to the
 // Backup Metadata under stateRoot. Targets are preserved by content: regular
-// files keep their permissions and symlinks keep their destination. The created
-// Backup Set is returned so callers can report or restore it later.
+// files and directories keep their permissions, and symlinks keep their
+// destination. The created Backup Set is returned so callers can report or
+// restore it later.
 func CreateSet(stateRoot string, targets []string, opts CreateOptions) (BackupSet, error) {
 	now := time.Now().UTC()
 	set := BackupSet{
@@ -79,17 +82,141 @@ func copyTarget(target, backupFile string) error {
 		}
 		return nil
 	}
+	if info.IsDir() {
+		if err := copyDirectory(target, backupFile, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("backup directory %s: %w", target, err)
+		}
+		return nil
+	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("backup target %s is not a regular file or symlink", target)
+		return fmt.Errorf("backup target %s is not a regular file, directory, or symlink", target)
 	}
-	data, err := os.ReadFile(target)
-	if err != nil {
-		return fmt.Errorf("read backup target %s: %w", target, err)
-	}
-	if err := os.WriteFile(backupFile, data, info.Mode().Perm()); err != nil {
-		return fmt.Errorf("write backup target %s: %w", backupFile, err)
+	if err := copyRegularFile(target, backupFile, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("backup file %s: %w", target, err)
 	}
 	return nil
+}
+
+func copyDirectory(sourceDir, backupDir string, mode os.FileMode) error {
+	type directoryMode struct {
+		path string
+		mode os.FileMode
+	}
+
+	if err := os.MkdirAll(backupDir, writableDirectoryMode(mode)); err != nil {
+		return err
+	}
+	if err := os.Chmod(backupDir, writableDirectoryMode(mode)); err != nil {
+		return err
+	}
+	dirs := []directoryMode{{path: backupDir, mode: mode}}
+	if err := filepath.WalkDir(sourceDir, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == sourceDir {
+			return nil
+		}
+		rel, err := filepath.Rel(sourceDir, path)
+		if err != nil {
+			return err
+		}
+		dest := filepath.Join(backupDir, rel)
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			linkDest, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+				return err
+			}
+			return os.Symlink(linkDest, dest)
+		}
+		if entry.IsDir() {
+			dirMode := info.Mode().Perm()
+			if err := os.MkdirAll(dest, writableDirectoryMode(dirMode)); err != nil {
+				return err
+			}
+			if err := os.Chmod(dest, writableDirectoryMode(dirMode)); err != nil {
+				return err
+			}
+			dirs = append(dirs, directoryMode{path: dest, mode: dirMode})
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("%s is not a regular file, directory, or symlink", path)
+		}
+		return copyRegularFile(path, dest, info.Mode().Perm())
+	}); err != nil {
+		return err
+	}
+	for i := len(dirs) - 1; i >= 0; i-- {
+		if err := os.Chmod(dirs[i].path, dirs[i].mode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writableDirectoryMode(mode os.FileMode) os.FileMode {
+	return mode | 0o700
+}
+
+// RemoveDirectoryTree removes a directory tree after making every directory
+// writable by its owner. This lets restore/replace operations clean up
+// user-owned read-only config directories while still failing closed when chmod
+// or removal is denied.
+func RemoveDirectoryTree(path string) error {
+	if err := filepath.WalkDir(path, func(current string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		mode := info.Mode().Perm()
+		writableMode := writableDirectoryMode(mode)
+		if mode == writableMode {
+			return nil
+		}
+		return os.Chmod(current, writableMode)
+	}); err != nil {
+		return err
+	}
+	return os.RemoveAll(path)
+}
+
+func copyRegularFile(source, dest string, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		_ = os.Remove(dest)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		_ = os.Remove(dest)
+		return err
+	}
+	return os.Chmod(dest, mode)
 }
 
 // RestoreAction describes what restoring a target will do to the current
@@ -113,14 +240,14 @@ type RestoreItem struct {
 }
 
 // PlanRestore computes, without changing anything, what restoring set would do.
-// It fails if any preserved file referenced by the set is missing, so a corrupt
+// It fails if any preserved item referenced by the set is missing, so a corrupt
 // Backup Set is reported before any target is touched.
 func PlanRestore(stateRoot string, set BackupSet) ([]RestoreItem, error) {
 	items := make([]RestoreItem, 0, len(set.Targets))
 	for i, target := range set.Targets {
 		backupFile := FilePath(stateRoot, set.ID, i+1, target)
 		if _, err := os.Lstat(backupFile); err != nil {
-			return nil, fmt.Errorf("preserved file for %s missing from Backup Set %s: %w", target, set.ID, err)
+			return nil, fmt.Errorf("preserved item for %s missing from Backup Set %s: %w", target, set.ID, err)
 		}
 
 		action := RestoreCreate
@@ -198,7 +325,7 @@ func overwriteTargets(items []RestoreItem) []string {
 	return targets
 }
 
-// applyRestore writes each preserved file back to its target. It is unexported
+// applyRestore writes each preserved item back to its target. It is unexported
 // on purpose: callers reach it only through Restore, which takes the safety
 // backup first.
 func applyRestore(items []RestoreItem) error {
@@ -218,10 +345,20 @@ func restoreItem(item RestoreItem) error {
 	if err := os.MkdirAll(filepath.Dir(item.Target), 0o755); err != nil {
 		return fmt.Errorf("create parent directory for %s: %w", item.Target, err)
 	}
-	// A Backup Set only ever preserves regular files and symlinks, so restoring
-	// one must never recursively delete a directory tree that now sits at the
-	// target. Refuse a directory and remove only a file or symlink, which fails
-	// closed (os.Remove will not delete a non-empty directory).
+	if info.IsDir() {
+		if err := removeTargetForDirectoryRestore(item.Target); err != nil {
+			return fmt.Errorf("remove current target %s: %w", item.Target, err)
+		}
+		if err := copyDirectory(item.BackupFile, item.Target, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("restore directory %s: %w", item.Target, err)
+		}
+		return nil
+	}
+	// A Backup Set can preserve regular files, directories, and symlinks. When
+	// restoring a file or symlink, never recursively delete a directory tree that
+	// now sits at the target. Refuse a directory and remove only a file or
+	// symlink, which fails closed (os.Remove will not delete a non-empty
+	// directory).
 	if current, err := os.Lstat(item.Target); err == nil {
 		if current.IsDir() {
 			return fmt.Errorf("refusing to restore over directory %s", item.Target)
@@ -243,14 +380,24 @@ func restoreItem(item RestoreItem) error {
 		return nil
 	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("preserved file %s is not a regular file or symlink", item.BackupFile)
+		return fmt.Errorf("preserved file %s is not a regular file, directory, or symlink", item.BackupFile)
 	}
-	data, err := os.ReadFile(item.BackupFile)
-	if err != nil {
-		return fmt.Errorf("read preserved file %s: %w", item.BackupFile, err)
-	}
-	if err := os.WriteFile(item.Target, data, info.Mode().Perm()); err != nil {
+	if err := copyRegularFile(item.BackupFile, item.Target, info.Mode().Perm()); err != nil {
 		return fmt.Errorf("restore target %s: %w", item.Target, err)
 	}
 	return nil
+}
+
+func removeTargetForDirectoryRestore(target string) error {
+	current, err := os.Lstat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if current.IsDir() {
+		return RemoveDirectoryTree(target)
+	}
+	return os.Remove(target)
 }

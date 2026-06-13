@@ -56,6 +56,136 @@ func TestCreateSetPreservesFileAndRecordsProvenance(t *testing.T) {
 	}
 }
 
+func TestCreateSetPreservesDirectoryRecursively(t *testing.T) {
+	stateRoot := t.TempDir()
+	home := t.TempDir()
+	target := filepath.Join(home, ".config", "nvim")
+	if err := os.MkdirAll(filepath.Join(target, "plugin"), 0o755); err != nil {
+		t.Fatalf("mkdir target dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "plugin", "local.lua"), []byte("-- local\n"), 0o600); err != nil {
+		t.Fatalf("write nested file: %v", err)
+	}
+
+	set, err := CreateSet(stateRoot, []string{target}, CreateOptions{Reason: "x"})
+	if err != nil {
+		t.Fatalf("CreateSet() error = %v", err)
+	}
+
+	preserved := filepath.Join(FilePath(stateRoot, set.ID, 1, target), "plugin", "local.lua")
+	got, err := os.ReadFile(preserved)
+	if err != nil {
+		t.Fatalf("read preserved nested file: %v", err)
+	}
+	if string(got) != "-- local\n" {
+		t.Fatalf("preserved nested file = %q, want local content", got)
+	}
+}
+
+func TestCreateSetPreservesReadOnlyDirectoryModesAfterCopyingChildren(t *testing.T) {
+	stateRoot := t.TempDir()
+	home := t.TempDir()
+	t.Cleanup(func() {
+		makeTreeWritableForCleanup(stateRoot)
+		makeTreeWritableForCleanup(home)
+	})
+	target := filepath.Join(home, ".config", "readonly")
+	nested := filepath.Join(target, "nested")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "config.lua"), []byte("-- readonly\n"), 0o600); err != nil {
+		t.Fatalf("write nested file: %v", err)
+	}
+	if err := os.Chmod(nested, 0o555); err != nil {
+		t.Fatalf("chmod nested readonly: %v", err)
+	}
+	if err := os.Chmod(target, 0o555); err != nil {
+		t.Fatalf("chmod target readonly: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(nested, 0o755)
+		_ = os.Chmod(target, 0o755)
+	})
+
+	set, err := CreateSet(stateRoot, []string{target}, CreateOptions{Reason: "x"})
+	if err != nil {
+		t.Fatalf("CreateSet() error = %v", err)
+	}
+
+	preservedDir := FilePath(stateRoot, set.ID, 1, target)
+	preservedNested := filepath.Join(preservedDir, "nested")
+	preservedFile := filepath.Join(preservedNested, "config.lua")
+	got, err := os.ReadFile(preservedFile)
+	if err != nil {
+		t.Fatalf("read preserved nested file: %v", err)
+	}
+	if string(got) != "-- readonly\n" {
+		t.Fatalf("preserved nested file = %q, want readonly content", got)
+	}
+
+	for _, tt := range []struct {
+		name string
+		path string
+	}{
+		{name: "root", path: preservedDir},
+		{name: "nested", path: preservedNested},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			info, err := os.Stat(tt.path)
+			if err != nil {
+				t.Fatalf("stat preserved dir: %v", err)
+			}
+			if got := info.Mode().Perm(); got != 0o555 {
+				t.Fatalf("mode = %v, want 0555", got)
+			}
+		})
+	}
+
+	if err := os.Chmod(nested, 0o755); err != nil {
+		t.Fatalf("chmod source nested writable before restore: %v", err)
+	}
+	if err := os.Chmod(target, 0o755); err != nil {
+		t.Fatalf("chmod source target writable before restore: %v", err)
+	}
+	if err := os.RemoveAll(target); err != nil {
+		t.Fatalf("remove source before restore: %v", err)
+	}
+
+	items, err := PlanRestore(stateRoot, set)
+	if err != nil {
+		t.Fatalf("PlanRestore() error = %v", err)
+	}
+	if err := applyRestore(items); err != nil {
+		t.Fatalf("applyRestore() error = %v", err)
+	}
+	restoredFile := filepath.Join(nested, "config.lua")
+	restored, err := os.ReadFile(restoredFile)
+	if err != nil {
+		t.Fatalf("read restored nested file: %v", err)
+	}
+	if string(restored) != "-- readonly\n" {
+		t.Fatalf("restored nested file = %q, want readonly content", restored)
+	}
+	for _, tt := range []struct {
+		name string
+		path string
+	}{
+		{name: "root", path: target},
+		{name: "nested", path: nested},
+	} {
+		t.Run("restore_"+tt.name, func(t *testing.T) {
+			info, err := os.Stat(tt.path)
+			if err != nil {
+				t.Fatalf("stat restored dir: %v", err)
+			}
+			if got := info.Mode().Perm(); got != 0o555 {
+				t.Fatalf("mode = %v, want 0555", got)
+			}
+		})
+	}
+}
+
 func TestPlanRestoreClassifiesTargetsAgainstCurrentFilesystem(t *testing.T) {
 	stateRoot := t.TempDir()
 	home := t.TempDir()
@@ -137,6 +267,116 @@ func TestApplyRestoreReturnsTargetsToPreservedContent(t *testing.T) {
 	if string(got) != "original\n" {
 		t.Fatalf("restored content = %q, want original", got)
 	}
+}
+
+func TestApplyRestoreReturnsDirectoryToPreservedContent(t *testing.T) {
+	stateRoot := t.TempDir()
+	home := t.TempDir()
+	target := filepath.Join(home, ".config", "nvim")
+	if err := os.MkdirAll(filepath.Join(target, "plugin"), 0o755); err != nil {
+		t.Fatalf("mkdir target dir: %v", err)
+	}
+	original := filepath.Join(target, "plugin", "local.lua")
+	if err := os.WriteFile(original, []byte("-- original\n"), 0o600); err != nil {
+		t.Fatalf("write original: %v", err)
+	}
+
+	set, err := CreateSet(stateRoot, []string{target}, CreateOptions{Reason: "x"})
+	if err != nil {
+		t.Fatalf("CreateSet() error = %v", err)
+	}
+	if err := os.RemoveAll(target); err != nil {
+		t.Fatalf("remove target dir: %v", err)
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatalf("mkdir drifted target dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "drifted.lua"), []byte("-- drifted\n"), 0o600); err != nil {
+		t.Fatalf("write drifted: %v", err)
+	}
+
+	items, err := PlanRestore(stateRoot, set)
+	if err != nil {
+		t.Fatalf("PlanRestore() error = %v", err)
+	}
+	if err := applyRestore(items); err != nil {
+		t.Fatalf("applyRestore() error = %v", err)
+	}
+
+	got, err := os.ReadFile(original)
+	if err != nil {
+		t.Fatalf("read restored nested file: %v", err)
+	}
+	if string(got) != "-- original\n" {
+		t.Fatalf("restored nested file = %q, want original", got)
+	}
+	if _, err := os.Lstat(filepath.Join(target, "drifted.lua")); !os.IsNotExist(err) {
+		t.Fatalf("drifted file still exists after directory restore; lstat err = %v", err)
+	}
+}
+
+func TestApplyRestoreReplacesNonWritableDirectoryTreeWithPreservedDirectory(t *testing.T) {
+	stateRoot := t.TempDir()
+	home := t.TempDir()
+	target := filepath.Join(home, ".config", "nvim")
+	original := filepath.Join(target, "plugin", "local.lua")
+	if err := os.MkdirAll(filepath.Dir(original), 0o755); err != nil {
+		t.Fatalf("mkdir original dir: %v", err)
+	}
+	if err := os.WriteFile(original, []byte("-- original\n"), 0o600); err != nil {
+		t.Fatalf("write original: %v", err)
+	}
+
+	set, err := CreateSet(stateRoot, []string{target}, CreateOptions{Reason: "x"})
+	if err != nil {
+		t.Fatalf("CreateSet() error = %v", err)
+	}
+	if err := os.RemoveAll(target); err != nil {
+		t.Fatalf("remove target dir: %v", err)
+	}
+	driftedDir := filepath.Join(target, "after", "locked")
+	if err := os.MkdirAll(driftedDir, 0o755); err != nil {
+		t.Fatalf("mkdir drifted dir: %v", err)
+	}
+	driftedFile := filepath.Join(driftedDir, "drifted.lua")
+	if err := os.WriteFile(driftedFile, []byte("-- drifted\n"), 0o400); err != nil {
+		t.Fatalf("write drifted file: %v", err)
+	}
+	if err := os.Chmod(driftedDir, 0o555); err != nil {
+		t.Fatalf("chmod drifted dir: %v", err)
+	}
+	t.Cleanup(func() {
+		makeTreeWritableForCleanup(stateRoot)
+		makeTreeWritableForCleanup(home)
+	})
+
+	items, err := PlanRestore(stateRoot, set)
+	if err != nil {
+		t.Fatalf("PlanRestore() error = %v", err)
+	}
+	if err := applyRestore(items); err != nil {
+		t.Fatalf("applyRestore() error = %v", err)
+	}
+
+	got, err := os.ReadFile(original)
+	if err != nil {
+		t.Fatalf("read restored nested file: %v", err)
+	}
+	if string(got) != "-- original\n" {
+		t.Fatalf("restored nested file = %q, want original", got)
+	}
+	if _, err := os.Lstat(driftedFile); !os.IsNotExist(err) {
+		t.Fatalf("drifted file still exists after directory restore; lstat err = %v", err)
+	}
+}
+
+func makeTreeWritableForCleanup(root string) {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err == nil && info.IsDir() {
+			_ = os.Chmod(path, 0o755)
+		}
+		return nil
+	})
 }
 
 func TestApplyRestoreRefusesDirectoryTarget(t *testing.T) {

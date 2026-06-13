@@ -1,0 +1,11 @@
+-- Machine-specific plugin specs — copy to lua/plugins/local.lua (git-ignored).
+--
+-- LazyVim automatically loads every lua/plugins/*.lua file. The .example
+-- suffix prevents this file itself from being loaded; the actual local.lua
+-- is git-ignored so machine-specific plugins never appear in the repo.
+--
+-- Usage:
+--   cp lua/plugins/local.lua.example lua/plugins/local.lua
+--   # Edit local.lua with machine-specific plugin specs, then restart Neovim.
+
+return {}
