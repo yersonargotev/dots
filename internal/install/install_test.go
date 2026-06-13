@@ -3,6 +3,7 @@ package install_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/backups"
@@ -148,6 +149,158 @@ func TestApplyReplaceConflictCreatesBackupSetBeforeChangingTarget(t *testing.T) 
 	}
 }
 
+func TestApplyReplaceConflictReplacesDirectoryTargetWithSymlink(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+
+	sourceDir := filepath.Join(sourceRoot, "configs", "nvim")
+	if err := os.MkdirAll(filepath.Join(sourceDir, "lua"), 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "init.lua"), []byte("-- managed\n"), 0o600); err != nil {
+		t.Fatalf("write source file: %v", err)
+	}
+
+	target := filepath.Join(home, ".config", "nvim")
+	if err := os.MkdirAll(filepath.Join(target, "plugin"), 0o755); err != nil {
+		t.Fatalf("mkdir target dir: %v", err)
+	}
+	localFile := filepath.Join(target, "plugin", "local.lua")
+	if err := os.WriteFile(localFile, []byte("-- local\n"), 0o600); err != nil {
+		t.Fatalf("write local target file: %v", err)
+	}
+
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:   "configs/nvim",
+		Target:   target,
+		Strategy: "symlink",
+		Status:   plan.StatusConflict,
+	}}}
+
+	if err := install.Apply(p, install.Options{
+		SourceRoot: sourceRoot,
+		Home:       home,
+		StateRoot:  stateRoot,
+		ConflictDecisions: map[string]install.ConflictDecision{
+			target: install.DecisionReplace,
+		},
+	}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	info, err := os.Lstat(target)
+	if err != nil {
+		t.Fatalf("lstat target: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("target mode = %v, want symlink", info.Mode())
+	}
+	dest, err := os.Readlink(target)
+	if err != nil {
+		t.Fatalf("readlink target: %v", err)
+	}
+	if dest != sourceDir {
+		t.Fatalf("symlink dest = %q, want %q", dest, sourceDir)
+	}
+
+	meta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Backup Metadata: %v", err)
+	}
+	if len(meta.Sets) != 1 {
+		t.Fatalf("Backup Sets = %d, want 1", len(meta.Sets))
+	}
+	preserved := filepath.Join(backups.FilePath(stateRoot, meta.Sets[0].ID, 1, target), "plugin", "local.lua")
+	got, err := os.ReadFile(preserved)
+	if err != nil {
+		t.Fatalf("read preserved directory file: %v", err)
+	}
+	if string(got) != "-- local\n" {
+		t.Fatalf("preserved directory file = %q, want local content", got)
+	}
+}
+
+func TestApplyReplaceConflictRemovesNonWritableDirectoryTargetWithSymlink(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+
+	sourceDir := filepath.Join(sourceRoot, "configs", "nvim")
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "init.lua"), []byte("-- managed\n"), 0o600); err != nil {
+		t.Fatalf("write source file: %v", err)
+	}
+
+	target := filepath.Join(home, ".config", "nvim")
+	lockedDir := filepath.Join(target, "plugin")
+	if err := os.MkdirAll(lockedDir, 0o755); err != nil {
+		t.Fatalf("mkdir target dir: %v", err)
+	}
+	localFile := filepath.Join(lockedDir, "local.lua")
+	if err := os.WriteFile(localFile, []byte("-- local\n"), 0o400); err != nil {
+		t.Fatalf("write local target file: %v", err)
+	}
+	if err := os.Chmod(lockedDir, 0o555); err != nil {
+		t.Fatalf("chmod locked target dir: %v", err)
+	}
+	t.Cleanup(func() {
+		makeTreeWritableForCleanup(home)
+		makeTreeWritableForCleanup(stateRoot)
+	})
+
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:   "configs/nvim",
+		Target:   target,
+		Strategy: "symlink",
+		Status:   plan.StatusConflict,
+	}}}
+
+	if err := install.Apply(p, install.Options{
+		SourceRoot: sourceRoot,
+		Home:       home,
+		StateRoot:  stateRoot,
+		ConflictDecisions: map[string]install.ConflictDecision{
+			target: install.DecisionReplace,
+		},
+	}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	info, err := os.Lstat(target)
+	if err != nil {
+		t.Fatalf("lstat target: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("target mode = %v, want symlink", info.Mode())
+	}
+	dest, err := os.Readlink(target)
+	if err != nil {
+		t.Fatalf("readlink target: %v", err)
+	}
+	if dest != sourceDir {
+		t.Fatalf("symlink dest = %q, want %q", dest, sourceDir)
+	}
+
+	meta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Backup Metadata: %v", err)
+	}
+	if len(meta.Sets) != 1 {
+		t.Fatalf("Backup Sets = %d, want 1", len(meta.Sets))
+	}
+	preserved := filepath.Join(backups.FilePath(stateRoot, meta.Sets[0].ID, 1, target), "plugin", "local.lua")
+	got, err := os.ReadFile(preserved)
+	if err != nil {
+		t.Fatalf("read preserved directory file: %v", err)
+	}
+	if string(got) != "-- local\n" {
+		t.Fatalf("preserved directory file = %q, want local content", got)
+	}
+}
+
 func TestApplyAdoptConflictCopiesTargetIntoSourceAndRecordsMetadata(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()
@@ -211,6 +364,15 @@ func TestApplyAdoptConflictCopiesTargetIntoSourceAndRecordsMetadata(t *testing.T
 	if rec.Hash != wantHash {
 		t.Fatalf("record hash = %q, want adopted source hash %q", rec.Hash, wantHash)
 	}
+}
+
+func makeTreeWritableForCleanup(root string) {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err == nil && info.IsDir() {
+			_ = os.Chmod(path, 0o755)
+		}
+		return nil
+	})
 }
 
 func TestApplyCopiesRegularFileForCreateAction(t *testing.T) {
@@ -590,6 +752,14 @@ func TestApplyRecordsInstallationMetadataForCreatedTargets(t *testing.T) {
 	if rec.InstalledAt == "" {
 		t.Fatalf("copy record InstalledAt is empty")
 	}
+
+	symlinkRec, ok := meta.FindByTarget(symlinkTarget)
+	if !ok {
+		t.Fatalf("metadata missing symlink target %s", symlinkTarget)
+	}
+	if symlinkRec.Hash != "" {
+		t.Fatalf("symlink record hash = %q, want empty", symlinkRec.Hash)
+	}
 }
 
 func TestApplyRejectsStateRootSymlinkEscapeBeforeMutation(t *testing.T) {
@@ -749,5 +919,110 @@ func TestApplyStatusCreateSymlinkRejectsMissingSource(t *testing.T) {
 	}
 	if _, err := os.Lstat(target); !os.IsNotExist(err) {
 		t.Fatalf("dangling symlink exists after rejected install; lstat err = %v", err)
+	}
+}
+
+func TestApplyCreatesDirectorySymlinkForDirectorySource(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+
+	// Create a source directory with content (simulating configs/nvim/).
+	sourceDirPath := filepath.Join(sourceRoot, "configs", "nvim")
+	if err := os.MkdirAll(filepath.Join(sourceDirPath, "lua"), 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDirPath, "init.lua"), []byte("-- init\n"), 0o600); err != nil {
+		t.Fatalf("write init.lua: %v", err)
+	}
+
+	target := filepath.Join(home, ".config", "nvim")
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:   "configs/nvim",
+		Target:   target,
+		Strategy: "symlink",
+		Status:   plan.StatusCreate,
+	}}}
+
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	info, err := os.Lstat(target)
+	if err != nil {
+		t.Fatalf("lstat target: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("target mode = %v, want symlink", info.Mode())
+	}
+	gotDest, err := os.Readlink(target)
+	if err != nil {
+		t.Fatalf("readlink target: %v", err)
+	}
+	if gotDest != sourceDirPath {
+		t.Fatalf("symlink dest = %q, want %q", gotDest, sourceDirPath)
+	}
+}
+
+func TestApplyCopyStrategyRejectsDirectorySourceBeforeInstall(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+
+	// Create a source directory (not a file).
+	sourceDirPath := filepath.Join(sourceRoot, "configs", "nvim")
+	if err := os.MkdirAll(sourceDirPath, 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+
+	target := filepath.Join(home, ".config", "nvim")
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:   "configs/nvim",
+		Target:   target,
+		Strategy: "copy",
+		Status:   plan.StatusCreate,
+	}}}
+
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home}); err == nil {
+		t.Fatal("Apply() error = nil, want error for directory source with copy strategy")
+	}
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Fatalf("target exists after rejected install; lstat err = %v", err)
+	}
+}
+
+func TestApplyAdoptConflictRejectsDirectoryTargetWithActionableError(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+
+	sourceDir := filepath.Join(sourceRoot, "configs", "nvim")
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+	target := filepath.Join(home, ".config", "nvim")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatalf("mkdir target dir: %v", err)
+	}
+
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:   "configs/nvim",
+		Target:   target,
+		Strategy: "symlink",
+		Status:   plan.StatusConflict,
+	}}}
+
+	err := install.Apply(p, install.Options{
+		SourceRoot: sourceRoot,
+		Home:       home,
+		ConflictDecisions: map[string]install.ConflictDecision{
+			target: install.DecisionAdopt,
+		},
+	})
+	if err == nil {
+		t.Fatal("Apply() error = nil, want directory adopt error")
+	}
+	if !strings.Contains(err.Error(), "Adopting directory target") && !strings.Contains(err.Error(), "adopting directory target") {
+		t.Fatalf("error %q does not explain directory adopt is unsupported", err)
+	}
+	if !strings.Contains(err.Error(), "replace") {
+		t.Fatalf("error %q does not suggest replace", err)
 	}
 }

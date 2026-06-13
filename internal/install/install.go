@@ -72,7 +72,8 @@ func Apply(p plan.Plan, opts Options) error {
 
 // recordMetadata upserts Installation Metadata for every managed target the plan
 // installed or confirmed unchanged, so dots status has an authoritative record
-// of what dots owns and what each target's Source of Truth hashed to.
+// of what dots owns. Copy-like records include a Source of Truth hash; symlink
+// records leave Hash empty because status compares the link destination.
 func recordMetadata(p plan.Plan, resolvedSources []string, opts Options) error {
 	if opts.StateRoot == "" {
 		return nil
@@ -90,9 +91,13 @@ func recordMetadata(p plan.Plan, resolvedSources []string, opts Options) error {
 		if !recordsMetadata(action, conflictDecision(action, opts)) {
 			continue
 		}
-		hash, err := state.HashFile(resolvedSources[i])
-		if err != nil {
-			return err
+		hash := ""
+		if action.Strategy != "symlink" {
+			var err error
+			hash, err = state.HashFile(resolvedSources[i])
+			if err != nil {
+				return err
+			}
 		}
 		upsertRecord(&meta, state.Record{
 			Target:      action.Target,
@@ -372,13 +377,27 @@ func applyReplace(action plan.Action, source string, opts Options) error {
 	if err := createBackupSet(opts, action.Target); err != nil {
 		return err
 	}
-	if err := os.Remove(action.Target); err != nil {
+	if err := removeConflictingTarget(action.Target); err != nil {
 		return fmt.Errorf("remove conflicting target %s: %w", action.Target, err)
 	}
 	if err := applyCreate(action, source); err != nil {
 		return err
 	}
 	return nil
+}
+
+func removeConflictingTarget(target string) error {
+	info, err := os.Lstat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.IsDir() {
+		return backups.RemoveDirectoryTree(target)
+	}
+	return os.Remove(target)
 }
 
 func applyAdopt(action plan.Action, source string, opts Options) error {
@@ -405,10 +424,10 @@ func validateBackupableTarget(target string) error {
 	if err != nil {
 		return fmt.Errorf("stat conflict target %s: %w", target, err)
 	}
-	if info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+	if info.Mode().IsRegular() || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return nil
 	}
-	return fmt.Errorf("backup target %s is not a regular file or symlink", target)
+	return fmt.Errorf("backup target %s is not a regular file, directory, or symlink", target)
 }
 
 func validateAdoptableTarget(target, home string) error {
@@ -418,6 +437,9 @@ func validateAdoptableTarget(target, home string) error {
 	info, err := os.Stat(target)
 	if err != nil {
 		return fmt.Errorf("stat adopt target %s: %w", target, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("adopting directory target %s is not supported; use replace to back it up and install the managed symlink", target)
 	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("adopt target %s is not a regular file", target)
@@ -432,6 +454,9 @@ func validateAdoptableSource(source, sourceRoot string) error {
 	info, err := os.Stat(source)
 	if err != nil {
 		return fmt.Errorf("stat adopt source %s: %w", source, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("adopting directory source %s is not supported; use replace to back up the target and install the managed symlink", source)
 	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("adopt source %s is not a regular file", source)

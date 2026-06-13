@@ -171,3 +171,18 @@ entries:
         apt: bat
         dnf: bat
         pacman: bat
+  - source: configs/nvim
+    target: ~/.config/nvim
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: neovim
+        command: nvim
+        brew: neovim
+        apt: neovim
+        dnf: neovim
+        pacman: neovim

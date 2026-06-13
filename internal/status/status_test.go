@@ -323,3 +323,71 @@ func TestBuildFailsForUnknownProfile(t *testing.T) {
 		t.Fatal("Build() error = nil, want error for unknown profile")
 	}
 }
+
+func TestBuildReportsOKForDirectorySymlinkPointingAtSource(t *testing.T) {
+	f := newFixture(manifest.Entry{Source: "configs/nvim", Target: "~/.config/nvim", Strategy: "symlink", Tags: []string{"core"}})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+
+	// Create a source directory with content (simulating configs/nvim/).
+	sourceDirPath := filepath.Join(f.sourceRoot, "configs", "nvim")
+	if err := os.MkdirAll(filepath.Join(sourceDirPath, "lua"), 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDirPath, "init.lua"), []byte("-- init\n"), 0o600); err != nil {
+		t.Fatalf("write init.lua: %v", err)
+	}
+
+	targetDir := filepath.Join(f.home, ".config", "nvim")
+	if err := os.MkdirAll(filepath.Dir(targetDir), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	if err := os.Symlink(sourceDirPath, targetDir); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	if got := onlyEntry(t, f.build(t, state.Metadata{})).State; got != status.StateOK {
+		t.Fatalf("state = %q, want ok for directory symlink pointing at source dir", got)
+	}
+}
+
+func TestBuildReportsConflictForDirectorySymlinkPointingElsewhere(t *testing.T) {
+	f := newFixture(manifest.Entry{Source: "configs/nvim", Target: "~/.config/nvim", Strategy: "symlink", Tags: []string{"core"}})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+
+	sourceDirPath := filepath.Join(f.sourceRoot, "configs", "nvim")
+	if err := os.MkdirAll(sourceDirPath, 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+
+	// The target symlink points at a different directory (not the managed source).
+	otherDir := t.TempDir()
+	targetDir := filepath.Join(f.home, ".config", "nvim")
+	if err := os.MkdirAll(filepath.Dir(targetDir), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	if err := os.Symlink(otherDir, targetDir); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	if got := onlyEntry(t, f.build(t, state.Metadata{})).State; got != status.StateConflict {
+		t.Fatalf("state = %q, want conflict for directory symlink pointing elsewhere", got)
+	}
+}
+
+func TestBuildReportsMissingForAbsentDirectorySymlinkTarget(t *testing.T) {
+	f := newFixture(manifest.Entry{Source: "configs/nvim", Target: "~/.config/nvim", Strategy: "symlink", Tags: []string{"core"}})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+
+	sourceDirPath := filepath.Join(f.sourceRoot, "configs", "nvim")
+	if err := os.MkdirAll(sourceDirPath, 0o755); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+
+	// Target does not exist yet.
+	if got := onlyEntry(t, f.build(t, state.Metadata{})).State; got != status.StateMissing {
+		t.Fatalf("state = %q, want missing when directory symlink target is absent", got)
+	}
+}

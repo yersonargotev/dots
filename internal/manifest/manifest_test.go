@@ -352,14 +352,6 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	entriesByTarget := map[string]manifest.Entry{}
 	for _, entry := range got.Entries {
 		entriesByTarget[entry.Target] = entry
-		if strings.Contains(entry.Source, "nvim") || strings.Contains(entry.Target, "nvim") {
-			t.Fatalf("repository manifest includes deferred Neovim configuration: %#v", entry)
-		}
-		for _, dep := range entry.Dependencies {
-			if dep.Name == "nvim" || dep.Name == "neovim" {
-				t.Fatalf("repository manifest includes deferred Neovim dependency: %#v", dep)
-			}
-		}
 	}
 
 	tests := []struct {
@@ -958,8 +950,8 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 		t.Fatalf("Build() error = %v", err)
 	}
 
-	if len(p.Actions) != 11 {
-		t.Fatalf("len(Actions) = %d, want 11", len(p.Actions))
+	if len(p.Actions) != 12 {
+		t.Fatalf("len(Actions) = %d, want 12", len(p.Actions))
 	}
 	for _, action := range p.Actions {
 		if action.Status != plan.StatusCreate {
@@ -983,8 +975,111 @@ func TestRepositoryManifestSourcesExist(t *testing.T) {
 		if err != nil {
 			t.Fatalf("entries[%d].source %q does not exist at %s: %v", i, entry.Source, sourcePath, err)
 		}
-		if info.IsDir() {
-			t.Fatalf("entries[%d].source %q points to a directory, want a file", i, entry.Source)
+		// For symlink strategy a directory source is valid: dots creates a directory
+		// symlink at the target pointing at the source directory. For copy and
+		// template strategies the source must be a regular file because those
+		// strategies operate on file content.
+		if info.IsDir() && entry.Strategy != "symlink" {
+			t.Fatalf("entries[%d].source %q points to a directory, want a file for strategy %q", i, entry.Source, entry.Strategy)
 		}
+	}
+}
+
+func TestRepositoryManifestNeovimEntry(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	entriesByTarget := map[string]manifest.Entry{}
+	for _, entry := range got.Entries {
+		entriesByTarget[entry.Target] = entry
+	}
+
+	entry, ok := entriesByTarget["~/.config/nvim"]
+	if !ok {
+		t.Fatal("repository manifest missing Neovim entry for target ~/.config/nvim")
+	}
+	if entry.Source != "configs/nvim" {
+		t.Errorf("Source = %q, want %q", entry.Source, "configs/nvim")
+	}
+	if entry.Strategy != "symlink" {
+		t.Errorf("Strategy = %q, want symlink", entry.Strategy)
+	}
+	if !hasString(entry.Tags, "core") {
+		t.Errorf("Tags = %#v, want core tag", entry.Tags)
+	}
+	if !sameStrings(entry.OS, []string{"darwin", "linux"}) {
+		t.Errorf("OS = %#v, want [darwin linux]", entry.OS)
+	}
+	if !hasDependency(entry.Dependencies, "neovim") {
+		t.Errorf("Dependencies = %#v, want neovim dependency", entry.Dependencies)
+	}
+
+	// The source directory must exist in the repository.
+	sourcePath := filepath.Join(root, entry.Source)
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		t.Fatalf("source %q does not exist: %v", sourcePath, err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("source %q is not a directory, want directory for symlink entry", sourcePath)
+	}
+}
+
+func TestDirectorySourceSymlinkStrategyPassesValidation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/nvim
+    target: ~/.config/nvim
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v; directory source with symlink strategy should pass validation", err)
+	}
+	if got.Entries[0].Source != "configs/nvim" {
+		t.Fatalf("Entry source = %q, want configs/nvim", got.Entries[0].Source)
+	}
+}
+
+func TestDirectorySourceCopyStrategyIsAcceptedByManifestValidation(t *testing.T) {
+	// The manifest itself accepts any source string; the copy strategy rejects
+	// directory sources at plan/install time, not at manifest validation time.
+	// This test documents the contract: manifest.LoadFile does not reject a copy
+	// entry whose source happens to be a directory path — that is caught later.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/nvim
+    target: ~/.config/nvim
+    strategy: copy
+    tags: [core]
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v; manifest validation does not inspect source type", err)
 	}
 }

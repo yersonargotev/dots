@@ -1,0 +1,6 @@
+{
+  "config": {
+    // MD013: line length. Disabled for prose-heavy Markdown files.
+    "MD013": false
+  }
+}

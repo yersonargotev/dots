@@ -3,6 +3,7 @@ package state_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/state"
@@ -102,5 +103,17 @@ func TestHashFileIsStableAndContentSensitive(t *testing.T) {
 	}
 	if ha == hb2 {
 		t.Fatal("HashFile() returned same hash for different content")
+	}
+}
+
+func TestHashFileRejectsDirectories(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := state.HashFile(dir)
+	if err == nil {
+		t.Fatal("HashFile() error = nil, want directory rejection")
+	}
+	if !strings.Contains(err.Error(), "directories are not supported") {
+		t.Fatalf("HashFile() error = %q, want directory rejection", err)
 	}
 }

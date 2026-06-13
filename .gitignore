@@ -1,0 +1,3 @@
+# Neovim spell files are downloaded/compiled by Neovim on demand, not authored.
+configs/nvim/spell/
+configs/nvim/lua/plugins/local.lua
