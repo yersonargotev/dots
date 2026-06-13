@@ -6,6 +6,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/doctor"
+	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/status"
 )
 
@@ -44,6 +45,25 @@ func TestRenderDoctorGolden(t *testing.T) {
 				SecretScan:    doctor.SecretReport{},
 			},
 			golden: "doctor_clean.golden",
+		},
+		{
+			name: "provisioner not ready",
+			report: doctor.Report{
+				Profile:       "default",
+				Platform:      doctor.Platform{Supported: true, OS: "darwin"},
+				Dependencies:  deps.CheckReport{Profile: "default"},
+				Configuration: status.Report{Profile: "default"},
+				Provisioners: provision.CheckReport{Profile: "default", Items: []provision.Readiness{
+					{
+						Tool:       "gentle-ai",
+						Executable: "gentle-ai",
+						Args:       []string{"install", "--scope", "global", "--agents", "codex"},
+						Missing:    []string{"engram"},
+					},
+				}},
+				SecretScan: doctor.SecretReport{},
+			},
+			golden: "doctor_provisioner_not_ready.golden",
 		},
 	}
 

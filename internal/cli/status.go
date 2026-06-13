@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 )
@@ -62,6 +63,12 @@ func newStatusCommand() *cobra.Command {
 			}
 
 			renderStatus(cmd.OutOrStdout(), report)
+
+			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
+			if err != nil {
+				return err
+			}
+			renderStatusProvisioners(cmd.OutOrStdout(), provPlan)
 			return nil
 		},
 	}
