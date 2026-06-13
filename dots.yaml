@@ -156,3 +156,18 @@ entries:
       - name: atuin
         command: atuin
         brew: atuin
+  - source: configs/bat/config
+    target: ~/.config/bat/config
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: bat
+        command: bat
+        brew: bat
+        apt: bat
+        dnf: bat
+        pacman: bat
