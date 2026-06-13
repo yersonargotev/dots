@@ -14,6 +14,7 @@ import (
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 )
@@ -33,6 +34,7 @@ type Report struct {
 	Platform      Platform
 	Dependencies  deps.CheckReport
 	Configuration status.Report
+	Provisioners  provision.CheckReport
 	SecretScan    SecretReport
 }
 
@@ -90,6 +92,12 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 		return Report{}, err
 	}
 	report.Configuration = statusReport
+
+	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, OS: opts.OS}, look)
+	if err != nil {
+		return Report{}, err
+	}
+	report.Provisioners = provReport
 
 	secretReport, err := ScanSecrets(m, opts)
 	if err != nil {

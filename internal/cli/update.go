@@ -85,7 +85,8 @@ func newUpdateCommand() *cobra.Command {
 				return nil
 			}
 
-			return resolveAndApply(cmd, p, paths, yes, noTUI)
+			_, err = resolveAndApply(cmd, p, paths, yes, noTUI)
+			return err
 		},
 	}
 

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 
+	"strings"
+
 	"github.com/yersonargotev/dots/internal/doctor"
 	"github.com/yersonargotev/dots/internal/status"
 )
@@ -19,7 +21,39 @@ func renderDoctor(w io.Writer, report doctor.Report) {
 
 	renderDoctorDependencies(w, report)
 	renderDoctorConfiguration(w, report)
+	renderDoctorProvisioners(w, report)
 	renderDoctorSecrets(w, report)
+}
+
+// renderDoctorProvisioners reports the readiness of each declared provisioner:
+// whether its dependencies are present so it could run. It never executes the
+// tool. A provisioner is "not ready" when any declared dependency is missing.
+func renderDoctorProvisioners(w io.Writer, report doctor.Report) {
+	items := report.Provisioners.Items
+	if len(items) == 0 {
+		fmt.Fprintln(w, "Provisioners: ok (no provisioners declared)")
+		return
+	}
+
+	var notReady int
+	for _, item := range items {
+		if len(item.Missing) > 0 {
+			notReady++
+		}
+	}
+	if notReady == 0 {
+		fmt.Fprintf(w, "Provisioners: ok (%d ready, 0 not ready)\n", len(items))
+		return
+	}
+
+	fmt.Fprintf(w, "Provisioners: warn (%d not ready)\n", notReady)
+	for _, item := range items {
+		if len(item.Missing) == 0 {
+			continue
+		}
+		fmt.Fprintf(w, "  not ready: %s %s (missing: %s)\n",
+			item.Executable, strings.Join(item.Args, " "), strings.Join(item.Missing, ", "))
+	}
 }
 
 func renderDoctorDependencies(w io.Writer, report doctor.Report) {

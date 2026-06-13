@@ -11,9 +11,10 @@ import (
 )
 
 type Manifest struct {
-	Version  int                `yaml:"version"`
-	Profiles map[string]Profile `yaml:"profiles"`
-	Entries  []Entry            `yaml:"entries"`
+	Version      int                `yaml:"version"`
+	Profiles     map[string]Profile `yaml:"profiles"`
+	Entries      []Entry            `yaml:"entries"`
+	Provisioners []Provisioner      `yaml:"provisioners,omitempty"`
 }
 
 type Profile struct {
@@ -27,6 +28,30 @@ type Entry struct {
 	Tags         []string     `yaml:"tags"`
 	OS           []string     `yaml:"os,omitempty"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
+}
+
+// Provisioner declares an allowlisted external agent-configuration tool that
+// dots drives declaratively after dependency installs and file entries. dots
+// versions the invocation (tool + flag spec), never the rendered content the
+// tool regenerates. Tags and OS reuse the same Profile scoping as Entries.
+type Provisioner struct {
+	Tool         string          `yaml:"tool"`
+	Tags         []string        `yaml:"tags"`
+	OS           []string        `yaml:"os,omitempty"`
+	Spec         ProvisionerSpec `yaml:"spec"`
+	Dependencies []Dependency    `yaml:"dependencies,omitempty"`
+}
+
+// ProvisionerSpec maps 1:1 to the allowlisted tool's install flags. dots owns
+// these declarative values; the tool owns how they render into agent config.
+type ProvisionerSpec struct {
+	Scope      string   `yaml:"scope,omitempty"`
+	Channel    string   `yaml:"channel,omitempty"`
+	Persona    string   `yaml:"persona,omitempty"`
+	SDDMode    string   `yaml:"sdd-mode,omitempty"`
+	Agents     []string `yaml:"agents,omitempty"`
+	Components []string `yaml:"components,omitempty"`
+	Skills     []string `yaml:"skills,omitempty"`
 }
 
 // Dependency is an external tool a Managed Entry needs to work correctly. dots
@@ -130,16 +155,85 @@ func (m Manifest) Validate() error {
 		}
 	}
 
+	for i, prov := range m.Provisioners {
+		if strings.TrimSpace(prov.Tool) == "" {
+			return fmt.Errorf("provisioners[%d].tool is required", i)
+		}
+		if !allowedProvisionerTool(prov.Tool) {
+			return fmt.Errorf("provisioners[%d].tool must be gentle-ai", i)
+		}
+		if len(prov.Tags) == 0 {
+			return fmt.Errorf("provisioners[%d].tags is required", i)
+		}
+		if j, ok := indexOfEmptyTag(prov.Tags); ok {
+			return fmt.Errorf("provisioners[%d].tags[%d] must not be empty", i, j)
+		}
+		for j, osName := range prov.OS {
+			if !allowedOS(osName) {
+				return fmt.Errorf("provisioners[%d].os[%d] must be one of darwin, linux", i, j)
+			}
+		}
+		if prov.Spec.IsEmpty() {
+			return fmt.Errorf("provisioners[%d].spec is required", i)
+		}
+		if persona := strings.TrimSpace(prov.Spec.Persona); persona != "" && !allowedPersona(persona) {
+			return fmt.Errorf("provisioners[%d].spec.persona must be one of gentleman, neutral", i)
+		}
+		if j, ok := indexOfEmptyString(prov.Spec.Agents); ok {
+			return fmt.Errorf("provisioners[%d].spec.agents[%d] must not be empty", i, j)
+		}
+		if j, ok := indexOfEmptyString(prov.Spec.Components); ok {
+			return fmt.Errorf("provisioners[%d].spec.components[%d] must not be empty", i, j)
+		}
+		if j, ok := indexOfEmptyString(prov.Spec.Skills); ok {
+			return fmt.Errorf("provisioners[%d].spec.skills[%d] must not be empty", i, j)
+		}
+		for j, dep := range prov.Dependencies {
+			if strings.TrimSpace(dep.Name) == "" {
+				return fmt.Errorf("provisioners[%d].dependencies[%d].name is required", i, j)
+			}
+			if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
+				return fmt.Errorf("provisioners[%d].dependencies[%d].command must not be empty", i, j)
+			}
+		}
+	}
+
 	return nil
 }
 
+// IsEmpty reports whether the spec declares no flags at all. A provisioner with
+// an empty spec would render a bare `gentle-ai install` with nothing to do, so
+// validation rejects it.
+func (s ProvisionerSpec) IsEmpty() bool {
+	return strings.TrimSpace(s.Scope) == "" &&
+		strings.TrimSpace(s.Channel) == "" &&
+		strings.TrimSpace(s.Persona) == "" &&
+		strings.TrimSpace(s.SDDMode) == "" &&
+		!hasNonEmptyString(s.Agents) &&
+		!hasNonEmptyString(s.Components) &&
+		!hasNonEmptyString(s.Skills)
+}
+
 func indexOfEmptyTag(tags []string) (int, bool) {
-	for i, tag := range tags {
-		if strings.TrimSpace(tag) == "" {
+	return indexOfEmptyString(tags)
+}
+
+func indexOfEmptyString(values []string) (int, bool) {
+	for i, value := range values {
+		if strings.TrimSpace(value) == "" {
 			return i, true
 		}
 	}
 	return -1, false
+}
+
+func hasNonEmptyString(values []string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func allowedStrategy(strategy string) bool {
@@ -154,6 +248,23 @@ func allowedStrategy(strategy string) bool {
 func allowedOS(osName string) bool {
 	switch osName {
 	case "darwin", "linux":
+		return true
+	default:
+		return false
+	}
+}
+
+// allowedProvisionerTool enforces the provisioner allowlist. dots is never a
+// generic command runner: only gentle-ai is an accepted provisioner tool in v1.
+func allowedProvisionerTool(tool string) bool {
+	return strings.TrimSpace(tool) == "gentle-ai"
+}
+
+// allowedPersona enforces the persona values gentle-ai ships as flag-driven
+// presets. Any other value is rejected before dots renders the install command.
+func allowedPersona(persona string) bool {
+	switch persona {
+	case "gentleman", "neutral":
 		return true
 	default:
 		return false

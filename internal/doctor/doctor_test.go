@@ -142,6 +142,59 @@ func TestBuildDiagnosticSections(t *testing.T) {
 	}
 }
 
+func TestBuildReportsProvisionerReadiness(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	writeFile(t, sourceRoot, "configs/app/config", "safe = true\n")
+
+	m := singleEntryManifest("configs/app/config")
+	m.Provisioners = []manifest.Provisioner{{
+		Tool: "gentle-ai",
+		Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"codex"}},
+		Dependencies: []manifest.Dependency{
+			{Name: "gentle-ai"},
+			{Name: "engram"},
+		},
+	}}
+
+	// gentle-ai present, engram missing: the provisioner is surfaced as not ready
+	// without ever being executed.
+	report, err := doctor.Build(m, state.Metadata{}, doctor.Options{
+		Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home,
+	}, lookupSet("gentle-ai"))
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	if len(report.Provisioners.Items) != 1 {
+		t.Fatalf("len(Provisioners.Items) = %d, want 1", len(report.Provisioners.Items))
+	}
+	item := report.Provisioners.Items[0]
+	if item.Tool != "gentle-ai" {
+		t.Fatalf("provisioner tool = %q, want gentle-ai", item.Tool)
+	}
+	wantArgs := []string{"install", "--scope", "global", "--agents", "codex"}
+	if !equalStrings(item.Args, wantArgs) {
+		t.Fatalf("provisioner args = %#v, want %#v", item.Args, wantArgs)
+	}
+	if !equalStrings(item.Missing, []string{"engram"}) {
+		t.Fatalf("provisioner missing = %#v, want [engram]", item.Missing)
+	}
+}
+
+func equalStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func singleEntryManifest(source string) manifest.Manifest {
 	return manifest.Manifest{
 		Version:  1,

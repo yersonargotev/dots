@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/tui"
 )
 
@@ -56,11 +58,26 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			renderPlan(cmd.OutOrStdout(), p)
+
+			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
+			if err != nil {
+				return err
+			}
+			renderProvisionPlan(cmd.OutOrStdout(), provPlan)
+
 			if dryRun {
 				return nil
 			}
 
-			return resolveAndApply(cmd, p, paths, yes, noTUI)
+			applied, err := resolveAndApply(cmd, p, paths, yes, noTUI)
+			if err != nil {
+				return err
+			}
+			if !applied {
+				return nil
+			}
+
+			return runProvisioners(cmd, *m, profile, paths.Home)
 		},
 	}
 
@@ -75,11 +92,34 @@ func newInstallCommand() *cobra.Command {
 	return cmd
 }
 
+// runProvisioners executes the selected provisioners after dependency installs
+// and file entries, in the same install run. It threads HOME from the resolved
+// --home so a sandboxed install lands every tool-managed file under the
+// temporary home. Apply stops at the first failing provisioner and returns the
+// error, which the caller surfaces; the tool's own stdout/stderr are streamed
+// through so its progress is visible.
+func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile, home string) error {
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	runner := provisionExecRunner{
+		ctx:    ctx,
+		home:   home,
+		stdin:  cmd.InOrStdin(),
+		stdout: cmd.OutOrStdout(),
+		stderr: cmd.ErrOrStderr(),
+	}
+	report, err := provision.Apply(m, provision.Options{Profile: profile, OS: runtime.GOOS}, lookupCommand, runner)
+	renderProvisionReport(cmd.OutOrStdout(), report)
+	return err
+}
+
 // resolveAndApply resolves the plan's conflicts (via the TUI, text prompts, or
 // the conservative --yes default) and applies it with Backup Set protection. It
 // is shared by install and update so post-update installation reuses identical
 // Conflict Resolution and filesystem machinery instead of reimplementing it.
-func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI bool) error {
+func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI bool) (bool, error) {
 	var (
 		decisions map[string]install.ConflictDecision
 		err       error
@@ -90,20 +130,20 @@ func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, 
 	case noTUI:
 		decisions, err = promptConflictDecisions(cmd, p, paths.Home, paths.SourceRoot)
 		if err != nil {
-			return err
+			return false, err
 		}
 	default:
 		decisions, err = resolveConflictsTUI(cmd, p, paths.Home, paths.SourceRoot)
 		if errors.Is(err, tui.ErrCanceled) {
 			fmt.Fprintln(cmd.OutOrStdout(), "Conflict resolution canceled; no changes applied.")
-			return nil
+			return false, nil
 		}
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	return install.Apply(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
+	return true, install.Apply(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
 }
 
 // resolveConflictsTUI launches the Bubble Tea conflict resolver for the plan's

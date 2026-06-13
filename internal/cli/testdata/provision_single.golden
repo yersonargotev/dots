@@ -1,0 +1,7 @@
+
+Provisioners for profile "default"
+
+  gentle-ai install --scope global --persona neutral --agents codex
+    affects: ~/.claude, ~/.codex, ~/.gentle-ai
+
+Summary: 1 provisioner(s)

@@ -91,6 +91,78 @@ entries:
 	}
 }
 
+func TestLoadFileParsesProvisioners(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: gentle-ai
+    tags: [core]
+    os: [darwin, linux]
+    spec:
+      scope: global
+      channel: stable
+      persona: neutral
+      sdd-mode: strict
+      agents: [codex]
+      components: [engram]
+      skills: [tdd]
+    dependencies:
+      - name: gentle-ai
+        brew: gentleman-programming/tap/gentle-ai
+      - name: engram
+        brew: gentleman-programming/tap/engram
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if len(got.Provisioners) != 1 {
+		t.Fatalf("Provisioners len = %d, want 1", len(got.Provisioners))
+	}
+	prov := got.Provisioners[0]
+	if prov.Tool != "gentle-ai" {
+		t.Fatalf("Provisioner.Tool = %q, want gentle-ai", prov.Tool)
+	}
+	if !sameStrings(prov.Tags, []string{"core"}) {
+		t.Fatalf("Provisioner.Tags = %#v, want [core]", prov.Tags)
+	}
+	if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
+		t.Fatalf("Provisioner.OS = %#v, want [darwin linux]", prov.OS)
+	}
+	if prov.Spec.Scope != "global" || prov.Spec.Channel != "stable" || prov.Spec.Persona != "neutral" || prov.Spec.SDDMode != "strict" {
+		t.Fatalf("Provisioner.Spec scalar flags = %#v, want global/stable/neutral/strict", prov.Spec)
+	}
+	if !sameStrings(prov.Spec.Agents, []string{"codex"}) {
+		t.Fatalf("Provisioner.Spec.Agents = %#v, want [codex]", prov.Spec.Agents)
+	}
+	if !sameStrings(prov.Spec.Components, []string{"engram"}) {
+		t.Fatalf("Provisioner.Spec.Components = %#v, want [engram]", prov.Spec.Components)
+	}
+	if !sameStrings(prov.Spec.Skills, []string{"tdd"}) {
+		t.Fatalf("Provisioner.Spec.Skills = %#v, want [tdd]", prov.Spec.Skills)
+	}
+	if len(prov.Dependencies) != 2 {
+		t.Fatalf("Provisioner.Dependencies len = %d, want 2", len(prov.Dependencies))
+	}
+	if prov.Dependencies[0].Name != "gentle-ai" || prov.Dependencies[0].Brew != "gentleman-programming/tap/gentle-ai" {
+		t.Fatalf("Provisioner.Dependencies[0] = %#v, want gentle-ai brew dependency", prov.Dependencies[0])
+	}
+}
+
 func TestDependencyProbeTrimsWhitespace(t *testing.T) {
 	tests := []struct {
 		name string
@@ -326,6 +398,156 @@ entries:
 			dir := t.TempDir()
 			path := filepath.Join(dir, "dots.yaml")
 			if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
+				t.Fatalf("write manifest: %v", err)
+			}
+
+			_, err := manifest.LoadFile(path)
+			if err == nil {
+				t.Fatal("LoadFile() error = nil, want validation error")
+			}
+			if err.Error() != tt.want {
+				t.Fatalf("LoadFile() error = %q, want %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadFileRejectsInvalidProvisioners(t *testing.T) {
+	const base = `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+`
+
+	tests := []struct {
+		name        string
+		provisioner string
+		want        string
+	}{
+		{
+			name: "missing tool",
+			provisioner: `  - tags: [core]
+    spec:
+      scope: global
+`,
+			want: "provisioners[0].tool is required",
+		},
+		{
+			name: "tool not allowlisted",
+			provisioner: `  - tool: bash
+    tags: [core]
+    spec:
+      scope: global
+`,
+			want: "provisioners[0].tool must be gentle-ai",
+		},
+		{
+			name: "missing spec",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+`,
+			want: "provisioners[0].spec is required",
+		},
+		{
+			name: "missing tags",
+			provisioner: `  - tool: gentle-ai
+    tags: []
+    spec:
+      scope: global
+`,
+			want: "provisioners[0].tags is required",
+		},
+		{
+			name: "empty tag value",
+			provisioner: `  - tool: gentle-ai
+    tags: ["", core]
+    spec:
+      scope: global
+`,
+			want: "provisioners[0].tags[0] must not be empty",
+		},
+		{
+			name: "unsupported os filter",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    os: [windows]
+    spec:
+      scope: global
+`,
+			want: "provisioners[0].os[0] must be one of darwin, linux",
+		},
+		{
+			name: "unsupported persona",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      persona: senior-architect
+`,
+			want: "provisioners[0].spec.persona must be one of gentleman, neutral",
+		},
+		{
+			name: "whitespace-only agents list is missing spec",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      agents: ["  "]
+`,
+			want: "provisioners[0].spec is required",
+		},
+		{
+			name: "empty agent value",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+      agents: ["  "]
+`,
+			want: "provisioners[0].spec.agents[0] must not be empty",
+		},
+		{
+			name: "empty component value",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+      components: ["  "]
+`,
+			want: "provisioners[0].spec.components[0] must not be empty",
+		},
+		{
+			name: "empty skill value",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+      skills: ["  "]
+`,
+			want: "provisioners[0].spec.skills[0] must not be empty",
+		},
+		{
+			name: "dependency without name",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+    dependencies:
+      - brew: gentleman-programming/tap/gentle-ai
+`,
+			want: "provisioners[0].dependencies[0].name is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "dots.yaml")
+			if err := os.WriteFile(path, []byte(base+tt.provisioner), 0o600); err != nil {
 				t.Fatalf("write manifest: %v", err)
 			}
 

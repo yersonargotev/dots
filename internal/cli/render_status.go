@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
+	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/status"
 )
 
@@ -45,4 +47,22 @@ func renderStatus(w io.Writer, report status.Report) {
 
 	fmt.Fprintf(w, "\nSummary: %d ok, %d missing, %d conflict, %d skipped, %d drifted, %d unsupported\n",
 		counts.ok, counts.missing, counts.conflict, counts.skipped, counts.drifted, counts.unsupported)
+}
+
+// renderStatusProvisioners lists the provisioners declared for the profile as
+// read-only, informational context. It deliberately makes no alignment claim:
+// whether a provisioner has actually been applied is verified by the tool
+// itself, not by dots. It renders nothing when no provisioner is declared.
+func renderStatusProvisioners(w io.Writer, p provision.Plan) {
+	if len(p.Steps) == 0 {
+		return
+	}
+
+	fmt.Fprintf(w, "\nDeclared provisioners for profile %q\n\n", p.Profile)
+	for _, step := range p.Steps {
+		fmt.Fprintf(w, "  %s %s\n", step.Executable, strings.Join(step.Args, " "))
+		if len(step.Targets) > 0 {
+			fmt.Fprintf(w, "    affects: %s\n", strings.Join(step.Targets, ", "))
+		}
+	}
 }
