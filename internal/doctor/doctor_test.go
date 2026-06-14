@@ -90,6 +90,27 @@ func TestScanSecretsIgnoresPlaceholdersAndUnselectedSources(t *testing.T) {
 	}
 }
 
+func TestScanSecretsScansDirectorySources(t *testing.T) {
+	sourceRoot := t.TempDir()
+	writeFile(t, sourceRoot, "configs/nvim/init.lua", "vim.g.mapleader = ' '\n")
+	writeFile(t, sourceRoot, "configs/nvim/lua/plugin.lua", "token = realtoken123\n")
+
+	report, err := doctor.ScanSecrets(singleEntryManifest("configs/nvim"), doctor.Options{
+		Profile: "default", OS: "linux", SourceRoot: sourceRoot,
+	})
+	if err != nil {
+		t.Fatalf("ScanSecrets() error = %v", err)
+	}
+
+	if len(report.Findings) != 1 {
+		t.Fatalf("Findings len = %d, want 1 (%#v)", len(report.Findings), report.Findings)
+	}
+	finding := report.Findings[0]
+	if finding.Source != "configs/nvim/lua/plugin.lua" || finding.Line != 1 || finding.Pattern != "credential-assignment" {
+		t.Fatalf("finding = %#v, want credential-assignment at configs/nvim/lua/plugin.lua:1", finding)
+	}
+}
+
 func TestBuildDiagnosticSections(t *testing.T) {
 	tests := []struct {
 		name            string
