@@ -186,6 +186,22 @@ entries:
         apt: neovim
         dnf: neovim
         pacman: neovim
+  - source: configs/claude/settings.json
+    target: ~/.claude/settings.json
+    strategy: copy
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+  - source: configs/claude/statusline-command.sh
+    target: ~/.claude/statusline-command.sh
+    strategy: copy
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
 provisioners:
   - tool: gentle-ai
     tags:
@@ -197,6 +213,7 @@ provisioners:
       sdd-mode: multi
       agents:
         - codex
+        - claude-code
     dependencies:
       - name: gentle-ai
         command: gentle-ai
