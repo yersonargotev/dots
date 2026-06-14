@@ -214,6 +214,7 @@ provisioners:
       agents:
         - codex
         - claude-code
+        - opencode
     dependencies:
       - name: gentle-ai
         command: gentle-ai

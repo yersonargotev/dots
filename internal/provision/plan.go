@@ -84,6 +84,9 @@ func managedRoots(prov manifest.Provisioner) []string {
 		if includes(prov.Spec.Agents, "codex") {
 			roots = append(roots, "~/.codex")
 		}
+		if includes(prov.Spec.Agents, "opencode") {
+			roots = append(roots, "~/.config/opencode")
+		}
 		return append(roots, "~/.gentle-ai")
 	default:
 		return nil

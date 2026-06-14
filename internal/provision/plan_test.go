@@ -97,7 +97,7 @@ func TestSelect(t *testing.T) {
 func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 	prov := manifest.Provisioner{
 		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"codex"}},
+		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"codex", "opencode"}},
 	}
 	m := manifestWithProvisioners(prov)
 
@@ -116,12 +116,12 @@ func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 	if step.Tool != "gentle-ai" || step.Executable != "gentle-ai" {
 		t.Fatalf("Step tool/executable = %q/%q, want gentle-ai", step.Tool, step.Executable)
 	}
-	wantArgs := []string{"install", "--scope", "global", "--agents", "codex"}
+	wantArgs := []string{"install", "--scope", "global", "--agents", "codex,opencode"}
 	if !reflect.DeepEqual(step.Args, wantArgs) {
 		t.Fatalf("Step.Args = %#v, want %#v", step.Args, wantArgs)
 	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.codex", "~/.gentle-ai"}) {
-		t.Fatalf("Step.Targets = %#v, want [~/.claude ~/.codex ~/.gentle-ai]", step.Targets)
+	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.codex", "~/.config/opencode", "~/.gentle-ai"}) {
+		t.Fatalf("Step.Targets = %#v, want [~/.claude ~/.codex ~/.config/opencode ~/.gentle-ai]", step.Targets)
 	}
 }
 
