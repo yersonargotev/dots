@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -145,6 +146,43 @@ func ScanSecrets(m manifest.Manifest, opts Options) (SecretReport, error) {
 }
 
 func scanSource(source, path string) ([]SecretFinding, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("stat secret scan source %s: %w", path, err)
+	}
+	if info.IsDir() {
+		var findings []SecretFinding
+		err := filepath.WalkDir(path, func(childPath string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(path, childPath)
+			if err != nil {
+				return err
+			}
+			childSource := filepath.ToSlash(filepath.Join(source, rel))
+			childFindings, err := scanFile(childSource, childPath)
+			if err != nil {
+				return err
+			}
+			findings = append(findings, childFindings...)
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("scan source directory %s: %w", path, err)
+		}
+		return findings, nil
+	}
+	return scanFile(source, path)
+}
+
+func scanFile(source, path string) ([]SecretFinding, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
