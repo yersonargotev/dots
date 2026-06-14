@@ -33,7 +33,7 @@ func TestClaudeDefaultProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	// so the test can assert the resolved provisioner command, not just the
 	// rendered plan. engram only needs to be present on PATH for the dep check.
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf '%s' \"$*\" > \"$HOME/gentle-ai-args\"\n")
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf '%s' \"$*\" > \"$HOME/gentle-ai-args\"\ncase \" $* \" in\n  *\" --agents codex,claude-code,opencode \"*)\n    mkdir -p \"$HOME/.config/opencode\"\n    printf '{\"generated\":true}' > \"$HOME/.config/opencode/opencode.json\"\n    ;;\nesac\n")
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
@@ -151,26 +151,35 @@ func TestClaudeDefaultProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	if !strings.Contains(string(settings), "bash ~/.claude/statusline-command.sh") {
 		t.Fatalf("seeded settings.json statusLine command is not normalized to ~\ncontent:\n%s", settings)
 	}
+	if _, err := os.Stat(filepath.Join(repoRoot, "configs", "opencode")); !os.IsNotExist(err) {
+		t.Fatalf("repo must not version rendered OpenCode config under configs/opencode: %v", err)
+	}
 
-	// The provisioner must have run, threaded to the sandbox HOME, with both
+	// The provisioner must have run, threaded to the sandbox HOME, with all
 	// agents resolved on its argv — not merely shown in the rendered plan.
 	gotArgs, err := os.ReadFile(filepath.Join(home, "gentle-ai-args"))
 	if err != nil {
 		t.Fatalf("provisioner did not run under the sandbox HOME %q: %v", home, err)
 	}
-	if !strings.Contains(string(gotArgs), "--agents codex,claude-code") {
-		t.Fatalf("provisioner argv = %q, want it to install agents codex,claude-code", gotArgs)
+	if !strings.Contains(string(gotArgs), "--agents codex,claude-code,opencode") {
+		t.Fatalf("provisioner argv = %q, want it to install agents codex,claude-code,opencode", gotArgs)
 	}
 	// And it must never have escaped into the inherited real HOME.
 	if _, err := os.Stat(filepath.Join(realHome, "gentle-ai-args")); err == nil {
 		t.Fatalf("provisioner wrote into the inherited HOME %q instead of the sandbox", realHome)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "opencode", "opencode.json")); err != nil {
+		t.Fatalf("OpenCode generated config did not land under the sandbox HOME %q: %v", home, err)
+	}
+	if _, err := os.Stat(filepath.Join(realHome, ".config", "opencode", "opencode.json")); err == nil {
+		t.Fatalf("OpenCode generated config escaped into the inherited HOME %q", realHome)
 	}
 
 	out := installOut.String()
 	for _, want := range []string{
 		"configs/claude/settings.json",
 		"configs/claude/statusline-command.sh",
-		"codex,claude-code",
+		"codex,claude-code,opencode",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("install output missing %q\noutput:\n%s", want, out)
