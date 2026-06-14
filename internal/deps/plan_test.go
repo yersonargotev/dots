@@ -264,3 +264,35 @@ func TestPlanIsEmptyWhenAllDependenciesPresent(t *testing.T) {
 		t.Fatalf("Actions len = %d, want 0 when all present", len(report.Actions))
 	}
 }
+
+func TestPlanIncludesSelectedProvisionerDependencies(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Provisioners: []manifest.Provisioner{
+			{
+				Tool: "gentle-ai",
+				Tags: []string{"core"},
+				Dependencies: []manifest.Dependency{
+					{Name: "gentle-ai", Brew: "gentleman-programming/tap/gentle-ai"},
+					{Name: "engram", Brew: "gentleman-programming/tap/engram"},
+				},
+			},
+		},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("engram"), deps.TierHomebrew)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	action := report.Actions[0]
+	if action.Dependency != "gentle-ai" {
+		t.Fatalf("Actions[0].Dependency = %q, want gentle-ai", action.Dependency)
+	}
+	if action.Package != "gentleman-programming/tap/gentle-ai" {
+		t.Fatalf("Actions[0].Package = %q, want tap package", action.Package)
+	}
+}

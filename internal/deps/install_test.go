@@ -351,3 +351,35 @@ func installSelectionManifest() manifest.Manifest {
 		},
 	}
 }
+
+func TestInstallDryRunIncludesSelectedProvisionerDependencies(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Provisioners: []manifest.Provisioner{
+			{
+				Tool: "gentle-ai",
+				Tags: []string{"core"},
+				Dependencies: []manifest.Dependency{
+					{Name: "gentle-ai", Brew: "gentleman-programming/tap/gentle-ai"},
+					{Name: "engram", Brew: "gentleman-programming/tap/engram"},
+				},
+			},
+		},
+	}
+
+	report, err := deps.InstallDryRun(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("engram"), deps.TierHomebrew)
+	if err != nil {
+		t.Fatalf("InstallDryRun() error = %v", err)
+	}
+	if len(report.Items) != 1 {
+		t.Fatalf("Items len = %d, want 1 (%#v)", len(report.Items), report.Items)
+	}
+	item := report.Items[0]
+	if item.Dependency != "gentle-ai" {
+		t.Fatalf("Items[0].Dependency = %q, want gentle-ai", item.Dependency)
+	}
+	if item.Package != "gentleman-programming/tap/gentle-ai" {
+		t.Fatalf("Items[0].Package = %q, want tap package", item.Package)
+	}
+}
