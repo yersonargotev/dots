@@ -31,6 +31,20 @@ macOS and Linux users can also install the same checksum-backed release through 
 brew install yersonargotev/tap/dots
 ```
 
+That fully-qualified install is the preferred Tap Trust path because Homebrew trusts only the `dots` formula, not every current and future entry in `yersonargotev/tap`. If you keep the tap installed and want to use the short name, trust the formula before installing:
+
+```bash
+brew tap yersonargotev/tap
+brew trust --formula yersonargotev/tap/dots
+brew install dots
+```
+
+For Brewfile-managed machines, declare the formula trust with the package entry:
+
+```ruby
+brew "yersonargotev/tap/dots", trusted: true
+```
+
 Verify the binary is available:
 
 ```bash

@@ -47,11 +47,11 @@ cd dist
 shasum -a 256 -c checksums.txt
 ```
 
-On Linux, `sha256sum -c checksums.txt` is equivalent.
+On Linux, `sha256sum -c checksums.txt` is equivalent. To validate Homebrew's future Tap Trust behavior locally, run install checks with `HOMEBREW_REQUIRE_TAP_TRUST=1` and use either the fully-qualified formula install or explicit `brew trust --formula yersonargotev/tap/dots`.
 
 ## Homebrew install
 
-Install the latest tap formula:
+Install the latest tap formula with a fully-qualified formula name:
 
 ```bash
 brew install yersonargotev/tap/dots
@@ -59,7 +59,23 @@ dots --help
 dots install
 ```
 
-Equivalent tapped form: `brew tap yersonargotev/tap`, then `brew install dots`.
+This is the preferred Tap Trust path for `dots`: Homebrew trusts only the formula being installed instead of trusting every current and future formula, cask, or external command in `yersonargotev/tap`.
+
+If you keep the tap installed and want short-name installs, trust the formula before installing from the tap:
+
+```bash
+brew tap yersonargotev/tap
+brew trust --formula yersonargotev/tap/dots
+brew install dots
+```
+
+Trust the whole tap with `brew trust yersonargotev/tap` only when you intentionally accept the broader blast radius. Homebrew currently allows non-official taps by default, but Tap Trust will require explicit trust in a future Homebrew release; maintainers can test the stricter behavior now with `HOMEBREW_REQUIRE_TAP_TRUST=1`.
+
+For Brewfile-managed machines, prefer formula-level trust:
+
+```ruby
+brew "yersonargotev/tap/dots", trusted: true
+```
 
 The formula selects the correct Release Artifact for macOS/Linux and amd64/arm64, marks each raw executable URL with `using: :nounzip`, verifies the published SHA-256 checksum from the generated formula, installs the downloaded binary as `dots`, and runs `dots --help` in `brew test`.
 
@@ -105,7 +121,7 @@ DOTS_VERSION=v0.1.0 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 | Artifacts | Raw `dots` binaries named `dots_<version>_<goos>_<goarch>`. |
 | Platforms | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, and `linux/arm64`. |
 | Checksums | One `checksums.txt` file covers every Release Artifact. |
-| Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and `checksums.txt`; the workflow locally prepares the tap commit, dry-run proves that prepared state can be pushed, then pushes it to `yersonargotev/homebrew-tap` with `HOMEBREW_TAP_TOKEN` after release assets upload. |
+| Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and `checksums.txt`; the workflow locally prepares the tap commit, dry-run proves that prepared state can be pushed, then pushes it to `yersonargotev/homebrew-tap` with `HOMEBREW_TAP_TOKEN` after release assets upload. Users should prefer formula-level Tap Trust through `brew install yersonargotev/tap/dots`, `brew trust --formula yersonargotev/tap/dots`, or Brewfile `trusted: true`. |
 
 ## First v0.x checklist
 
@@ -115,4 +131,5 @@ DOTS_VERSION=v0.1.0 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 - [ ] `checksums.txt` contains one SHA-256 entry for each artifact.
 - [ ] The Bootstrapper maps its detected `goos/goarch` to the matching artifact name.
 - [ ] `Formula/dots.rb` in `yersonargotev/homebrew-tap` points at the same tag and checksums.
+- [ ] A Tap Trust install path has been checked with `HOMEBREW_REQUIRE_TAP_TRUST=1` using the fully-qualified formula or formula-level trust.
 - [ ] `HOMEBREW_TAP_TOKEN` is configured before relying on automatic tap updates.
