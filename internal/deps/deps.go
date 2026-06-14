@@ -1,7 +1,7 @@
 // Package deps computes Dependency findings for a Profile: which external tools
-// a workstation needs for its Managed Entries, whether they are present,
-// OS-aware advisory guidance for installing the missing ones, and explicitly
-// confirmed package-manager execution.
+// a workstation needs for its selected Managed Entries and Provisioners, whether
+// they are present, OS-aware advisory guidance for installing the missing ones,
+// and explicitly confirmed package-manager execution.
 package deps
 
 import (
@@ -36,8 +36,8 @@ type CheckReport struct {
 }
 
 // Check reports which Dependencies declared by the Profile's selected Managed
-// Entries are present on the workstation. Dependencies are deduplicated by name
-// in first-declared order.
+// Entries and Provisioners are present on the workstation. Dependencies are
+// deduplicated by name in first-declared order.
 func Check(m manifest.Manifest, opts Options, look Lookup) (CheckReport, error) {
 	selected, err := selectDependencies(m, opts)
 	if err != nil {
@@ -56,9 +56,9 @@ func Check(m manifest.Manifest, opts Options, look Lookup) (CheckReport, error) 
 	return report, nil
 }
 
-// selectDependencies gathers the Dependencies of every Managed Entry that
-// belongs to the Profile and passes the OS filter, deduplicated by name in
-// first-declared order.
+// selectDependencies gathers the Dependencies of every Managed Entry and
+// Provisioner that belongs to the Profile and passes the OS filter, deduplicated
+// by name in first-declared order.
 func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependency, error) {
 	profile, ok := m.Profiles[opts.Profile]
 	if !ok {
@@ -67,14 +67,8 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 
 	var selected []manifest.Dependency
 	seen := make(map[string]bool)
-	for _, entry := range m.Entries {
-		if !sharesTag(entry.Tags, profile.Tags) {
-			continue
-		}
-		if !matchesOS(entry.OS, opts.OS) {
-			continue
-		}
-		for _, dep := range entry.Dependencies {
+	addDependencies := func(deps []manifest.Dependency) {
+		for _, dep := range deps {
 			// Normalize the name so padded and unpadded declarations of the same
 			// dependency deduplicate and render consistently with Probe().
 			dep.Name = strings.TrimSpace(dep.Name)
@@ -84,6 +78,25 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 			seen[dep.Name] = true
 			selected = append(selected, dep)
 		}
+	}
+
+	for _, entry := range m.Entries {
+		if !sharesTag(entry.Tags, profile.Tags) {
+			continue
+		}
+		if !matchesOS(entry.OS, opts.OS) {
+			continue
+		}
+		addDependencies(entry.Dependencies)
+	}
+	for _, prov := range m.Provisioners {
+		if !sharesTag(prov.Tags, profile.Tags) {
+			continue
+		}
+		if !matchesOS(prov.OS, opts.OS) {
+			continue
+		}
+		addDependencies(prov.Dependencies)
 	}
 	return selected, nil
 }

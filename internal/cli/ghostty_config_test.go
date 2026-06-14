@@ -18,6 +18,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
+	stubGentleAIProvisionerTools(t)
 
 	install := cli.NewRootCommand()
 	var installOut bytes.Buffer

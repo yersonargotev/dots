@@ -186,3 +186,21 @@ entries:
         apt: neovim
         dnf: neovim
         pacman: neovim
+provisioners:
+  - tool: gentle-ai
+    tags:
+      - core
+    spec:
+      scope: global
+      channel: stable
+      persona: neutral
+      sdd-mode: multi
+      agents:
+        - codex
+    dependencies:
+      - name: gentle-ai
+        command: gentle-ai
+        brew: gentleman-programming/tap/gentle-ai
+      - name: engram
+        command: engram
+        brew: gentleman-programming/tap/engram

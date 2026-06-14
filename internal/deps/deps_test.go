@@ -133,3 +133,108 @@ func TestCheckFailsOnUnknownProfile(t *testing.T) {
 		t.Fatal("Check() error = nil, want error for unknown profile")
 	}
 }
+
+func TestCheckIncludesSelectedProvisionerDependencies(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/zsh/zshrc", Target: "~/.zshrc", Strategy: "symlink", Tags: []string{"core"},
+				Dependencies: []manifest.Dependency{{Name: "zsh"}},
+			},
+		},
+		Provisioners: []manifest.Provisioner{
+			{
+				Tool: "gentle-ai",
+				Tags: []string{"core"},
+				Dependencies: []manifest.Dependency{
+					{Name: "gentle-ai", Brew: "gentleman-programming/tap/gentle-ai"},
+					{Name: "engram", Brew: "gentleman-programming/tap/engram"},
+				},
+			},
+		},
+	}
+
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("zsh", "engram"))
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	want := []deps.Result{
+		{Name: "zsh", Command: "zsh", Present: true},
+		{Name: "gentle-ai", Command: "gentle-ai", Present: false},
+		{Name: "engram", Command: "engram", Present: true},
+	}
+	if len(report.Results) != len(want) {
+		t.Fatalf("Results len = %d, want %d (%#v)", len(report.Results), len(want), report.Results)
+	}
+	for i := range want {
+		if report.Results[i] != want[i] {
+			t.Fatalf("Results[%d] = %#v, want %#v", i, report.Results[i], want[i])
+		}
+	}
+}
+
+func TestCheckFiltersProvisionerDependenciesByProfileAndOS(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Provisioners: []manifest.Provisioner{
+			{Tool: "gentle-ai", Tags: []string{"core"}, OS: []string{"darwin"}, Dependencies: []manifest.Dependency{{Name: "gentle-ai"}}},
+			{Tool: "opencode", Tags: []string{"work"}, Dependencies: []manifest.Dependency{{Name: "opencode"}}},
+			{Tool: "claude", Tags: []string{"core"}, OS: []string{"linux"}, Dependencies: []manifest.Dependency{{Name: "claude"}}},
+		},
+	}
+
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	if len(report.Results) != 1 {
+		t.Fatalf("Results len = %d, want 1 (%#v)", len(report.Results), report.Results)
+	}
+	if report.Results[0].Name != "gentle-ai" {
+		t.Fatalf("Results[0].Name = %q, want gentle-ai", report.Results[0].Name)
+	}
+}
+
+func TestCheckDedupesProvisionerDependenciesWithEntries(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/a", Target: "~/.a", Strategy: "symlink", Tags: []string{"core"},
+				Dependencies: []manifest.Dependency{{Name: "gentle-ai", Brew: "gentleman-programming/tap/gentle-ai"}},
+			},
+		},
+		Provisioners: []manifest.Provisioner{
+			{
+				Tool:         "gentle-ai",
+				Tags:         []string{"core"},
+				Dependencies: []manifest.Dependency{{Name: " gentle-ai "}, {Name: "engram"}},
+			},
+		},
+	}
+
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	got := make([]string, 0, len(report.Results))
+	for _, result := range report.Results {
+		got = append(got, result.Name)
+	}
+	want := []string{"gentle-ai", "engram"}
+	if len(got) != len(want) {
+		t.Fatalf("dependency names = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("dependency names = %v, want %v", got, want)
+		}
+	}
+}
