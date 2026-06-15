@@ -184,6 +184,26 @@ func TestDependencyProbeTrimsWhitespace(t *testing.T) {
 	}
 }
 
+func TestDependencyIsFont(t *testing.T) {
+	tests := []struct {
+		name string
+		dep  manifest.Dependency
+		want bool
+	}{
+		{name: "command dependency is not a font", dep: manifest.Dependency{Name: "tmux"}, want: false},
+		{name: "font_match marks a font dependency", dep: manifest.Dependency{Name: "CascadiaCode NF", FontMatch: "CascadiaCodeNF*"}, want: true},
+		{name: "blank font_match is not a font", dep: manifest.Dependency{Name: "tmux", FontMatch: "  "}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.dep.IsFont(); got != tt.want {
+				t.Fatalf("IsFont() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadFileRejectsUnknownFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")

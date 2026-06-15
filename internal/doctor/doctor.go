@@ -70,14 +70,14 @@ var secretPatterns = []secretPattern{
 }
 
 // Build runs all doctor diagnostics without mutating the filesystem.
-func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Lookup) (Report, error) {
+func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Lookup, fontLook deps.FontLookup) (Report, error) {
 	report := Report{
 		Profile:  opts.Profile,
 		OS:       opts.OS,
 		Platform: Platform{Supported: supportedOS(opts.OS), OS: opts.OS},
 	}
 
-	depReport, err := deps.Check(m, deps.Options{Profile: opts.Profile, OS: opts.OS}, look)
+	depReport, err := deps.Check(m, deps.Options{Profile: opts.Profile, OS: opts.OS}, look, fontLook)
 	if err != nil {
 		return Report{}, err
 	}

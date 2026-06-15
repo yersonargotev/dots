@@ -16,6 +16,11 @@ import (
 // in tests.
 type Lookup func(command string) bool
 
+// FontLookup reports whether a font matching the declared glob is installed on
+// the workstation. It is the injectable boundary around font-directory scanning,
+// parallel to Lookup, so font dependency checks stay deterministic in tests.
+type FontLookup func(match string) bool
+
 // Options carries the resolved inputs needed to select Dependencies.
 type Options struct {
 	Profile string
@@ -38,7 +43,7 @@ type CheckReport struct {
 // Check reports which Dependencies declared by the Profile's selected Managed
 // Entries and Provisioners are present on the workstation. Dependencies are
 // deduplicated by name in first-declared order.
-func Check(m manifest.Manifest, opts Options, look Lookup) (CheckReport, error) {
+func Check(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup) (CheckReport, error) {
 	selected, err := selectDependencies(m, opts)
 	if err != nil {
 		return CheckReport{}, err
@@ -46,12 +51,17 @@ func Check(m manifest.Manifest, opts Options, look Lookup) (CheckReport, error) 
 
 	report := CheckReport{Profile: opts.Profile}
 	for _, dep := range selected {
-		probe := dep.Probe()
-		report.Results = append(report.Results, Result{
-			Name:    dep.Name,
-			Command: probe,
-			Present: look(probe),
-		})
+		var result Result
+		if dep.IsFont() {
+			// A font has no executable on PATH; detect it as an installed asset
+			// by scanning the workstation font directories for a matching file.
+			match := strings.TrimSpace(dep.FontMatch)
+			result = Result{Name: dep.Name, Command: match, Present: fontLook(match)}
+		} else {
+			probe := dep.Probe()
+			result = Result{Name: dep.Name, Command: probe, Present: look(probe)}
+		}
+		report.Results = append(report.Results, result)
 	}
 	return report, nil
 }
