@@ -116,6 +116,10 @@ _Avoid_: dotfiles, config files, installed files
 A terminal preference that can follow the user across machines without encoding host-specific ergonomics, such as theme, intentional keybindings, cursor behavior, scrollback, copy/paste behavior, or close confirmations.
 _Avoid_: terminal setup, my terminal config, machine terminal preference
 
+**Install Profile**:
+A named selection in `dots.yaml` (such as `default` or `desktop`) that resolves to a set of tags and decides which Managed Entries are installed on a given machine. It is about machine scope, not editor behavior.
+_Avoid_: profile, machine profile, install set
+
 **Project Name**:
 The public repository name for the dotfiles project. The canonical repository name is `dotfiles`, while the command-line binary remains `dots`.
 _Avoid_: repo name, product name, tool name
