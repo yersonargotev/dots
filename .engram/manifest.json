@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "chunks": [
+    {
+      "id": "4bf76f7f",
+      "created_by": "argote",
+      "created_at": "2026-06-15T17:43:38Z",
+      "sessions": 121,
+      "memories": 518,
+      "prompts": 74
+    }
+  ]
+}
