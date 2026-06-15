@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose an improvement or new capability.
+title: "feat: "
+labels: ["needs-triage", "enhancement"]
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is an actionable change, not a support question.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What pain point or limitation should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behavior from the user's perspective.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - CLI
+        - Dotfiles configuration
+        - Installation workflow
+        - Documentation
+        - CI / release
+        - Agent workflow
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

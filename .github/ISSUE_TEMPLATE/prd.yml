@@ -1,0 +1,61 @@
+name: PRD / agent-ready work
+description: Define product requirements for implementation by an agent or contributor.
+title: "feat: "
+labels: ["needs-triage"]
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: The scope is small enough for one reviewable work unit or clearly identifies slices.
+          required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What user or maintainer outcome should exist when this is complete?
+    validations:
+      required: true
+  - type: textarea
+    id: current-gap
+    attributes:
+      label: Current-state gap
+      description: What cannot be done today, or what is too painful/risky?
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      placeholder: |
+        - The system must ...
+        - The workflow must ...
+    validations:
+      required: true
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Non-goals
+      description: What should explicitly stay out of scope?
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation notes
+      description: Include safe validation expectations. Do not require writing to real home configuration.
+      placeholder: |
+        - `go test ./...`
+        - `go vet ./...`
+        - `go run ./cmd/dots manifest validate --file dots.yaml`
+        - Use temporary directories for home/config behavior.
