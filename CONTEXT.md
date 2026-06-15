@@ -181,11 +181,11 @@ The package-manager installation path for the Dotfiles CLI through the `yersonar
 _Avoid_: brew install, tap, package manager install
 
 **MVP Configuration Set**:
-The first group of Managed Configuration used to prove the installer end-to-end without migrating the entire workstation. The original v1 MVP Configuration Set was zsh, git, starship, and tmux; the current safe portable desktop layer also includes authored Zed configuration.
+The first group of Managed Configuration used to prove the installer end-to-end without migrating the entire workstation. The current set is the bounded `dots.yaml` manifest: shell, git, terminal, editor, and agent-tool config with explicit install strategies and dependencies.
 _Avoid_: first dotfiles, initial configs, starter set
 
 **Deferred Configuration**:
-Managed Configuration intentionally postponed until the installer is proven with the MVP Configuration Set. Neovim, generated editor state, and non-portable application configuration remain Deferred Configuration because they can introduce plugin, runtime-state, and dependency complexity unrelated to installer correctness.
+Managed Configuration intentionally postponed until the installer is proven with the MVP Configuration Set. Generated editor state, machine-local state, secrets, runtime caches, and non-portable application configuration remain Deferred Configuration because they can introduce plugin, runtime-state, and dependency complexity unrelated to installer correctness.
 _Avoid_: later dotfiles, backlog config, skipped config
 
 **Implementation Sequence**:

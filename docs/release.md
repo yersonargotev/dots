@@ -10,14 +10,14 @@ This workflow publishes `dots` Release Artifacts for macOS and Linux, then updat
    ```
 2. Create and push a v0.x tag:
    ```bash
-   git tag v0.5.0
-   git push origin v0.5.0
+   git tag v0.5.1
+   git push origin v0.5.1
    ```
 3. Open the GitHub release created by the `Release` workflow and verify these assets exist:
-   - `dots_v0.5.0_darwin_amd64`
-   - `dots_v0.5.0_darwin_arm64`
-   - `dots_v0.5.0_linux_amd64`
-   - `dots_v0.5.0_linux_arm64`
+   - `dots_v0.5.1_darwin_amd64`
+   - `dots_v0.5.1_darwin_arm64`
+   - `dots_v0.5.1_linux_amd64`
+   - `dots_v0.5.1_linux_arm64`
    - `checksums.txt`
 4. Verify the tap repository has an updated `Formula/dots.rb` commit for the same tag.
 
@@ -26,7 +26,7 @@ This workflow publishes `dots` Release Artifacts for macOS and Linux, then updat
 Use manual dispatch when the tag already exists but the release needs to be rebuilt or re-uploaded.
 
 1. Go to **Actions → Release → Run workflow**.
-2. Enter the existing tag, for example `v0.5.0`.
+2. Enter the existing tag, for example `v0.5.1`.
 3. Run the workflow. It checks out that tag, rebuilds the four artifacts, recreates `checksums.txt`, verifies `HOMEBREW_TAP_TOKEN` is present, checks out the Homebrew tap, regenerates and locally commits `Formula/dots.rb` when changed, dry-run pushes that prepared tap state, uploads assets with `--clobber`, and only then pushes the prepared tap commit.
 
 ## Checksum Verification contract
@@ -42,7 +42,7 @@ A Bootstrapper can verify the downloaded artifact by selecting the line for its 
 Local maintainer check:
 
 ```bash
-scripts/build-release-artifacts.sh --version v0.5.0 --out-dir dist
+scripts/build-release-artifacts.sh --version v0.5.1 --out-dir dist
 cd dist
 shasum -a 256 -c checksums.txt
 ```
@@ -98,7 +98,7 @@ Maintainer setup:
 Install a published v0.x release with the checksum-verified Bootstrapper:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | DOTS_VERSION=v0.5.0 bash
+curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | DOTS_VERSION=v0.5.1 bash
 ```
 
 The Bootstrapper downloads `checksums.txt` and the matching platform artifact from GitHub Releases, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, and then delegates setup to:
@@ -110,7 +110,7 @@ The Bootstrapper downloads `checksums.txt` and the matching platform artifact fr
 For development checkouts, pass the Installed Repository override through the Bootstrapper instead of duplicating install behavior in shell:
 
 ```bash
-DOTS_VERSION=v0.5.0 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
+DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 ```
 
 ## Release details
@@ -125,7 +125,7 @@ DOTS_VERSION=v0.5.0 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 
 ## First v0.x checklist
 
-- [ ] The tag is a v0.x tag, such as `v0.5.0`.
+- [ ] The tag is a v0.x tag, such as `v0.5.1`.
 - [ ] The workflow completed from the tag commit.
 - [ ] All four platform artifacts are attached to the GitHub Release.
 - [ ] `checksums.txt` contains one SHA-256 entry for each artifact.

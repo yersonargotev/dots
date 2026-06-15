@@ -11,7 +11,7 @@ The Bootstrapper in [`scripts/install.sh`](scripts/install.sh) installs the rele
 Pin the version explicitly so the Bootstrapper downloads a known Release Artifact and verifies it against the published checksum manifest:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | DOTS_VERSION=v0.5.0 bash
+curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | DOTS_VERSION=v0.5.1 bash
 ```
 
 The Bootstrapper:
@@ -96,7 +96,7 @@ dots install
 |---------|---------|
 | Source of Truth | This repository's tracked dotfiles and manifest are the canonical desired state. |
 | Install Manifest | The manifest that maps repository files to home-directory targets. |
-| Managed Entry | A target file or link managed by `dots`, such as `.zshrc`, `.gitconfig`, Starship, tmux, or Zed config. |
+| Managed Entry | A target file or link managed by `dots`, such as shell, git, terminal, editor, or agent-tool config. |
 | Install Plan | The preview of create, replace, skip, or conflict actions before install applies changes. |
 | Installation Metadata | Local state used to remember what `dots` installed. |
 | Backup Set | A preserved copy of user-owned files before a restore or overwrite path changes them. |
@@ -114,7 +114,7 @@ Release artifacts are published for:
 
 ## v1 scope boundary
 
-The v1 scope focuses on safe repository-owned configuration: zsh, git, starship, tmux, and portable Zed editor files. It includes guarded dependency inspection and installation for supported package-manager tiers, but does not include Windows, official WSL support, NixOS-specific behavior, Alpine/musl specialization, Neovim configuration, arbitrary manifest hooks, dependency rollback, version constraints, reinstall, or upgrade orchestration.
+The v1 scope focuses on safe repository-owned configuration declared in `dots.yaml`: shell, git, terminal, editor, and agent-tool config with explicit install strategies. It includes guarded dependency inspection and installation for supported package-manager tiers, but does not include Windows, official WSL support, NixOS-specific behavior, Alpine/musl specialization, arbitrary manifest hooks, dependency rollback, version constraints, reinstall, or upgrade orchestration.
 
 ## Canonical docs
 

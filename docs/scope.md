@@ -46,7 +46,7 @@ Migration trigger: the day a genuinely hard, broad capability is needed (serious
 | Release artifacts | GitHub Releases publish platform-specific Release Artifacts for macOS amd64/arm64 and Linux amd64/arm64. |
 | Bootstrapper support | The Bootstrapper downloads the matching Release Artifact, performs Checksum Verification, installs or locates `dots`, and delegates setup to the Dotfiles CLI. |
 | Homebrew Distribution | The release workflow generates a tap formula from the same Release Artifacts and checksum manifest, then publishes it to `yersonargotev/homebrew-tap`. |
-| MVP Configuration Set | v1 proves the installer with zsh, git, starship, tmux, and portable Zed authored files while generated editor state remains out of scope. |
+| MVP Configuration Set | v1 proves the installer with the bounded `dots.yaml` manifest: shell, git, terminal, editor, and agent-tool config with explicit install strategies and dependencies. Generated editor state remains out of scope. |
 
 ## Deferred to v1.1 or later
 
@@ -54,7 +54,7 @@ Migration trigger: the day a genuinely hard, broad capability is needed (serious
 |---------------|-----------------|--------------------|
 | Advanced dependency orchestration | Later than v1 | Rollback, version constraints, repository/tap/index refresh, reinstall, and upgrade behavior introduce package-manager state decisions beyond the guarded v1 install flow. |
 | `dots update` | v1.1 — **shipped** | Updating the Installed Repository introduces Git state, local changes, versioning, and post-update conflict handling. Delivered in v1.1; see [`docs/update.md`](update.md). |
-| Neovim and non-portable/generated application configurations | Later than v1 | Neovim, generated editor state, and non-portable app configs introduce plugin, language-server, runtime-state, and dependency complexity that distracts from installer correctness. Portable authored Zed files are the deliberate exception because they have stable paths and a bounded install model. |
+| Non-portable/generated application configurations | Later than v1 | Generated editor state, machine-local state, secrets, runtime caches, and non-portable app configs introduce runtime-state and dependency complexity that distracts from installer correctness. Authored editor files with stable paths are allowed when they fit the manifest install model. |
 | Windows support | Later than v1 | v1 focuses on macOS and Linux Supported Platforms only. Windows needs separate path, shell, package, and platform behavior decisions. |
 | Official WSL support | Later than v1 | WSL has mixed Windows/Linux filesystem and dependency concerns that should not be treated as generic Linux during the first release. |
 | NixOS specialization | Later than v1 | NixOS requires specialized package and system-configuration assumptions that do not fit the v1 advisory Dependency Plan. |
@@ -82,7 +82,7 @@ v1 distribution starts with GitHub Release Artifacts plus Checksum Verification 
 
 ### The MVP Configuration Set keeps the feedback loop tight
 
-zsh, git, starship, tmux, and portable Zed authored files are enough to prove symlink, template, copy, Local Extension Point, dependency, status, backup, conflict, and desktop-profile behavior. Pulling Neovim, generated editor state, or non-portable app configuration into v1 would blur whether failures come from installer design or application-specific complexity.
+The bounded `dots.yaml` manifest is enough to prove symlink, template, copy, Local Extension Point, dependency, status, backup, conflict, and desktop-profile behavior. Pulling generated editor state, machine-local state, secrets, runtime caches, or non-portable app configuration into v1 would blur whether failures come from installer design or application-specific complexity.
 
 ## Alignment references
 
