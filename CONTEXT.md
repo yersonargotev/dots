@@ -177,15 +177,15 @@ The bootstrap safety step that confirms a downloaded Release Artifact matches th
 _Avoid_: validation, hash check, download check
 
 **Homebrew Distribution**:
-The later package-manager installation path for the Dotfiles CLI through a Homebrew tap. It is planned for v1.1 or phase 2 after GitHub Releases and checksum-based bootstrapping are working.
+The package-manager installation path for the Dotfiles CLI through the `yersonargotev/tap/dots` Homebrew formula. It uses the same checksum-backed Release Artifacts as the Bootstrapper, so Homebrew is a distribution surface, not a second installer implementation.
 _Avoid_: brew install, tap, package manager install
 
 **MVP Configuration Set**:
-The first group of Managed Configuration used to prove the installer end-to-end without migrating the entire workstation. The v1 MVP Configuration Set is zsh, git, starship, and tmux.
+The first group of Managed Configuration used to prove the installer end-to-end without migrating the entire workstation. The original v1 MVP Configuration Set was zsh, git, starship, and tmux; the current safe portable desktop layer also includes authored Zed configuration.
 _Avoid_: first dotfiles, initial configs, starter set
 
 **Deferred Configuration**:
-Managed Configuration intentionally postponed until the installer is proven with the MVP Configuration Set. Neovim and larger app configurations are Deferred Configuration because they can introduce plugin and dependency complexity unrelated to installer correctness.
+Managed Configuration intentionally postponed until the installer is proven with the MVP Configuration Set. Neovim, generated editor state, and non-portable application configuration remain Deferred Configuration because they can introduce plugin, runtime-state, and dependency complexity unrelated to installer correctness.
 _Avoid_: later dotfiles, backlog config, skipped config
 
 **Implementation Sequence**:
