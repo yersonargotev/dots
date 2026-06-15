@@ -69,12 +69,16 @@ A safety check that looks for known credential and private-key patterns in repos
 _Avoid_: security audit, secret validation, token check
 
 **Dependency**:
-An external tool or package required for a managed configuration to work correctly, such as Neovim, Starship, ripgrep, or tmux. Dependencies are declared and checked by the Dotfiles CLI but are not automatically installed in v1.
+An external tool, package, or font required for a managed configuration to work correctly, such as Neovim, Starship, ripgrep, tmux, or a Nerd Font. The Dotfiles CLI declares and checks Dependencies; their presence is detected either as an executable command on the search path or, for non-executable assets such as fonts, by the presence of their installed files.
 _Avoid_: package, app, required tool
 
 **Dependency Plan**:
-The OS-aware installation guidance produced by the Dotfiles CLI for missing dependencies. In v1 it is advisory only; automatic dependency installation is reserved for a later version.
+The OS-aware installation guidance the Dotfiles CLI produces for missing Dependencies. It is the reviewable intent that `dots deps plan` previews and that `dots deps install` may execute.
 _Avoid_: install script, package install, setup commands
+
+**Font Dependency**:
+A Dependency that is a font rather than an executable, such as a Nerd Font required so Starship, tmux, or editor configuration renders its glyphs. Because a font is not on the search path, its presence is detected by scanning the workstation font directories for its installed files, not by a command lookup.
+_Avoid_: typeface, glyph pack, icon font
 
 **Supported Platform**:
 An operating system and architecture combination the Dotfiles CLI intentionally supports. v1 supports macOS arm64/amd64 and Linux arm64/amd64 for configuration installation.
