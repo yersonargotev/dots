@@ -1,0 +1,56 @@
+// Zed settings
+//
+// For information on how to configure Zed, see the Zed
+// documentation: https://zed.dev/docs/configuring-zed
+//
+// To see all of Zed's default settings without changing your
+// custom settings, run `zed: open default settings` from the
+// command palette (cmd-shift-p / ctrl-shift-p)
+{
+  // Extensions this config depends on. A fresh install self-provisions them so
+  // the theme, icon theme, and language support are reproducible.
+  "auto_install_extensions": {
+    "astro": true,
+    "catppuccin": true,
+    "catppuccin-icons": true,
+    "git-firefly": true,
+    "html": true,
+    "scss": true
+  },
+  "project_panel": {
+    "dock": "right"
+  },
+  "outline_panel": {
+    "dock": "right"
+  },
+  "collaboration_panel": {
+    "dock": "right"
+  },
+  "agent": {
+    "dock": "left",
+    "favorite_models": [],
+    "model_parameters": []
+  },
+  "git_panel": {
+    "dock": "right"
+  },
+  "edit_predictions": {
+    "provider": "copilot"
+  },
+  "agent_servers": {
+    "github-copilot": {
+      "type": "registry"
+    }
+  },
+  "icon_theme": "Catppuccin Mocha",
+  "ui_font_family": ".ZedSans",
+  "buffer_font_family": "CaskaydiaCove Nerd Font",
+  "vim_mode": true,
+  "ui_font_size": 16,
+  "buffer_font_size": 16.0,
+  "theme": {
+    "mode": "system",
+    "light": "One Light",
+    "dark": "Catppuccin Mocha (blue)",
+  },
+}
