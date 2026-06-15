@@ -143,7 +143,7 @@ func TestBuildDiagnosticSections(t *testing.T) {
 			m := singleEntryManifest("configs/app/config")
 			m.Entries[0].Dependencies = tt.deps
 
-			report, err := doctor.Build(m, state.Metadata{}, doctor.Options{Profile: "default", OS: tt.goos, SourceRoot: sourceRoot, Home: home}, lookupSet(tt.present...))
+			report, err := doctor.Build(m, state.Metadata{}, doctor.Options{Profile: "default", OS: tt.goos, SourceRoot: sourceRoot, Home: home}, lookupSet(tt.present...), fontLookupSet())
 			if err != nil {
 				t.Fatalf("Build() error = %v", err)
 			}
@@ -183,7 +183,7 @@ func TestBuildReportsProvisionerReadiness(t *testing.T) {
 	// without ever being executed.
 	report, err := doctor.Build(m, state.Metadata{}, doctor.Options{
 		Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home,
-	}, lookupSet("gentle-ai"))
+	}, lookupSet("gentle-ai"), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -230,6 +230,14 @@ func lookupSet(present ...string) func(string) bool {
 		set[command] = true
 	}
 	return func(command string) bool { return set[command] }
+}
+
+func fontLookupSet(present ...string) func(string) bool {
+	set := make(map[string]bool, len(present))
+	for _, match := range present {
+		set[match] = true
+	}
+	return func(match string) bool { return set[match] }
 }
 
 func writeFile(t *testing.T, root, rel, content string) {

@@ -56,7 +56,7 @@ func newDoctorCommand() *cobra.Command {
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
-			}, lookupCommand)
+			}, lookupCommand, fontInstalled(runtime.GOOS, paths.Home))
 			if err != nil {
 				return err
 			}

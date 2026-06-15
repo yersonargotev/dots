@@ -65,6 +65,17 @@ type Dependency struct {
 	Apt     string `yaml:"apt,omitempty"`
 	Dnf     string `yaml:"dnf,omitempty"`
 	Pacman  string `yaml:"pacman,omitempty"`
+	// FontMatch, when set, switches detection from a PATH lookup to a scan of
+	// the workstation font directories for an installed file whose name matches
+	// this case-insensitive glob (e.g. "CascadiaCodeNF*"). A font has no
+	// executable on the path, so it must be probed as an installed asset.
+	FontMatch string `yaml:"font_match,omitempty"`
+}
+
+// IsFont reports whether the Dependency is detected as an installed font asset
+// rather than an executable on PATH. It is true exactly when FontMatch is set.
+func (d Dependency) IsFont() bool {
+	return strings.TrimSpace(d.FontMatch) != ""
 }
 
 // Probe is the command name used to detect a Dependency's presence in PATH. It

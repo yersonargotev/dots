@@ -198,8 +198,9 @@ entries:
       - name: zed
         command: zed
         brew: zed
-      - name: CaskaydiaCove Nerd Font
-        brew: font-caskaydia-cove-nerd-font
+      - name: CascadiaCode Nerd Font
+        brew: font-cascadia-code-nf
+        font_match: "CascadiaCodeNF*"
   - source: configs/zed/keymap.json
     target: ~/.config/zed/keymap.json
     strategy: symlink

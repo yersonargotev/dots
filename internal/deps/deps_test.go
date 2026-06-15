@@ -15,6 +15,48 @@ func lookupSet(present ...string) deps.Lookup {
 	return func(command string) bool { return set[command] }
 }
 
+func fontLookupSet(present ...string) deps.FontLookup {
+	set := make(map[string]bool, len(present))
+	for _, p := range present {
+		set[p] = true
+	}
+	return func(match string) bool { return set[match] }
+}
+
+func TestCheckDetectsFontDependencyByScanNotPath(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/zed/settings.json", Target: "~/.config/zed/settings.json", Strategy: "symlink", Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{
+					{Name: "zed", Command: "zed"},
+					{Name: "CascadiaCode NF", FontMatch: "CascadiaCodeNF*", Brew: "font-cascadia-code-nf"},
+				},
+			},
+		},
+	}
+
+	// The font is installed on disk (font scan hits) but has no executable on
+	// PATH; the command tool is the inverse. Detection must use the right probe
+	// for each.
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"},
+		lookupSet("zed"), fontLookupSet("CascadiaCodeNF*"))
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if len(report.Results) != 2 {
+		t.Fatalf("Results len = %d, want 2 (%#v)", len(report.Results), report.Results)
+	}
+	if !report.Results[1].Present {
+		t.Fatalf("Results[1] = %#v, want font present via scan", report.Results[1])
+	}
+	if report.Results[1].Name != "CascadiaCode NF" {
+		t.Fatalf("Results[1].Name = %q, want CascadiaCode NF", report.Results[1].Name)
+	}
+}
+
 func TestCheckReportsPresentAndMissingForProfile(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,
@@ -30,7 +72,7 @@ func TestCheckReportsPresentAndMissingForProfile(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"))
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Check() error = %v", err)
 	}
@@ -76,7 +118,7 @@ func TestCheckDedupesAndSkipsEntriesFilteredOutByOS(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("zsh"))
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("zsh"), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Check() error = %v", err)
 	}
@@ -110,7 +152,7 @@ func TestCheckTrimsAndDedupesPaddedNames(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet())
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet(), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Check() error = %v", err)
 	}
@@ -129,7 +171,7 @@ func TestCheckFailsOnUnknownProfile(t *testing.T) {
 		Entries:  []manifest.Entry{{Source: "s", Target: "~/.t", Strategy: "symlink", Tags: []string{"core"}}},
 	}
 
-	if _, err := deps.Check(m, deps.Options{Profile: "missing", OS: "darwin"}, lookupSet()); err == nil {
+	if _, err := deps.Check(m, deps.Options{Profile: "missing", OS: "darwin"}, lookupSet(), fontLookupSet()); err == nil {
 		t.Fatal("Check() error = nil, want error for unknown profile")
 	}
 }
@@ -156,7 +198,7 @@ func TestCheckIncludesSelectedProvisionerDependencies(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("zsh", "engram"))
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("zsh", "engram"), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Check() error = %v", err)
 	}
@@ -187,7 +229,7 @@ func TestCheckFiltersProvisionerDependenciesByProfileAndOS(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet())
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet(), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Check() error = %v", err)
 	}
@@ -219,7 +261,7 @@ func TestCheckDedupesProvisionerDependenciesWithEntries(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet())
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet(), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Check() error = %v", err)
 	}
