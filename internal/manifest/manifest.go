@@ -62,9 +62,13 @@ type Dependency struct {
 	Name    string `yaml:"name"`
 	Command string `yaml:"command,omitempty"`
 	Brew    string `yaml:"brew,omitempty"`
-	Apt     string `yaml:"apt,omitempty"`
-	Dnf     string `yaml:"dnf,omitempty"`
-	Pacman  string `yaml:"pacman,omitempty"`
+	// BrewCask declares a Homebrew cask package. It renders as
+	// `brew install --cask <token>` and is separate from Brew so casks are not
+	// hidden behind Homebrew's implicit formula/cask resolution.
+	BrewCask string `yaml:"brew_cask,omitempty"`
+	Apt      string `yaml:"apt,omitempty"`
+	Dnf      string `yaml:"dnf,omitempty"`
+	Pacman   string `yaml:"pacman,omitempty"`
 	// FontMatch, when set, switches detection from a PATH lookup to a scan of
 	// the workstation font directories for an installed file whose name matches
 	// this case-insensitive glob (e.g. "CascadiaCodeNF*"). A font has no
@@ -157,11 +161,8 @@ func (m Manifest) Validate() error {
 			}
 		}
 		for j, dep := range entry.Dependencies {
-			if strings.TrimSpace(dep.Name) == "" {
-				return fmt.Errorf("entries[%d].dependencies[%d].name is required", i, j)
-			}
-			if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
-				return fmt.Errorf("entries[%d].dependencies[%d].command must not be empty", i, j)
+			if err := validateDependency(dep, fmt.Sprintf("entries[%d].dependencies[%d]", i, j)); err != nil {
+				return err
 			}
 		}
 	}
@@ -200,15 +201,28 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].spec.skills[%d] must not be empty", i, j)
 		}
 		for j, dep := range prov.Dependencies {
-			if strings.TrimSpace(dep.Name) == "" {
-				return fmt.Errorf("provisioners[%d].dependencies[%d].name is required", i, j)
-			}
-			if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
-				return fmt.Errorf("provisioners[%d].dependencies[%d].command must not be empty", i, j)
+			if err := validateDependency(dep, fmt.Sprintf("provisioners[%d].dependencies[%d]", i, j)); err != nil {
+				return err
 			}
 		}
 	}
 
+	return nil
+}
+
+func validateDependency(dep Dependency, path string) error {
+	if strings.TrimSpace(dep.Name) == "" {
+		return fmt.Errorf("%s.name is required", path)
+	}
+	if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
+		return fmt.Errorf("%s.command must not be empty", path)
+	}
+	if dep.BrewCask != "" && strings.TrimSpace(dep.BrewCask) == "" {
+		return fmt.Errorf("%s.brew_cask must not be empty", path)
+	}
+	if strings.TrimSpace(dep.Brew) != "" && strings.TrimSpace(dep.BrewCask) != "" {
+		return fmt.Errorf("%s must not set both brew and brew_cask", path)
+	}
 	return nil
 }
 

@@ -68,8 +68,8 @@ type InstallReport struct {
 
 // InstallDryRun computes the install preview for missing Dependencies without
 // executing package managers.
-func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, tier Tier) (InstallDryRunReport, error) {
-	plan, err := Plan(m, opts, look, tier)
+func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, tier Tier) (InstallDryRunReport, error) {
+	plan, err := Plan(m, opts, look, fontLook, tier)
 	if err != nil {
 		return InstallDryRunReport{}, err
 	}
@@ -94,8 +94,8 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, tier Tier) (I
 
 // Install executes missing executable install actions and re-probes each
 // dependency after a successful package-manager command.
-func Install(m manifest.Manifest, opts Options, look Lookup, tier Tier, runner Runner) (InstallReport, error) {
-	plan, err := Plan(m, opts, look, tier)
+func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, tier Tier, runner Runner) (InstallReport, error) {
+	plan, err := Plan(m, opts, look, fontLook, tier)
 	if err != nil {
 		return InstallReport{}, err
 	}
@@ -123,7 +123,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, tier Tier, runner R
 			})
 			return report, fmt.Errorf("install %q: %w", action.Dependency, err)
 		}
-		if !look(action.Probe) {
+		if !actionPresent(action, look, fontLook) {
 			unresolved = true
 			report.Items = append(report.Items, InstallItem{
 				Dependency: action.Dependency,
@@ -146,6 +146,13 @@ func Install(m manifest.Manifest, opts Options, look Lookup, tier Tier, runner R
 		return report, errors.New("unresolved dependencies remain after install")
 	}
 	return report, nil
+}
+
+func actionPresent(action InstallAction, look Lookup, fontLook FontLookup) bool {
+	if action.FontMatch != "" {
+		return fontLook(action.FontMatch)
+	}
+	return look(action.Probe)
 }
 
 func installArgsWithConfirmation(action InstallAction, tier Tier) []string {

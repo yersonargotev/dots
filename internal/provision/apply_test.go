@@ -34,6 +34,14 @@ func lookupWith(present ...string) deps.Lookup {
 	return func(command string) bool { return set[command] }
 }
 
+func fontLookupWith(present ...string) deps.FontLookup {
+	set := make(map[string]bool, len(present))
+	for _, p := range present {
+		set[p] = true
+	}
+	return func(match string) bool { return set[match] }
+}
+
 func gentleAIProvisioner(agent string) manifest.Provisioner {
 	return manifest.Provisioner{
 		Tool: "gentle-ai",
@@ -51,7 +59,7 @@ func TestApplyRunsSelectedProvisionersInOrder(t *testing.T) {
 	runner := &fakeRunner{}
 	look := lookupWith("gentle-ai", "engram")
 
-	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, runner)
+	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, fontLookupWith(), runner)
 	if err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
@@ -78,7 +86,7 @@ func TestApplyFailsWithoutRunningWhenDependencyMissing(t *testing.T) {
 	runner := &fakeRunner{}
 	look := lookupWith("gentle-ai") // engram missing
 
-	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, runner)
+	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, fontLookupWith(), runner)
 	if err == nil {
 		t.Fatal("Apply() error = nil, want missing-dependency error")
 	}
@@ -103,7 +111,7 @@ func TestApplyStopsAndReportsOnRunnerFailure(t *testing.T) {
 	runner := &fakeRunner{failOn: 1, failErr: runErr}
 	look := lookupWith("gentle-ai", "engram")
 
-	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, runner)
+	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, fontLookupWith(), runner)
 	if err == nil {
 		t.Fatal("Apply() error = nil, want runner failure error")
 	}
@@ -122,7 +130,7 @@ func TestApplyNoProvisionersIsNoOp(t *testing.T) {
 	m := manifestWithProvisioners()
 	runner := &fakeRunner{}
 
-	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, lookupWith(), runner)
+	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, lookupWith(), fontLookupWith(), runner)
 	if err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
@@ -136,7 +144,35 @@ func TestApplyNoProvisionersIsNoOp(t *testing.T) {
 
 func TestApplyUnknownProfileIsError(t *testing.T) {
 	m := manifestWithProvisioners(gentleAIProvisioner("codex"))
-	if _, err := provision.Apply(m, provision.Options{Profile: "ghost", OS: "darwin"}, lookupWith(), &fakeRunner{}); err == nil {
+	if _, err := provision.Apply(m, provision.Options{Profile: "ghost", OS: "darwin"}, lookupWith(), fontLookupWith(), &fakeRunner{}); err == nil {
 		t.Fatal("Apply() error = nil, want unknown-profile error")
+	}
+}
+
+func TestApplyUsesFontLookupForProvisionerFontDependencies(t *testing.T) {
+	prov := gentleAIProvisioner("codex")
+	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{
+		Name: "CascadiaCode Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*",
+	})
+	m := manifestWithProvisioners(prov)
+	runner := &fakeRunner{}
+	var commandProbes []string
+
+	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
+		commandProbes = append(commandProbes, command)
+		return command == "gentle-ai" || command == "engram"
+	}, fontLookupWith("CascadiaCodeNF*"), runner)
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	if !reflect.DeepEqual(commandProbes, []string{"gentle-ai", "engram"}) {
+		t.Fatalf("command probes = %#v, want only command dependencies", commandProbes)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != provision.RunStatusProvisioned {
+		t.Fatalf("report.Items = %#v, want provisioned item", report.Items)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("runner.calls = %#v, want one provisioner invocation", runner.calls)
 	}
 }

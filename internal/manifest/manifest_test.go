@@ -69,6 +69,9 @@ entries:
       - name: ripgrep
         command: rg
         brew: ripgrep
+      - name: CascadiaCode Nerd Font
+        brew_cask: font-cascadia-code-nf
+        font_match: "CascadiaCodeNF*"
 `)
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
@@ -80,14 +83,17 @@ entries:
 	}
 
 	deps := got.Entries[0].Dependencies
-	if len(deps) != 2 {
-		t.Fatalf("Dependencies len = %d, want 2", len(deps))
+	if len(deps) != 3 {
+		t.Fatalf("Dependencies len = %d, want 3", len(deps))
 	}
 	if deps[0].Name != "tmux" || deps[0].Brew != "tmux" || deps[0].Apt != "tmux" || deps[0].Dnf != "tmux" || deps[0].Pacman != "tmux" {
 		t.Fatalf("Dependencies[0] = %#v, want fully mapped tmux dependency", deps[0])
 	}
 	if deps[1].Name != "ripgrep" || deps[1].Command != "rg" || deps[1].Brew != "ripgrep" {
 		t.Fatalf("Dependencies[1] = %#v, want ripgrep with rg command", deps[1])
+	}
+	if deps[2].Name != "CascadiaCode Nerd Font" || deps[2].BrewCask != "font-cascadia-code-nf" || deps[2].FontMatch != "CascadiaCodeNF*" {
+		t.Fatalf("Dependencies[2] = %#v, want Homebrew cask font dependency", deps[2])
 	}
 }
 
@@ -399,6 +405,42 @@ entries:
 			want: `entries[0].dependencies[0].command must not be empty`,
 		},
 		{
+			name: "dependency with whitespace-only brew cask",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/fonts
+    target: ~/.local/share/fonts
+    strategy: copy
+    tags: [core]
+    dependencies:
+      - name: CascadiaCode Nerd Font
+        brew_cask: "  "
+        font_match: "CascadiaCodeNF*"
+`,
+			want: `entries[0].dependencies[0].brew_cask must not be empty`,
+		},
+		{
+			name: "dependency with ambiguous homebrew formula and cask",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/fonts
+    target: ~/.local/share/fonts
+    strategy: copy
+    tags: [core]
+    dependencies:
+      - name: CascadiaCode Nerd Font
+        brew: cascadia-code
+        brew_cask: font-cascadia-code-nf
+`,
+			want: `entries[0].dependencies[0] must not set both brew and brew_cask`,
+		},
+		{
 			name: "missing entry target",
 			content: `version: 1
 profiles:
@@ -560,6 +602,32 @@ provisioners:
       - brew: gentleman-programming/tap/gentle-ai
 `,
 			want: "provisioners[0].dependencies[0].name is required",
+		},
+		{
+			name: "dependency with whitespace-only brew cask",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+    dependencies:
+      - name: CascadiaCode Nerd Font
+        brew_cask: "  "
+        font_match: "CascadiaCodeNF*"
+`,
+			want: "provisioners[0].dependencies[0].brew_cask must not be empty",
+		},
+		{
+			name: "dependency with ambiguous homebrew formula and cask",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+    dependencies:
+      - name: CascadiaCode Nerd Font
+        brew: cascadia-code
+        brew_cask: font-cascadia-code-nf
+`,
+			want: "provisioners[0].dependencies[0] must not set both brew and brew_cask",
 		},
 	}
 

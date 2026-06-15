@@ -2,6 +2,7 @@ package provision
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -45,7 +46,7 @@ type Report struct {
 // HOME threading for sandboxing is the concrete Runner's responsibility, not
 // this orchestration. Apply stops at the first failing Provisioner and returns
 // the partial Report alongside the error.
-func Apply(m manifest.Manifest, opts Options, look deps.Lookup, runner deps.Runner) (Report, error) {
+func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.FontLookup, runner deps.Runner) (Report, error) {
 	selected, err := Select(m, opts)
 	if err != nil {
 		return Report{}, err
@@ -55,7 +56,7 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, runner deps.Runn
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
 
-		if missing := missingDependencies(prov, look); len(missing) > 0 {
+		if missing := missingDependencies(prov, look, fontLook); len(missing) > 0 {
 			report.Items = append(report.Items, RunItem{
 				Tool:       prov.Tool,
 				Executable: executable,
@@ -88,9 +89,16 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, runner deps.Runn
 
 // missingDependencies returns the probes of the Provisioner's declared
 // dependencies that are absent on the workstation, in declared order.
-func missingDependencies(prov manifest.Provisioner, look deps.Lookup) []string {
+func missingDependencies(prov manifest.Provisioner, look deps.Lookup, fontLook deps.FontLookup) []string {
 	var missing []string
 	for _, dep := range prov.Dependencies {
+		if dep.IsFont() {
+			match := strings.TrimSpace(dep.FontMatch)
+			if !fontLook(match) {
+				missing = append(missing, match)
+			}
+			continue
+		}
 		probe := dep.Probe()
 		if !look(probe) {
 			missing = append(missing, probe)

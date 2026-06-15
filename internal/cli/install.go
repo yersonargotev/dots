@@ -110,7 +110,7 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile, home stri
 		stdout: cmd.OutOrStdout(),
 		stderr: cmd.ErrOrStderr(),
 	}
-	report, err := provision.Apply(m, provision.Options{Profile: profile, OS: runtime.GOOS}, lookupCommand, runner)
+	report, err := provision.Apply(m, provision.Options{Profile: profile, OS: runtime.GOOS}, lookupCommand, fontInstalled(runtime.GOOS, home), runner)
 	renderProvisionReport(cmd.OutOrStdout(), report)
 	return err
 }
