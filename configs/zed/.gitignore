@@ -1,0 +1,11 @@
+# Keep Zed runtime and application state out of the repository.
+# Only authored config (settings, keymap, custom theme) is the Source of Truth.
+conversations/
+prompts/
+extensions/
+*.log
+*.bak
+*.tmp
+cache/
+logs/
+db/

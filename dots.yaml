@@ -186,6 +186,44 @@ entries:
         apt: neovim
         dnf: neovim
         pacman: neovim
+  - source: configs/zed/settings.json
+    target: ~/.config/zed/settings.json
+    strategy: symlink
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: zed
+        command: zed
+        brew: zed
+      - name: CaskaydiaCove Nerd Font
+        brew: font-caskaydia-cove-nerd-font
+  - source: configs/zed/keymap.json
+    target: ~/.config/zed/keymap.json
+    strategy: symlink
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: zed
+        command: zed
+        brew: zed
+  - source: configs/zed/themes/catppuccin-blue.json
+    target: ~/.config/zed/themes/catppuccin-blue.json
+    strategy: symlink
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: zed
+        command: zed
+        brew: zed
   - source: configs/claude/settings.json
     target: ~/.claude/settings.json
     strategy: copy
