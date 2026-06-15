@@ -8,18 +8,20 @@ The Bootstrapper in [`scripts/install.sh`](scripts/install.sh) installs the rele
 
 ### Bootstrapper
 
-Pin the version explicitly so the Bootstrapper downloads a known Release Artifact and verifies it against the published checksum manifest:
+Install the latest published Release Artifact and verify it against the published checksum manifest:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | DOTS_VERSION=v0.5.1 bash
+curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | bash
 ```
 
 The Bootstrapper:
 
 1. Detects the current Supported Platform.
-2. Downloads the matching GitHub Release Artifact and `checksums.txt`.
+2. Downloads the matching GitHub Release Artifact and `checksums.txt` from the latest release by default.
 3. Performs Checksum Verification before installing the binary to `~/.local/bin/dots`.
 4. Runs `dots install` so the Dotfiles CLI owns the Install Plan and file changes.
+
+Set `DOTS_VERSION=v0.x.y` only when you intentionally need to pin a specific release.
 
 Requirements: `curl` or `wget`, plus `sha256sum` or `shasum`. Make sure `~/.local/bin` is on your `PATH` after install.
 

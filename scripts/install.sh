@@ -6,7 +6,7 @@ usage() {
 Install the dots CLI from a checksum-verified GitHub Release Artifact, then delegate setup to dots install.
 
 Environment:
-  DOTS_VERSION           Release tag to install, for example v0.1.0. Required.
+  DOTS_VERSION           Release tag to install, for example v0.x.y. Defaults to latest.
   DOTS_RELEASE_BASE_URL  Release asset base URL. Defaults to https://github.com/yersonargotev/dots/releases/download.
   DOTS_INSTALL_DIR       Directory where the dots command is installed. Defaults to ~/.local/bin.
   DOTS_SOURCE_ROOT       Optional development checkout/Installed Repository override passed to dots install.
@@ -25,14 +25,11 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-version="${DOTS_VERSION:-}"
-release_base_url="${DOTS_RELEASE_BASE_URL:-https://github.com/yersonargotev/dots/releases/download}"
+version="${DOTS_VERSION:-latest}"
+default_release_base_url="https://github.com/yersonargotev/dots/releases/download"
+release_base_url="${DOTS_RELEASE_BASE_URL:-$default_release_base_url}"
 install_dir="${DOTS_INSTALL_DIR:-$HOME/.local/bin}"
 source_root="${DOTS_SOURCE_ROOT:-}"
-
-if [[ -z "$version" ]]; then
-  fail "DOTS_VERSION is required, for example DOTS_VERSION=v0.1.0"
-fi
 
 case "${DOTS_OS:-$(uname -s)}" in
   Darwin|darwin) goos="darwin" ;;
@@ -46,8 +43,12 @@ case "${DOTS_ARCH:-$(uname -m)}" in
   *) fail "unsupported architecture: ${DOTS_ARCH:-$(uname -m)}" ;;
 esac
 
-artifact="dots_${version}_${goos}_${goarch}"
-asset_base="${release_base_url%/}/${version}"
+if [[ "$version" == "latest" && "$release_base_url" == "$default_release_base_url" ]]; then
+  asset_base="https://github.com/yersonargotev/dots/releases/latest/download"
+else
+  asset_base="${release_base_url%/}/${version}"
+fi
+artifact=""
 
 download() {
   local url="$1"
@@ -79,10 +80,20 @@ cleanup() {
 trap cleanup EXIT
 
 checksums_path="$tmp_dir/checksums.txt"
-artifact_path="$tmp_dir/$artifact"
 
 echo "Downloading checksums for $version"
 download "$asset_base/checksums.txt" "$checksums_path"
+
+if [[ "$version" == "latest" ]]; then
+  artifact="$(awk -v goos="$goos" -v goarch="$goarch" '$2 ~ "^dots_v[0-9][^ ]*_" goos "_" goarch "$" { print $2; exit }' "$checksums_path")"
+  if [[ -z "$artifact" ]]; then
+    fail "checksums.txt does not contain a latest artifact for ${goos}/${goarch}"
+  fi
+else
+  artifact="dots_${version}_${goos}_${goarch}"
+fi
+
+artifact_path="$tmp_dir/$artifact"
 
 echo "Downloading $artifact"
 download "$asset_base/$artifact" "$artifact_path"

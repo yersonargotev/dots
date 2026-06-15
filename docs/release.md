@@ -95,13 +95,13 @@ Maintainer setup:
 
 ## Bootstrapper install
 
-Install a published v0.x release with the checksum-verified Bootstrapper:
+Install the latest published v0.x release with the checksum-verified Bootstrapper:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | DOTS_VERSION=v0.5.1 bash
+curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | bash
 ```
 
-The Bootstrapper downloads `checksums.txt` and the matching platform artifact from GitHub Releases, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, and then delegates setup to:
+The Bootstrapper downloads `checksums.txt` and the matching platform artifact from the latest GitHub Release by default, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, and then delegates setup to:
 
 ```bash
 ~/.local/bin/dots install
@@ -112,6 +112,8 @@ For development checkouts, pass the Installed Repository override through the Bo
 ```bash
 DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 ```
+
+`DOTS_VERSION` is optional. Use it only when you intentionally need to pin or test a specific release tag.
 
 ## Release details
 

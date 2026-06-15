@@ -111,6 +111,56 @@ func TestBootstrapperDelegatesWithoutSourceRootForDefaultInstalledRepository(t *
 	}
 }
 
+func TestBootstrapperDefaultsToLatestReleaseArtifactWhenVersionIsUnset(t *testing.T) {
+	root := repoRoot(t)
+	version := "v0.99.1"
+	artifact := "dots_v0.99.1_darwin_arm64"
+	releaseRoot := t.TempDir()
+	latestDir := filepath.Join(releaseRoot, "latest")
+	if err := os.MkdirAll(latestDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "dots-args.log")
+	artifactBody := fmt.Sprintf("#!/usr/bin/env bash\nset -euo pipefail\nprintf '%%s\\n' \"$*\" > %q\n", logPath)
+	writeFile(t, filepath.Join(latestDir, artifact), artifactBody, 0o644)
+	writeFile(t, filepath.Join(latestDir, "checksums.txt"), fmt.Sprintf("%s  %s\n", sha256Hex([]byte(artifactBody)), artifact), 0o644)
+
+	server := httptest.NewServer(http.FileServer(http.Dir(releaseRoot)))
+	t.Cleanup(server.Close)
+
+	installDir := filepath.Join(t.TempDir(), "bin")
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "install.sh"))
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(),
+		"HOME="+t.TempDir(),
+		"DOTS_RELEASE_BASE_URL="+server.URL,
+		"DOTS_INSTALL_DIR="+installDir,
+		"DOTS_OS=darwin",
+		"DOTS_ARCH=arm64",
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bootstrap install failed: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "Downloading "+artifact) {
+		t.Fatalf("bootstrap should resolve latest artifact %s, got:\n%s", artifact, output)
+	}
+	if !strings.Contains(string(output), "Downloading checksums for latest") {
+		t.Fatalf("bootstrap should use latest release when DOTS_VERSION is unset, got:\n%s", output)
+	}
+	if _, err := os.Stat(filepath.Join(installDir, "dots")); err != nil {
+		t.Fatalf("expected installed dots binary for %s: %v", version, err)
+	}
+	gotArgs, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("expected bootstrapper to delegate to installed dots: %v\noutput:\n%s", err, output)
+	}
+	if strings.TrimSpace(string(gotArgs)) != "install" {
+		t.Fatalf("delegated args = %q, want %q", strings.TrimSpace(string(gotArgs)), "install")
+	}
+}
+
 func TestBootstrapperRejectsChecksumMismatchBeforeInstallOrDelegation(t *testing.T) {
 	root := repoRoot(t)
 	version := "v0.99.0"
