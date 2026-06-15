@@ -27,7 +27,7 @@ type CheckReport struct {
 // Check reports each selected Provisioner's resolved command and dependency
 // readiness without invoking any tool. It is the read-only diagnostic surfaced
 // by dots doctor.
-func Check(m manifest.Manifest, opts Options, look deps.Lookup) (CheckReport, error) {
+func Check(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.FontLookup) (CheckReport, error) {
 	selected, err := Select(m, opts)
 	if err != nil {
 		return CheckReport{}, err
@@ -40,7 +40,7 @@ func Check(m manifest.Manifest, opts Options, look deps.Lookup) (CheckReport, er
 			Tool:       prov.Tool,
 			Executable: executable,
 			Args:       args,
-			Missing:    missingDependencies(prov, look),
+			Missing:    missingDependencies(prov, look, fontLook),
 		})
 	}
 	return report, nil

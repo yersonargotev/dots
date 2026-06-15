@@ -2,6 +2,7 @@ package deps_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/deps"
@@ -39,7 +40,7 @@ func TestPlanProducesStructuredInstallActionsForMappedPackages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			report, err := deps.Plan(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), tt.tier)
+			report, err := deps.Plan(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), fontLookupSet(), tt.tier)
 			if err != nil {
 				t.Fatalf("Plan() error = %v", err)
 			}
@@ -67,6 +68,94 @@ func TestPlanProducesStructuredInstallActionsForMappedPackages(t *testing.T) {
 	}
 }
 
+func TestPlanProducesHomebrewCaskActionsForMappedPackages(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/zed/settings.json", Target: "~/.config/zed/settings.json", Strategy: "symlink", Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{
+					{Name: "CascadiaCode Nerd Font", BrewCask: "  font-cascadia-code-nf  ", FontMatch: "CascadiaCodeNF*"},
+				},
+			},
+		},
+	}
+
+	var commandProbes []string
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
+		commandProbes = append(commandProbes, command)
+		return false
+	}, fontLookupSet(), deps.TierHomebrew)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+
+	if len(commandProbes) != 0 {
+		t.Fatalf("command probes = %#v, want none for font dependency", commandProbes)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	action := report.Actions[0]
+	if action.Package != "font-cascadia-code-nf" {
+		t.Fatalf("Package = %q, want font-cascadia-code-nf", action.Package)
+	}
+	if action.Executable != "brew" {
+		t.Fatalf("Executable = %q, want brew", action.Executable)
+	}
+	if !reflect.DeepEqual(action.Args, []string{"install", "--cask", "font-cascadia-code-nf"}) {
+		t.Fatalf("Args = %#v, want brew install --cask font-cascadia-code-nf", action.Args)
+	}
+	if report.Items[0].Command != "brew install --cask font-cascadia-code-nf" {
+		t.Fatalf("Command = %q, want brew install --cask font-cascadia-code-nf", report.Items[0].Command)
+	}
+}
+
+func TestPlanKeepsCaskOnlyFontsManualOutsideHomebrew(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/zed/settings.json", Target: "~/.config/zed/settings.json", Strategy: "symlink", Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{
+					{Name: "CascadiaCode Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*"},
+				},
+			},
+		},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	action := report.Actions[0]
+	if action.Executable != "" || len(action.Args) != 0 || action.Package != "" {
+		t.Fatalf("linux cask-only font action = %#v, want manual advisory action", action)
+	}
+	if action.Manual == "" {
+		t.Fatalf("Manual empty, want advisory-only guidance")
+	}
+	wantSteps := []string{
+		`obtain the font files for "CascadiaCode Nerd Font"`,
+		`Homebrew cask token "font-cascadia-code-nf"`,
+		`copy .ttf/.otf files into ~/.local/share/fonts`,
+		`run fc-cache -f ~/.local/share/fonts`,
+		`rerun dots deps check`,
+		`font_match "CascadiaCodeNF*"`,
+	}
+	for _, want := range wantSteps {
+		if !strings.Contains(action.Manual, want) {
+			t.Fatalf("Manual = %q, want advisory step containing %q", action.Manual, want)
+		}
+	}
+}
+
 func TestPlanProducesTierGuidanceForMissingDependencies(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -82,7 +171,7 @@ func TestPlanProducesTierGuidanceForMissingDependencies(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// tmux is present, starship missing: only starship should be planned.
-			report, err := deps.Plan(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), tt.tier)
+			report, err := deps.Plan(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), fontLookupSet(), tt.tier)
 			if err != nil {
 				t.Fatalf("Plan() error = %v", err)
 			}
@@ -124,7 +213,7 @@ func TestPlanFallsBackToManualGuidance(t *testing.T) {
 	}
 
 	t.Run("generic tier is always manual", func(t *testing.T) {
-		report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), deps.TierGeneric)
+		report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierGeneric)
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
@@ -142,7 +231,7 @@ func TestPlanFallsBackToManualGuidance(t *testing.T) {
 	})
 
 	t.Run("missing package field falls back to manual", func(t *testing.T) {
-		report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), deps.TierDebian)
+		report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierDebian)
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
@@ -184,7 +273,7 @@ func TestPlanProducesManualInstallActions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), tt.tier)
+			report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), tt.tier)
 			if err != nil {
 				t.Fatalf("Plan() error = %v", err)
 			}
@@ -234,7 +323,7 @@ func TestPlanActionsUseManifestOrderAndSkipPresentDependencies(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "nvim"), deps.TierHomebrew)
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "nvim"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -253,7 +342,7 @@ func TestPlanActionsUseManifestOrderAndSkipPresentDependencies(t *testing.T) {
 }
 
 func TestPlanIsEmptyWhenAllDependenciesPresent(t *testing.T) {
-	report, err := deps.Plan(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "starship"), deps.TierHomebrew)
+	report, err := deps.Plan(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "starship"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -281,7 +370,7 @@ func TestPlanIncludesSelectedProvisionerDependencies(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("engram"), deps.TierHomebrew)
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("engram"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}

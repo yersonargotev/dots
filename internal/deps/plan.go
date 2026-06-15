@@ -14,6 +14,7 @@ import (
 type InstallAction struct {
 	Dependency string
 	Probe      string
+	FontMatch  string
 	Package    string
 	Executable string
 	Args       []string
@@ -42,7 +43,7 @@ type PlanReport struct {
 
 // Plan computes advisory installation guidance for the Dependencies that the
 // Profile needs but the workstation is missing, tailored to the active Tier.
-func Plan(m manifest.Manifest, opts Options, look Lookup, tier Tier) (PlanReport, error) {
+func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, tier Tier) (PlanReport, error) {
 	selected, err := selectDependencies(m, opts)
 	if err != nil {
 		return PlanReport{}, err
@@ -50,7 +51,7 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, tier Tier) (PlanReport
 
 	report := PlanReport{Profile: opts.Profile, Tier: tier}
 	for _, dep := range selected {
-		if look(dep.Probe()) {
+		if dependencyPresent(dep, look, fontLook) {
 			continue
 		}
 		action := actionFor(dep, tier)
@@ -65,11 +66,12 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, tier Tier) (PlanReport
 func actionFor(dep manifest.Dependency, tier Tier) InstallAction {
 	pkg, executable, args := tierPackage(dep, tier)
 	if pkg == "" {
-		return InstallAction{Dependency: dep.Name, Probe: dep.Probe(), Manual: manualNote(dep, tier)}
+		return InstallAction{Dependency: dep.Name, Probe: dep.Probe(), FontMatch: strings.TrimSpace(dep.FontMatch), Manual: manualNote(dep, tier)}
 	}
 	return InstallAction{
 		Dependency: dep.Name,
 		Probe:      dep.Probe(),
+		FontMatch:  strings.TrimSpace(dep.FontMatch),
 		Package:    pkg,
 		Executable: executable,
 		Args:       append(args, pkg),
@@ -95,19 +97,30 @@ func (a InstallAction) commandHint() string {
 func tierPackage(dep manifest.Dependency, tier Tier) (pkg, executable string, args []string) {
 	switch tier {
 	case TierHomebrew:
-		return dep.Brew, "brew", []string{"install"}
+		if pkg := strings.TrimSpace(dep.BrewCask); pkg != "" {
+			return pkg, "brew", []string{"install", "--cask"}
+		}
+		return strings.TrimSpace(dep.Brew), "brew", []string{"install"}
 	case TierDebian:
-		return dep.Apt, "sudo", []string{"apt-get", "install"}
+		return strings.TrimSpace(dep.Apt), "sudo", []string{"apt-get", "install"}
 	case TierFedora:
-		return dep.Dnf, "sudo", []string{"dnf", "install"}
+		return strings.TrimSpace(dep.Dnf), "sudo", []string{"dnf", "install"}
 	case TierArch:
-		return dep.Pacman, "sudo", []string{"pacman", "-S"}
+		return strings.TrimSpace(dep.Pacman), "sudo", []string{"pacman", "-S"}
 	default:
 		return "", "", nil
 	}
 }
 
 func manualNote(dep manifest.Dependency, tier Tier) string {
+	if dep.IsFont() && tier != TierHomebrew {
+		name := strings.TrimSpace(dep.Name)
+		match := strings.TrimSpace(dep.FontMatch)
+		if cask := strings.TrimSpace(dep.BrewCask); cask != "" {
+			return fmt.Sprintf("obtain the font files for %q manually on Linux using Homebrew cask token %q as the package/source clue; copy .ttf/.otf files into ~/.local/share/fonts; run fc-cache -f ~/.local/share/fonts; rerun dots deps check; dots will detect files matching font_match %q", name, cask, match)
+		}
+		return fmt.Sprintf("obtain the font files for %q manually on Linux; copy .ttf/.otf files into ~/.local/share/fonts; run fc-cache -f ~/.local/share/fonts; rerun dots deps check; dots will detect files matching font_match %q", name, match)
+	}
 	if tier == TierGeneric {
 		return fmt.Sprintf("install %q with your distribution's package manager", dep.Name)
 	}

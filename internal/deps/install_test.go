@@ -18,7 +18,7 @@ func TestInstallYesExecutesInstallableActionsThroughRunner(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, look, deps.TierHomebrew, runner)
+	report, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, look, fontLookupSet(), deps.TierHomebrew, runner)
 	if err != nil {
 		t.Fatalf("Install() error = %v", err)
 	}
@@ -57,7 +57,7 @@ func TestInstallYesUsesPackageManagerConfirmationArgs(t *testing.T) {
 
 			if _, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
 				return present[command]
-			}, tt.tier, runner); err != nil {
+			}, fontLookupSet(), tt.tier, runner); err != nil {
 				t.Fatalf("Install() error = %v", err)
 			}
 
@@ -88,7 +88,7 @@ func TestInstallYesExecutesMissingInstallableActionsInPlanOrder(t *testing.T) {
 
 	if _, err := deps.Install(installSelectionManifest(), deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
 		return present[command]
-	}, deps.TierHomebrew, runner); err != nil {
+	}, fontLookupSet(), deps.TierHomebrew, runner); err != nil {
 		t.Fatalf("Install() error = %v", err)
 	}
 
@@ -105,7 +105,7 @@ func TestInstallYesExecutesMissingInstallableActionsInPlanOrder(t *testing.T) {
 func TestInstallYesDoesNotRunManualActionsAndReportsUnresolved(t *testing.T) {
 	runner := &recordingRunner{}
 
-	report, err := deps.Install(manualOnlyManifest(), deps.Options{Profile: "default", OS: "linux"}, lookupSet(), deps.TierGeneric, runner)
+	report, err := deps.Install(manualOnlyManifest(), deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierGeneric, runner)
 	if err == nil {
 		t.Fatalf("Install() error = nil, want unresolved manual dependency error")
 	}
@@ -125,7 +125,7 @@ func TestInstallYesReprobesAfterSuccessAndErrorsWhenStillMissing(t *testing.T) {
 		return command == "tmux"
 	}
 
-	report, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, look, deps.TierHomebrew, runner)
+	report, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, look, fontLookupSet(), deps.TierHomebrew, runner)
 	if err == nil {
 		t.Fatalf("Install() error = nil, want unresolved dependency error")
 	}
@@ -144,7 +144,7 @@ func TestInstallYesStopsOnFirstRunnerFailure(t *testing.T) {
 	runnerErr := errors.New("package manager failed")
 	runner := &recordingRunner{err: runnerErr}
 
-	report, err := deps.Install(installSelectionManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "nvim"), deps.TierHomebrew, runner)
+	report, err := deps.Install(installSelectionManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "nvim"), fontLookupSet(), deps.TierHomebrew, runner)
 	if !errors.Is(err, runnerErr) {
 		t.Fatalf("Install() error = %v, want runner error", err)
 	}
@@ -159,7 +159,7 @@ func TestInstallYesStopsOnFirstRunnerFailure(t *testing.T) {
 func TestInstallYesSkipsAlreadyPresentDependenciesBeforeExecution(t *testing.T) {
 	runner := &recordingRunner{}
 
-	report, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "starship"), deps.TierHomebrew, runner)
+	report, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "starship"), fontLookupSet(), deps.TierHomebrew, runner)
 	if err != nil {
 		t.Fatalf("Install() error = %v", err)
 	}
@@ -177,7 +177,7 @@ func TestInstallYesAllowsProgressWithManualAndInstallableDependencies(t *testing
 
 	report, err := deps.Install(mixedManualAndInstallableManifest(), deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
 		return present[command]
-	}, deps.TierHomebrew, runner)
+	}, fontLookupSet(), deps.TierHomebrew, runner)
 	if err == nil {
 		t.Fatalf("Install() error = nil, want unresolved manual dependency error")
 	}
@@ -244,8 +244,45 @@ func (r *recordingRunner) Run(executable string, args []string) error {
 	return nil
 }
 
+func TestInstallYesExecutesHomebrewCaskActionsThroughRunner(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/zed/settings.json", Target: "~/.config/zed/settings.json", Strategy: "symlink", Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{
+					{Name: "CascadiaCode Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*"},
+				},
+			},
+		},
+	}
+	fontPresent := false
+	runner := &recordingRunner{afterRun: func() { fontPresent = true }}
+
+	report, err := deps.Install(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet(), func(match string) bool {
+		return fontPresent && match == "CascadiaCodeNF*"
+	}, deps.TierHomebrew, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+
+	if len(runner.calls) != 1 {
+		t.Fatalf("runner calls len = %d, want 1 (%#v)", len(runner.calls), runner.calls)
+	}
+	if runner.calls[0].executable != "brew" {
+		t.Fatalf("runner executable = %q, want brew", runner.calls[0].executable)
+	}
+	if !reflect.DeepEqual(runner.calls[0].args, []string{"install", "--cask", "font-cascadia-code-nf"}) {
+		t.Fatalf("runner args = %#v, want brew install --cask font-cascadia-code-nf", runner.calls[0].args)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusInstalled {
+		t.Fatalf("report items = %#v, want one installed item", report.Items)
+	}
+}
+
 func TestInstallDryRunReportsInstallableActions(t *testing.T) {
-	report, err := deps.InstallDryRun(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), deps.TierHomebrew)
+	report, err := deps.InstallDryRun(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("InstallDryRun() error = %v", err)
 	}
@@ -279,7 +316,7 @@ func TestInstallDryRunReportsInstallableActions(t *testing.T) {
 }
 
 func TestInstallDryRunReportsManualActionsAsManual(t *testing.T) {
-	report, err := deps.InstallDryRun(manualOnlyManifest(), deps.Options{Profile: "default", OS: "linux"}, lookupSet(), deps.TierGeneric)
+	report, err := deps.InstallDryRun(manualOnlyManifest(), deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierGeneric)
 	if err != nil {
 		t.Fatalf("InstallDryRun() error = %v", err)
 	}
@@ -313,7 +350,7 @@ func manualOnlyManifest() manifest.Manifest {
 }
 
 func TestInstallDryRunUsesPlanSelectionOrderAndSkipsPresentDependencies(t *testing.T) {
-	report, err := deps.InstallDryRun(installSelectionManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "nvim"), deps.TierHomebrew)
+	report, err := deps.InstallDryRun(installSelectionManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux", "nvim"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("InstallDryRun() error = %v", err)
 	}
@@ -368,7 +405,7 @@ func TestInstallDryRunIncludesSelectedProvisionerDependencies(t *testing.T) {
 		},
 	}
 
-	report, err := deps.InstallDryRun(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("engram"), deps.TierHomebrew)
+	report, err := deps.InstallDryRun(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("engram"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("InstallDryRun() error = %v", err)
 	}

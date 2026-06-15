@@ -199,7 +199,7 @@ entries:
         command: zed
         brew: zed
       - name: CascadiaCode Nerd Font
-        brew: font-cascadia-code-nf
+        brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
   - source: configs/zed/keymap.json
     target: ~/.config/zed/keymap.json

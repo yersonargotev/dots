@@ -90,10 +90,11 @@ func newDepsPlanCommand() *cobra.Command {
 				return err
 			}
 
+			home, _ := os.UserHomeDir()
 			report, err := deps.Plan(*m, deps.Options{
 				Profile: profile,
 				OS:      runtime.GOOS,
-			}, lookupCommand, resolvedTier)
+			}, lookupCommand, fontInstalled(runtime.GOOS, home), resolvedTier)
 			if err != nil {
 				return err
 			}
@@ -140,7 +141,8 @@ func newDepsInstallCommand() *cobra.Command {
 				OS:      runtime.GOOS,
 			}
 
-			report, err := deps.InstallDryRun(*m, options, lookupCommand, resolvedTier)
+			home, _ := os.UserHomeDir()
+			report, err := deps.InstallDryRun(*m, options, lookupCommand, fontInstalled(runtime.GOOS, home), resolvedTier)
 			if err != nil {
 				return err
 			}
@@ -183,7 +185,8 @@ func newDepsInstallCommand() *cobra.Command {
 }
 
 func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier) error {
-	report, err := deps.Install(m, options, lookupCommand, tier, depsExecRunner{
+	home, _ := os.UserHomeDir()
+	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, depsExecRunner{
 		ctx:    cmd.Context(),
 		stdin:  cmd.InOrStdin(),
 		stdout: cmd.OutOrStdout(),

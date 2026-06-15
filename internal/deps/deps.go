@@ -51,19 +51,28 @@ func Check(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup) 
 
 	report := CheckReport{Profile: opts.Profile}
 	for _, dep := range selected {
-		var result Result
-		if dep.IsFont() {
-			// A font has no executable on PATH; detect it as an installed asset
-			// by scanning the workstation font directories for a matching file.
-			match := strings.TrimSpace(dep.FontMatch)
-			result = Result{Name: dep.Name, Command: match, Present: fontLook(match)}
-		} else {
-			probe := dep.Probe()
-			result = Result{Name: dep.Name, Command: probe, Present: look(probe)}
-		}
+		result := checkResult(dep, look, fontLook)
 		report.Results = append(report.Results, result)
 	}
 	return report, nil
+}
+
+func dependencyPresent(dep manifest.Dependency, look Lookup, fontLook FontLookup) bool {
+	if dep.IsFont() {
+		return fontLook(strings.TrimSpace(dep.FontMatch))
+	}
+	return look(dep.Probe())
+}
+
+func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Result {
+	if dep.IsFont() {
+		// A font has no executable on PATH; detect it as an installed asset
+		// by scanning the workstation font directories for a matching file.
+		match := strings.TrimSpace(dep.FontMatch)
+		return Result{Name: dep.Name, Command: match, Present: fontLook(match)}
+	}
+	probe := dep.Probe()
+	return Result{Name: dep.Name, Command: probe, Present: look(probe)}
 }
 
 // selectDependencies gathers the Dependencies of every Managed Entry and

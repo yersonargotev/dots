@@ -94,7 +94,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 	}
 	report.Configuration = statusReport
 
-	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, OS: opts.OS}, look)
+	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, OS: opts.OS}, look, fontLook)
 	if err != nil {
 		return Report{}, err
 	}
