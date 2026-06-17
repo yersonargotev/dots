@@ -9,3 +9,8 @@ command -v nvim >/dev/null 2>&1 && export EDITOR=nvim
 
 # Foundry (Ethereum toolchain).
 [[ -d "${HOME}/.foundry/bin" ]] && export PATH="${PATH}:${HOME}/.foundry/bin"
+
+# OpenCode: merge the dots-owned MCP fragment over the global config. OpenCode
+# merges OPENCODE_CONFIG, it does not replace, so this adds servers without
+# touching the gentle-ai-managed opencode.json. Skipped when the file is absent.
+[[ -r "${HOME}/.config/opencode-dots.json" ]] && export OPENCODE_CONFIG="${HOME}/.config/opencode-dots.json"

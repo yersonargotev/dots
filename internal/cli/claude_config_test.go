@@ -151,8 +151,12 @@ func TestClaudeDefaultProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	if !strings.Contains(string(settings), "bash ~/.claude/statusline-command.sh") {
 		t.Fatalf("seeded settings.json statusLine command is not normalized to ~\ncontent:\n%s", settings)
 	}
-	if _, err := os.Stat(filepath.Join(repoRoot, "configs", "opencode")); !os.IsNotExist(err) {
-		t.Fatalf("repo must not version rendered OpenCode config under configs/opencode: %v", err)
+	// dots must not version the gentle-ai-rendered opencode.json (Regenerated
+	// Content). A hand-authored dots overlay fragment under configs/opencode/ is
+	// allowed: OpenCode merges it via OPENCODE_CONFIG, it is never the rendered
+	// config.
+	if _, err := os.Stat(filepath.Join(repoRoot, "configs", "opencode", "opencode.json")); !os.IsNotExist(err) {
+		t.Fatalf("repo must not version the gentle-ai-rendered configs/opencode/opencode.json: %v", err)
 	}
 
 	// The provisioner must have run, threaded to the sandbox HOME, with all
