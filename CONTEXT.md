@@ -191,3 +191,15 @@ _Avoid_: later dotfiles, backlog config, skipped config
 **Implementation Sequence**:
 The ordered construction plan for the Dotfiles CLI, starting with the project skeleton, then manifest/platform logic, dry-run planning, filesystem installation, diagnostics, TUI conflict UX, and finally bootstrap/release distribution.
 _Avoid_: roadmap, build order, task list
+
+**Provisioner**:
+An allowlisted external agent-configuration tool the Dotfiles CLI drives declaratively after Dependencies and Managed Entries are in place. dots versions only the invocation — the tool plus its declarative spec — and renders it into one exact, idempotent command (such as a `gentle-ai install`, a `claude plugin install`, or a `codex mcp add`). It never versions the Regenerated Content the tool owns. The allowlist is closed, so dots is never a generic command runner.
+_Avoid_: hook, post-install script, command runner
+
+**Provisioner Spec**:
+The declarative values the Dotfiles CLI owns for a single Provisioner, which render into that tool's command. A spec speaks exactly one tool dialect at a time and carries no Regenerated Content.
+_Avoid_: provisioner config, tool arguments
+
+**Regenerated Content**:
+The agent-tool state a Provisioner's tool owns and rewrites on its own — skills, personas, MCP-server entries, plugin registries, and machine-specific values such as absolute project paths or auth tokens (for example most of `~/.codex/config.toml` or `~/.claude.json`). dots keeps it out of the Source of Truth and reproduces it by re-running the invocation, never by versioning the tool's config file. Skills and personas are Regenerated Content owned by `gentle-ai`, not by `dots`.
+_Avoid_: generated config, tool output, machine state

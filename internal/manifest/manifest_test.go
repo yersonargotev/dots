@@ -232,6 +232,96 @@ provisioners:
 	}
 }
 
+func TestLoadFileParsesCodexProvisioner(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: codex
+    tags: [desktop]
+    os: [darwin, linux]
+    spec:
+      mcp: chrome-devtools
+      command: [npx, -y, chrome-devtools-mcp@latest, --no-performance-crux]
+      env:
+        CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1"
+        CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1"
+    dependencies:
+      - name: codex
+        command: codex
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if len(got.Provisioners) != 1 {
+		t.Fatalf("Provisioners len = %d, want 1", len(got.Provisioners))
+	}
+
+	codex := got.Provisioners[0]
+	if codex.Tool != "codex" {
+		t.Fatalf("Provisioner[0].Tool = %q, want codex", codex.Tool)
+	}
+	if codex.Spec.MCP != "chrome-devtools" {
+		t.Fatalf("Provisioner[0].Spec.MCP = %q, want chrome-devtools", codex.Spec.MCP)
+	}
+	wantCommand := []string{"npx", "-y", "chrome-devtools-mcp@latest", "--no-performance-crux"}
+	if !sameStrings(codex.Spec.Command, wantCommand) {
+		t.Fatalf("Provisioner[0].Spec.Command = %#v, want %#v", codex.Spec.Command, wantCommand)
+	}
+	if codex.Spec.Env["CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS"] != "1" ||
+		codex.Spec.Env["CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS"] != "1" {
+		t.Fatalf("Provisioner[0].Spec.Env = %#v, want both telemetry flags set to 1", codex.Spec.Env)
+	}
+	if codex.Dependencies[0].Name != "codex" || codex.Dependencies[0].Command != "codex" {
+		t.Fatalf("Provisioner[0].Dependencies[0] = %#v, want codex command dependency", codex.Dependencies[0])
+	}
+}
+
+func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var codex *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool == "codex" && prov.Spec.MCP == "chrome-devtools" {
+			codex = prov
+		}
+	}
+
+	if codex == nil {
+		t.Fatal("repository manifest missing codex MCP provisioner for chrome-devtools")
+	}
+	if !hasString(codex.Tags, "desktop") {
+		t.Errorf("codex provisioner %#v missing desktop tag", codex.Spec)
+	}
+	if !sameStrings(codex.OS, []string{"darwin", "linux"}) {
+		t.Errorf("codex provisioner OS = %#v, want [darwin linux]", codex.OS)
+	}
+	if !hasDependency(codex.Dependencies, "codex") {
+		t.Errorf("codex provisioner missing codex dependency: %#v", codex.Dependencies)
+	}
+}
+
 func TestRepositoryManifestIncludesChromeDevToolsPluginProvisioners(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
@@ -613,7 +703,7 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be one of claude, gentle-ai",
+			want: "provisioners[0].tool must be one of claude, codex, gentle-ai",
 		},
 		{
 			name: "claude spec sets neither marketplace nor plugin",
@@ -672,6 +762,66 @@ provisioners:
       plugin: chrome-devtools-mcp
 `,
 			want: "provisioners[0].spec must not set claude fields (marketplace, plugin, from) for the gentle-ai tool",
+		},
+		{
+			name: "gentle-ai spec mixes codex mcp fields",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+      mcp: chrome-devtools
+`,
+			want: "provisioners[0].spec must not set codex MCP fields (mcp, command, env) for the gentle-ai tool",
+		},
+		{
+			name: "claude spec mixes codex mcp fields",
+			provisioner: `  - tool: claude
+    tags: [core]
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+      mcp: chrome-devtools
+`,
+			want: "provisioners[0].spec must not set codex MCP fields (mcp, command, env) for the claude tool",
+		},
+		{
+			name: "codex spec without mcp name",
+			provisioner: `  - tool: codex
+    tags: [core]
+    spec:
+      command: [npx, chrome-devtools-mcp@latest]
+`,
+			want: "provisioners[0].spec.mcp is required for the codex tool",
+		},
+		{
+			name: "codex spec with mcp but no command",
+			provisioner: `  - tool: codex
+    tags: [core]
+    spec:
+      mcp: chrome-devtools
+`,
+			want: "provisioners[0].spec.command is required when mcp is set",
+		},
+		{
+			name: "codex spec mixes gentle-ai flags",
+			provisioner: `  - tool: codex
+    tags: [core]
+    spec:
+      mcp: chrome-devtools
+      command: [npx, chrome-devtools-mcp@latest]
+      persona: neutral
+`,
+			want: "provisioners[0].spec must not set gentle-ai install flags for the codex tool",
+		},
+		{
+			name: "codex spec mixes claude fields",
+			provisioner: `  - tool: codex
+    tags: [core]
+    spec:
+      mcp: chrome-devtools
+      command: [npx, chrome-devtools-mcp@latest]
+      from: chrome-devtools-plugins
+`,
+			want: "provisioners[0].spec must not set claude fields (marketplace, plugin, from) for the codex tool",
 		},
 		{
 			name: "missing spec",

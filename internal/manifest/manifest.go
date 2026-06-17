@@ -45,8 +45,9 @@ type Provisioner struct {
 // ProvisionerSpec carries the declarative values dots owns for an allowlisted
 // tool; the tool owns how they render into agent config. The scalar/list flags
 // map 1:1 to gentle-ai's install flags. The Claude fields (Marketplace, Plugin,
-// From) describe a single idempotent `claude` invocation instead — they are
-// mutually exclusive with each other and with the gentle-ai flags.
+// From) describe a single idempotent `claude` invocation, and the codex MCP
+// fields (MCP, Command, Env) a single `codex mcp add` invocation. The three
+// dialects are mutually exclusive: a spec speaks exactly one of them.
 type ProvisionerSpec struct {
 	Scope      string   `yaml:"scope,omitempty"`
 	Channel    string   `yaml:"channel,omitempty"`
@@ -65,6 +66,17 @@ type ProvisionerSpec struct {
 	// From names the marketplace a Plugin is installed from. It is only valid
 	// alongside Plugin.
 	From string `yaml:"from,omitempty"`
+	// MCP names a Model Context Protocol server to register with the codex tool,
+	// rendering `codex mcp add <mcp> [--env K=V]... -- <command...>`. It requires
+	// Command and is mutually exclusive with the gentle-ai and claude fields.
+	MCP string `yaml:"mcp,omitempty"`
+	// Command is the launch argv for the MCP server, rendered verbatim after the
+	// `--` separator. It is required alongside MCP and only valid with it.
+	Command []string `yaml:"command,omitempty"`
+	// Env carries environment variables for the MCP server, rendered as repeated
+	// `--env KEY=VALUE` flags in sorted-key order so the command stays
+	// deterministic. It is optional and only valid alongside MCP.
+	Env map[string]string `yaml:"env,omitempty"`
 }
 
 // Dependency is an external tool a Managed Entry needs to work correctly. dots
@@ -185,7 +197,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of claude, gentle-ai", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of claude, codex, gentle-ai", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -201,13 +213,21 @@ func (m Manifest) Validate() error {
 		if prov.Spec.IsEmpty() {
 			return fmt.Errorf("provisioners[%d].spec is required", i)
 		}
-		if prov.Tool == "claude" {
+		switch prov.Tool {
+		case "claude":
 			if err := validateClaudeSpec(prov.Spec, i); err != nil {
 				return err
 			}
-		} else {
+		case "codex":
+			if err := validateCodexSpec(prov.Spec, i); err != nil {
+				return err
+			}
+		default:
 			if prov.Spec.usesClaudeFields() {
 				return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the gentle-ai tool", i)
+			}
+			if prov.Spec.usesMCPFields() {
+				return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the gentle-ai tool", i)
 			}
 			if persona := strings.TrimSpace(prov.Spec.Persona); persona != "" && !allowedPersona(persona) {
 				return fmt.Errorf("provisioners[%d].spec.persona must be one of gentleman, neutral", i)
@@ -252,15 +272,23 @@ func validateDependency(dep Dependency, path string) error {
 // an empty spec would render a bare command with nothing to do, so validation
 // rejects it.
 func (s ProvisionerSpec) IsEmpty() bool {
-	return !s.usesGentleAIFlags() && !s.usesClaudeFields()
+	return !s.usesGentleAIFlags() && !s.usesClaudeFields() && !s.usesMCPFields()
 }
 
 // usesClaudeFields reports whether the spec sets any Claude-specific field. It
-// keeps the two tool dialects from silently bleeding into each other.
+// keeps the tool dialects from silently bleeding into each other.
 func (s ProvisionerSpec) usesClaudeFields() bool {
 	return strings.TrimSpace(s.Marketplace) != "" ||
 		strings.TrimSpace(s.Plugin) != "" ||
 		strings.TrimSpace(s.From) != ""
+}
+
+// usesMCPFields reports whether the spec sets any codex MCP-server field. It
+// keeps the codex dialect disjoint from the gentle-ai and claude dialects.
+func (s ProvisionerSpec) usesMCPFields() bool {
+	return strings.TrimSpace(s.MCP) != "" ||
+		hasNonEmptyString(s.Command) ||
+		len(s.Env) > 0
 }
 
 // usesGentleAIFlags reports whether the spec sets any gentle-ai install flag.
@@ -281,6 +309,9 @@ func validateClaudeSpec(s ProvisionerSpec, i int) error {
 	if s.usesGentleAIFlags() {
 		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai install flags for the claude tool", i)
 	}
+	if s.usesMCPFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the claude tool", i)
+	}
 	hasMarketplace := strings.TrimSpace(s.Marketplace) != ""
 	hasPlugin := strings.TrimSpace(s.Plugin) != ""
 	if hasMarketplace == hasPlugin {
@@ -291,6 +322,30 @@ func validateClaudeSpec(s ProvisionerSpec, i int) error {
 	}
 	if hasMarketplace && strings.TrimSpace(s.From) != "" {
 		return fmt.Errorf("provisioners[%d].spec.from is only valid alongside plugin", i)
+	}
+	return nil
+}
+
+// validateCodexSpec enforces the codex provisioner contract: it drives exactly
+// one idempotent `codex mcp add` invocation — an MCP server name plus its launch
+// command — and never mixes in the gentle-ai or claude dialects.
+func validateCodexSpec(s ProvisionerSpec, i int) error {
+	if s.usesGentleAIFlags() {
+		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai install flags for the codex tool", i)
+	}
+	if s.usesClaudeFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the codex tool", i)
+	}
+	if strings.TrimSpace(s.MCP) == "" {
+		return fmt.Errorf("provisioners[%d].spec.mcp is required for the codex tool", i)
+	}
+	if !hasNonEmptyString(s.Command) {
+		return fmt.Errorf("provisioners[%d].spec.command is required when mcp is set", i)
+	}
+	for key := range s.Env {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("provisioners[%d].spec.env has an empty key", i)
+		}
 	}
 	return nil
 }
@@ -340,7 +395,7 @@ func allowedOS(osName string) bool {
 // tools, each driven through a fixed set of subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "gentle-ai", "claude":
+	case "gentle-ai", "claude", "codex":
 		return true
 	default:
 		return false

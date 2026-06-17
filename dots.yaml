@@ -284,3 +284,22 @@ provisioners:
     dependencies:
       - name: claude
         command: claude
+  - tool: codex
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    spec:
+      mcp: chrome-devtools
+      command:
+        - npx
+        - -y
+        - chrome-devtools-mcp@latest
+        - --no-performance-crux
+      env:
+        CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1"
+        CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1"
+    dependencies:
+      - name: codex
+        command: codex

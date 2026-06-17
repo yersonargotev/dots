@@ -6,6 +6,7 @@
 package provision
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -16,10 +17,14 @@ import (
 // is safe to render in a dry-run. The tool name is the binary name, enforced by
 // the manifest allowlist before this function is reached.
 func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
-	if p.Tool == "claude" {
+	switch p.Tool {
+	case "claude":
 		return p.Tool, renderClaudeArgs(p.Spec)
+	case "codex":
+		return p.Tool, renderCodexArgs(p.Spec)
+	default:
+		return p.Tool, renderGentleAIArgs(p.Spec)
 	}
-	return p.Tool, renderGentleAIArgs(p.Spec)
 }
 
 // renderGentleAIArgs renders `install` plus gentle-ai's flags in a deterministic
@@ -49,6 +54,27 @@ func renderClaudeArgs(spec manifest.ProvisionerSpec) []string {
 	return []string{"plugin", "install", ref, "--scope", "user"}
 }
 
+// renderCodexArgs renders one idempotent `codex mcp add` invocation: the MCP
+// server name, any environment flags in sorted-key order, and the launch command
+// after the `--` separator. Sorting env keys keeps the rendered command
+// deterministic. Validation guarantees MCP and Command are set before this is
+// reached.
+func renderCodexArgs(spec manifest.ProvisionerSpec) []string {
+	args := []string{"mcp", "add", strings.TrimSpace(spec.MCP)}
+	keys := make([]string, 0, len(spec.Env))
+	for key := range spec.Env {
+		if strings.TrimSpace(key) != "" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		args = append(args, "--env", strings.TrimSpace(key)+"="+spec.Env[key])
+	}
+	args = append(args, "--")
+	return append(args, cleanList(spec.Command)...)
+}
+
 func appendScalarFlag(args []string, flag, value string) []string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -66,11 +92,17 @@ func appendListFlag(args []string, flag string, values []string) []string {
 }
 
 func joinNonEmpty(values []string) string {
+	return strings.Join(cleanList(values), ",")
+}
+
+// cleanList trims surrounding whitespace from each value and drops the entries
+// that are empty afterwards, preserving order.
+func cleanList(values []string) []string {
 	cleaned := make([]string, 0, len(values))
 	for _, value := range values {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
 			cleaned = append(cleaned, trimmed)
 		}
 	}
-	return strings.Join(cleaned, ",")
+	return cleaned
 }
