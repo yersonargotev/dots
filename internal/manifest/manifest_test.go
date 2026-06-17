@@ -169,6 +169,112 @@ provisioners:
 	}
 }
 
+func TestLoadFileParsesClaudeProvisioners(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: claude
+    tags: [desktop]
+    os: [darwin, linux]
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+    dependencies:
+      - name: claude
+        command: claude
+  - tool: claude
+    tags: [desktop]
+    spec:
+      plugin: chrome-devtools-mcp
+      from: chrome-devtools-plugins
+    dependencies:
+      - name: claude
+        command: claude
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if len(got.Provisioners) != 2 {
+		t.Fatalf("Provisioners len = %d, want 2", len(got.Provisioners))
+	}
+
+	market := got.Provisioners[0]
+	if market.Tool != "claude" {
+		t.Fatalf("Provisioner[0].Tool = %q, want claude", market.Tool)
+	}
+	if market.Spec.Marketplace != "ChromeDevTools/chrome-devtools-mcp" {
+		t.Fatalf("Provisioner[0].Spec.Marketplace = %q, want ChromeDevTools/chrome-devtools-mcp", market.Spec.Marketplace)
+	}
+	if !sameStrings(market.Tags, []string{"desktop"}) {
+		t.Fatalf("Provisioner[0].Tags = %#v, want [desktop]", market.Tags)
+	}
+	if market.Dependencies[0].Name != "claude" || market.Dependencies[0].Command != "claude" {
+		t.Fatalf("Provisioner[0].Dependencies[0] = %#v, want claude command dependency", market.Dependencies[0])
+	}
+
+	plugin := got.Provisioners[1]
+	if plugin.Spec.Plugin != "chrome-devtools-mcp" || plugin.Spec.From != "chrome-devtools-plugins" {
+		t.Fatalf("Provisioner[1].Spec = %#v, want plugin chrome-devtools-mcp from chrome-devtools-plugins", plugin.Spec)
+	}
+}
+
+func TestRepositoryManifestIncludesChromeDevToolsPluginProvisioners(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var market, plugin *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool != "claude" {
+			continue
+		}
+		switch {
+		case prov.Spec.Marketplace == "ChromeDevTools/chrome-devtools-mcp":
+			market = prov
+		case prov.Spec.Plugin == "chrome-devtools-mcp" && prov.Spec.From == "chrome-devtools-plugins":
+			plugin = prov
+		}
+	}
+
+	if market == nil {
+		t.Fatal("repository manifest missing claude marketplace provisioner for chrome-devtools")
+	}
+	if plugin == nil {
+		t.Fatal("repository manifest missing claude plugin provisioner for chrome-devtools-mcp")
+	}
+
+	for _, prov := range []*manifest.Provisioner{market, plugin} {
+		if !hasString(prov.Tags, "desktop") {
+			t.Errorf("claude provisioner %#v missing desktop tag", prov.Spec)
+		}
+		if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
+			t.Errorf("claude provisioner OS = %#v, want [darwin linux]", prov.OS)
+		}
+		if !hasDependency(prov.Dependencies, "claude") {
+			t.Errorf("claude provisioner missing claude dependency: %#v", prov.Dependencies)
+		}
+	}
+}
+
 func TestDependencyProbeTrimsWhitespace(t *testing.T) {
 	tests := []struct {
 		name string
@@ -507,7 +613,65 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be gentle-ai",
+			want: "provisioners[0].tool must be one of claude, gentle-ai",
+		},
+		{
+			name: "claude spec sets neither marketplace nor plugin",
+			provisioner: `  - tool: claude
+    tags: [core]
+    spec:
+      from: chrome-devtools-plugins
+`,
+			want: "provisioners[0].spec must set exactly one of marketplace or plugin for the claude tool",
+		},
+		{
+			name: "claude spec sets both marketplace and plugin",
+			provisioner: `  - tool: claude
+    tags: [core]
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+      plugin: chrome-devtools-mcp
+`,
+			want: "provisioners[0].spec must set exactly one of marketplace or plugin for the claude tool",
+		},
+		{
+			name: "claude plugin without from",
+			provisioner: `  - tool: claude
+    tags: [core]
+    spec:
+      plugin: chrome-devtools-mcp
+`,
+			want: "provisioners[0].spec.from is required when plugin is set",
+		},
+		{
+			name: "claude marketplace with stray from",
+			provisioner: `  - tool: claude
+    tags: [core]
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+      from: chrome-devtools-plugins
+`,
+			want: "provisioners[0].spec.from is only valid alongside plugin",
+		},
+		{
+			name: "claude spec mixes gentle-ai flags",
+			provisioner: `  - tool: claude
+    tags: [core]
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+      persona: neutral
+`,
+			want: "provisioners[0].spec must not set gentle-ai install flags for the claude tool",
+		},
+		{
+			name: "gentle-ai spec mixes claude fields",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+      plugin: chrome-devtools-mcp
+`,
+			want: "provisioners[0].spec must not set claude fields (marketplace, plugin, from) for the gentle-ai tool",
 		},
 		{
 			name: "missing spec",

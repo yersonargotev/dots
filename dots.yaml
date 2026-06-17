@@ -261,3 +261,26 @@ provisioners:
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+  - tool: claude
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+    dependencies:
+      - name: claude
+        command: claude
+  - tool: claude
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    spec:
+      plugin: chrome-devtools-mcp
+      from: chrome-devtools-plugins
+    dependencies:
+      - name: claude
+        command: claude

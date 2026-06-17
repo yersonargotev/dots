@@ -46,7 +46,7 @@ Migration trigger: the day a genuinely hard, broad capability is needed (serious
 | Release artifacts | GitHub Releases publish platform-specific Release Artifacts for macOS amd64/arm64 and Linux amd64/arm64. |
 | Bootstrapper support | The Bootstrapper downloads the matching Release Artifact, performs Checksum Verification, installs or locates `dots`, and delegates setup to the Dotfiles CLI. |
 | Homebrew Distribution | The release workflow generates a tap formula from the same Release Artifacts and checksum manifest, then publishes it to `yersonargotev/homebrew-tap`. |
-| MVP Configuration Set | v1 proves the installer with the bounded `dots.yaml` manifest: shell, git, terminal, editor, and agent-tool config with explicit install strategies and dependencies. Generated editor state remains out of scope. |
+| MVP Configuration Set | v1 proves the installer with the bounded `dots.yaml` manifest: shell, git, terminal, editor, and agent-tool config with explicit install strategies and dependencies. Agent-tool provisioning is driven through the closed provisioner allowlist (`gentle-ai`, `claude`); dots versions the invocation, never the regenerated content (see [`docs/adr/0003-claude-plugin-provisioner.md`](adr/0003-claude-plugin-provisioner.md)). Generated editor state remains out of scope. |
 
 ## Deferred to v1.1 or later
 

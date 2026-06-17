@@ -125,6 +125,42 @@ func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesClaudeProvisioner(t *testing.T) {
+	market := manifest.Provisioner{
+		Tool: "claude", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Marketplace: "ChromeDevTools/chrome-devtools-mcp"},
+	}
+	plugin := manifest.Provisioner{
+		Tool: "claude", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Plugin: "chrome-devtools-mcp", From: "chrome-devtools-plugins"},
+	}
+	m := manifestWithProvisioners(market, plugin)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 2 {
+		t.Fatalf("len(Plan.Steps) = %d, want 2", len(p.Steps))
+	}
+
+	marketStep := p.Steps[0]
+	if marketStep.Executable != "claude" {
+		t.Fatalf("market step executable = %q, want claude", marketStep.Executable)
+	}
+	if !reflect.DeepEqual(marketStep.Args, []string{"plugin", "marketplace", "add", "ChromeDevTools/chrome-devtools-mcp"}) {
+		t.Fatalf("market step args = %#v", marketStep.Args)
+	}
+	if !reflect.DeepEqual(marketStep.Targets, []string{"~/.claude", "~/.claude.json"}) {
+		t.Fatalf("market step targets = %#v, want [~/.claude ~/.claude.json]", marketStep.Targets)
+	}
+
+	pluginStep := p.Steps[1]
+	if !reflect.DeepEqual(pluginStep.Args, []string{"plugin", "install", "chrome-devtools-mcp@chrome-devtools-plugins", "--scope", "user"}) {
+		t.Fatalf("plugin step args = %#v", pluginStep.Args)
+	}
+}
+
 func TestPlanEmptyWhenNoProvisionerSelected(t *testing.T) {
 	prov := manifest.Provisioner{
 		Tool: "gentle-ai", Tags: []string{"desktop"},

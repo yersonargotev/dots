@@ -75,6 +75,33 @@ func TestRenderCommand(t *testing.T) {
 			wantExec: "gentle-ai",
 			wantArgs: []string{"install", "--scope", "global", "--agents", "codex,claude"},
 		},
+		{
+			name: "claude marketplace registration",
+			prov: manifest.Provisioner{
+				Tool: "claude",
+				Spec: manifest.ProvisionerSpec{Marketplace: "ChromeDevTools/chrome-devtools-mcp"},
+			},
+			wantExec: "claude",
+			wantArgs: []string{"plugin", "marketplace", "add", "ChromeDevTools/chrome-devtools-mcp"},
+		},
+		{
+			name: "claude plugin install into user scope",
+			prov: manifest.Provisioner{
+				Tool: "claude",
+				Spec: manifest.ProvisionerSpec{Plugin: "chrome-devtools-mcp", From: "chrome-devtools-plugins"},
+			},
+			wantExec: "claude",
+			wantArgs: []string{"plugin", "install", "chrome-devtools-mcp@chrome-devtools-plugins", "--scope", "user"},
+		},
+		{
+			name: "claude trims whitespace around marketplace source",
+			prov: manifest.Provisioner{
+				Tool: "claude",
+				Spec: manifest.ProvisionerSpec{Marketplace: "  ChromeDevTools/chrome-devtools-mcp  "},
+			},
+			wantExec: "claude",
+			wantArgs: []string{"plugin", "marketplace", "add", "ChromeDevTools/chrome-devtools-mcp"},
+		},
 	}
 
 	for _, tt := range tests {
