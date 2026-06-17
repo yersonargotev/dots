@@ -110,7 +110,7 @@ func TestRenderCommand(t *testing.T) {
 					MCP:     "chrome-devtools",
 					Command: []string{"npx", "-y", "chrome-devtools-mcp@latest", "--no-performance-crux"},
 					Env: map[string]string{
-						"CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": "1",
+						"CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": " 1 ",
 						"CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS":    "1",
 					},
 				},

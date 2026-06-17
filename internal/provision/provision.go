@@ -69,7 +69,7 @@ func renderCodexArgs(spec manifest.ProvisionerSpec) []string {
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		args = append(args, "--env", strings.TrimSpace(key)+"="+spec.Env[key])
+		args = append(args, "--env", strings.TrimSpace(key)+"="+strings.TrimSpace(spec.Env[key]))
 	}
 	args = append(args, "--")
 	return append(args, cleanList(spec.Command)...)

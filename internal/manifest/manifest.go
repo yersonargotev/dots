@@ -391,8 +391,8 @@ func allowedOS(osName string) bool {
 }
 
 // allowedProvisionerTool enforces the provisioner allowlist. dots is never a
-// generic command runner: gentle-ai and claude are the only accepted provisioner
-// tools, each driven through a fixed set of subcommands.
+// generic command runner: gentle-ai, claude, and codex are the only accepted
+// provisioner tools, each driven through a fixed set of subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
 	case "gentle-ai", "claude", "codex":
