@@ -6,6 +6,7 @@
 package provision
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -13,20 +14,65 @@ import (
 
 // RenderCommand resolves a Provisioner into the exact executable and argv that
 // would run it. It is PURE: it performs no I/O and never invokes the tool, so it
-// is safe to render in a dry-run. Flags are emitted in a deterministic order;
-// unset scalar flags and empty list flags are omitted, and list values are
-// comma-joined. The tool name is the binary name (gentle-ai), enforced by the
-// manifest allowlist before this function is reached.
+// is safe to render in a dry-run. The tool name is the binary name, enforced by
+// the manifest allowlist before this function is reached.
 func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
-	args = []string{"install"}
-	args = appendScalarFlag(args, "--scope", p.Spec.Scope)
-	args = appendScalarFlag(args, "--channel", p.Spec.Channel)
-	args = appendScalarFlag(args, "--persona", p.Spec.Persona)
-	args = appendScalarFlag(args, "--sdd-mode", p.Spec.SDDMode)
-	args = appendListFlag(args, "--agents", p.Spec.Agents)
-	args = appendListFlag(args, "--components", p.Spec.Components)
-	args = appendListFlag(args, "--skills", p.Spec.Skills)
-	return p.Tool, args
+	switch p.Tool {
+	case "claude":
+		return p.Tool, renderClaudeArgs(p.Spec)
+	case "codex":
+		return p.Tool, renderCodexArgs(p.Spec)
+	default:
+		return p.Tool, renderGentleAIArgs(p.Spec)
+	}
+}
+
+// renderGentleAIArgs renders `install` plus gentle-ai's flags in a deterministic
+// order; unset scalar flags and empty list flags are omitted, and list values
+// are comma-joined.
+func renderGentleAIArgs(spec manifest.ProvisionerSpec) []string {
+	args := []string{"install"}
+	args = appendScalarFlag(args, "--scope", spec.Scope)
+	args = appendScalarFlag(args, "--channel", spec.Channel)
+	args = appendScalarFlag(args, "--persona", spec.Persona)
+	args = appendScalarFlag(args, "--sdd-mode", spec.SDDMode)
+	args = appendListFlag(args, "--agents", spec.Agents)
+	args = appendListFlag(args, "--components", spec.Components)
+	args = appendListFlag(args, "--skills", spec.Skills)
+	return args
+}
+
+// renderClaudeArgs renders one idempotent `claude` invocation. A marketplace
+// spec registers a plugin marketplace from its source; otherwise a plugin spec
+// installs `<plugin>@<from>` into the user scope. Validation guarantees exactly
+// one shape is set before this is reached.
+func renderClaudeArgs(spec manifest.ProvisionerSpec) []string {
+	if marketplace := strings.TrimSpace(spec.Marketplace); marketplace != "" {
+		return []string{"plugin", "marketplace", "add", marketplace}
+	}
+	ref := strings.TrimSpace(spec.Plugin) + "@" + strings.TrimSpace(spec.From)
+	return []string{"plugin", "install", ref, "--scope", "user"}
+}
+
+// renderCodexArgs renders one idempotent `codex mcp add` invocation: the MCP
+// server name, any environment flags in sorted-key order, and the launch command
+// after the `--` separator. Sorting env keys keeps the rendered command
+// deterministic. Validation guarantees MCP and Command are set before this is
+// reached.
+func renderCodexArgs(spec manifest.ProvisionerSpec) []string {
+	args := []string{"mcp", "add", strings.TrimSpace(spec.MCP)}
+	keys := make([]string, 0, len(spec.Env))
+	for key := range spec.Env {
+		if strings.TrimSpace(key) != "" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		args = append(args, "--env", strings.TrimSpace(key)+"="+strings.TrimSpace(spec.Env[key]))
+	}
+	args = append(args, "--")
+	return append(args, cleanList(spec.Command)...)
 }
 
 func appendScalarFlag(args []string, flag, value string) []string {
@@ -46,11 +92,17 @@ func appendListFlag(args []string, flag string, values []string) []string {
 }
 
 func joinNonEmpty(values []string) string {
+	return strings.Join(cleanList(values), ",")
+}
+
+// cleanList trims surrounding whitespace from each value and drops the entries
+// that are empty afterwards, preserving order.
+func cleanList(values []string) []string {
 	cleaned := make([]string, 0, len(values))
 	for _, value := range values {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
 			cleaned = append(cleaned, trimmed)
 		}
 	}
-	return strings.Join(cleaned, ",")
+	return cleaned
 }

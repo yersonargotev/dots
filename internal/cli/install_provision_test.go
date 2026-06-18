@@ -116,6 +116,72 @@ func TestInstallExecutesProvisionerAfterFilesWithHomeThreaded(t *testing.T) {
 	}
 }
 
+// TestInstallExecutesClaudeProvisionerHomeThreaded proves a claude provisioner
+// renders and runs the exact `claude plugin ...` invocations, in manifest order,
+// under the sandbox HOME and never the inherited one.
+func TestInstallExecutesClaudeProvisionerHomeThreaded(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	// The claude stub appends each invocation's argv to a log under the threaded
+	// HOME so the test can assert the resolved commands and their order.
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/claude-calls\"\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, sandboxHome, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: claude
+    tags: [core]
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+    dependencies:
+      - name: claude
+  - tool: claude
+    tags: [core]
+    spec:
+      plugin: chrome-devtools-mcp
+      from: chrome-devtools-plugins
+    dependencies:
+      - name: claude
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	calls, err := os.ReadFile(filepath.Join(sandboxHome, "claude-calls"))
+	if err != nil {
+		t.Fatalf("claude provisioner did not run under the sandbox HOME %q: %v", sandboxHome, err)
+	}
+	want := "plugin marketplace add ChromeDevTools/chrome-devtools-mcp\n" +
+		"plugin install chrome-devtools-mcp@chrome-devtools-plugins --scope user\n"
+	if string(calls) != want {
+		t.Fatalf("claude calls = %q, want %q", calls, want)
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, "claude-calls")); err == nil {
+		t.Fatalf("claude provisioner wrote into the inherited HOME %q instead of the sandbox", fakeRealHome)
+	}
+}
+
 // TestInstallTUICancelDoesNotRunProvisioners proves canceling conflict
 // resolution aborts the whole install before any provisioner can mutate
 // tool-managed config roots.

@@ -75,6 +75,66 @@ func TestRenderCommand(t *testing.T) {
 			wantExec: "gentle-ai",
 			wantArgs: []string{"install", "--scope", "global", "--agents", "codex,claude"},
 		},
+		{
+			name: "claude marketplace registration",
+			prov: manifest.Provisioner{
+				Tool: "claude",
+				Spec: manifest.ProvisionerSpec{Marketplace: "ChromeDevTools/chrome-devtools-mcp"},
+			},
+			wantExec: "claude",
+			wantArgs: []string{"plugin", "marketplace", "add", "ChromeDevTools/chrome-devtools-mcp"},
+		},
+		{
+			name: "claude plugin install into user scope",
+			prov: manifest.Provisioner{
+				Tool: "claude",
+				Spec: manifest.ProvisionerSpec{Plugin: "chrome-devtools-mcp", From: "chrome-devtools-plugins"},
+			},
+			wantExec: "claude",
+			wantArgs: []string{"plugin", "install", "chrome-devtools-mcp@chrome-devtools-plugins", "--scope", "user"},
+		},
+		{
+			name: "claude trims whitespace around marketplace source",
+			prov: manifest.Provisioner{
+				Tool: "claude",
+				Spec: manifest.ProvisionerSpec{Marketplace: "  ChromeDevTools/chrome-devtools-mcp  "},
+			},
+			wantExec: "claude",
+			wantArgs: []string{"plugin", "marketplace", "add", "ChromeDevTools/chrome-devtools-mcp"},
+		},
+		{
+			name: "codex mcp add renders env flags in sorted order before the command",
+			prov: manifest.Provisioner{
+				Tool: "codex",
+				Spec: manifest.ProvisionerSpec{
+					MCP:     "chrome-devtools",
+					Command: []string{"npx", "-y", "chrome-devtools-mcp@latest", "--no-performance-crux"},
+					Env: map[string]string{
+						"CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": " 1 ",
+						"CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS":    "1",
+					},
+				},
+			},
+			wantExec: "codex",
+			wantArgs: []string{
+				"mcp", "add", "chrome-devtools",
+				"--env", "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=1",
+				"--env", "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1",
+				"--", "npx", "-y", "chrome-devtools-mcp@latest", "--no-performance-crux",
+			},
+		},
+		{
+			name: "codex mcp add without env omits env flags and trims command parts",
+			prov: manifest.Provisioner{
+				Tool: "codex",
+				Spec: manifest.ProvisionerSpec{
+					MCP:     "  chrome-devtools  ",
+					Command: []string{" npx ", "", "  ", "chrome-devtools-mcp@latest"},
+				},
+			},
+			wantExec: "codex",
+			wantArgs: []string{"mcp", "add", "chrome-devtools", "--", "npx", "chrome-devtools-mcp@latest"},
+		},
 	}
 
 	for _, tt := range tests {

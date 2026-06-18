@@ -241,6 +241,21 @@ entries:
     os:
       - darwin
       - linux
+  # OpenCode has no MCP install CLI and its global opencode.json is co-owned by
+  # gentle-ai, so dots owns a separate fragment that OpenCode merges (not
+  # replaces) via the OPENCODE_CONFIG env var set in zshenv. This keeps the
+  # chrome-devtools MCP server out of gentle-ai's file.
+  - source: configs/opencode/mcp.json
+    target: ~/.config/opencode-dots.json
+    strategy: symlink
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: opencode
+        command: opencode
 provisioners:
   - tool: gentle-ai
     tags:
@@ -261,3 +276,45 @@ provisioners:
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+  - tool: claude
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+    dependencies:
+      - name: claude
+        command: claude
+  - tool: claude
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    spec:
+      plugin: chrome-devtools-mcp
+      from: chrome-devtools-plugins
+    dependencies:
+      - name: claude
+        command: claude
+  - tool: codex
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    spec:
+      mcp: chrome-devtools
+      command:
+        - npx
+        - -y
+        - chrome-devtools-mcp@latest
+        - --no-performance-crux
+      env:
+        CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1"
+        CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1"
+    dependencies:
+      - name: codex
+        command: codex
