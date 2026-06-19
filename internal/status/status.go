@@ -42,16 +42,16 @@ const (
 
 // Entry is the evaluated alignment of one Managed Entry.
 type Entry struct {
-	Source   string
-	Target   string
-	Strategy string
-	State    State
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	Strategy string `json:"strategy"`
+	State    State  `json:"state"`
 }
 
 // Report is the Dotfiles Status for a Profile, in manifest order.
 type Report struct {
-	Profile string
-	Entries []Entry
+	Profile string  `json:"profile"`
+	Entries []Entry `json:"entries"`
 }
 
 // HasFindings reports whether the Dotfiles Status contains any entry that

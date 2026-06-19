@@ -9,19 +9,19 @@ import (
 // resolved command and which declared dependencies are absent. It never runs the
 // tool.
 type Readiness struct {
-	Tool       string
-	Executable string
-	Args       []string
+	Tool       string   `json:"tool"`
+	Executable string   `json:"executable"`
+	Args       []string `json:"args"`
 	// Missing holds the probes of absent dependencies, in declared order. An
 	// empty Missing means the Provisioner is ready to run.
-	Missing []string
+	Missing []string `json:"missing"`
 }
 
 // CheckReport is the readiness report for a Profile's selected Provisioners, in
 // manifest order. It mirrors deps.CheckReport for Managed Entry dependencies.
 type CheckReport struct {
-	Profile string
-	Items   []Readiness
+	Profile string      `json:"profile"`
+	Items   []Readiness `json:"items"`
 }
 
 // HasFindings reports whether any selected Provisioner is missing a dependency

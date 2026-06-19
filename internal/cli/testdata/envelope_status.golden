@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "command": "status",
+  "status": "findings",
+  "data": {
+    "profile": "default",
+    "entries": [
+      {
+        "source": "configs/zsh/zshrc",
+        "target": "/home/user/.zshrc",
+        "strategy": "symlink",
+        "state": "ok"
+      },
+      {
+        "source": "configs/git/config",
+        "target": "/home/user/.gitconfig",
+        "strategy": "copy",
+        "state": "missing"
+      }
+    ]
+  }
+}

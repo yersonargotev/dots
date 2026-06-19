@@ -62,11 +62,10 @@ func newDoctorCommand() *cobra.Command {
 				return err
 			}
 
-			renderDoctor(cmd.OutOrStdout(), report)
-			if report.HasFindings() {
-				return &FindingsError{}
-			}
-			return nil
+			return renderOrEmit(cmd, report, func() error {
+				renderDoctor(cmd.OutOrStdout(), report)
+				return nil
+			})
 		},
 	}
 
