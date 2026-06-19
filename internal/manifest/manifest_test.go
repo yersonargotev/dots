@@ -322,6 +322,40 @@ func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) 
 	}
 }
 
+func TestRepositoryManifestIncludesCodeGraphCodexProvisioner(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var codex *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool == "codex" && prov.Spec.MCP == "codegraph" {
+			codex = prov
+		}
+	}
+
+	if codex == nil {
+		t.Fatal("repository manifest missing codex MCP provisioner for codegraph")
+	}
+	if !hasString(codex.Tags, "desktop") {
+		t.Errorf("codegraph codex provisioner %#v missing desktop tag", codex.Spec)
+	}
+	if !sameStrings(codex.OS, []string{"darwin", "linux"}) {
+		t.Errorf("codegraph codex provisioner OS = %#v, want [darwin linux]", codex.OS)
+	}
+	if !sameStrings(codex.Spec.Command, []string{"codegraph", "serve", "--mcp"}) {
+		t.Errorf("codegraph codex command = %#v, want [codegraph serve --mcp]", codex.Spec.Command)
+	}
+	if !hasDependency(codex.Dependencies, "codegraph") {
+		t.Errorf("codegraph codex provisioner missing codegraph dependency: %#v", codex.Dependencies)
+	}
+}
+
 func TestRepositoryManifestIncludesChromeDevToolsPluginProvisioners(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")

@@ -318,3 +318,20 @@ provisioners:
     dependencies:
       - name: codex
         command: codex
+  - tool: codex
+    tags:
+      - desktop
+    os:
+      - darwin
+      - linux
+    spec:
+      mcp: codegraph
+      command:
+        - codegraph
+        - serve
+        - --mcp
+    dependencies:
+      - name: codex
+        command: codex
+      - name: codegraph
+        command: codegraph

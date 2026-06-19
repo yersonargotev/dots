@@ -197,6 +197,34 @@ func TestPlanResolvesCodexProvisioner(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesCodeGraphCodexProvisioner(t *testing.T) {
+	codex := manifest.Provisioner{
+		Tool: "codex", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{
+			MCP:     "codegraph",
+			Command: []string{"codegraph", "serve", "--mcp"},
+		},
+	}
+	m := manifestWithProvisioners(codex)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
+	}
+
+	step := p.Steps[0]
+	wantArgs := []string{"mcp", "add", "codegraph", "--", "codegraph", "serve", "--mcp"}
+	if !reflect.DeepEqual(step.Args, wantArgs) {
+		t.Fatalf("codegraph codex args = %#v, want %#v", step.Args, wantArgs)
+	}
+	if !reflect.DeepEqual(step.Targets, []string{"~/.codex"}) {
+		t.Fatalf("codegraph codex targets = %#v, want [~/.codex]", step.Targets)
+	}
+}
+
 func TestPlanEmptyWhenNoProvisionerSelected(t *testing.T) {
 	prov := manifest.Provisioner{
 		Tool: "gentle-ai", Tags: []string{"desktop"},
