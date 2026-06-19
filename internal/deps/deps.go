@@ -46,6 +46,18 @@ type CheckReport struct {
 	Results []Result
 }
 
+// HasFindings reports whether any declared Dependency is absent from the
+// workstation, or present but degraded by a probe warning (such as a broken Git
+// toolchain). Both are concerns doctor surfaces and the caller should act on.
+func (r CheckReport) HasFindings() bool {
+	for _, res := range r.Results {
+		if !res.Present || res.Warning != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // Check reports which Dependencies declared by the Profile's selected Managed
 // Entries and Provisioners are present on the workstation. Dependencies are
 // deduplicated by name in first-declared order.

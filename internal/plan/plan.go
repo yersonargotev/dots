@@ -39,6 +39,19 @@ type Plan struct {
 	Actions []Action
 }
 
+// HasFindings reports whether the Install Plan contains an action the caller
+// must act on before a clean apply: an unresolved Conflict, or a missing source
+// the manifest declares but the Installed Repository does not provide.
+func (p Plan) HasFindings() bool {
+	for _, a := range p.Actions {
+		switch a.Status {
+		case StatusConflict, StatusMissingSource:
+			return true
+		}
+	}
+	return false
+}
+
 // Options carries the resolved inputs needed to compute a Plan.
 type Options struct {
 	Profile    string

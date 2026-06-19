@@ -69,6 +69,12 @@ func newStatusCommand() *cobra.Command {
 				return err
 			}
 			renderStatusProvisioners(cmd.OutOrStdout(), provPlan)
+
+			// Declared provisioners make no alignment claim, so only the Dotfiles
+			// Status entries decide whether the workstation diverges.
+			if report.HasFindings() {
+				return &FindingsError{}
+			}
 			return nil
 		},
 	}

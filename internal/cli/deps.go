@@ -56,6 +56,9 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 			}
 
 			renderDepsCheck(cmd.OutOrStdout(), report)
+			if report.HasFindings() {
+				return &FindingsError{}
+			}
 			return nil
 		},
 	}
@@ -98,6 +101,9 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 			}
 
 			renderDepsPlan(cmd.OutOrStdout(), report)
+			if report.HasFindings() {
+				return &FindingsError{}
+			}
 			return nil
 		},
 	}

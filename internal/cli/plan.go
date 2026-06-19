@@ -55,6 +55,9 @@ func newPlanCommand() *cobra.Command {
 			}
 
 			renderPlan(cmd.OutOrStdout(), p)
+			if p.HasFindings() {
+				return &FindingsError{}
+			}
 			return nil
 		},
 	}

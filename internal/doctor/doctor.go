@@ -40,6 +40,17 @@ type Report struct {
 	SecretScan    SecretReport
 }
 
+// HasFindings reports whether doctor surfaced any concern across its
+// dimensions: an unsupported platform, a missing Dependency, a Configuration
+// finding, a Provisioner that is not ready, or a Secret Scan finding.
+func (r Report) HasFindings() bool {
+	return !r.Platform.Supported ||
+		r.Dependencies.HasFindings() ||
+		r.Configuration.HasFindings() ||
+		r.Provisioners.HasFindings() ||
+		len(r.SecretScan.Findings) > 0
+}
+
 // Platform reports whether the current platform is supported by dots v1.
 type Platform struct {
 	Supported bool
