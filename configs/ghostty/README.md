@@ -12,12 +12,10 @@ outside version control.
 
 - **`ghostty`** — declared as an advisory dependency for the desktop profile.
 - **Desktop Nerd Font** — declared on the `desktop` profile as shared desktop
-  infrastructure, not as a Zed-owned dependency. Ghostty local overrides,
-  terminals, and editors can consume the same requirement. The primary macOS
-  package is the Homebrew cask `font-cascadia-code-nf`, detected through
-  `CascadiaCodeNF*` font files; compatible files such as
-  `CaskaydiaCoveNerdFont*` also satisfy the dependency. This is not VS Code
-  configuration management.
+  infrastructure. Ghostty consumes this shared requirement for the managed
+  `font-family` baseline (`Cascadia Code NF`). The primary macOS package is the
+  Homebrew cask `font-cascadia-code-nf`, detected through `CascadiaCodeNF*` font
+  files.
 
 `dots install` does not install packages. `dots deps plan` and the explicit
 `dots deps install` workflow can report/use Homebrew guidance where available;
@@ -30,8 +28,8 @@ The live `~/.config/ghostty/config` file was classified before adoption:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| **Portable** | Catppuccin Mocha palette, foreground/background/cursor/selection colors, split divider color, intentional keybindings for terminal workflow and Zellij/tmux forwarding | Managed in `configs/ghostty/config.ghostty`. |
-| **Machine-specific** | font family, font size, window dimensions, opacity/blur, window padding ergonomics, explicit shell/command paths, initial working directories, OS integrations, display/GPU/host-dependent behavior | Excluded from the shared file. Font family can use the shared Desktop Nerd Font from local overrides; documented in `configs/ghostty/config.local.ghostty.example`. |
+| **Portable** | font family, font size, Catppuccin Mocha palette, foreground/background/cursor/selection colors, split divider color, intentional keybindings for terminal workflow and Zellij/tmux forwarding | Managed in `configs/ghostty/config.ghostty`. |
+| **Machine-specific** | window dimensions, opacity/blur, window padding ergonomics, explicit shell/command paths, initial working directories, OS integrations, display/GPU/host-dependent behavior | Excluded from the shared file; document deliberate host-specific exceptions in `configs/ghostty/config.local.ghostty.example`. |
 | **Generated** | logs, caches, sessions, backups, temporary files, generated state, local shaders | Never committed. |
 | **Private** | secrets, authenticated state, private paths, hostnames, machine IDs | Excluded. |
 
@@ -44,7 +42,9 @@ legacy file can override the repository-managed Source of Truth after install.
 Before switching a real workstation to this slice, classify the legacy file, move
 portable settings into `configs/ghostty/config.ghostty`, move machine-specific
 settings into `~/.config/ghostty/config.local.ghostty`, then archive or remove
-the legacy `~/.config/ghostty/config` file. Do the same review for macOS
+the legacy `~/.config/ghostty/config` file. Do not leave duplicated font, color,
+or keybinding settings in the legacy file because they can override the managed
+Source of Truth. Do the same review for macOS
 Application Support Ghostty config files if they exist.
 
 Do not delete the legacy file blindly: it is user state until it has been

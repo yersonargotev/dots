@@ -5,12 +5,9 @@
 #
 # Keep this file local unless a setting is explicitly reviewed as portable.
 
-# Fonts are machine-specific because installed font names and comfortable sizes
-# differ across hosts, displays, and operating systems.
-# font-family = "Cascadia Code NF"
-# Compatible fallback family names such as "CaskaydiaCove Nerd Font Mono" may
-# also work when those files are already installed.
-# font-size = 20
+# Font family and size are managed in config.ghostty. Add font overrides here
+# only for a deliberate host-specific exception; local values loaded from this
+# file override the shared Source of Truth.
 
 # Window and rendering ergonomics depend on monitor size, compositor/GPU, and
 # personal workspace layout.
