@@ -1,10 +1,15 @@
 # Ghostty portable preferences managed by dots.
 #
-# Machine-specific settings such as font family/size, window dimensions,
-# opacity/blur, shell paths, working directories, and platform integrations live
-# in the optional local file below. Ghostty resolves this relative to this file
-# and ignores it when it does not exist.
+# Machine-specific settings such as window dimensions, opacity/blur, shell paths,
+# working directories, and platform integrations live in the optional local file
+# below. Ghostty resolves this relative to this file and ignores it when it does
+# not exist.
 config-file = ?config.local.ghostty
+
+# Shared font baseline. The Desktop Nerd Font dependency keeps this portable
+# across supported desktop hosts.
+font-family = "Cascadia Code NF"
+font-size = 20
 
 # Catppuccin Mocha palette and terminal colors.
 palette = 0=#45475a

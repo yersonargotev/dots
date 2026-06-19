@@ -11,8 +11,6 @@ profiles:
       - name: Desktop Nerd Font
         brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
-        font_fallback_matches:
-          - "CaskaydiaCoveNerdFont*"
 entries:
   - source: configs/zsh/zshrc
     target: ~/.zshrc
