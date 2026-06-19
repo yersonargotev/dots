@@ -113,7 +113,7 @@ jobs:
           else
             gh release create "$RELEASE_TAG" \
               --title "$RELEASE_TAG" \
-              --notes "First usable v0.x release target for dots. Assets include macOS/Linux amd64/arm64 binaries plus checksums.txt for Bootstrapper verification."
+              --generate-notes
           fi
 
       - name: Upload release assets

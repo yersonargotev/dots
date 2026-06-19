@@ -59,6 +59,30 @@ func TestReleaseWorkflowPublishesBootstrapperConsumableArtifacts(t *testing.T) {
 	}
 }
 
+func TestReleaseWorkflowCreatesReleaseWithGeneratedNotes(t *testing.T) {
+	root := repoRoot(t)
+	workflow := readWorkflow(t, filepath.Join(root, ".github", "workflows", "release.yml"))
+	steps := workflowSteps(t, workflow)
+
+	createReleaseIndex := workflowStepIndex(t, steps, "GitHub Release creation with generated notes", func(step map[string]any) bool {
+		return stepName(step) == "Create GitHub Release if needed"
+	})
+	run := stepRun(steps[createReleaseIndex])
+
+	if !strings.Contains(run, "gh release create") {
+		t.Fatalf("release creation step should create the GitHub Release; run script:\n%s", run)
+	}
+	if !strings.Contains(run, "--generate-notes") {
+		t.Fatalf("release creation should ask GitHub to generate per-tag notes; run script:\n%s", run)
+	}
+	if strings.Contains(run, "--notes") {
+		t.Fatalf("release creation should not pass static release notes; run script:\n%s", run)
+	}
+	if strings.Contains(run, "First usable v0.x release target") {
+		t.Fatalf("release creation should not keep the old first-release notes body; run script:\n%s", run)
+	}
+}
+
 func TestReleaseWorkflowProvesTapAccessBeforePublishingReleaseAssets(t *testing.T) {
 	root := repoRoot(t)
 	workflow := readWorkflow(t, filepath.Join(root, ".github", "workflows", "release.yml"))
