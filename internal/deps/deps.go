@@ -72,7 +72,7 @@ func CheckWithToolProbes(m manifest.Manifest, opts Options, look Lookup, fontLoo
 
 func dependencyPresent(dep manifest.Dependency, look Lookup, fontLook FontLookup) bool {
 	if dep.IsFont() {
-		return fontLook(strings.TrimSpace(dep.FontMatch))
+		return fontPresent(dep.FontMatches(), fontLook)
 	}
 	return look(dep.Probe())
 }
@@ -80,9 +80,10 @@ func dependencyPresent(dep manifest.Dependency, look Lookup, fontLook FontLookup
 func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Result {
 	if dep.IsFont() {
 		// A font has no executable on PATH; detect it as an installed asset
-		// by scanning the workstation font directories for a matching file.
-		match := strings.TrimSpace(dep.FontMatch)
-		return Result{Name: dep.Name, Command: match, Present: fontLook(match)}
+		// by scanning the workstation font directories for any compatible file
+		// pattern, starting with the primary match.
+		matches := dep.FontMatches()
+		return Result{Name: dep.Name, Command: fontProbeLabel(matches), Present: fontPresent(matches, fontLook)}
 	}
 	probe := dep.Probe()
 	return Result{Name: dep.Name, Command: probe, Present: look(probe)}
@@ -119,9 +120,26 @@ func probeDetail(output string, err error) string {
 	return detail[:maxProbeDetailLen-len("...")] + "..."
 }
 
-// selectDependencies gathers the Dependencies of every Managed Entry and
-// Provisioner that belongs to the Profile and passes the OS filter, deduplicated
-// by name in first-declared order.
+func fontPresent(matches []string, fontLook FontLookup) bool {
+	for _, match := range matches {
+		if fontLook(match) {
+			return true
+		}
+	}
+	return false
+}
+
+func fontProbeLabel(matches []string) string {
+	if len(matches) == 0 {
+		return ""
+	}
+	return strings.Join(matches, ", ")
+}
+
+// selectDependencies gathers the Dependencies declared directly by the Profile,
+// then every Managed Entry and Provisioner that belongs to the Profile and
+// passes the OS filter, deduplicated by name in first-declared order.
+
 func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependency, error) {
 	profile, ok := m.Profiles[opts.Profile]
 	if !ok {
@@ -143,6 +161,7 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 		}
 	}
 
+	addDependencies(profile.Dependencies)
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, profile.Tags) {
 			continue

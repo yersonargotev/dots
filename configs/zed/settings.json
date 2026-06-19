@@ -44,7 +44,7 @@
   },
   "icon_theme": "Catppuccin Mocha",
   "ui_font_family": ".ZedSans",
-  "buffer_font_family": "CaskaydiaCove Nerd Font",
+  "buffer_font_family": "Cascadia Code NF",
   "vim_mode": true,
   "ui_font_size": 16,
   "buffer_font_size": 16.0,

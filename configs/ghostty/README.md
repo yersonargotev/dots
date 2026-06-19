@@ -11,10 +11,18 @@ outside version control.
 ## Prerequisites
 
 - **`ghostty`** — declared as an advisory dependency for the desktop profile.
-  `dots install` does not install packages. `dots deps plan` and the explicit
-  `dots deps install` workflow can report/use Homebrew guidance where available;
-  Linux package mappings are intentionally omitted until package names are
-  verified for each distro.
+- **Desktop Nerd Font** — declared on the `desktop` profile as shared desktop
+  infrastructure, not as a Zed-owned dependency. Ghostty local overrides,
+  terminals, and editors can consume the same requirement. The primary macOS
+  package is the Homebrew cask `font-cascadia-code-nf`, detected through
+  `CascadiaCodeNF*` font files; compatible files such as
+  `CaskaydiaCoveNerdFont*` also satisfy the dependency. This is not VS Code
+  configuration management.
+
+`dots install` does not install packages. `dots deps plan` and the explicit
+`dots deps install` workflow can report/use Homebrew guidance where available;
+Linux package mappings are intentionally omitted until package names are
+verified for each distro.
 
 ## Portability classification
 
@@ -23,7 +31,7 @@ The live `~/.config/ghostty/config` file was classified before adoption:
 | Category | Examples | Repository decision |
 | --- | --- | --- |
 | **Portable** | Catppuccin Mocha palette, foreground/background/cursor/selection colors, split divider color, intentional keybindings for terminal workflow and Zellij/tmux forwarding | Managed in `configs/ghostty/config.ghostty`. |
-| **Machine-specific** | font family, font size, window dimensions, opacity/blur, window padding ergonomics, explicit shell/command paths, initial working directories, OS integrations, display/GPU/host-dependent behavior | Excluded from the shared file. Documented in `configs/ghostty/config.local.ghostty.example`. |
+| **Machine-specific** | font family, font size, window dimensions, opacity/blur, window padding ergonomics, explicit shell/command paths, initial working directories, OS integrations, display/GPU/host-dependent behavior | Excluded from the shared file. Font family can use the shared Desktop Nerd Font from local overrides; documented in `configs/ghostty/config.local.ghostty.example`. |
 | **Generated** | logs, caches, sessions, backups, temporary files, generated state, local shaders | Never committed. |
 | **Private** | secrets, authenticated state, private paths, hostnames, machine IDs | Excluded. |
 

@@ -2,7 +2,6 @@ package provision
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -93,9 +92,9 @@ func missingDependencies(prov manifest.Provisioner, look deps.Lookup, fontLook d
 	var missing []string
 	for _, dep := range prov.Dependencies {
 		if dep.IsFont() {
-			match := strings.TrimSpace(dep.FontMatch)
-			if !fontLook(match) {
-				missing = append(missing, match)
+			matches := dep.FontMatches()
+			if !fontDependencyPresent(matches, fontLook) {
+				missing = append(missing, fontDependencyLabel(matches))
 			}
 			continue
 		}
@@ -105,4 +104,20 @@ func missingDependencies(prov manifest.Provisioner, look deps.Lookup, fontLook d
 		}
 	}
 	return missing
+}
+
+func fontDependencyPresent(matches []string, fontLook deps.FontLookup) bool {
+	for _, match := range matches {
+		if fontLook(match) {
+			return true
+		}
+	}
+	return false
+}
+
+func fontDependencyLabel(matches []string) string {
+	if len(matches) == 0 {
+		return ""
+	}
+	return matches[0]
 }

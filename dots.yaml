@@ -7,6 +7,12 @@ profiles:
     tags:
       - core
       - desktop
+    dependencies:
+      - name: Desktop Nerd Font
+        brew_cask: font-cascadia-code-nf
+        font_match: "CascadiaCodeNF*"
+        font_fallback_matches:
+          - "CaskaydiaCoveNerdFont*"
 entries:
   - source: configs/zsh/zshrc
     target: ~/.zshrc
@@ -198,9 +204,6 @@ entries:
       - name: zed
         command: zed
         brew: zed
-      - name: CascadiaCode Nerd Font
-        brew_cask: font-cascadia-code-nf
-        font_match: "CascadiaCodeNF*"
   - source: configs/zed/keymap.json
     target: ~/.config/zed/keymap.json
     strategy: symlink

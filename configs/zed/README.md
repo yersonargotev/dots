@@ -17,9 +17,12 @@ compiled extensions stay outside version control.
 ## Prerequisites
 
 - **`zed`** — declared as an advisory dependency for the desktop profile.
-- **CaskaydiaCove Nerd Font** — declared as an advisory dependency. Zed degrades
-  to a fallback font when it is absent, so `dots install` does not fail when the
-  font is missing.
+- **Desktop Nerd Font** — declared on the `desktop` profile, not on Zed itself,
+  so Ghostty-only or other desktop slices can satisfy the same shared font
+  requirement without selecting Zed. The primary macOS package is the Homebrew
+  cask `font-cascadia-code-nf`, detected through `CascadiaCodeNF*` font files.
+  Compatible installed files such as `CaskaydiaCoveNerdFont*` also satisfy the
+  dependency. This does not manage VS Code configuration.
 
 `dots install` does not install packages. `dots deps plan` and the explicit
 `dots deps install` workflow can report/use Homebrew guidance where available;
@@ -53,7 +56,7 @@ The live `~/.config/zed/` directory was classified before adoption:
 | Category | Examples | Repository decision |
 | --- | --- | --- |
 | **Portable** | panel docks, `vim_mode`, `theme` (system/One Light/Catppuccin Mocha (blue)), `icon_theme`, `ui_font_family`, Copilot/agent preferences, declared extensions, the two intentional keybindings, the custom Catppuccin blue theme | Managed in `configs/zed/`. |
-| **Machine-specific** | `buffer_font_family` and font sizes. Zed has no user-level local include (no `settings.local.json`), so these stay in the shared `settings.json`; the font is declared as an advisory dependency instead of extracted. | Kept in `settings.json`; font handled via dependency declaration. |
+| **Machine-specific** | `buffer_font_family` and font sizes. Zed has no user-level local include (no `settings.local.json`), so these stay in the shared `settings.json`; the Nerd Font is modeled as a shared desktop advisory dependency instead of Zed-owned state. | Kept in `settings.json`; font handled via the desktop dependency declaration. |
 | **Generated** | `conversations/`, `prompts/`, compiled `extensions/`, extension index/DB, caches, logs | Never committed (see `.gitignore`). |
 | **Private** | secrets, authenticated state (Copilot auth lives outside the authored files), private paths, machine IDs | Excluded. |
 

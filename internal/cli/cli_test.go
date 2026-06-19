@@ -322,6 +322,83 @@ entries:
 	}
 }
 
+func TestDoctorCommandReportsProfileFontDependencyPresentThroughFallbackFile(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	srcPath := filepath.Join(sourceRoot, "configs/ghostty/config.ghostty")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte("theme = catppuccin-mocha\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	targetPath := filepath.Join(home, ".config", "ghostty", "config.ghostty")
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.Symlink(srcPath, targetPath); err != nil {
+		t.Fatalf("symlink target: %v", err)
+	}
+	for _, dir := range []string{
+		filepath.Join(home, "Library", "Fonts"),
+		filepath.Join(home, ".local", "share", "fonts"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("create font dir %q: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "CaskaydiaCoveNerdFont-Regular.ttf"), []byte("font"), 0o600); err != nil {
+			t.Fatalf("write fallback font: %v", err)
+		}
+	}
+
+	manifestPath := filepath.Join(home, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  desktop:
+    tags: [desktop]
+    dependencies:
+      - name: Desktop Nerd Font
+        brew_cask: font-cascadia-code-nf
+        font_match: "DefinitelyMissingCascadiaCodeNF*"
+        font_fallback_matches:
+          - "CaskaydiaCoveNerdFont*"
+entries:
+  - source: configs/ghostty/config.ghostty
+    target: ~/.config/ghostty/config.ghostty
+    strategy: symlink
+    tags: [desktop]
+`)
+	if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"doctor", "--file", manifestPath, "--profile", "desktop", "--home", home, "--source-root", sourceRoot})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`Doctor for profile "desktop"`,
+		"Dependencies: ok (1 present, 0 missing)",
+		"Configuration: ok (1 ok, 0 concerns)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("doctor output missing %q\noutput:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "missing dependency: Desktop Nerd Font") {
+		t.Fatalf("doctor output reported fallback font as missing\noutput:\n%s", got)
+	}
+}
+
 func TestPlanCommandFailsOnUnknownProfile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -1167,6 +1244,104 @@ entries:
 		"present  presenttool",
 		"missing  absenttool",
 		"Summary: 1 present, 1 missing",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("deps check output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
+func TestDepsCheckCommandReportsMissingFontWithFallbacks(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [desktop]
+entries:
+  - source: configs/zed/settings.json
+    target: ~/.config/zed/settings.json
+    strategy: symlink
+    tags: [desktop]
+    dependencies:
+      - name: Desktop Nerd Font
+        brew_cask: font-cascadia-code-nf
+        font_match: "DefinitelyMissingCascadiaCodeNF*"
+        font_fallback_matches:
+          - "DefinitelyMissingCaskaydiaCoveNerdFont*"
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`Dependencies for profile "default"`,
+		"missing  Desktop Nerd Font",
+		"Summary: 0 present, 1 missing",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("deps check output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
+func TestDepsCheckCommandDetectsFallbackFontFileInUserFontDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	for _, dir := range []string{
+		filepath.Join(home, "Library", "Fonts"),
+		filepath.Join(home, ".local", "share", "fonts"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("create font dir %q: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "CaskaydiaCoveNerdFont-Regular.ttf"), []byte("font"), 0o600); err != nil {
+			t.Fatalf("write fallback font: %v", err)
+		}
+	}
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [desktop]
+entries:
+  - source: configs/zed/settings.json
+    target: ~/.config/zed/settings.json
+    strategy: symlink
+    tags: [desktop]
+    dependencies:
+      - name: Desktop Nerd Font
+        brew_cask: font-cascadia-code-nf
+        font_match: "DefinitelyMissingCascadiaCodeNF*"
+        font_fallback_matches:
+          - "CaskaydiaCoveNerdFont*"
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`Dependencies for profile "default"`,
+		"present  Desktop Nerd Font",
+		"Summary: 1 present, 0 missing",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("deps check output missing %q\noutput:\n%s", want, got)
