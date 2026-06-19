@@ -54,6 +54,20 @@ type Report struct {
 	Entries []Entry
 }
 
+// HasFindings reports whether the Dotfiles Status contains any entry that
+// diverges from the Source of Truth and requires action: missing, conflict,
+// drifted, or unsupported. An ok or intentionally skipped entry is not a
+// finding.
+func (r Report) HasFindings() bool {
+	for _, e := range r.Entries {
+		switch e.State {
+		case StateMissing, StateConflict, StateDrifted, StateUnsupported:
+			return true
+		}
+	}
+	return false
+}
+
 // Options carries the resolved inputs needed to evaluate status.
 type Options struct {
 	Profile    string

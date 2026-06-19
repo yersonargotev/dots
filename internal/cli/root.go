@@ -14,6 +14,12 @@ func NewRootCommand() *cobra.Command {
 		Short:   "Dotfiles CLI",
 		Long:    "dots is the Dotfiles CLI for managing repository-owned workstation configuration.",
 		Version: version.Value,
+		// Run owns error presentation and exit-code mapping so a structured
+		// FindingsError is never printed as an "Error:" line. The read-only
+		// diagnostic commands set SilenceUsage themselves, so the root only
+		// silences errors and leaves cobra's usage-on-misuse intact for the
+		// other commands. See internal/cli/run.go.
+		SilenceErrors: true,
 	}
 	root.SetVersionTemplate("dots {{.Version}}\n")
 

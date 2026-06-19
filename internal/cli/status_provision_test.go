@@ -26,9 +26,9 @@ func TestStatusListsDeclaredProvisioners(t *testing.T) {
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
-	}
+	// The managed entries are not installed in this sandbox, so status reports
+	// them as missing: a finding.
+	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	for _, want := range []string{

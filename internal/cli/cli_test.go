@@ -195,9 +195,8 @@ entries:
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"plan", "--file", manifestPath})
 
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
+	// A declared source the Installed Repository does not provide is a finding.
+	requireFindings(t, cmd.Execute())
 
 	if got := out.String(); !strings.Contains(got, "Summary: 0 create, 0 conflict, 0 unchanged, 1 missing-source") {
 		t.Fatalf("plan output missing expected missing-source summary\noutput:\n%s", got)
@@ -298,9 +297,9 @@ entries:
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"doctor", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
+	// doctor surfaces warning diagnostics (a missing dependency), so it now
+	// returns findings.
+	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	for _, want := range []string{
@@ -1093,9 +1092,8 @@ entries:
 	statusCmd.SetOut(&out)
 	statusCmd.SetErr(&out)
 	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
-	if err := statusCmd.Execute(); err != nil {
-		t.Fatalf("status Execute() error = %v", err)
-	}
+	// The foreign target is a Conflict, so status now returns findings.
+	requireFindings(t, statusCmd.Execute())
 
 	if got := out.String(); !strings.Contains(got, "Summary: 0 ok, 0 missing, 1 conflict, 0 skipped, 0 drifted, 0 unsupported") {
 		t.Fatalf("status output missing expected conflict summary\noutput:\n%s", got)
@@ -1234,9 +1232,8 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
-	}
+	// A missing Dependency is a finding.
+	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	for _, want := range []string{
@@ -1278,9 +1275,8 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
-	}
+	// A missing Dependency is a finding.
+	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	for _, want := range []string{
@@ -1333,6 +1329,7 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
+	// The fallback font is present, so every Dependency is satisfied: no findings.
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
@@ -1380,9 +1377,8 @@ entries:
 	cmd.SetErr(&out)
 	// --tier makes the guidance deterministic regardless of the test host.
 	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "debian"})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
-	}
+	// The plan lists missing Dependencies, which is a finding.
+	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	for _, want := range []string{
@@ -1422,9 +1418,8 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "Debian"})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
-	}
+	// The plan lists missing Dependencies, which is a finding.
+	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	if !strings.Contains(got, `(debian)`) || !strings.Contains(got, "sudo apt-get install starship") {
@@ -1507,9 +1502,8 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"deps", "--profile", "desktop", "check", "--file", manifestPath})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
-	}
+	// A missing Dependency under the desktop profile is a finding.
+	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	for _, want := range []string{`Dependencies for profile "desktop"`, "missing  desktop-only-tool"} {

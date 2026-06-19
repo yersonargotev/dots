@@ -24,6 +24,17 @@ type CheckReport struct {
 	Items   []Readiness
 }
 
+// HasFindings reports whether any selected Provisioner is missing a dependency
+// and is therefore not ready to run.
+func (r CheckReport) HasFindings() bool {
+	for _, item := range r.Items {
+		if len(item.Missing) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Check reports each selected Provisioner's resolved command and dependency
 // readiness without invoking any tool. It is the read-only diagnostic surfaced
 // by dots doctor.

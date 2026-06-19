@@ -42,6 +42,13 @@ type PlanReport struct {
 	Items   []Guidance
 }
 
+// HasFindings reports whether the Dependency Plan lists any missing Dependency.
+// A PlanReport only carries guidance for absent Dependencies, so a non-empty
+// plan is itself the finding.
+func (r PlanReport) HasFindings() bool {
+	return len(r.Items) > 0
+}
+
 // Plan computes advisory installation guidance for the Dependencies that the
 // Profile needs but the workstation is missing, tailored to the active Tier.
 func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, tier Tier) (PlanReport, error) {

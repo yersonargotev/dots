@@ -57,9 +57,8 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"status", "--profile", "desktop", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("status Execute() error = %v\noutput:\n%s", err, out.String())
-	}
+	// The Zed targets are Conflicts, so status now returns findings.
+	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	for _, want := range []string{
