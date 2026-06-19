@@ -350,6 +350,40 @@ func validateCodexSpec(s ProvisionerSpec, i int) error {
 	return nil
 }
 
+// SharesTag reports whether an item's tags intersect a profile's tags. It is
+// half the profile-scoping rule entries and provisioners share: an item belongs
+// to a profile when at least one of its tags matches one of the profile's tags.
+// Centralizing it here keeps plan, status, deps, doctor, and provision filtering
+// through one rule instead of each carrying its own copy.
+func SharesTag(itemTags, profileTags []string) bool {
+	for _, it := range itemTags {
+		for _, pt := range profileTags {
+			if it == pt {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// MatchesOS reports whether an item's OS filter admits the current OS. An empty
+// filter matches every OS. The comparison is case-insensitive so a manifest that
+// declared an OS in mixed case still matches runtime.GOOS, which is always
+// lowercase; validation already constrains OS values to lowercase darwin/linux,
+// so this is defensive rather than load-bearing. It is the other half of the
+// profile-scoping rule SharesTag begins.
+func MatchesOS(itemOS []string, currentOS string) bool {
+	if len(itemOS) == 0 {
+		return true
+	}
+	for _, osName := range itemOS {
+		if strings.EqualFold(osName, currentOS) {
+			return true
+		}
+	}
+	return false
+}
+
 func indexOfEmptyTag(tags []string) (int, bool) {
 	return indexOfEmptyString(tags)
 }

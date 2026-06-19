@@ -70,12 +70,12 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 
 	report := Report{Profile: opts.Profile}
 	for _, entry := range m.Entries {
-		if !sharesTag(entry.Tags, profile.Tags) {
+		if !manifest.SharesTag(entry.Tags, profile.Tags) {
 			continue
 		}
 
 		evaluated := Entry{Source: entry.Source, Target: entry.Target, Strategy: entry.Strategy}
-		if !matchesOS(entry.OS, opts.OS) {
+		if !manifest.MatchesOS(entry.OS, opts.OS) {
 			evaluated.State = StateSkipped
 			report.Entries = append(report.Entries, evaluated)
 			continue
@@ -191,27 +191,4 @@ func sameContent(a, b string) (bool, error) {
 		return false, fmt.Errorf("read %s: %w", b, err)
 	}
 	return bytes.Equal(da, db), nil
-}
-
-func sharesTag(entryTags, profileTags []string) bool {
-	for _, et := range entryTags {
-		for _, pt := range profileTags {
-			if et == pt {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchesOS(entryOS []string, current string) bool {
-	if len(entryOS) == 0 {
-		return true
-	}
-	for _, osName := range entryOS {
-		if osName == current {
-			return true
-		}
-	}
-	return false
 }

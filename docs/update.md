@@ -71,7 +71,13 @@ To keep that requirement discoverable, both `install` and `update` print a one-l
 Note: profile "default" skips 3 provisioner(s); run with --profile desktop to include them.
 ```
 
-The hint also appears in `--dry-run`, so you can see what a profile omits before committing to it. The fuller profile that already selects every provisioner prints no hint.
+File entries are profile-scoped the same way, and the `default` profile silently omits the `desktop`-tagged ones (the Ghostty and Zed configs, plus the OpenCode MCP overlay). To close the same discoverability gap, both commands print a parallel hint for skipped file entries:
+
+```
+Note: profile "default" skips 5 file entries; run with --profile desktop to include them.
+```
+
+Both hints also appear in `--dry-run`, so you can see what a profile omits before committing to it. The fuller profile that already selects every entry and provisioner prints no hint.
 
 ## References
 

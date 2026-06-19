@@ -2,9 +2,9 @@ package provision
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/profilesel"
 )
 
 // Options carries the resolved inputs needed to select and plan Provisioners.
@@ -61,97 +61,23 @@ func selectedIndices(m manifest.Manifest, profileName, os string) (map[int]bool,
 
 	indices := make(map[int]bool)
 	for i, prov := range m.Provisioners {
-		if sharesTag(prov.Tags, profile.Tags) && matchesOS(prov.OS, os) {
+		if manifest.SharesTag(prov.Tags, profile.Tags) && manifest.MatchesOS(prov.OS, os) {
 			indices[i] = true
 		}
 	}
 	return indices, nil
 }
 
-// SkippedHint describes provisioners the active profile omits that some other
-// profile would select on this OS, so the CLI can nudge the user toward the
-// fuller profile instead of silently dropping them.
-type SkippedHint struct {
-	// Profile is the active profile being installed.
-	Profile string
-	// Count is how many of the skipped provisioners SuggestedProfile would
-	// recover. It is intentionally the suggested profile's coverage, not the
-	// union of omissions across every profile, so the "run --profile S to
-	// include them" nudge is always exact and never promises more than S
-	// delivers. In the nested-profile model dots uses (e.g. desktop ⊇ default)
-	// the most complete profile recovers everything, so Count equals the total
-	// the active profile omits.
-	Count int
-	// SuggestedProfile is the other profile that covers the most skipped
-	// provisioners — the single most complete profile worth recommending.
-	SuggestedProfile string
-}
-
 // SkippedProvisioners reports whether the active profile omits provisioners that
-// another profile would select on this OS, and which single profile best
-// recovers them. The second return is false (with a zero hint) when nothing is
-// skipped — either the active profile already selects everything, or the OS
-// filter excludes the extras for every profile so switching profiles would not
-// recover them. The reported Count is the suggested profile's coverage of the
-// skipped set, so the caller's remediation message stays accurate even when no
-// single profile is a superset of every omission. It is PURE: no I/O, safe in a
-// dry-run, and mirrors the tag/OS scoping used by Select.
-func SkippedProvisioners(m manifest.Manifest, opts Options) (SkippedHint, bool, error) {
-	active, err := selectedIndices(m, opts.Profile, opts.OS)
-	if err != nil {
-		return SkippedHint{}, false, err
-	}
-
-	others := make([]string, 0, len(m.Profiles))
-	for name := range m.Profiles {
-		if name != opts.Profile {
-			others = append(others, name)
-		}
-	}
-	// Sort so the suggested profile is deterministic on ties (first by name).
-	sort.Strings(others)
-
-	selections := make(map[string]map[int]bool, len(others))
-	skipped := make(map[int]bool)
-	for _, name := range others {
-		sel, err := selectedIndices(m, name, opts.OS)
-		if err != nil {
-			return SkippedHint{}, false, err
-		}
-		selections[name] = sel
-		for i := range sel {
-			if !active[i] {
-				skipped[i] = true
-			}
-		}
-	}
-
-	if len(skipped) == 0 {
-		return SkippedHint{}, false, nil
-	}
-
-	var (
-		suggested string
-		best      int
-	)
-	for _, name := range others {
-		covered := 0
-		for i := range selections[name] {
-			if skipped[i] {
-				covered++
-			}
-		}
-		if covered > best {
-			best = covered
-			suggested = name
-		}
-	}
-
-	// best is the suggested profile's coverage of the skipped set, and is >= 1
-	// whenever skipped is non-empty: every skipped index came from some other
-	// profile's selection, so that profile covers it. Reporting best (not
-	// len(skipped)) keeps "run --profile S to include them" exact.
-	return SkippedHint{Profile: opts.Profile, Count: best, SuggestedProfile: suggested}, true, nil
+// another profile would select on this OS, and which single profile best recovers
+// them. It is a thin adapter over profilesel.Skipped, injecting the provisioner
+// index selection; plan.SkippedEntries is its file-entry twin over the same
+// shared math. It is PURE: no I/O, safe in a dry-run, and mirrors the tag/OS
+// scoping used by Select.
+func SkippedProvisioners(m manifest.Manifest, opts Options) (profilesel.Hint, bool, error) {
+	return profilesel.Skipped(m.Profiles, opts.Profile, opts.OS, func(name, os string) (map[int]bool, error) {
+		return selectedIndices(m, name, os)
+	})
 }
 
 // Build resolves every selected Provisioner into its exact command and the
@@ -205,29 +131,6 @@ func managedRoots(prov manifest.Provisioner) []string {
 func includes(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
-func sharesTag(provTags, profileTags []string) bool {
-	for _, pt := range provTags {
-		for _, prt := range profileTags {
-			if pt == prt {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchesOS(provOS []string, current string) bool {
-	if len(provOS) == 0 {
-		return true
-	}
-	for _, osName := range provOS {
-		if osName == current {
 			return true
 		}
 	}

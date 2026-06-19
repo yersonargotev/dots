@@ -56,10 +56,10 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 
 	plan := Plan{Profile: opts.Profile}
 	for _, entry := range m.Entries {
-		if !sharesTag(entry.Tags, profile.Tags) {
+		if !manifest.SharesTag(entry.Tags, profile.Tags) {
 			continue
 		}
-		if !matchesOS(entry.OS, opts.OS) {
+		if !manifest.MatchesOS(entry.OS, opts.OS) {
 			continue
 		}
 
@@ -85,29 +85,6 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	}
 
 	return plan, nil
-}
-
-func sharesTag(entryTags, profileTags []string) bool {
-	for _, et := range entryTags {
-		for _, pt := range profileTags {
-			if et == pt {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchesOS(entryOS []string, current string) bool {
-	if len(entryOS) == 0 {
-		return true
-	}
-	for _, osName := range entryOS {
-		if osName == current {
-			return true
-		}
-	}
-	return false
 }
 
 // ResolveTarget resolves a manifest target inside home. Targets are deliberately

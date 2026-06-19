@@ -58,6 +58,9 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			renderPlan(cmd.OutOrStdout(), p)
+			if err := renderSkippedEntryHint(cmd.OutOrStdout(), *m, profile, runtime.GOOS); err != nil {
+				return err
+			}
 
 			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
 			if err != nil {
