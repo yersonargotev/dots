@@ -9,6 +9,7 @@
 3. **Fast-forwards only.** `update` fetches the upstream and advances the branch with `git merge --ff-only`. If the branch has diverged from its upstream, it cannot be fast-forwarded; `update` reports the divergence and asks you to resolve it manually with Git. It never performs an automatic merge or rebase.
 4. **Recomputes the Install Plan.** After the fast-forward, the manifest is loaded from the updated repository (so a manifest change pulled from upstream is honored) and a fresh Install Plan is computed against the current workstation state, surfacing any new Conflicts or Drift.
 5. **Applies safely.** The post-update install resolves conflicts exactly like `dots install`: interactive TUI by default, text prompts with `--no-tui`, or the conservative skip default with `--yes`. Any `replace` still creates a [Backup Set](../CONTEXT.md) before touching an existing target.
+6. **Runs provisioners.** After the file plan is applied, `update` runs the same provisioners `install` would for the active profile, so provisioner-managed agent configuration (gentle-ai regen, Claude plugins, Codex MCP server) stays aligned with the Source of Truth. Provisioners run only when the file apply was not canceled; a `--dry-run` renders the Provisioners plan section without executing anything. If conflict resolution is canceled, the whole run aborts before any provisioner can mutate tool-managed config.
 
 ## Versioning model
 
@@ -59,6 +60,18 @@ Installed Repository can fast-forward a1b2c3d -> e4f5a6b:
 ```
 
 Because no fast-forward is applied in a dry run, the rendered plan reflects the **current** Source of Truth, not the post-update state. Run `update` without `--dry-run` to apply the fast-forward and compute the plan against the updated repository.
+
+## Profiles and provisioners
+
+Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects only `core`-tagged provisioners (gentle-ai); the chrome-devtools integration for Claude, Codex, and the OpenCode overlay is tagged `desktop` and is only provisioned under `--profile desktop`. This is design-intent — chrome-devtools drives a real browser and does not belong in headless or server installs.
+
+To keep that requirement discoverable, both `install` and `update` print a one-line hint when the active profile skips provisioners another profile would select on this OS:
+
+```
+Note: profile "default" skips 3 provisioner(s); run with --profile desktop to include them.
+```
+
+The hint also appears in `--dry-run`, so you can see what a profile omits before committing to it. The fuller profile that already selects every provisioner prints no hint.
 
 ## References
 

@@ -11,6 +11,7 @@ import (
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/provision"
 )
 
 func newUpdateCommand() *cobra.Command {
@@ -29,10 +30,11 @@ func newUpdateCommand() *cobra.Command {
 		Use:   "update",
 		Short: "Update the Installed Repository and re-run the safe install flow",
 		Long: "update fast-forwards the Installed Repository (default ~/.local/share/dots) to its " +
-			"upstream, then recomputes the Install Plan so managed configuration stays aligned with " +
-			"the Source of Truth. It refuses to touch a repository with local changes and only ever " +
-			"applies a clean fast-forward, never a merge or rebase. Conflicts during the post-update " +
-			"install are resolved exactly like dots install, creating a Backup Set before any replacement.",
+			"upstream, then recomputes the Install Plan and re-runs the selected provisioners so managed " +
+			"configuration stays aligned with the Source of Truth. It refuses to touch a repository with " +
+			"local changes and only ever applies a clean fast-forward, never a merge or rebase. Conflicts " +
+			"during the post-update install are resolved exactly like dots install, creating a Backup Set " +
+			"before any replacement.",
 		// Domain failures (dirty repo, divergence, conflicts) are user-facing
 		// conditions, not command misuse, so do not dump the usage block.
 		SilenceUsage: true,
@@ -81,12 +83,32 @@ func newUpdateCommand() *cobra.Command {
 			}
 
 			renderPlan(out, p)
+
+			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
+			if err != nil {
+				return err
+			}
+			renderProvisionPlan(out, provPlan)
+			if err := renderSkippedProvisionerHint(out, *m, profile, runtime.GOOS); err != nil {
+				return err
+			}
+
 			if dryRun {
 				return nil
 			}
 
-			_, err = resolveAndApply(cmd, p, paths, yes, noTUI)
-			return err
+			applied, err := resolveAndApply(cmd, p, paths, yes, noTUI)
+			if err != nil {
+				return err
+			}
+			if !applied {
+				return nil
+			}
+
+			// Mirror install: managed agent configuration stays aligned with the
+			// Source of Truth only if the same provisioners install runs are
+			// re-applied after an update, not just the file plan.
+			return runProvisioners(cmd, *m, profile, paths.Home)
 		},
 	}
 

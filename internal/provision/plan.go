@@ -2,6 +2,7 @@ package provision
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 )
@@ -33,22 +34,112 @@ type Plan struct {
 // intersect the Profile's tags) and pass the OS filter, preserving manifest
 // order. It mirrors the Entry selection used by deps, plan, and status.
 func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
-	profile, ok := m.Profiles[opts.Profile]
-	if !ok {
-		return nil, fmt.Errorf("profile %q not found", opts.Profile)
+	indices, err := selectedIndices(m, opts.Profile, opts.OS)
+	if err != nil {
+		return nil, err
 	}
 
 	var selected []manifest.Provisioner
-	for _, prov := range m.Provisioners {
-		if !sharesTag(prov.Tags, profile.Tags) {
-			continue
+	for i, prov := range m.Provisioners {
+		if indices[i] {
+			selected = append(selected, prov)
 		}
-		if !matchesOS(prov.OS, opts.OS) {
-			continue
-		}
-		selected = append(selected, prov)
 	}
 	return selected, nil
+}
+
+// selectedIndices returns the set of m.Provisioners positions a profile would
+// select on the given OS. Working in index space lets callers reason about
+// provisioner identity across profiles (which provisioner, not just how many)
+// without depending on struct equality, and keeps Select and SkippedProvisioners
+// filtering through one tag/OS rule.
+func selectedIndices(m manifest.Manifest, profileName, os string) (map[int]bool, error) {
+	profile, ok := m.Profiles[profileName]
+	if !ok {
+		return nil, fmt.Errorf("profile %q not found", profileName)
+	}
+
+	indices := make(map[int]bool)
+	for i, prov := range m.Provisioners {
+		if sharesTag(prov.Tags, profile.Tags) && matchesOS(prov.OS, os) {
+			indices[i] = true
+		}
+	}
+	return indices, nil
+}
+
+// SkippedHint describes provisioners the active profile omits that some other
+// profile would select on this OS, so the CLI can nudge the user toward the
+// fuller profile instead of silently dropping them.
+type SkippedHint struct {
+	// Profile is the active profile being installed.
+	Profile string
+	// Count is how many provisioners the active profile skips that at least one
+	// other profile would include.
+	Count int
+	// SuggestedProfile is the other profile that covers the most skipped
+	// provisioners — the one worth recommending to recover them.
+	SuggestedProfile string
+}
+
+// SkippedProvisioners reports whether the active profile omits provisioners that
+// another profile would select on this OS. The second return is false (with a
+// zero hint) when nothing is skipped — either the active profile already selects
+// everything, or the OS filter excludes the extras for every profile so
+// switching profiles would not recover them. It is PURE: no I/O, safe in a
+// dry-run, and mirrors the tag/OS scoping used by Select.
+func SkippedProvisioners(m manifest.Manifest, opts Options) (SkippedHint, bool, error) {
+	active, err := selectedIndices(m, opts.Profile, opts.OS)
+	if err != nil {
+		return SkippedHint{}, false, err
+	}
+
+	others := make([]string, 0, len(m.Profiles))
+	for name := range m.Profiles {
+		if name != opts.Profile {
+			others = append(others, name)
+		}
+	}
+	// Sort so the suggested profile is deterministic on ties (first by name).
+	sort.Strings(others)
+
+	selections := make(map[string]map[int]bool, len(others))
+	skipped := make(map[int]bool)
+	for _, name := range others {
+		sel, err := selectedIndices(m, name, opts.OS)
+		if err != nil {
+			return SkippedHint{}, false, err
+		}
+		selections[name] = sel
+		for i := range sel {
+			if !active[i] {
+				skipped[i] = true
+			}
+		}
+	}
+
+	if len(skipped) == 0 {
+		return SkippedHint{}, false, nil
+	}
+
+	var (
+		suggested string
+		best      int
+	)
+	for _, name := range others {
+		covered := 0
+		for i := range selections[name] {
+			if skipped[i] {
+				covered++
+			}
+		}
+		if covered > best {
+			best = covered
+			suggested = name
+		}
+	}
+
+	return SkippedHint{Profile: opts.Profile, Count: len(skipped), SuggestedProfile: suggested}, true, nil
 }
 
 // Build resolves every selected Provisioner into its exact command and the
