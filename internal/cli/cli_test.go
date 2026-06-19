@@ -28,6 +28,38 @@ func TestRootHelpIdentifiesDotsCLI(t *testing.T) {
 	}
 }
 
+func TestRootVersionFlagReportsDevelopmentVersion(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--version"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if got, want := strings.TrimSpace(out.String()), "dots dev"; got != want {
+		t.Fatalf("version output = %q, want %q", got, want)
+	}
+}
+
+func TestVersionCommandReportsDevelopmentVersion(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"version"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if got, want := strings.TrimSpace(out.String()), "dots dev"; got != want {
+		t.Fatalf("version output = %q, want %q", got, want)
+	}
+}
+
 func TestPlanCommandRendersPreviewForResolvedEnvironment(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()

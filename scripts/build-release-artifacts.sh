@@ -66,7 +66,7 @@ for platform in "${platforms[@]}"; do
   artifact="dots_${version}_${goos}_${goarch}"
   echo "building ${artifact}"
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-    go build -trimpath -ldflags="-s -w" -o "$out_dir/$artifact" ./cmd/dots
+    go build -trimpath -ldflags="-s -w -X github.com/yersonargotev/dots/internal/version.Value=${version}" -o "$out_dir/$artifact" ./cmd/dots
   artifacts+=("$artifact")
 done
 

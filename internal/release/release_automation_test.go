@@ -214,6 +214,14 @@ func TestBuildReleaseArtifactsValidatesReleaseVersionLikeWorkflow(t *testing.T) 
 				if _, err := os.Stat(logPath); err != nil {
 					t.Fatalf("expected accepted version %s to reach go build: %v", version, err)
 				}
+				log, err := os.ReadFile(logPath)
+				if err != nil {
+					t.Fatalf("read go build log: %v", err)
+				}
+				wantLdflag := "-X github.com/yersonargotev/dots/internal/version.Value=" + version
+				if !strings.Contains(string(log), wantLdflag) {
+					t.Fatalf("release build should inject version with ldflags %q\nlog:\n%s", wantLdflag, log)
+				}
 			})
 		}
 	})
@@ -291,7 +299,7 @@ func TestGenerateHomebrewFormulaUsesChecksummedReleaseArtifacts(t *testing.T) {
 		`url "https://github.com/yersonargotev/dots/releases/download/v0.99.0/dots_v0.99.0_linux_arm64", using: :nounzip`,
 		`sha256 "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"`,
 		`bin.install downloaded_binary => "dots"`,
-		`system "#{bin}/dots", "--help"`,
+		`system "#{bin}/dots", "--version"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("formula should contain %q\nformula:\n%s", want, text)
