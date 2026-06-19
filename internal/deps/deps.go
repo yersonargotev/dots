@@ -100,45 +100,22 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 	}
 
 	for _, entry := range m.Entries {
-		if !sharesTag(entry.Tags, profile.Tags) {
+		if !manifest.SharesTag(entry.Tags, profile.Tags) {
 			continue
 		}
-		if !matchesOS(entry.OS, opts.OS) {
+		if !manifest.MatchesOS(entry.OS, opts.OS) {
 			continue
 		}
 		addDependencies(entry.Dependencies)
 	}
 	for _, prov := range m.Provisioners {
-		if !sharesTag(prov.Tags, profile.Tags) {
+		if !manifest.SharesTag(prov.Tags, profile.Tags) {
 			continue
 		}
-		if !matchesOS(prov.OS, opts.OS) {
+		if !manifest.MatchesOS(prov.OS, opts.OS) {
 			continue
 		}
 		addDependencies(prov.Dependencies)
 	}
 	return selected, nil
-}
-
-func sharesTag(entryTags, profileTags []string) bool {
-	for _, et := range entryTags {
-		for _, pt := range profileTags {
-			if et == pt {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchesOS(entryOS []string, current string) bool {
-	if len(entryOS) == 0 {
-		return true
-	}
-	for _, osName := range entryOS {
-		if osName == current {
-			return true
-		}
-	}
-	return false
 }

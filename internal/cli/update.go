@@ -83,6 +83,9 @@ func newUpdateCommand() *cobra.Command {
 			}
 
 			renderPlan(out, p)
+			if err := renderSkippedEntryHint(out, *m, profile, runtime.GOOS); err != nil {
+				return err
+			}
 
 			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
 			if err != nil {

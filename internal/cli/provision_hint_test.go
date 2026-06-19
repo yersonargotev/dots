@@ -47,6 +47,104 @@ provisioners:
       - name: codex
 `
 
+const skippedEntryHintManifest = `version: 1
+profiles:
+  default:
+    tags: [core]
+  desktop:
+    tags: [core, desktop]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+  - source: configs/ghostty/config.ghostty
+    target: ~/.config/ghostty/config
+    strategy: symlink
+    tags: [desktop]
+  - source: configs/zed/settings.json
+    target: ~/.config/zed/settings.json
+    strategy: symlink
+    tags: [desktop]
+`
+
+// TestInstallDryRunHintsSkippedDesktopEntries proves the default profile surfaces
+// a one-line nudge naming the fuller profile that would include the desktop-only
+// file entries it silently skips, in parallel with the provisioner hint.
+func TestInstallDryRunHintsSkippedDesktopEntries(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	writeCLISource(t, sourceRoot, "configs/ghostty/config.ghostty", "ghostty\n")
+	writeCLISource(t, sourceRoot, "configs/zed/settings.json", "{}\n")
+	manifestPath := writeCLIManifest(t, home, skippedEntryHintManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--dry-run", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	want := `Note: profile "default" skips 2 file entries; run with --profile desktop to include them.`
+	if !strings.Contains(out.String(), want) {
+		t.Fatalf("install --dry-run output missing skipped-entry hint %q\noutput:\n%s", want, out.String())
+	}
+}
+
+// TestInstallDesktopProfileShowsNoSkippedEntryHint proves the profile that
+// already selects every entry stays quiet — no spurious nudge.
+func TestInstallDesktopProfileShowsNoSkippedEntryHint(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	writeCLISource(t, sourceRoot, "configs/ghostty/config.ghostty", "ghostty\n")
+	writeCLISource(t, sourceRoot, "configs/zed/settings.json", "{}\n")
+	manifestPath := writeCLIManifest(t, home, skippedEntryHintManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--dry-run", "--profile", "desktop", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	if strings.Contains(out.String(), "skips") {
+		t.Fatalf("desktop profile should not show a skipped-entry hint\noutput:\n%s", out.String())
+	}
+}
+
+// TestUpdateDryRunHintsSkippedDesktopEntries proves the file-entry hint reaches
+// the update path too, not just install.
+func TestUpdateDryRunHintsSkippedDesktopEntries(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/zsh/zshrc":              "managed\n",
+		"configs/ghostty/config.ghostty": "ghostty\n",
+		"configs/zed/settings.json":      "{}\n",
+		"dots.yaml":                      skippedEntryHintManifest,
+	})
+
+	out := runUpdate(t, "--dry-run", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot)
+
+	want := `Note: profile "default" skips 2 file entries; run with --profile desktop to include them.`
+	if !strings.Contains(out, want) {
+		t.Fatalf("update --dry-run output missing skipped-entry hint %q\noutput:\n%s", want, out)
+	}
+}
+
 // TestInstallDryRunHintsSkippedDesktopProvisioners proves the default profile
 // surfaces a one-line nudge naming the fuller profile that would include the
 // desktop-only provisioners it silently skips.

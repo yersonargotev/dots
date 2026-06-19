@@ -120,7 +120,7 @@ func ScanSecrets(m manifest.Manifest, opts Options) (SecretReport, error) {
 	var report SecretReport
 	seen := map[string]bool{}
 	for _, entry := range m.Entries {
-		if !sharesTag(entry.Tags, profile.Tags) || !matchesOS(entry.OS, opts.OS) || seen[entry.Source] {
+		if !manifest.SharesTag(entry.Tags, profile.Tags) || !manifest.MatchesOS(entry.OS, opts.OS) || seen[entry.Source] {
 			continue
 		}
 		seen[entry.Source] = true
@@ -217,29 +217,6 @@ func looksLikePlaceholder(text string) bool {
 	lower := strings.ToLower(text)
 	for _, marker := range []string{"example", "placeholder", "replace_me", "changeme", "your_", "dummy"} {
 		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
-}
-
-func sharesTag(entryTags, profileTags []string) bool {
-	for _, et := range entryTags {
-		for _, pt := range profileTags {
-			if et == pt {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchesOS(entryOS []string, current string) bool {
-	if len(entryOS) == 0 {
-		return true
-	}
-	for _, osName := range entryOS {
-		if strings.EqualFold(osName, current) {
 			return true
 		}
 	}

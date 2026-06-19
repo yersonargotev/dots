@@ -37,11 +37,10 @@ func renderProvisionPlan(w io.Writer, p provision.Plan) {
 // profile is already validated upstream by plan.Build, so an error here only
 // signals a programming mistake and is surfaced rather than swallowed.
 //
-// Scope is deliberately provisioner-only: it targets the silent
-// agent-provisioning gap from issue #85 (chrome-devtools for Claude, Codex, and
-// the OpenCode overlay). File entries are profile-scoped the same way and are a
-// candidate for the same nudge, but that is a separate surface and is out of
-// scope here.
+// Scope is provisioner-only by design; renderSkippedEntryHint is its file-entry
+// twin. Keeping them as two functions over two surfaces (issue #85 covered the
+// agent-provisioning gap, issue #87 the file entries) lets each name exactly what
+// it omits and keeps this already-shipped message stable.
 //
 // SuggestedProfile is rendered with %s, not %q: it is a copy-pasteable shell
 // argument the user types as `--profile desktop`, so it is intentionally
