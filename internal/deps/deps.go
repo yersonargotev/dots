@@ -21,6 +21,9 @@ type Lookup func(command string) bool
 // parallel to Lookup, so font dependency checks stay deterministic in tests.
 type FontLookup func(match string) bool
 
+// CommandRunner executes a read-only tool probe and returns its combined output.
+type CommandRunner func(command string, args ...string) (string, error)
+
 // Options carries the resolved inputs needed to select Dependencies.
 type Options struct {
 	Profile string
@@ -29,9 +32,12 @@ type Options struct {
 
 // Result is the presence finding for a single declared Dependency.
 type Result struct {
-	Name    string
-	Command string
-	Present bool
+	Name        string
+	Command     string
+	Present     bool
+	Warning     string
+	ProbeDetail string
+	Hint        string
 }
 
 // CheckReport is the Dependency presence report for a Profile.
@@ -44,6 +50,12 @@ type CheckReport struct {
 // Entries and Provisioners are present on the workstation. Dependencies are
 // deduplicated by name in first-declared order.
 func Check(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup) (CheckReport, error) {
+	return CheckWithToolProbes(m, opts, look, fontLook, nil)
+}
+
+// CheckWithToolProbes reports Dependency presence and, for selected tools whose
+// PATH presence is not enough, runs read-only executable probes.
+func CheckWithToolProbes(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, run CommandRunner) (CheckReport, error) {
 	selected, err := selectDependencies(m, opts)
 	if err != nil {
 		return CheckReport{}, err
@@ -52,6 +64,7 @@ func Check(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup) 
 	report := CheckReport{Profile: opts.Profile}
 	for _, dep := range selected {
 		result := checkResult(dep, look, fontLook)
+		probeToolchain(&result, opts, run)
 		report.Results = append(report.Results, result)
 	}
 	return report, nil
@@ -73,6 +86,37 @@ func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Resu
 	}
 	probe := dep.Probe()
 	return Result{Name: dep.Name, Command: probe, Present: look(probe)}
+}
+
+const maxProbeDetailLen = 240
+
+func probeToolchain(result *Result, opts Options, run CommandRunner) {
+	if run == nil || !result.Present || result.Command != "git" {
+		return
+	}
+
+	output, err := run("git", "--version")
+	if err == nil {
+		return
+	}
+
+	result.Warning = "git resolved on PATH but `git --version` failed"
+	result.ProbeDetail = probeDetail(output, err)
+	if opts.OS == "darwin" && strings.Contains(output, "xcrun: error: invalid active developer path") {
+		result.Hint = "Repair Xcode Command Line Tools with `xcode-select --install` or reinstall them, then rerun `dots doctor`."
+	}
+}
+
+func probeDetail(output string, err error) string {
+	source := output
+	if strings.TrimSpace(source) == "" && err != nil {
+		source = err.Error()
+	}
+	detail := strings.Join(strings.Fields(source), " ")
+	if len(detail) <= maxProbeDetailLen {
+		return detail
+	}
+	return detail[:maxProbeDetailLen-len("...")] + "..."
 }
 
 // selectDependencies gathers the Dependencies of every Managed Entry and

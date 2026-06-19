@@ -236,6 +236,12 @@ func lookupCommand(command string) bool {
 	return err == nil
 }
 
+func commandOutput(command string, args ...string) (string, error) {
+	cmd := exec.Command(command, args...)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
+}
+
 // fontDirectories returns the workstation directories that hold installed font
 // files for the given OS, rooting the per-user locations at home. A font
 // declared as a Dependency is detected by scanning these for a matching file.
