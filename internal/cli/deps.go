@@ -17,22 +17,22 @@ import (
 )
 
 func newDepsCommand() *cobra.Command {
+	var profile string
+
 	cmd := &cobra.Command{
 		Use:   "deps",
 		Short: "Inspect external tool Dependencies declared by managed entries",
 		Long:  "deps reports which external Dependencies a profile needs, offers OS-aware installation guidance, and can execute missing install actions with explicit confirmation.",
 	}
-	cmd.AddCommand(newDepsCheckCommand())
-	cmd.AddCommand(newDepsPlanCommand())
-	cmd.AddCommand(newDepsInstallCommand())
+	cmd.PersistentFlags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
+	cmd.AddCommand(newDepsCheckCommand(&profile))
+	cmd.AddCommand(newDepsPlanCommand(&profile))
+	cmd.AddCommand(newDepsInstallCommand(&profile))
 	return cmd
 }
 
-func newDepsCheckCommand() *cobra.Command {
-	var (
-		file    string
-		profile string
-	)
+func newDepsCheckCommand(profile *string) *cobra.Command {
+	var file string
 
 	cmd := &cobra.Command{
 		Use:   "check",
@@ -48,7 +48,7 @@ func newDepsCheckCommand() *cobra.Command {
 
 			home, _ := os.UserHomeDir()
 			report, err := deps.Check(*m, deps.Options{
-				Profile: profile,
+				Profile: *profile,
 				OS:      runtime.GOOS,
 			}, lookupCommand, fontInstalled(runtime.GOOS, home))
 			if err != nil {
@@ -61,15 +61,13 @@ func newDepsCheckCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
-	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
 	return cmd
 }
 
-func newDepsPlanCommand() *cobra.Command {
+func newDepsPlanCommand(profile *string) *cobra.Command {
 	var (
-		file    string
-		profile string
-		tier    string
+		file string
+		tier string
 	)
 
 	cmd := &cobra.Command{
@@ -92,7 +90,7 @@ func newDepsPlanCommand() *cobra.Command {
 
 			home, _ := os.UserHomeDir()
 			report, err := deps.Plan(*m, deps.Options{
-				Profile: profile,
+				Profile: *profile,
 				OS:      runtime.GOOS,
 			}, lookupCommand, fontInstalled(runtime.GOOS, home), resolvedTier)
 			if err != nil {
@@ -105,18 +103,16 @@ func newDepsPlanCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
-	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
 	cmd.Flags().StringVar(&tier, "tier", "", "override the dependency plan tier (homebrew, debian, fedora, arch, generic); default: auto-detect from the host")
 	return cmd
 }
 
-func newDepsInstallCommand() *cobra.Command {
+func newDepsInstallCommand(profile *string) *cobra.Command {
 	var (
-		file    string
-		profile string
-		tier    string
-		dryRun  bool
-		yes     bool
+		file   string
+		tier   string
+		dryRun bool
+		yes    bool
 	)
 
 	cmd := &cobra.Command{
@@ -137,7 +133,7 @@ func newDepsInstallCommand() *cobra.Command {
 			}
 
 			options := deps.Options{
-				Profile: profile,
+				Profile: *profile,
 				OS:      runtime.GOOS,
 			}
 
@@ -177,7 +173,6 @@ func newDepsInstallCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
-	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
 	cmd.Flags().StringVar(&tier, "tier", "", "override the dependency install tier (homebrew, debian, fedora, arch, generic); default: auto-detect from the host")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview dependency install actions without executing package managers")
 	cmd.Flags().BoolVar(&yes, "yes", false, "execute dependency install actions without interactive confirmation")
