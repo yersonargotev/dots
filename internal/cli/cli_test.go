@@ -1281,6 +1281,69 @@ entries:
 	}
 }
 
+func TestDepsCommandProfileFlagIsDiscoverableFromParent(t *testing.T) {
+	for _, args := range [][]string{
+		{"deps", "--profile", "desktop"},
+		{"deps", "-p", "desktop"},
+	} {
+		t.Run(strings.Join(args[:2], " "), func(t *testing.T) {
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(args)
+
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+			}
+
+			got := out.String()
+			for _, want := range []string{"check", "plan", "install", "--profile"} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("deps help missing %q\noutput:\n%s", want, got)
+				}
+			}
+		})
+	}
+}
+
+func TestDepsCheckCommandInheritsParentProfileFlag(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+  desktop:
+    tags: [desktop]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [desktop]
+    dependencies:
+      - name: desktop-only-tool
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "--profile", "desktop", "check", "--file", manifestPath})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got := out.String()
+	for _, want := range []string{`Dependencies for profile "desktop"`, "missing  desktop-only-tool"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("deps check output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
 func writeFakeExecutable(t *testing.T, dir, name string) {
 	t.Helper()
 	path := filepath.Join(dir, name)
