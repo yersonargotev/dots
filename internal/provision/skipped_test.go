@@ -76,6 +76,54 @@ func TestSkippedProvisioners(t *testing.T) {
 	}
 }
 
+// TestSkippedProvisionersCountReflectsSuggestedCoverage proves Count is the
+// suggested profile's coverage of the skipped set, not the union of omissions
+// across every profile, so the "run --profile S to include them" message never
+// promises more than S delivers when no single profile is a superset.
+func TestSkippedProvisionersCountReflectsSuggestedCoverage(t *testing.T) {
+	coreProv := manifest.Provisioner{
+		Tool: "gentle-ai", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Scope: "global"},
+	}
+	onlyAProv := manifest.Provisioner{
+		Tool: "claude", Tags: []string{"a"},
+		Spec: manifest.ProvisionerSpec{Marketplace: "owner/repo"},
+	}
+	onlyBProv := manifest.Provisioner{
+		Tool: "codex", Tags: []string{"b"},
+		Spec: manifest.ProvisionerSpec{MCP: "srv", Command: []string{"npx"}},
+	}
+	// Three non-nested profiles: neither "a" nor "b" is a superset of the two
+	// extras the default profile omits. The union of omissions is 2, but each
+	// other profile recovers only 1.
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {Tags: []string{"core"}},
+			"a":       {Tags: []string{"core", "a"}},
+			"b":       {Tags: []string{"core", "b"}},
+		},
+		Entries: []manifest.Entry{{
+			Source: "configs/zsh/zshrc", Target: "~/.zshrc", Strategy: "symlink", Tags: []string{"core"},
+		}},
+		Provisioners: []manifest.Provisioner{coreProv, onlyAProv, onlyBProv},
+	}
+
+	hint, ok, err := provision.SkippedProvisioners(m, provision.Options{Profile: "default", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("SkippedProvisioners() error = %v", err)
+	}
+	if !ok {
+		t.Fatalf("SkippedProvisioners() ok = false, want true")
+	}
+	if hint.Count != 1 {
+		t.Fatalf("hint.Count = %d, want 1 (suggested profile's coverage, not the union of 2)", hint.Count)
+	}
+	if hint.SuggestedProfile != "a" {
+		t.Fatalf("hint.SuggestedProfile = %q, want %q (alphabetical tie-break on equal coverage)", hint.SuggestedProfile, "a")
+	}
+}
+
 func TestSkippedProvisionersUnknownProfileErrors(t *testing.T) {
 	m := manifestWithProvisioners(manifest.Provisioner{
 		Tool: "gentle-ai", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Scope: "global"},
