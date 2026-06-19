@@ -52,6 +52,22 @@ func TestCheckReportsReadiness(t *testing.T) {
 	})
 }
 
+func TestCheckAcceptsProvisionerFontFallbackDependency(t *testing.T) {
+	prov := gentleAIProvisioner("codex")
+	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{
+		Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*", FontFallbackMatches: []string{"CaskaydiaCoveNerdFont*"},
+	})
+	m := manifestWithProvisioners(prov)
+
+	report, err := provision.Check(m, provision.Options{Profile: "default", OS: "darwin"}, lookupWith("gentle-ai", "engram"), fontLookupWith("CaskaydiaCoveNerdFont*"))
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if len(report.Items) != 1 || len(report.Items[0].Missing) != 0 {
+		t.Fatalf("readiness = %#v, want no missing deps when fallback font is installed", report.Items)
+	}
+}
+
 func TestCheckUsesFontLookupForProvisionerFontDependencies(t *testing.T) {
 	prov := gentleAIProvisioner("codex")
 	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{

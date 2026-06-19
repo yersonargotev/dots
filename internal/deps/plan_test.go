@@ -156,6 +156,29 @@ func TestPlanKeepsCaskOnlyFontsManualOutsideHomebrew(t *testing.T) {
 	}
 }
 
+func TestPlanSkipsFontDependencyWhenFallbackMatchIsInstalled(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/zed/settings.json", Target: "~/.config/zed/settings.json", Strategy: "symlink", Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{
+					{Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*", FontFallbackMatches: []string{"CaskaydiaCoveNerdFont*"}},
+				},
+			},
+		},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet(), fontLookupSet("CaskaydiaCoveNerdFont*"), deps.TierHomebrew)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 0 {
+		t.Fatalf("Actions len = %d, want 0 when fallback font is installed (%#v)", len(report.Actions), report.Actions)
+	}
+}
+
 func TestPlanProducesTierGuidanceForMissingDependencies(t *testing.T) {
 	tests := []struct {
 		name        string

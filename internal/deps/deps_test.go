@@ -59,6 +59,76 @@ func TestCheckDetectsFontDependencyByScanNotPath(t *testing.T) {
 	}
 }
 
+func TestCheckDetectsFontDependencyByFallbackMatch(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/zed/settings.json", Target: "~/.config/zed/settings.json", Strategy: "symlink", Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{
+					{
+						Name:                "Desktop Nerd Font",
+						FontMatch:           "CascadiaCodeNF*",
+						FontFallbackMatches: []string{"CaskaydiaCoveNerdFont*"},
+						BrewCask:            "font-cascadia-code-nf",
+					},
+				},
+			},
+		},
+	}
+
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"},
+		lookupSet(), fontLookupSet("CaskaydiaCoveNerdFont*"))
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if len(report.Results) != 1 {
+		t.Fatalf("Results len = %d, want 1 (%#v)", len(report.Results), report.Results)
+	}
+	if !report.Results[0].Present {
+		t.Fatalf("Results[0] = %#v, want present through compatible fallback font", report.Results[0])
+	}
+}
+
+func TestCheckIncludesProfileDependenciesBeforeEntryDependencies(t *testing.T) {
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {
+				Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{
+					{Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*"},
+				},
+			},
+		},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/ghostty/config.ghostty", Target: "~/.config/ghostty/config.ghostty", Strategy: "symlink", Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{{Name: "ghostty", Command: "ghostty", Brew: "ghostty"}},
+			},
+		},
+	}
+
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("ghostty"), fontLookupSet("CascadiaCodeNF*"))
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	want := []deps.Result{
+		{Name: "Desktop Nerd Font", Command: "CascadiaCodeNF*", Present: true},
+		{Name: "ghostty", Command: "ghostty", Present: true},
+	}
+	if len(report.Results) != len(want) {
+		t.Fatalf("Results len = %d, want %d (%#v)", len(report.Results), len(want), report.Results)
+	}
+	for i := range want {
+		if report.Results[i] != want[i] {
+			t.Fatalf("Results[%d] = %#v, want %#v", i, report.Results[i], want[i])
+		}
+	}
+}
+
 func TestCheckReportsPresentAndMissingForProfile(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,

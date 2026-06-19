@@ -100,6 +100,8 @@ entries:
       - name: CascadiaCode Nerd Font
         brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
+        font_fallback_matches:
+          - "CaskaydiaCoveNerdFont*"
 `)
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
@@ -120,8 +122,45 @@ entries:
 	if deps[1].Name != "ripgrep" || deps[1].Command != "rg" || deps[1].Brew != "ripgrep" {
 		t.Fatalf("Dependencies[1] = %#v, want ripgrep with rg command", deps[1])
 	}
-	if deps[2].Name != "CascadiaCode Nerd Font" || deps[2].BrewCask != "font-cascadia-code-nf" || deps[2].FontMatch != "CascadiaCodeNF*" {
-		t.Fatalf("Dependencies[2] = %#v, want Homebrew cask font dependency", deps[2])
+	if deps[2].Name != "CascadiaCode Nerd Font" || deps[2].BrewCask != "font-cascadia-code-nf" || deps[2].FontMatch != "CascadiaCodeNF*" || !sameStrings(deps[2].FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
+		t.Fatalf("Dependencies[2] = %#v, want Homebrew cask font dependency with fallback match", deps[2])
+	}
+}
+
+func TestLoadFileParsesProfileDependencies(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  desktop:
+    tags: [core, desktop]
+    dependencies:
+      - name: Desktop Nerd Font
+        brew_cask: font-cascadia-code-nf
+        font_match: "CascadiaCodeNF*"
+        font_fallback_matches:
+          - "CaskaydiaCoveNerdFont*"
+entries:
+  - source: configs/ghostty/config.ghostty
+    target: ~/.config/ghostty/config.ghostty
+    strategy: symlink
+    tags: [desktop]
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	deps := got.Profiles["desktop"].Dependencies
+	if len(deps) != 1 {
+		t.Fatalf("Profile dependencies len = %d, want 1 (%#v)", len(deps), deps)
+	}
+	if deps[0].Name != "Desktop Nerd Font" || deps[0].BrewCask != "font-cascadia-code-nf" || deps[0].FontMatch != "CascadiaCodeNF*" || !sameStrings(deps[0].FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
+		t.Fatalf("Profile dependency = %#v, want desktop font dependency with fallback match", deps[0])
 	}
 }
 
@@ -485,6 +524,7 @@ func TestDependencyIsFont(t *testing.T) {
 	}{
 		{name: "command dependency is not a font", dep: manifest.Dependency{Name: "tmux"}, want: false},
 		{name: "font_match marks a font dependency", dep: manifest.Dependency{Name: "CascadiaCode NF", FontMatch: "CascadiaCodeNF*"}, want: true},
+		{name: "fallback match marks a font dependency", dep: manifest.Dependency{Name: "Desktop Nerd Font", FontFallbackMatches: []string{"CaskaydiaCoveNerdFont*"}}, want: true},
 		{name: "blank font_match is not a font", dep: manifest.Dependency{Name: "tmux", FontMatch: "  "}, want: false},
 	}
 
@@ -494,6 +534,17 @@ func TestDependencyIsFont(t *testing.T) {
 				t.Fatalf("IsFont() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDependencyFontMatches(t *testing.T) {
+	dep := manifest.Dependency{
+		FontMatch:           " CascadiaCodeNF* ",
+		FontFallbackMatches: []string{"", " CaskaydiaCoveNerdFont* ", "CascadiaCodeNF*"},
+	}
+	want := []string{"CascadiaCodeNF*", "CaskaydiaCoveNerdFont*"}
+	if got := dep.FontMatches(); !sameStrings(got, want) {
+		t.Fatalf("FontMatches() = %#v, want %#v", got, want)
 	}
 }
 
@@ -583,6 +634,22 @@ entries:
     tags: [core]
 `,
 			want: `profiles["default"].tags[0] must not be empty`,
+		},
+		{
+			name: "profile dependency without name",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+    dependencies:
+      - brew_cask: font-cascadia-code-nf
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`,
+			want: `profiles["default"].dependencies[0].name is required`,
 		},
 		{
 			name: "unsupported strategy",
@@ -726,6 +793,24 @@ entries:
         brew_cask: font-cascadia-code-nf
 `,
 			want: `entries[0].dependencies[0] must not set both brew and brew_cask`,
+		},
+		{
+			name: "dependency with empty font fallback match",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/fonts
+    target: ~/.local/share/fonts
+    strategy: copy
+    tags: [core]
+    dependencies:
+      - name: CascadiaCode Nerd Font
+        font_match: "CascadiaCodeNF*"
+        font_fallback_matches: ["  "]
+`,
+			want: `entries[0].dependencies[0].font_fallback_matches[0] must not be empty`,
 		},
 		{
 			name: "missing entry target",
@@ -1063,6 +1148,19 @@ provisioners:
         brew_cask: font-cascadia-code-nf
 `,
 			want: "provisioners[0].dependencies[0] must not set both brew and brew_cask",
+		},
+		{
+			name: "dependency with empty font fallback match",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+    dependencies:
+      - name: CascadiaCode Nerd Font
+        font_match: "CascadiaCodeNF*"
+        font_fallback_matches: ["  "]
+`,
+			want: "provisioners[0].dependencies[0].font_fallback_matches[0] must not be empty",
 		},
 	}
 

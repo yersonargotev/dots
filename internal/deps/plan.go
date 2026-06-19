@@ -12,13 +12,14 @@ import (
 // Manual is set when the dependency has no executable package-manager action for
 // the active Tier.
 type InstallAction struct {
-	Dependency string
-	Probe      string
-	FontMatch  string
-	Package    string
-	Executable string
-	Args       []string
-	Manual     string
+	Dependency  string
+	Probe       string
+	FontMatch   string
+	FontMatches []string
+	Package     string
+	Executable  string
+	Args        []string
+	Manual      string
 }
 
 // Guidance is the advisory installation hint for one missing Dependency. Command
@@ -65,16 +66,22 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 // Dependency under a Tier.
 func actionFor(dep manifest.Dependency, tier Tier) InstallAction {
 	pkg, executable, args := tierPackage(dep, tier)
+	fontMatches := dep.FontMatches()
+	fontMatch := ""
+	if len(fontMatches) > 0 {
+		fontMatch = fontMatches[0]
+	}
 	if pkg == "" {
-		return InstallAction{Dependency: dep.Name, Probe: dep.Probe(), FontMatch: strings.TrimSpace(dep.FontMatch), Manual: manualNote(dep, tier)}
+		return InstallAction{Dependency: dep.Name, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches, Manual: manualNote(dep, tier)}
 	}
 	return InstallAction{
-		Dependency: dep.Name,
-		Probe:      dep.Probe(),
-		FontMatch:  strings.TrimSpace(dep.FontMatch),
-		Package:    pkg,
-		Executable: executable,
-		Args:       append(args, pkg),
+		Dependency:  dep.Name,
+		Probe:       dep.Probe(),
+		FontMatch:   fontMatch,
+		FontMatches: fontMatches,
+		Package:     pkg,
+		Executable:  executable,
+		Args:        append(args, pkg),
 	}
 }
 
@@ -115,14 +122,24 @@ func tierPackage(dep manifest.Dependency, tier Tier) (pkg, executable string, ar
 func manualNote(dep manifest.Dependency, tier Tier) string {
 	if dep.IsFont() && tier != TierHomebrew {
 		name := strings.TrimSpace(dep.Name)
-		match := strings.TrimSpace(dep.FontMatch)
+		matchHint := fontMatchHint(dep.FontMatches())
 		if cask := strings.TrimSpace(dep.BrewCask); cask != "" {
-			return fmt.Sprintf("obtain the font files for %q manually on Linux using Homebrew cask token %q as the package/source clue; copy .ttf/.otf files into ~/.local/share/fonts; run fc-cache -f ~/.local/share/fonts; rerun dots deps check; dots will detect files matching font_match %q", name, cask, match)
+			return fmt.Sprintf("obtain the font files for %q manually on Linux using Homebrew cask token %q as the package/source clue; copy .ttf/.otf files into ~/.local/share/fonts; run fc-cache -f ~/.local/share/fonts; rerun dots deps check; dots will detect files matching %s", name, cask, matchHint)
 		}
-		return fmt.Sprintf("obtain the font files for %q manually on Linux; copy .ttf/.otf files into ~/.local/share/fonts; run fc-cache -f ~/.local/share/fonts; rerun dots deps check; dots will detect files matching font_match %q", name, match)
+		return fmt.Sprintf("obtain the font files for %q manually on Linux; copy .ttf/.otf files into ~/.local/share/fonts; run fc-cache -f ~/.local/share/fonts; rerun dots deps check; dots will detect files matching %s", name, matchHint)
 	}
 	if tier == TierGeneric {
 		return fmt.Sprintf("install %q with your distribution's package manager", dep.Name)
 	}
 	return fmt.Sprintf("no %s package declared for %q; install it manually", tier, dep.Name)
+}
+
+func fontMatchHint(matches []string) string {
+	if len(matches) == 0 {
+		return `font_match ""`
+	}
+	if len(matches) == 1 {
+		return fmt.Sprintf("font_match %q", matches[0])
+	}
+	return fmt.Sprintf("font_match %q or compatible fallback patterns %q", matches[0], matches[1:])
 }

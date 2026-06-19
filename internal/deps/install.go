@@ -149,8 +149,12 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 }
 
 func actionPresent(action InstallAction, look Lookup, fontLook FontLookup) bool {
-	if action.FontMatch != "" {
-		return fontLook(action.FontMatch)
+	matches := action.FontMatches
+	if len(matches) == 0 && action.FontMatch != "" {
+		matches = []string{action.FontMatch}
+	}
+	if len(matches) > 0 {
+		return fontPresent(matches, fontLook)
 	}
 	return look(action.Probe)
 }

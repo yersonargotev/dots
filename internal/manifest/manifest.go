@@ -18,7 +18,8 @@ type Manifest struct {
 }
 
 type Profile struct {
-	Tags []string `yaml:"tags"`
+	Tags         []string     `yaml:"tags"`
+	Dependencies []Dependency `yaml:"dependencies,omitempty"`
 }
 
 type Entry struct {
@@ -100,12 +101,35 @@ type Dependency struct {
 	// this case-insensitive glob (e.g. "CascadiaCodeNF*"). A font has no
 	// executable on the path, so it must be probed as an installed asset.
 	FontMatch string `yaml:"font_match,omitempty"`
+	// FontFallbackMatches declares compatible installed-font filename globs that
+	// satisfy the same dependency when the primary font file pattern is absent.
+	FontFallbackMatches []string `yaml:"font_fallback_matches,omitempty"`
 }
 
 // IsFont reports whether the Dependency is detected as an installed font asset
-// rather than an executable on PATH. It is true exactly when FontMatch is set.
+// rather than an executable on PATH. It is true when any font match pattern is set.
 func (d Dependency) IsFont() bool {
-	return strings.TrimSpace(d.FontMatch) != ""
+	return len(d.FontMatches()) > 0
+}
+
+// FontMatches returns the primary installed-font filename glob followed by any
+// compatible fallback globs, trimming whitespace and dropping blank patterns.
+func (d Dependency) FontMatches() []string {
+	matches := make([]string, 0, 1+len(d.FontFallbackMatches))
+	seen := map[string]bool{}
+	add := func(match string) {
+		match = strings.TrimSpace(match)
+		if match == "" || seen[match] {
+			return
+		}
+		seen[match] = true
+		matches = append(matches, match)
+	}
+	add(d.FontMatch)
+	for _, match := range d.FontFallbackMatches {
+		add(match)
+	}
+	return matches
 }
 
 // Probe is the command name used to detect a Dependency's presence in PATH. It
@@ -156,12 +180,18 @@ func (m Manifest) Validate() error {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		tags := m.Profiles[name].Tags
+		profile := m.Profiles[name]
+		tags := profile.Tags
 		if len(tags) == 0 {
 			return fmt.Errorf("profiles[%q].tags is required", name)
 		}
 		if i, ok := indexOfEmptyTag(tags); ok {
 			return fmt.Errorf("profiles[%q].tags[%d] must not be empty", name, i)
+		}
+		for j, dep := range profile.Dependencies {
+			if err := validateDependency(dep, fmt.Sprintf("profiles[%q].dependencies[%d]", name, j)); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -268,6 +298,11 @@ func validateDependency(dep Dependency, path string) error {
 	}
 	if dep.BrewCask != "" && strings.TrimSpace(dep.BrewCask) == "" {
 		return fmt.Errorf("%s.brew_cask must not be empty", path)
+	}
+	for i, match := range dep.FontFallbackMatches {
+		if strings.TrimSpace(match) == "" {
+			return fmt.Errorf("%s.font_fallback_matches[%d] must not be empty", path, i)
+		}
 	}
 	if strings.TrimSpace(dep.Brew) != "" && strings.TrimSpace(dep.BrewCask) != "" {
 		return fmt.Errorf("%s must not set both brew and brew_cask", path)

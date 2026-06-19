@@ -149,6 +149,23 @@ func TestApplyUnknownProfileIsError(t *testing.T) {
 	}
 }
 
+func TestApplyAcceptsProvisionerFontFallbackDependency(t *testing.T) {
+	prov := gentleAIProvisioner("codex")
+	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{
+		Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*", FontFallbackMatches: []string{"CaskaydiaCoveNerdFont*"},
+	})
+	m := manifestWithProvisioners(prov)
+	runner := &fakeRunner{}
+
+	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, lookupWith("gentle-ai", "engram"), fontLookupWith("CaskaydiaCoveNerdFont*"), runner)
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != provision.RunStatusProvisioned {
+		t.Fatalf("report.Items = %#v, want provisioned item when fallback font is installed", report.Items)
+	}
+}
+
 func TestApplyUsesFontLookupForProvisionerFontDependencies(t *testing.T) {
 	prov := gentleAIProvisioner("codex")
 	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{

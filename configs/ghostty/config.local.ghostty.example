@@ -7,7 +7,9 @@
 
 # Fonts are machine-specific because installed font names and comfortable sizes
 # differ across hosts, displays, and operating systems.
-# font-family = "CaskaydiaCove Nerd Font Mono"
+# font-family = "Cascadia Code NF"
+# Compatible fallback family names such as "CaskaydiaCove Nerd Font Mono" may
+# also work when those files are already installed.
 # font-size = 20
 
 # Window and rendering ergonomics depend on monitor size, compositor/GPU, and

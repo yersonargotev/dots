@@ -281,6 +281,33 @@ func TestInstallYesExecutesHomebrewCaskActionsThroughRunner(t *testing.T) {
 	}
 }
 
+func TestInstallYesAcceptsFallbackFontAfterCaskInstall(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/zed/settings.json", Target: "~/.config/zed/settings.json", Strategy: "symlink", Tags: []string{"desktop"},
+				Dependencies: []manifest.Dependency{
+					{Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*", FontFallbackMatches: []string{"CaskaydiaCoveNerdFont*"}},
+				},
+			},
+		},
+	}
+	installedFallback := false
+	runner := &recordingRunner{afterRun: func() { installedFallback = true }}
+
+	report, err := deps.Install(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet(), func(match string) bool {
+		return installedFallback && match == "CaskaydiaCoveNerdFont*"
+	}, deps.TierHomebrew, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusInstalled {
+		t.Fatalf("report items = %#v, want installed when fallback font satisfies re-probe", report.Items)
+	}
+}
+
 func TestInstallDryRunReportsInstallableActions(t *testing.T) {
 	report, err := deps.InstallDryRun(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
