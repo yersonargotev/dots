@@ -74,19 +74,27 @@ func selectedIndices(m manifest.Manifest, profileName, os string) (map[int]bool,
 type SkippedHint struct {
 	// Profile is the active profile being installed.
 	Profile string
-	// Count is how many provisioners the active profile skips that at least one
-	// other profile would include.
+	// Count is how many of the skipped provisioners SuggestedProfile would
+	// recover. It is intentionally the suggested profile's coverage, not the
+	// union of omissions across every profile, so the "run --profile S to
+	// include them" nudge is always exact and never promises more than S
+	// delivers. In the nested-profile model dots uses (e.g. desktop ⊇ default)
+	// the most complete profile recovers everything, so Count equals the total
+	// the active profile omits.
 	Count int
 	// SuggestedProfile is the other profile that covers the most skipped
-	// provisioners — the one worth recommending to recover them.
+	// provisioners — the single most complete profile worth recommending.
 	SuggestedProfile string
 }
 
 // SkippedProvisioners reports whether the active profile omits provisioners that
-// another profile would select on this OS. The second return is false (with a
-// zero hint) when nothing is skipped — either the active profile already selects
-// everything, or the OS filter excludes the extras for every profile so
-// switching profiles would not recover them. It is PURE: no I/O, safe in a
+// another profile would select on this OS, and which single profile best
+// recovers them. The second return is false (with a zero hint) when nothing is
+// skipped — either the active profile already selects everything, or the OS
+// filter excludes the extras for every profile so switching profiles would not
+// recover them. The reported Count is the suggested profile's coverage of the
+// skipped set, so the caller's remediation message stays accurate even when no
+// single profile is a superset of every omission. It is PURE: no I/O, safe in a
 // dry-run, and mirrors the tag/OS scoping used by Select.
 func SkippedProvisioners(m manifest.Manifest, opts Options) (SkippedHint, bool, error) {
 	active, err := selectedIndices(m, opts.Profile, opts.OS)
@@ -139,7 +147,11 @@ func SkippedProvisioners(m manifest.Manifest, opts Options) (SkippedHint, bool, 
 		}
 	}
 
-	return SkippedHint{Profile: opts.Profile, Count: len(skipped), SuggestedProfile: suggested}, true, nil
+	// best is the suggested profile's coverage of the skipped set, and is >= 1
+	// whenever skipped is non-empty: every skipped index came from some other
+	// profile's selection, so that profile covers it. Reporting best (not
+	// len(skipped)) keeps "run --profile S to include them" exact.
+	return SkippedHint{Profile: opts.Profile, Count: best, SuggestedProfile: suggested}, true, nil
 }
 
 // Build resolves every selected Provisioner into its exact command and the
