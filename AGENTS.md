@@ -71,6 +71,11 @@ dots doctor --home "$SANDBOX"   # inspect without touching real config
 - **Pull requests.** Use [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
   Include `Closes #<issue-number>`, exactly one `type:*` label, validation
   evidence, and the dotfiles safety checklist when config paths are involved.
+- **Docs follow the same flow.** Documentation changes (`*.md`, `docs/`,
+  including this file) go through issue + PR like code — never push docs directly
+  to `main`. Open an issue, branch, then a PR labeled `type:docs` with
+  `Closes #<issue-number>`; `main` is branch-protected and requires the
+  `Test, vet and build` check on every PR.
 - **Domain docs.** Single-context layout: `CONTEXT.md` at the root and ADRs under
   `docs/adr/`. Read the relevant ADR before changing architecture or workflow.
   See [`docs/agents/domain.md`](docs/agents/domain.md).
