@@ -116,6 +116,157 @@ func TestInstallExecutesProvisionerAfterFilesWithHomeThreaded(t *testing.T) {
 	}
 }
 
+// TestInstallWritesCodexCodeGraphOverlayAfterProvisioners proves dots adds its
+// own Codex AGENTS.md instruction layer only after a successful provisioner run,
+// under the sandbox HOME threaded through --home.
+func TestInstallWritesCodexCodeGraphOverlayAfterProvisioners(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, sandboxHome, provisionerManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read sandbox Codex AGENTS.md: %v", err)
+	}
+	content := string(got)
+	for _, want := range []string{
+		"<!-- dots:codegraph-mode -->",
+		"CodeGraph Mode: enabled",
+		"If `.codegraph/` exists in the project, use CodeGraph first",
+		"<!-- /dots:codegraph-mode -->",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("Codex AGENTS.md missing %q\ncontent:\n%s", want, content)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	}
+}
+
+// TestInstallDoesNotWriteCodexCodeGraphOverlayWithoutSelectedProvisioners proves
+// the post-provision Codex layer is scoped to selected Codex-related
+// provisioners. A successful install whose active profile selects no
+// provisioners must not create a sandbox Codex AGENTS.md.
+func TestInstallDoesNotWriteCodexCodeGraphOverlayWithoutSelectedProvisioners(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, sandboxHome, `version: 1
+profiles:
+  default:
+    tags: [core]
+  desktop:
+    tags: [desktop]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: gentle-ai
+    tags: [desktop]
+    spec:
+      scope: global
+      agents: [codex]
+    dependencies:
+      - name: gentle-ai
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install without selected provisioners created sandbox Codex AGENTS.md; stat err = %v\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	}
+}
+
+// TestInstallWritesCodexCodeGraphOverlayAfterCodexProvisioner proves a selected
+// Codex MCP provisioner also qualifies for the post-provision Codex layer, not
+// only the gentle-ai provisioner that installs Codex agents.
+func TestInstallWritesCodexCodeGraphOverlayAfterCodexProvisioner(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "codex"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, sandboxHome, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: codex
+    tags: [core]
+    spec:
+      mcp: codegraph
+      command: [codegraph, serve, --mcp]
+    dependencies:
+      - name: codex
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	if _, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); err != nil {
+		t.Fatalf("read sandbox Codex AGENTS.md after codex provisioner: %v\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	}
+}
+
 // TestInstallExecutesClaudeProvisionerHomeThreaded proves a claude provisioner
 // renders and runs the exact `claude plugin ...` invocations, in manifest order,
 // under the sandbox HOME and never the inherited one.
@@ -179,6 +330,9 @@ provisioners:
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, "claude-calls")); err == nil {
 		t.Fatalf("claude provisioner wrote into the inherited HOME %q instead of the sandbox", fakeRealHome)
+	}
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("claude-only provisioners created sandbox Codex AGENTS.md; stat err = %v", err)
 	}
 }
 

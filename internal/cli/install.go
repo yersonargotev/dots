@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yersonargotev/dots/internal/codexconfig"
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
@@ -118,7 +119,38 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile, home stri
 	}
 	report, err := provision.Apply(m, provision.Options{Profile: profile, OS: runtime.GOOS}, lookupCommand, fontInstalled(runtime.GOOS, home), runner)
 	renderProvisionReport(cmd.OutOrStdout(), report)
-	return err
+	if err != nil {
+		return err
+	}
+	selected, err := provision.Select(m, provision.Options{Profile: profile, OS: runtime.GOOS})
+	if err != nil {
+		return err
+	}
+	if !selectedProvisionersAffectCodex(selected) {
+		return nil
+	}
+	return codexconfig.EnsureCodeGraphMode(home)
+}
+
+func selectedProvisionersAffectCodex(selected []manifest.Provisioner) bool {
+	for _, prov := range selected {
+		if prov.Tool == "codex" {
+			return true
+		}
+		if prov.Tool == "gentle-ai" && provisionerAgentsInclude(prov, "codex") {
+			return true
+		}
+	}
+	return false
+}
+
+func provisionerAgentsInclude(prov manifest.Provisioner, want string) bool {
+	for _, agent := range prov.Spec.Agents {
+		if agent == want {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveAndApply resolves the plan's conflicts (via the TUI, text prompts, or

@@ -94,6 +94,49 @@ func TestUpdateExecutesProvisionersAfterApply(t *testing.T) {
 	}
 }
 
+// TestUpdateWritesCodexCodeGraphOverlayAfterProvisioners proves update reaches
+// the same post-provision Codex AGENTS.md overlay hook as install, under the
+// sandbox HOME.
+func TestUpdateWritesCodexCodeGraphOverlayAfterProvisioners(t *testing.T) {
+	requireGitCLI(t)
+	sandboxHome := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/git/gitconfig": "managed\n",
+		"dots.yaml":             updateProvisionerManifest,
+	})
+
+	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot)
+
+	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read sandbox Codex AGENTS.md: %v\noutput:\n%s", err, out)
+	}
+	content := string(got)
+	for _, want := range []string{
+		"<!-- dots:codegraph-mode -->",
+		"CodeGraph Mode: enabled",
+		"If `.codegraph/` exists in the project, use CodeGraph first",
+		"<!-- /dots:codegraph-mode -->",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("Codex AGENTS.md missing %q\ncontent:\n%s", want, content)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	}
+}
+
 // TestUpdateCanceledConflictDoesNotRunProvisioners proves canceling conflict
 // resolution during a post-update install aborts before any provisioner runs —
 // the same applied-gating install enforces.
