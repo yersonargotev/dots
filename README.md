@@ -50,7 +50,7 @@ brew "yersonargotev/tap/dots", trusted: true
 Verify the binary is available:
 
 ```bash
-dots --help
+dots --version
 ```
 
 ## Quickstart
@@ -89,6 +89,7 @@ dots backups list
 When the plan looks right, run the install for real:
 
 ```bash
+dots --version
 dots install
 ```
 

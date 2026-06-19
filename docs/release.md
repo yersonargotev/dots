@@ -55,7 +55,7 @@ Install the latest tap formula with a fully-qualified formula name:
 
 ```bash
 brew install yersonargotev/tap/dots
-dots --help
+dots --version
 dots install
 ```
 
@@ -77,7 +77,7 @@ For Brewfile-managed machines, prefer formula-level trust:
 brew "yersonargotev/tap/dots", trusted: true
 ```
 
-The formula selects the correct Release Artifact for macOS/Linux and amd64/arm64, marks each raw executable URL with `using: :nounzip`, verifies the published SHA-256 checksum from the generated formula, installs the downloaded binary as `dots`, and runs `dots --help` in `brew test`.
+The formula selects the correct Release Artifact for macOS/Linux and amd64/arm64, marks each raw executable URL with `using: :nounzip`, verifies the published SHA-256 checksum from the generated formula, installs the downloaded binary as `dots`, and runs `dots --version` in `brew test`.
 
 The release workflow proves tap write access before it mutates the public GitHub Release, but it does not publish the tap update until the release assets exist:
 
@@ -101,9 +101,10 @@ Install the latest published v0.x release with the checksum-verified Bootstrappe
 curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | bash
 ```
 
-The Bootstrapper downloads `checksums.txt` and the matching platform artifact from the latest GitHub Release by default, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, and then delegates setup to:
+The Bootstrapper downloads `checksums.txt` and the matching platform artifact from the latest GitHub Release by default, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, and then uses that tested binary for setup. Before any real-home install, verify the installed binary version:
 
 ```bash
+~/.local/bin/dots --version
 ~/.local/bin/dots install
 ```
 
@@ -132,6 +133,7 @@ DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 - [ ] All four platform artifacts are attached to the GitHub Release.
 - [ ] `checksums.txt` contains one SHA-256 entry for each artifact.
 - [ ] The Bootstrapper maps its detected `goos/goarch` to the matching artifact name.
+- [ ] `dots --version` and `dots version` both report the release tag.
 - [ ] `Formula/dots.rb` in `yersonargotev/homebrew-tap` points at the same tag and checksums.
 - [ ] A Tap Trust install path has been checked with `HOMEBREW_REQUIRE_TAP_TRUST=1` using the fully-qualified formula or formula-level trust.
 - [ ] `HOMEBREW_TAP_TOKEN` is configured before relying on automatic tap updates.

@@ -5,15 +5,19 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/version"
 )
 
 func NewRootCommand() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "dots",
-		Short: "Dotfiles CLI",
-		Long:  "dots is the Dotfiles CLI for managing repository-owned workstation configuration.",
+		Use:     "dots",
+		Short:   "Dotfiles CLI",
+		Long:    "dots is the Dotfiles CLI for managing repository-owned workstation configuration.",
+		Version: version.Value,
 	}
+	root.SetVersionTemplate("dots {{.Version}}\n")
 
+	root.AddCommand(newVersionCommand())
 	root.AddCommand(newManifestCommand())
 	root.AddCommand(newPlanCommand())
 	root.AddCommand(newInstallCommand())
@@ -23,6 +27,18 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newDepsCommand())
 	root.AddCommand(newDoctorCommand())
 	return root
+}
+
+func newVersionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the dots version",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Fprintf(cmd.OutOrStdout(), "dots %s\n", version.Value)
+			return nil
+		},
+	}
 }
 
 func newManifestCommand() *cobra.Command {

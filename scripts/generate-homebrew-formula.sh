@@ -221,7 +221,7 @@ class Dots < Formula
   end
 
   test do
-    system "#{bin}/dots", "--help"
+    system "#{bin}/dots", "--version"
   end
 end
 FORMULA
