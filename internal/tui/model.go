@@ -207,6 +207,8 @@ func (m Model) viewList() string {
 	}
 
 	b.WriteString("\n")
+	b.WriteString(m.styles.Help.Render("skip keeps the local file untouched · replace backs up then installs the Source of Truth · adopt copies supported regular-file local content into the Source of Truth"))
+	b.WriteString("\n")
 	b.WriteString(m.styles.Help.Render("j/k move · s skip · r replace · a adopt · d diff · enter apply · q cancel"))
 	b.WriteString("\n")
 	return b.String()
