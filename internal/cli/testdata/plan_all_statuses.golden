@@ -6,3 +6,11 @@ Plan for profile "work"
   missing-source  template  configs/nvim/init.lua -> /home/user/.config/nvim/init.lua
 
 Summary: 1 create, 1 conflict, 1 unchanged, 1 missing-source
+
+Conflict guidance:
+  Conflicts mean this profile is only partially managed until you choose a resolution.
+  - skip keeps the local file untouched; dots leaves that target unmanaged for this run.
+  - replace creates a Backup Set before installing the Source of Truth.
+  - adopt is only for supported regular-file conflicts; it copies local file content into the Source of Truth after you choose it.
+  - diff previews target versus source before you decide.
+  Non-interactive install/update keeps conflicts skipped by default.

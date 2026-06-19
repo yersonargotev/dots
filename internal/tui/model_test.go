@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -109,6 +110,20 @@ func TestArrowKeysAlsoNavigate(t *testing.T) {
 	m = update(t, m, tea.KeyMsg{Type: tea.KeyUp})
 	if m.cursor != 0 {
 		t.Fatalf("cursor = %d after up, want 0", m.cursor)
+	}
+}
+
+func TestListViewExplainsDecisionTradeoffs(t *testing.T) {
+	m := New(sampleConflicts(), nil)
+	view := m.View()
+	for _, want := range []string{
+		"skip keeps the local file untouched",
+		"replace backs up then installs the Source of Truth",
+		"adopt copies supported regular-file local content into the Source of Truth",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("view missing %q\nview:\n%s", want, view)
+		}
 	}
 }
 

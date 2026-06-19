@@ -47,6 +47,9 @@ func renderStatus(w io.Writer, report status.Report) {
 
 	fmt.Fprintf(w, "\nSummary: %d ok, %d missing, %d conflict, %d skipped, %d drifted, %d unsupported\n",
 		counts.ok, counts.missing, counts.conflict, counts.skipped, counts.drifted, counts.unsupported)
+	if counts.conflict > 0 {
+		renderConflictResolutionGuidance(w)
+	}
 }
 
 // renderStatusProvisioners lists the provisioners declared for the profile as
