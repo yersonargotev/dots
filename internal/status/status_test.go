@@ -90,6 +90,144 @@ func TestBuildReportsOKForCopyMatchingSource(t *testing.T) {
 	}
 }
 
+func TestBuildReportsOKForClaudeSettingsWithProvisionerAdditionsWhenInstalled(t *testing.T) {
+	f := newFixture(manifest.Entry{
+		Source:    "configs/claude/settings.json",
+		Target:    "~/.claude/settings.json",
+		Strategy:  "copy",
+		Ownership: "json-subset",
+		Tags:      []string{"core"},
+	})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+	writeSource(t, f.sourceRoot, "configs/claude/settings.json", `{
+  "env": {
+    "ENABLE_TOOL_SEARCH": "true"
+  },
+  "permissions": {
+    "allow": ["mcp__codegraph__codegraph_search"]
+  },
+  "model": "opus"
+}
+`)
+	target := filepath.Join(f.home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{
+  "env": {
+    "ENABLE_TOOL_SEARCH": "true",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
+  },
+  "permissions": {
+    "allow": [
+      "mcp__codegraph__codegraph_search",
+      "mcp__chrome-devtools__new_page"
+    ],
+    "deny": ["Bash(rm -rf *)"]
+  },
+  "model": "opus",
+  "enabledPlugins": {
+    "chrome-devtools-mcp": true
+  }
+}
+`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	meta := state.Metadata{Version: 1, Entries: []state.Record{{
+		Target: target, Source: "configs/claude/settings.json", Strategy: "copy", Hash: "installed-hash",
+	}}}
+
+	if got := onlyEntry(t, f.build(t, meta)).State; got != status.StateOK {
+		t.Fatalf("state = %q, want ok because provisioner-added JSON keys/items are outside dots ownership", got)
+	}
+}
+
+func TestBuildReportsDriftedForChangedDotsOwnedClaudeSettingsValues(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+	}{
+		{
+			name: "changed scalar",
+			target: `{
+  "permissions": {"allow": ["mcp__codegraph__codegraph_search"]},
+  "model": "sonnet",
+  "enabledPlugins": {"chrome-devtools-mcp": true}
+}
+`,
+		},
+		{
+			name: "missing array item",
+			target: `{
+  "permissions": {"allow": ["mcp__chrome-devtools__new_page"]},
+  "model": "opus",
+  "enabledPlugins": {"chrome-devtools-mcp": true}
+}
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(manifest.Entry{
+				Source:    "configs/claude/settings.json",
+				Target:    "~/.claude/settings.json",
+				Strategy:  "copy",
+				Ownership: "json-subset",
+				Tags:      []string{"core"},
+			})
+			f.sourceRoot = t.TempDir()
+			f.home = t.TempDir()
+			writeSource(t, f.sourceRoot, "configs/claude/settings.json", `{
+  "permissions": {
+    "allow": ["mcp__codegraph__codegraph_search"]
+  },
+  "model": "opus"
+}
+`)
+			target := filepath.Join(f.home, ".claude", "settings.json")
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				t.Fatalf("mkdir target parent: %v", err)
+			}
+			if err := os.WriteFile(target, []byte(tt.target), 0o600); err != nil {
+				t.Fatalf("write target: %v", err)
+			}
+			meta := state.Metadata{Version: 1, Entries: []state.Record{{
+				Target: target, Source: "configs/claude/settings.json", Strategy: "copy", Hash: "installed-hash",
+			}}}
+
+			if got := onlyEntry(t, f.build(t, meta)).State; got != status.StateDrifted {
+				t.Fatalf("state = %q, want drifted because a dots-owned JSON value diverged", got)
+			}
+		})
+	}
+}
+
+func TestBuildReportsConflictForClaudeSettingsSubsetWithoutInstallMetadata(t *testing.T) {
+	f := newFixture(manifest.Entry{
+		Source:    "configs/claude/settings.json",
+		Target:    "~/.claude/settings.json",
+		Strategy:  "copy",
+		Ownership: "json-subset",
+		Tags:      []string{"core"},
+	})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+	writeSource(t, f.sourceRoot, "configs/claude/settings.json", `{"model": "opus"}`)
+	target := filepath.Join(f.home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"model": "opus", "enabledPlugins": {"chrome-devtools-mcp": true}}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	if got := onlyEntry(t, f.build(t, state.Metadata{})).State; got != status.StateConflict {
+		t.Fatalf("state = %q, want conflict because extra co-owned JSON is trusted only after dots install metadata", got)
+	}
+}
+
 func TestBuildReportsMissingWhenTargetAbsent(t *testing.T) {
 	f := newFixture(manifest.Entry{Source: "configs/git/gitconfig", Target: "~/.gitconfig", Strategy: "copy", Tags: []string{"core"}})
 	f.sourceRoot = t.TempDir()

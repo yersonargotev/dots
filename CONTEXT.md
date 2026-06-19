@@ -44,6 +44,14 @@ _Avoid_: install mode, file operation, action
 A single configuration item declared in the Install Manifest, including its source, target, install strategy, filters, and local extension points.
 _Avoid_: dotfile item, config row, install target
 
+**Entry Ownership**:
+The part of a Managed Entry's target that dots claims when evaluating Dotfiles Status. The default ownership is the whole installed file, but an entry may declare a narrower ownership mode when a supported tool legitimately co-owns the target.
+_Avoid_: loose ownership, ignored drift, special case
+
+**JSON Subset Ownership**:
+An Entry Ownership mode for co-owned JSON targets where the repository source is the dots-owned baseline and the workstation target may contain additional object keys or array elements added by another supported owner. All scalar values, object keys, and array elements present in the baseline must still be present and equal in the target; otherwise the target is Drift when Installation Metadata proves dots installed it, or a Conflict when it does not.
+_Avoid_: JSON merge, partial sync, tolerate anything
+
 **Backup Set**:
 A timestamped collection of files preserved before an installation changes existing workstation targets. Backup sets live under `~/.local/state/dots/backups/` and include metadata describing what was protected and why.
 _Avoid_: old files, backup folder, snapshot

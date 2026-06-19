@@ -25,6 +25,7 @@ type Entry struct {
 	Source       string       `yaml:"source"`
 	Target       string       `yaml:"target"`
 	Strategy     string       `yaml:"strategy"`
+	Ownership    string       `yaml:"ownership,omitempty"`
 	Tags         []string     `yaml:"tags"`
 	OS           []string     `yaml:"os,omitempty"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
@@ -173,6 +174,12 @@ func (m Manifest) Validate() error {
 		}
 		if !allowedStrategy(entry.Strategy) {
 			return fmt.Errorf("entries[%d].strategy must be one of copy, symlink, template", i)
+		}
+		if !allowedOwnership(entry.Ownership) {
+			return fmt.Errorf("entries[%d].ownership must be one of json-subset", i)
+		}
+		if entry.Ownership == "json-subset" && entry.Strategy != "copy" {
+			return fmt.Errorf("entries[%d].ownership json-subset requires strategy copy", i)
 		}
 		if len(entry.Tags) == 0 {
 			return fmt.Errorf("entries[%d].tags is required", i)
@@ -409,6 +416,15 @@ func hasNonEmptyString(values []string) bool {
 func allowedStrategy(strategy string) bool {
 	switch strategy {
 	case "copy", "symlink", "template":
+		return true
+	default:
+		return false
+	}
+}
+
+func allowedOwnership(ownership string) bool {
+	switch ownership {
+	case "", "json-subset":
 		return true
 	default:
 		return false

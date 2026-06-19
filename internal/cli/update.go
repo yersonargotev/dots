@@ -72,11 +72,17 @@ func newUpdateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			meta, err := loadInstallationMetadata(paths, stateRoot)
+			if err != nil {
+				return err
+			}
+
 			p, err := plan.Build(*m, plan.Options{
 				Profile:    profile,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
+				Metadata:   meta,
 			})
 			if err != nil {
 				return err
