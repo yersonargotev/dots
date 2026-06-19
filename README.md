@@ -68,6 +68,19 @@ dots status
 dots doctor
 ```
 
+### Machine-readable output
+
+Scripts and agents can drive the read-only diagnostics (`status`, `plan`,
+`doctor`, `deps check`) through a stable JSON envelope and semantic exit codes
+instead of parsing human text:
+
+```bash
+dots status --output json   # exit 0 aligned, 2 findings to act on, 1 error
+```
+
+See [`docs/agents/output-contract.md`](docs/agents/output-contract.md) for the
+envelope shape and exit-code contract.
+
 Inspect and install missing Dependencies deliberately:
 
 ```bash
@@ -124,4 +137,6 @@ The v1 scope focuses on safe repository-owned configuration declared in `dots.ya
 - [`CONTEXT.md`](CONTEXT.md) — domain vocabulary, architecture context, and project model.
 - [`docs/scope.md`](docs/scope.md) — v1 scope, non-goals, and deferred work.
 - [`docs/release.md`](docs/release.md) — release workflow, checksums, Homebrew, and Bootstrapper details.
+- [`AGENTS.md`](AGENTS.md) — shared guide for autonomous agents (also exposed as `CLAUDE.md`).
+- [`docs/agents/output-contract.md`](docs/agents/output-contract.md) — JSON envelope and semantic exit codes for agents and scripts.
 - [`docs/adr/0001-bootstrap-with-go-cli.md`](docs/adr/0001-bootstrap-with-go-cli.md) — ADR for bootstrapping with the Go CLI.
