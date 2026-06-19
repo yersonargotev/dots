@@ -228,6 +228,7 @@ entries:
   - source: configs/claude/settings.json
     target: ~/.claude/settings.json
     strategy: copy
+    ownership: json-subset
     tags:
       - core
     os:

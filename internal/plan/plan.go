@@ -2,13 +2,16 @@ package plan
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 // Status describes what installing an Action would do to its target.
@@ -42,6 +45,7 @@ type Options struct {
 	OS         string
 	SourceRoot string
 	Home       string
+	Metadata   state.Metadata
 }
 
 // Build computes the Install Plan for the selected Profile without mutating
@@ -71,7 +75,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		if err != nil {
 			return Plan{}, err
 		}
-		actionStatus, err := status(entry.Strategy, target, sourceAbs, opts.SourceRoot)
+		actionStatus, err := status(entry, target, sourceAbs, opts.SourceRoot, opts.Metadata)
 		if err != nil {
 			return Plan{}, err
 		}
@@ -253,7 +257,7 @@ func InsideRoot(path, root string) bool {
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
-func status(strategy, target, sourceAbs, sourceRoot string) (Status, error) {
+func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta state.Metadata) (Status, error) {
 	// The managed source must exist before any target comparison is
 	// meaningful: a missing source cannot be installed, and a symlink that
 	// still points at a deleted source is broken, not unchanged.
@@ -271,7 +275,7 @@ func status(strategy, target, sourceAbs, sourceRoot string) (Status, error) {
 		return StatusConflict, nil
 	}
 
-	switch strategy {
+	switch entry.Strategy {
 	case "symlink":
 		if info.Mode()&os.ModeSymlink == 0 {
 			return StatusConflict, nil
@@ -286,12 +290,26 @@ func status(strategy, target, sourceAbs, sourceRoot string) (Status, error) {
 			return StatusConflict, nil
 		}
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
+			if entry.Ownership == "json-subset" && metadataMatchesEntry(meta, target, entry.Source, entry.Strategy) {
+				subset, subsetErr := jsonSubsetContent(target, sourceAbs)
+				if subsetErr != nil {
+					return "", subsetErr
+				}
+				if subset {
+					return StatusUnchanged, nil
+				}
+			}
 			return StatusConflict, nil
 		}
 		return StatusUnchanged, nil
 	default:
 		return StatusConflict, nil
 	}
+}
+
+func metadataMatchesEntry(meta state.Metadata, target, source, strategy string) bool {
+	rec, ok := meta.FindByTarget(target)
+	return ok && rec.Source == source && rec.Strategy == strategy
 }
 
 func safeSourceExists(sourceAbs, sourceRoot string) (bool, error) {
@@ -333,4 +351,61 @@ func sameContent(a, b string) (bool, error) {
 		return false, err
 	}
 	return bytes.Equal(da, db), nil
+}
+
+func jsonSubsetContent(target, sourceAbs string) (bool, error) {
+	sourceData, err := os.ReadFile(sourceAbs)
+	if err != nil {
+		return false, err
+	}
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		return false, err
+	}
+
+	var sourceValue, targetValue any
+	if err := json.Unmarshal(sourceData, &sourceValue); err != nil {
+		return false, fmt.Errorf("parse source JSON %s: %w", sourceAbs, err)
+	}
+	if err := json.Unmarshal(targetData, &targetValue); err != nil {
+		return false, nil
+	}
+	return jsonContains(targetValue, sourceValue), nil
+}
+
+func jsonContains(target, source any) bool {
+	switch sourceTyped := source.(type) {
+	case map[string]any:
+		targetTyped, ok := target.(map[string]any)
+		if !ok {
+			return false
+		}
+		for key, sourceChild := range sourceTyped {
+			targetChild, ok := targetTyped[key]
+			if !ok || !jsonContains(targetChild, sourceChild) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		targetTyped, ok := target.([]any)
+		if !ok {
+			return false
+		}
+		for _, sourceItem := range sourceTyped {
+			found := false
+			for _, targetItem := range targetTyped {
+				if jsonContains(targetItem, sourceItem) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+		return true
+	default:
+		return reflect.DeepEqual(target, source)
+	}
 }

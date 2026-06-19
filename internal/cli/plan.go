@@ -14,6 +14,7 @@ func newPlanCommand() *cobra.Command {
 		profile    string
 		sourceRoot string
 		home       string
+		stateRoot  string
 	)
 
 	cmd := &cobra.Command{
@@ -29,7 +30,12 @@ func newPlanCommand() *cobra.Command {
 				return err
 			}
 
-			paths, err := resolvePaths(home, sourceRoot, "")
+			paths, err := resolvePaths(home, sourceRoot, stateRoot)
+			if err != nil {
+				return err
+			}
+
+			meta, err := loadInstallationMetadata(paths, stateRoot)
 			if err != nil {
 				return err
 			}
@@ -42,6 +48,7 @@ func newPlanCommand() *cobra.Command {
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
+				Metadata:   meta,
 			})
 			if err != nil {
 				return err
@@ -56,5 +63,6 @@ func newPlanCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to plan")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to plan against (default: the current user's home); use a sandbox path to preview without touching real config")
+	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")
 	return cmd
 }

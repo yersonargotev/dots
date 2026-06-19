@@ -48,6 +48,34 @@ entries:
 	}
 }
 
+func TestLoadFileParsesEntryOwnership(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/claude/settings.json
+    target: ~/.claude/settings.json
+    strategy: copy
+    ownership: json-subset
+    tags: [core]
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if got.Entries[0].Ownership != "json-subset" {
+		t.Fatalf("Entry.Ownership = %q, want json-subset", got.Entries[0].Ownership)
+	}
+}
+
 func TestLoadFileParsesEntryDependencies(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")
@@ -399,6 +427,35 @@ func TestRepositoryManifestIncludesChromeDevToolsPluginProvisioners(t *testing.T
 	}
 }
 
+func TestRepositoryManifestMarksClaudeSettingsAsJSONSubsetOwned(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var settings *manifest.Entry
+	for i := range got.Entries {
+		entry := &got.Entries[i]
+		if entry.Source == "configs/claude/settings.json" && entry.Target == "~/.claude/settings.json" {
+			settings = entry
+			break
+		}
+	}
+
+	if settings == nil {
+		t.Fatal("repository manifest missing Claude settings entry")
+	}
+	if settings.Strategy != "copy" {
+		t.Fatalf("Claude settings strategy = %q, want copy", settings.Strategy)
+	}
+	if settings.Ownership != "json-subset" {
+		t.Fatalf("Claude settings ownership = %q, want json-subset", settings.Ownership)
+	}
+}
+
 func TestDependencyProbeTrimsWhitespace(t *testing.T) {
 	tests := []struct {
 		name string
@@ -682,6 +739,36 @@ entries:
     tags: [core]
 `,
 			want: "entries[0].target is required",
+		},
+		{
+			name: "unsupported ownership",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/claude/settings.json
+    target: ~/.claude/settings.json
+    strategy: copy
+    ownership: merge
+    tags: [core]
+`,
+			want: "entries[0].ownership must be one of json-subset",
+		},
+		{
+			name: "json subset ownership on non-copy strategy",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/claude/settings.json
+    target: ~/.claude/settings.json
+    strategy: symlink
+    ownership: json-subset
+    tags: [core]
+`,
+			want: "entries[0].ownership json-subset requires strategy copy",
 		},
 	}
 

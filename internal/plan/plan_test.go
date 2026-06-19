@@ -7,6 +7,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 // writeSource creates a managed source file under sourceRoot and returns its
@@ -25,6 +26,11 @@ func writeSource(t *testing.T, sourceRoot, rel, content string) string {
 
 func buildOne(t *testing.T, sourceRoot, home string, e manifest.Entry) plan.Action {
 	t.Helper()
+	return buildOneWithMetadata(t, sourceRoot, home, e, state.Metadata{})
+}
+
+func buildOneWithMetadata(t *testing.T, sourceRoot, home string, e manifest.Entry, meta state.Metadata) plan.Action {
+	t.Helper()
 	m := manifest.Manifest{
 		Version:  1,
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
@@ -35,6 +41,7 @@ func buildOne(t *testing.T, sourceRoot, home string, e manifest.Entry) plan.Acti
 		OS:         "darwin",
 		SourceRoot: sourceRoot,
 		Home:       home,
+		Metadata:   meta,
 	})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -155,6 +162,151 @@ func TestBuildCopyComparesContent(t *testing.T) {
 			t.Fatalf("Status = %q, want %q", action.Status, plan.StatusCreate)
 		}
 	})
+}
+
+func TestBuildCopyJSONSubsetOwnership(t *testing.T) {
+	tests := []struct {
+		name          string
+		ownership     string
+		sourceContent string
+		targetContent string
+		metadata      func(target string) state.Metadata
+		want          plan.Status
+	}{
+		{
+			name:      "untrusted pre-existing compatible JSON superset is conflict",
+			ownership: "json-subset",
+			sourceContent: `{
+  "permissions": {
+    "allow": ["Bash(git status:*)"]
+  }
+}`,
+			targetContent: `{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(go test:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": []
+  }
+}`,
+			want: plan.StatusConflict,
+		},
+		{
+			name:      "trusted source values plus provisioner additions are unchanged",
+			ownership: "json-subset",
+			sourceContent: `{
+  "permissions": {
+    "allow": ["Bash(git status:*)"]
+  }
+}`,
+			targetContent: `{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(go test:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": []
+  }
+}`,
+			metadata: func(target string) state.Metadata {
+				return state.Metadata{Entries: []state.Record{{Target: target, Source: "configs/claude/settings.json", Strategy: "copy"}}}
+			},
+			want: plan.StatusUnchanged,
+		},
+		{
+			name: "regular copy still requires exact content",
+			sourceContent: `{
+  "permissions": {
+    "allow": ["Bash(git status:*)"]
+  }
+}`,
+			targetContent: `{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(go test:*)"
+    ]
+  }
+}`,
+			want: plan.StatusConflict,
+		},
+		{
+			name:      "missing dots-owned JSON value is conflict even with metadata",
+			ownership: "json-subset",
+			sourceContent: `{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(go test:*)"
+    ]
+  }
+}`,
+			targetContent: `{
+  "permissions": {
+    "allow": ["Bash(git status:*)"]
+  }
+}`,
+			metadata: func(target string) state.Metadata {
+				return state.Metadata{Entries: []state.Record{{Target: target, Source: "configs/claude/settings.json", Strategy: "copy"}}}
+			},
+			want: plan.StatusConflict,
+		},
+		{
+			name:      "changed dots-owned JSON value is conflict even with metadata",
+			ownership: "json-subset",
+			sourceContent: `{
+  "permissions": {
+    "allow": ["Bash(git status:*)"]
+  }
+}`,
+			targetContent: `{
+  "permissions": {
+    "allow": ["Bash(git diff:*)"]
+  }
+}`,
+			metadata: func(target string) state.Metadata {
+				return state.Metadata{Entries: []state.Record{{Target: target, Source: "configs/claude/settings.json", Strategy: "copy"}}}
+			},
+			want: plan.StatusConflict,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sourceRoot := t.TempDir()
+			home := t.TempDir()
+			writeSource(t, sourceRoot, "configs/claude/settings.json", tt.sourceContent)
+			target := filepath.Join(home, ".claude", "settings.json")
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				t.Fatalf("mkdir target: %v", err)
+			}
+			if err := os.WriteFile(target, []byte(tt.targetContent), 0o600); err != nil {
+				t.Fatalf("write target: %v", err)
+			}
+
+			meta := state.Metadata{}
+			if tt.metadata != nil {
+				meta = tt.metadata(target)
+			}
+
+			action := buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+				Source:    "configs/claude/settings.json",
+				Target:    "~/.claude/settings.json",
+				Strategy:  "copy",
+				Ownership: tt.ownership,
+				Tags:      []string{"core"},
+			}, meta)
+
+			if action.Status != tt.want {
+				t.Fatalf("Status = %q, want %q", action.Status, tt.want)
+			}
+		})
+	}
 }
 
 func TestBuildDanglingSymlinkIsConflict(t *testing.T) {
