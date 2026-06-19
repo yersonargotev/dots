@@ -62,20 +62,19 @@ func newStatusCommand() *cobra.Command {
 				return err
 			}
 
-			renderStatus(cmd.OutOrStdout(), report)
-
-			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
-			if err != nil {
-				return err
-			}
-			renderStatusProvisioners(cmd.OutOrStdout(), provPlan)
-
 			// Declared provisioners make no alignment claim, so only the Dotfiles
-			// Status entries decide whether the workstation diverges.
-			if report.HasFindings() {
-				return &FindingsError{}
-			}
-			return nil
+			// Status entries decide findings; the JSON envelope therefore carries
+			// the report, while the text surface also lists provisioners.
+			return renderOrEmit(cmd, report, func() error {
+				renderStatus(cmd.OutOrStdout(), report)
+
+				provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
+				if err != nil {
+					return err
+				}
+				renderStatusProvisioners(cmd.OutOrStdout(), provPlan)
+				return nil
+			})
 		},
 	}
 

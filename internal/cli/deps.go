@@ -55,11 +55,10 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 				return err
 			}
 
-			renderDepsCheck(cmd.OutOrStdout(), report)
-			if report.HasFindings() {
-				return &FindingsError{}
-			}
-			return nil
+			return renderOrEmit(cmd, report, func() error {
+				renderDepsCheck(cmd.OutOrStdout(), report)
+				return nil
+			})
 		},
 	}
 
@@ -100,11 +99,10 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 				return err
 			}
 
-			renderDepsPlan(cmd.OutOrStdout(), report)
-			if report.HasFindings() {
-				return &FindingsError{}
-			}
-			return nil
+			return renderOrEmit(cmd, report, func() error {
+				renderDepsPlan(cmd.OutOrStdout(), report)
+				return nil
+			})
 		},
 	}
 

@@ -12,14 +12,14 @@ import (
 // Manual is set when the dependency has no executable package-manager action for
 // the active Tier.
 type InstallAction struct {
-	Dependency  string
-	Probe       string
-	FontMatch   string
-	FontMatches []string
-	Package     string
-	Executable  string
-	Args        []string
-	Manual      string
+	Dependency  string   `json:"dependency"`
+	Probe       string   `json:"probe,omitempty"`
+	FontMatch   string   `json:"font_match,omitempty"`
+	FontMatches []string `json:"font_matches,omitempty"`
+	Package     string   `json:"package,omitempty"`
+	Executable  string   `json:"executable,omitempty"`
+	Args        []string `json:"args,omitempty"`
+	Manual      string   `json:"manual,omitempty"`
 }
 
 // Guidance is the advisory installation hint for one missing Dependency. Command
@@ -27,19 +27,19 @@ type InstallAction struct {
 // for the active Tier; otherwise Manual carries a fallback note and Command is
 // empty. Action carries the structured model that Command renders from.
 type Guidance struct {
-	Name    string
-	Command string
-	Manual  string
-	Action  InstallAction
+	Name    string        `json:"name"`
+	Command string        `json:"command,omitempty"`
+	Manual  string        `json:"manual,omitempty"`
+	Action  InstallAction `json:"action"`
 }
 
 // PlanReport is the Dependency Plan for a Profile: OS-aware guidance for the
 // missing Dependencies under the active Tier. It is advisory only.
 type PlanReport struct {
-	Profile string
-	Tier    Tier
-	Actions []InstallAction
-	Items   []Guidance
+	Profile string          `json:"profile"`
+	Tier    Tier            `json:"tier"`
+	Actions []InstallAction `json:"actions"`
+	Items   []Guidance      `json:"items"`
 }
 
 // HasFindings reports whether the Dependency Plan lists any missing Dependency.

@@ -26,17 +26,21 @@ const (
 
 // Action is a single planned filesystem change for a Managed Entry.
 type Action struct {
-	Source         string
-	ResolvedSource string
-	Target         string
-	Strategy       string
-	Status         Status
+	Source string `json:"source"`
+	// ResolvedSource is an absolute, machine-local path and is therefore kept out
+	// of the Agent Output Contract: it differs between machines and install
+	// locations, which would break idempotent envelope comparisons. Agents key on
+	// the portable, manifest-relative Source instead.
+	ResolvedSource string `json:"-"`
+	Target         string `json:"target"`
+	Strategy       string `json:"strategy"`
+	Status         Status `json:"status"`
 }
 
 // Plan is the preview of changes the installer would apply for a Profile.
 type Plan struct {
-	Profile string
-	Actions []Action
+	Profile string   `json:"profile"`
+	Actions []Action `json:"actions"`
 }
 
 // HasFindings reports whether the Install Plan contains an action the caller

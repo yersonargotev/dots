@@ -41,16 +41,24 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 
-	err := root.Execute()
+	// ExecuteC returns the command that actually ran so the error envelope can be
+	// labeled and the output mode read from its inherited flags.
+	executed, err := root.ExecuteC()
 	if err == nil {
 		return ExitOK
 	}
 
 	var findings *FindingsError
 	if errors.As(err, &findings) {
+		// The diagnostic envelope (status "findings") was already written; only
+		// the exit code remains.
 		return ExitFindings
 	}
 
-	fmt.Fprintln(stderr, "Error:", err)
+	if wantsJSON(executed) {
+		emitError(stdout, executed, err)
+	} else {
+		fmt.Fprintln(stderr, "Error:", err)
+	}
 	return ExitError
 }

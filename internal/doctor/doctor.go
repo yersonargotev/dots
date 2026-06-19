@@ -31,13 +31,13 @@ type Options struct {
 
 // Report is the consolidated doctor diagnostic output for a profile.
 type Report struct {
-	Profile       string
-	OS            string
-	Platform      Platform
-	Dependencies  deps.CheckReport
-	Configuration status.Report
-	Provisioners  provision.CheckReport
-	SecretScan    SecretReport
+	Profile       string                `json:"profile"`
+	OS            string                `json:"os"`
+	Platform      Platform              `json:"platform"`
+	Dependencies  deps.CheckReport      `json:"dependencies"`
+	Configuration status.Report         `json:"configuration"`
+	Provisioners  provision.CheckReport `json:"provisioners"`
+	SecretScan    SecretReport          `json:"secret_scan"`
 }
 
 // HasFindings reports whether doctor surfaced any concern across its
@@ -53,21 +53,21 @@ func (r Report) HasFindings() bool {
 
 // Platform reports whether the current platform is supported by dots v1.
 type Platform struct {
-	Supported bool
-	OS        string
+	Supported bool   `json:"supported"`
+	OS        string `json:"os"`
 }
 
 // SecretReport is the repository-managed configuration Secret Scan result.
 type SecretReport struct {
-	Findings []SecretFinding
+	Findings []SecretFinding `json:"findings"`
 }
 
 // SecretFinding identifies one obvious credential/private-key pattern in a
 // managed source file.
 type SecretFinding struct {
-	Source  string
-	Line    int
-	Pattern string
+	Source  string `json:"source"`
+	Line    int    `json:"line"`
+	Pattern string `json:"pattern"`
 }
 
 type secretPattern struct {

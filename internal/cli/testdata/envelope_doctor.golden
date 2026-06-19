@@ -1,0 +1,66 @@
+{
+  "schema_version": "1",
+  "command": "doctor",
+  "status": "findings",
+  "data": {
+    "profile": "default",
+    "os": "darwin",
+    "platform": {
+      "supported": true,
+      "os": "darwin"
+    },
+    "dependencies": {
+      "profile": "default",
+      "results": [
+        {
+          "name": "git",
+          "command": "git",
+          "present": true,
+          "warning": "git on PATH but `git --version` failed"
+        },
+        {
+          "name": "rg",
+          "command": "rg",
+          "present": false
+        }
+      ]
+    },
+    "configuration": {
+      "profile": "default",
+      "entries": [
+        {
+          "source": "configs/zsh/zshrc",
+          "target": "/Users/me/.zshrc",
+          "strategy": "symlink",
+          "state": "ok"
+        }
+      ]
+    },
+    "provisioners": {
+      "profile": "default",
+      "items": [
+        {
+          "tool": "gentle-ai",
+          "executable": "gentle-ai",
+          "args": [
+            "install",
+            "--scope",
+            "global"
+          ],
+          "missing": [
+            "engram"
+          ]
+        }
+      ]
+    },
+    "secret_scan": {
+      "findings": [
+        {
+          "source": "configs/git/config",
+          "line": 3,
+          "pattern": "credential-assignment"
+        }
+      ]
+    }
+  }
+}

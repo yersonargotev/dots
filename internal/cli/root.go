@@ -23,6 +23,18 @@ func NewRootCommand() *cobra.Command {
 	}
 	root.SetVersionTemplate("dots {{.Version}}\n")
 
+	// --output is the Agent Output Contract surface selector. It is persistent so
+	// it is uniformly available and documented once; only the read-only
+	// diagnostic commands emit a JSON envelope today.
+	root.PersistentFlags().String(outputFlag, outputText, "output format for command results: text or json")
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		v, _ := cmd.Flags().GetString(outputFlag)
+		if v != outputText && v != outputJSON {
+			return fmt.Errorf("invalid --%s %q: must be %q or %q", outputFlag, v, outputText, outputJSON)
+		}
+		return nil
+	}
+
 	root.AddCommand(newVersionCommand())
 	root.AddCommand(newManifestCommand())
 	root.AddCommand(newPlanCommand())

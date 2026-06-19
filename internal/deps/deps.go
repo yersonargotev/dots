@@ -32,18 +32,22 @@ type Options struct {
 
 // Result is the presence finding for a single declared Dependency.
 type Result struct {
-	Name        string
-	Command     string
-	Present     bool
-	Warning     string
-	ProbeDetail string
-	Hint        string
+	Name    string `json:"name"`
+	Command string `json:"command"`
+	Present bool   `json:"present"`
+	Warning string `json:"warning,omitempty"`
+	// ProbeDetail and Hint are advisory, human-prose strings with no stable
+	// format (truncated probe output, English remediation text). They stay out of
+	// the Agent Output Contract; the machine-meaningful signals are Present and
+	// Warning.
+	ProbeDetail string `json:"-"`
+	Hint        string `json:"-"`
 }
 
 // CheckReport is the Dependency presence report for a Profile.
 type CheckReport struct {
-	Profile string
-	Results []Result
+	Profile string   `json:"profile"`
+	Results []Result `json:"results"`
 }
 
 // HasFindings reports whether any declared Dependency is absent from the
