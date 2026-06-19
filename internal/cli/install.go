@@ -64,6 +64,9 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			renderProvisionPlan(cmd.OutOrStdout(), provPlan)
+			if err := renderSkippedProvisionerHint(cmd.OutOrStdout(), *m, profile, runtime.GOOS); err != nil {
+				return err
+			}
 
 			if dryRun {
 				return nil

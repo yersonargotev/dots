@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/provision"
 )
 
@@ -26,6 +27,26 @@ func renderProvisionPlan(w io.Writer, p provision.Plan) {
 		}
 	}
 	fmt.Fprintf(w, "\nSummary: %d provisioner(s)\n", len(p.Steps))
+}
+
+// renderSkippedProvisionerHint prints a one-line nudge when the active profile
+// omits provisioners that another profile would select on this OS, so a
+// default-profile user discovers the fuller profile (e.g. the desktop-only
+// chrome-devtools integration) instead of silently missing it. It stays quiet
+// when nothing is skipped, keeping the fuller profile's output noise-free. The
+// profile is already validated upstream by plan.Build, so an error here only
+// signals a programming mistake and is surfaced rather than swallowed.
+func renderSkippedProvisionerHint(w io.Writer, m manifest.Manifest, profile, os string) error {
+	hint, ok, err := provision.SkippedProvisioners(m, provision.Options{Profile: profile, OS: os})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	fmt.Fprintf(w, "\nNote: profile %q skips %d provisioner(s); run with --profile %s to include them.\n",
+		hint.Profile, hint.Count, hint.SuggestedProfile)
+	return nil
 }
 
 // renderProvisionReport writes the actual execution outcomes for provisioners.
