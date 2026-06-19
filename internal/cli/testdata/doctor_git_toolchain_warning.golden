@@ -1,0 +1,11 @@
+Doctor for profile "default"
+
+Platform: ok (darwin)
+Dependencies: warn (0 missing, 1 warnings)
+  warning: git: git resolved on PATH but `git --version` failed
+    detail: xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools), missing xcrun
+    hint: Repair Xcode Command Line Tools with `xcode-select --install` or reinstall them, then rerun `dots doctor`.
+Configuration: ok (0 ok, 0 concerns)
+Provisioners: ok (no provisioners declared)
+Secret Scan: ok (0 findings)
+Guardrail: Secret Scan catches obvious credential and private-key patterns only; it is not proof this repository is safe.

@@ -26,6 +26,7 @@ type Options struct {
 	OS         string
 	SourceRoot string
 	Home       string
+	ToolRunner deps.CommandRunner
 }
 
 // Report is the consolidated doctor diagnostic output for a profile.
@@ -77,7 +78,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 		Platform: Platform{Supported: supportedOS(opts.OS), OS: opts.OS},
 	}
 
-	depReport, err := deps.Check(m, deps.Options{Profile: opts.Profile, OS: opts.OS}, look, fontLook)
+	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, OS: opts.OS}, look, fontLook, opts.ToolRunner)
 	if err != nil {
 		return Report{}, err
 	}

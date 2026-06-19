@@ -1,6 +1,8 @@
 package deps_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/deps"
@@ -88,6 +90,113 @@ func TestCheckReportsPresentAndMissingForProfile(t *testing.T) {
 	}
 	if report.Results[1] != (deps.Result{Name: "starship", Command: "starship", Present: false}) {
 		t.Fatalf("Results[1] = %#v, want missing starship", report.Results[1])
+	}
+}
+
+func TestCheckWithToolProbesReportsGitToolchainWarnings(t *testing.T) {
+	errProbe := errors.New("exit status 1")
+	xcrunOutput := "xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools), missing xcrun"
+
+	tests := []struct {
+		name          string
+		goos          string
+		present       []string
+		output        string
+		runErr        error
+		wantPresent   bool
+		wantWarning   bool
+		wantHint      bool
+		wantDetail    string
+		wantProbeRuns int
+	}{
+		{name: "git probe succeeds", goos: "darwin", present: []string{"git"}, wantPresent: true, wantProbeRuns: 1},
+		{name: "git missing skips probe", goos: "darwin", present: nil, wantPresent: false},
+		{name: "git probe fails", goos: "darwin", present: []string{"git"}, runErr: errProbe, wantPresent: true, wantWarning: true, wantDetail: "exit status 1", wantProbeRuns: 1},
+		{name: "darwin xcrun failure includes repair hint", goos: "darwin", present: []string{"git"}, output: xcrunOutput, runErr: errProbe, wantPresent: true, wantWarning: true, wantHint: true, wantDetail: xcrunOutput, wantProbeRuns: 1},
+		{name: "linux xcrun-looking failure keeps generic warning", goos: "linux", present: []string{"git"}, output: xcrunOutput, runErr: errProbe, wantPresent: true, wantWarning: true, wantDetail: xcrunOutput, wantProbeRuns: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := manifest.Manifest{
+				Version:  1,
+				Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+				Entries: []manifest.Entry{{
+					Source: "configs/git/config", Target: "~/.gitconfig", Strategy: "copy", Tags: []string{"core"},
+					Dependencies: []manifest.Dependency{{Name: "git"}},
+				}},
+			}
+
+			var probeRuns int
+			report, err := deps.CheckWithToolProbes(m, deps.Options{Profile: "default", OS: tt.goos}, lookupSet(tt.present...), fontLookupSet(),
+				func(command string, args ...string) (string, error) {
+					probeRuns++
+					if command != "git" {
+						t.Fatalf("probe command = %q, want git", command)
+					}
+					if len(args) != 1 || args[0] != "--version" {
+						t.Fatalf("probe args = %#v, want [--version]", args)
+					}
+					return tt.output, tt.runErr
+				})
+			if err != nil {
+				t.Fatalf("CheckWithToolProbes() error = %v", err)
+			}
+
+			if probeRuns != tt.wantProbeRuns {
+				t.Fatalf("probe runs = %d, want %d", probeRuns, tt.wantProbeRuns)
+			}
+			if len(report.Results) != 1 {
+				t.Fatalf("Results len = %d, want 1 (%#v)", len(report.Results), report.Results)
+			}
+			result := report.Results[0]
+			if result.Present != tt.wantPresent {
+				t.Fatalf("Present = %v, want %v (%#v)", result.Present, tt.wantPresent, result)
+			}
+			if (result.Warning != "") != tt.wantWarning {
+				t.Fatalf("Warning = %q, want warning=%v", result.Warning, tt.wantWarning)
+			}
+			if (result.Hint != "") != tt.wantHint {
+				t.Fatalf("Hint = %q, want hint=%v", result.Hint, tt.wantHint)
+			}
+			if result.ProbeDetail != tt.wantDetail {
+				t.Fatalf("ProbeDetail = %q, want %q", result.ProbeDetail, tt.wantDetail)
+			}
+		})
+	}
+}
+
+func TestCheckWithToolProbesSanitizesAndTruncatesGitProbeDetail(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/git/config", Target: "~/.gitconfig", Strategy: "copy", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "git"}},
+		}},
+	}
+	output := "  xcrun: error: invalid active developer path\n\t(/Library/Developer/CommandLineTools), missing xcrun  " + strings.Repeat(" detail", 80)
+
+	report, err := deps.CheckWithToolProbes(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("git"), fontLookupSet(),
+		func(command string, args ...string) (string, error) {
+			return output, errors.New("exit status 1")
+		})
+	if err != nil {
+		t.Fatalf("CheckWithToolProbes() error = %v", err)
+	}
+
+	detail := report.Results[0].ProbeDetail
+	if strings.ContainsAny(detail, "\n\r\t") {
+		t.Fatalf("ProbeDetail contains raw whitespace: %q", detail)
+	}
+	if !strings.Contains(detail, "xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools), missing xcrun") {
+		t.Fatalf("ProbeDetail = %q, want sanitized xcrun error", detail)
+	}
+	if len(detail) > 240 {
+		t.Fatalf("ProbeDetail length = %d, want <= 240", len(detail))
+	}
+	if !strings.HasSuffix(detail, "...") {
+		t.Fatalf("ProbeDetail = %q, want truncation marker", detail)
 	}
 }
 

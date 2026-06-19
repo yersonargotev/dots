@@ -63,20 +63,37 @@ func renderDoctorDependencies(w io.Writer, report doctor.Report) {
 	}
 
 	var missing int
+	var warnings int
 	for _, result := range report.Dependencies.Results {
 		if !result.Present {
 			missing++
 		}
+		if result.Warning != "" {
+			warnings++
+		}
 	}
-	if missing == 0 {
+	if missing == 0 && warnings == 0 {
 		fmt.Fprintf(w, "Dependencies: ok (%d present, 0 missing)\n", len(report.Dependencies.Results))
 		return
 	}
 
-	fmt.Fprintf(w, "Dependencies: warn (%d missing)\n", missing)
+	if warnings == 0 {
+		fmt.Fprintf(w, "Dependencies: warn (%d missing)\n", missing)
+	} else {
+		fmt.Fprintf(w, "Dependencies: warn (%d missing, %d warnings)\n", missing, warnings)
+	}
 	for _, result := range report.Dependencies.Results {
 		if !result.Present {
 			fmt.Fprintf(w, "  missing dependency: %s\n", result.Name)
+		}
+		if result.Warning != "" {
+			fmt.Fprintf(w, "  warning: %s: %s\n", result.Name, result.Warning)
+			if result.ProbeDetail != "" {
+				fmt.Fprintf(w, "    detail: %s\n", result.ProbeDetail)
+			}
+			if result.Hint != "" {
+				fmt.Fprintf(w, "    hint: %s\n", result.Hint)
+			}
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package doctor_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -201,6 +202,41 @@ func TestBuildReportsProvisionerReadiness(t *testing.T) {
 	}
 	if !equalStrings(item.Missing, []string{"engram"}) {
 		t.Fatalf("provisioner missing = %#v, want [engram]", item.Missing)
+	}
+}
+
+func TestBuildRunsReadOnlyGitProbe(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	writeFile(t, sourceRoot, "configs/git/config", "safe = true\n")
+
+	m := singleEntryManifest("configs/git/config")
+	m.Entries[0].Dependencies = []manifest.Dependency{{Name: "git"}, {Name: "starship"}}
+
+	var gotCommand string
+	var gotArgs []string
+	report, err := doctor.Build(m, state.Metadata{}, doctor.Options{
+		Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home,
+		ToolRunner: func(command string, args ...string) (string, error) {
+			gotCommand = command
+			gotArgs = append([]string(nil), args...)
+			return "xcrun: error: invalid active developer path", errors.New("exit status 1")
+		},
+	}, lookupSet("git", "starship"), fontLookupSet())
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if gotCommand != "git" || !equalStrings(gotArgs, []string{"--version"}) {
+		t.Fatalf("probe = %s %#v, want git [--version]", gotCommand, gotArgs)
+	}
+	if len(report.Dependencies.Results) != 2 {
+		t.Fatalf("Results len = %d, want 2 (%#v)", len(report.Dependencies.Results), report.Dependencies.Results)
+	}
+	if report.Dependencies.Results[0].Warning == "" || report.Dependencies.Results[0].Hint == "" {
+		t.Fatalf("git result = %#v, want warning and Xcode CLT hint", report.Dependencies.Results[0])
+	}
+	if report.Dependencies.Results[1].Warning != "" {
+		t.Fatalf("starship result = %#v, want no probe warning", report.Dependencies.Results[1])
 	}
 }
 

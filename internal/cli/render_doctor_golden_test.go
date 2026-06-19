@@ -65,6 +65,26 @@ func TestRenderDoctorGolden(t *testing.T) {
 			},
 			golden: "doctor_provisioner_not_ready.golden",
 		},
+		{
+			name: "git toolchain warning",
+			report: doctor.Report{
+				Profile:  "default",
+				Platform: doctor.Platform{Supported: true, OS: "darwin"},
+				Dependencies: deps.CheckReport{Profile: "default", Results: []deps.Result{
+					{
+						Name:        "git",
+						Command:     "git",
+						Present:     true,
+						Warning:     "git resolved on PATH but `git --version` failed",
+						ProbeDetail: "xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools), missing xcrun",
+						Hint:        "Repair Xcode Command Line Tools with `xcode-select --install` or reinstall them, then rerun `dots doctor`.",
+					},
+				}},
+				Configuration: status.Report{Profile: "default"},
+				SecretScan:    doctor.SecretReport{},
+			},
+			golden: "doctor_git_toolchain_warning.golden",
+		},
 	}
 
 	for _, tt := range tests {
