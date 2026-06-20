@@ -23,6 +23,7 @@ func TestRenderCommand(t *testing.T) {
 					Scope:      "global",
 					Channel:    "stable",
 					Persona:    "neutral",
+					Preset:     "custom",
 					SDDMode:    "strict",
 					Agents:     []string{"codex", "claude"},
 					Components: []string{"engram", "sdd"},
@@ -35,6 +36,7 @@ func TestRenderCommand(t *testing.T) {
 				"--scope", "global",
 				"--channel", "stable",
 				"--persona", "neutral",
+				"--preset", "custom",
 				"--sdd-mode", "strict",
 				"--agents", "codex,claude",
 				"--components", "engram,sdd",
@@ -54,6 +56,20 @@ func TestRenderCommand(t *testing.T) {
 			wantArgs: []string{"install", "--scope", "global", "--agents", "codex"},
 		},
 		{
+			name: "uninstall renders action with cleanup flags",
+			prov: manifest.Provisioner{
+				Tool: "gentle-ai",
+				Spec: manifest.ProvisionerSpec{
+					Action:     "uninstall",
+					Agents:     []string{"codex", "claude-code"},
+					Components: []string{"sdd"},
+					Yes:        true,
+				},
+			},
+			wantExec: "gentle-ai",
+			wantArgs: []string{"uninstall", "--agents", "codex,claude-code", "--components", "sdd", "--yes"},
+		},
+		{
 			name: "persona only",
 			prov: manifest.Provisioner{
 				Tool: "gentle-ai",
@@ -61,6 +77,15 @@ func TestRenderCommand(t *testing.T) {
 			},
 			wantExec: "gentle-ai",
 			wantArgs: []string{"install", "--persona", "gentleman"},
+		},
+		{
+			name: "preset only",
+			prov: manifest.Provisioner{
+				Tool: "gentle-ai",
+				Spec: manifest.ProvisionerSpec{Preset: "custom"},
+			},
+			wantExec: "gentle-ai",
+			wantArgs: []string{"install", "--preset", "custom"},
 		},
 		{
 			name: "whitespace scalars and list entries are trimmed and dropped",

@@ -181,9 +181,11 @@ provisioners:
     tags: [core]
     os: [darwin, linux]
     spec:
+      action: install
       scope: global
       channel: stable
       persona: neutral
+      preset: custom
       sdd-mode: strict
       agents: [codex]
       components: [engram]
@@ -216,8 +218,8 @@ provisioners:
 	if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
 		t.Fatalf("Provisioner.OS = %#v, want [darwin linux]", prov.OS)
 	}
-	if prov.Spec.Scope != "global" || prov.Spec.Channel != "stable" || prov.Spec.Persona != "neutral" || prov.Spec.SDDMode != "strict" {
-		t.Fatalf("Provisioner.Spec scalar flags = %#v, want global/stable/neutral/strict", prov.Spec)
+	if prov.Spec.Action != "install" || prov.Spec.Scope != "global" || prov.Spec.Channel != "stable" || prov.Spec.Persona != "neutral" || prov.Spec.Preset != "custom" || prov.Spec.SDDMode != "strict" || prov.Spec.Yes {
+		t.Fatalf("Provisioner.Spec scalar flags = %#v, want install/global/stable/neutral/custom/strict/no yes", prov.Spec)
 	}
 	if !sameStrings(prov.Spec.Agents, []string{"codex"}) {
 		t.Fatalf("Provisioner.Spec.Agents = %#v, want [codex]", prov.Spec.Agents)
@@ -386,6 +388,63 @@ func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) 
 	}
 	if !hasDependency(codex.Dependencies, "codex") {
 		t.Errorf("codex provisioner missing codex dependency: %#v", codex.Dependencies)
+	}
+}
+
+func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var cleanup, install *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool != "gentle-ai" {
+			continue
+		}
+		switch {
+		case cleanup == nil && prov.Spec.Action == "uninstall":
+			cleanup = prov
+		case install == nil && (prov.Spec.Action == "" || prov.Spec.Action == "install"):
+			install = prov
+		}
+	}
+
+	if cleanup == nil {
+		t.Fatal("repository manifest missing gentle-ai uninstall cleanup provisioner")
+	}
+	if install == nil {
+		t.Fatal("repository manifest missing gentle-ai basic install provisioner")
+	}
+	if cleanup.Spec.Yes != true {
+		t.Fatalf("gentle-ai cleanup yes = %v, want true", cleanup.Spec.Yes)
+	}
+	if !sameStrings(cleanup.Spec.Agents, []string{"codex", "claude-code", "opencode"}) {
+		t.Fatalf("gentle-ai cleanup agents = %#v, want [codex claude-code opencode]", cleanup.Spec.Agents)
+	}
+	if !sameStrings(cleanup.Spec.Components, []string{"sdd"}) {
+		t.Fatalf("gentle-ai cleanup components = %#v, want [sdd]", cleanup.Spec.Components)
+	}
+	if install.Spec.Preset != "custom" {
+		t.Fatalf("gentle-ai install preset = %q, want custom", install.Spec.Preset)
+	}
+	if !sameStrings(install.Spec.Agents, []string{"codex", "claude-code"}) {
+		t.Fatalf("gentle-ai install agents = %#v, want [codex claude-code]", install.Spec.Agents)
+	}
+	if !sameStrings(install.Spec.Components, []string{"engram", "context7", "persona", "permissions"}) {
+		t.Fatalf("gentle-ai install components = %#v, want [engram context7 persona permissions]", install.Spec.Components)
+	}
+	for i := range got.Provisioners {
+		if &got.Provisioners[i] == cleanup {
+			break
+		}
+		if &got.Provisioners[i] == install {
+			t.Fatal("gentle-ai install provisioner appears before cleanup")
+		}
 	}
 }
 
@@ -1072,6 +1131,38 @@ provisioners:
       persona: senior-architect
 `,
 			want: "provisioners[0].spec.persona must be one of gentleman, neutral",
+		},
+		{
+			name: "unsupported gentle-ai action",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      action: sync
+`,
+			want: "provisioners[0].spec.action must be one of install, uninstall",
+		},
+		{
+			name: "yes without uninstall action",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      preset: custom
+      yes: true
+`,
+			want: "provisioners[0].spec.yes is only valid when action is uninstall",
+		},
+		{
+			name: "uninstall action rejects install-only fields",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      action: uninstall
+      scope: global
+      agents: [codex]
+      components: [sdd]
+      yes: true
+`,
+			want: "provisioners[0].spec uninstall action must not set install-only fields (scope, channel, persona, preset, sdd-mode, skills)",
 		},
 		{
 			name: "whitespace-only agents list is missing spec",

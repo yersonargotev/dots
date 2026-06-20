@@ -27,18 +27,27 @@ func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 	}
 }
 
-// renderGentleAIArgs renders `install` plus gentle-ai's flags in a deterministic
-// order; unset scalar flags and empty list flags are omitted, and list values
-// are comma-joined.
+// renderGentleAIArgs renders the selected gentle-ai action plus its flags in a
+// deterministic order; unset scalar flags and empty list flags are omitted, and
+// list values are comma-joined. The action defaults to install for existing
+// manifests that only declare install flags.
 func renderGentleAIArgs(spec manifest.ProvisionerSpec) []string {
-	args := []string{"install"}
+	action := strings.TrimSpace(spec.Action)
+	if action == "" {
+		action = "install"
+	}
+	args := []string{action}
 	args = appendScalarFlag(args, "--scope", spec.Scope)
 	args = appendScalarFlag(args, "--channel", spec.Channel)
 	args = appendScalarFlag(args, "--persona", spec.Persona)
+	args = appendScalarFlag(args, "--preset", spec.Preset)
 	args = appendScalarFlag(args, "--sdd-mode", spec.SDDMode)
 	args = appendListFlag(args, "--agents", spec.Agents)
 	args = appendListFlag(args, "--components", spec.Components)
 	args = appendListFlag(args, "--skills", spec.Skills)
+	if spec.Yes {
+		args = append(args, "--yes")
+	}
 	return args
 }
 

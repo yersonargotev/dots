@@ -297,14 +297,34 @@ provisioners:
     tags:
       - core
     spec:
-      scope: global
-      channel: stable
-      persona: neutral
-      sdd-mode: multi
+      action: uninstall
       agents:
         - codex
         - claude-code
         - opencode
+      components:
+        - sdd
+      yes: true
+    dependencies:
+      - name: gentle-ai
+        command: gentle-ai
+        brew: gentleman-programming/tap/gentle-ai
+  - tool: gentle-ai
+    tags:
+      - core
+    spec:
+      scope: global
+      channel: stable
+      persona: neutral
+      preset: custom
+      agents:
+        - codex
+        - claude-code
+      components:
+        - engram
+        - context7
+        - persona
+        - permissions
     dependencies:
       - name: gentle-ai
         command: gentle-ai
