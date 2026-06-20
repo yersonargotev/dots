@@ -400,7 +400,7 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	var cleanup, install *manifest.Provisioner
+	var cleanup, codexInstall, claudeInstall *manifest.Provisioner
 	for i := range got.Provisioners {
 		prov := &got.Provisioners[i]
 		if prov.Tool != "gentle-ai" {
@@ -409,16 +409,21 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 		switch {
 		case cleanup == nil && prov.Spec.Action == "uninstall":
 			cleanup = prov
-		case install == nil && (prov.Spec.Action == "" || prov.Spec.Action == "install"):
-			install = prov
+		case codexInstall == nil && sameStrings(prov.Spec.Agents, []string{"codex"}):
+			codexInstall = prov
+		case claudeInstall == nil && sameStrings(prov.Spec.Agents, []string{"claude-code"}):
+			claudeInstall = prov
 		}
 	}
 
 	if cleanup == nil {
 		t.Fatal("repository manifest missing gentle-ai uninstall cleanup provisioner")
 	}
-	if install == nil {
-		t.Fatal("repository manifest missing gentle-ai basic install provisioner")
+	if codexInstall == nil {
+		t.Fatal("repository manifest missing gentle-ai codex basic install provisioner")
+	}
+	if claudeInstall == nil {
+		t.Fatal("repository manifest missing gentle-ai claude basic install provisioner")
 	}
 	if cleanup.Spec.Yes != true {
 		t.Fatalf("gentle-ai cleanup yes = %v, want true", cleanup.Spec.Yes)
@@ -429,20 +434,26 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	if !sameStrings(cleanup.Spec.Components, []string{"sdd"}) {
 		t.Fatalf("gentle-ai cleanup components = %#v, want [sdd]", cleanup.Spec.Components)
 	}
-	if install.Spec.Preset != "custom" {
-		t.Fatalf("gentle-ai install preset = %q, want custom", install.Spec.Preset)
+	if codexInstall.Spec.Preset != "custom" {
+		t.Fatalf("gentle-ai codex install preset = %q, want custom", codexInstall.Spec.Preset)
 	}
-	if !sameStrings(install.Spec.Agents, []string{"codex", "claude-code"}) {
-		t.Fatalf("gentle-ai install agents = %#v, want [codex claude-code]", install.Spec.Agents)
+	if !sameStrings(codexInstall.Spec.Components, []string{"engram", "context7", "persona"}) {
+		t.Fatalf("gentle-ai codex install components = %#v, want [engram context7 persona]", codexInstall.Spec.Components)
 	}
-	if !sameStrings(install.Spec.Components, []string{"engram", "context7", "persona", "permissions"}) {
-		t.Fatalf("gentle-ai install components = %#v, want [engram context7 persona permissions]", install.Spec.Components)
+	if hasString(codexInstall.Spec.Components, "permissions") {
+		t.Fatalf("gentle-ai codex install components = %#v, must not include permissions because it installs gentle-dev", codexInstall.Spec.Components)
+	}
+	if claudeInstall.Spec.Preset != "custom" {
+		t.Fatalf("gentle-ai claude install preset = %q, want custom", claudeInstall.Spec.Preset)
+	}
+	if !sameStrings(claudeInstall.Spec.Components, []string{"engram", "context7", "persona", "permissions"}) {
+		t.Fatalf("gentle-ai claude install components = %#v, want [engram context7 persona permissions]", claudeInstall.Spec.Components)
 	}
 	for i := range got.Provisioners {
 		if &got.Provisioners[i] == cleanup {
 			break
 		}
-		if &got.Provisioners[i] == install {
+		if &got.Provisioners[i] == codexInstall || &got.Provisioners[i] == claudeInstall {
 			t.Fatal("gentle-ai install provisioner appears before cleanup")
 		}
 	}

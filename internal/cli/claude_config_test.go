@@ -169,8 +169,14 @@ func TestClaudeDefaultProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	if !strings.Contains(string(gotArgs), "uninstall --agents codex,claude-code,opencode --components sdd --yes") {
 		t.Fatalf("provisioner argv = %q, want it to cleanup legacy SDD for codex,claude-code,opencode before install", gotArgs)
 	}
-	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code") {
-		t.Fatalf("provisioner argv = %q, want it to install agents codex,claude-code", gotArgs)
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex --components engram,context7,persona") {
+		t.Fatalf("provisioner argv = %q, want codex install without permissions", gotArgs)
+	}
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents claude-code --components engram,context7,persona,permissions") {
+		t.Fatalf("provisioner argv = %q, want claude-code install with permissions", gotArgs)
+	}
+	if strings.Contains(string(gotArgs), "--agents codex --components engram,context7,persona,permissions") {
+		t.Fatalf("provisioner argv = %q, want codex install without permissions because it installs gentle-dev", gotArgs)
 	}
 	if strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code,opencode") {
 		t.Fatalf("provisioner argv = %q, want basic install without opencode", gotArgs)
@@ -187,7 +193,8 @@ func TestClaudeDefaultProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	for _, want := range []string{
 		"configs/claude/settings.json",
 		"configs/claude/statusline-command.sh",
-		"codex,claude-code",
+		"--agents codex --components engram,context7,persona",
+		"--agents claude-code --components engram,context7,persona,permissions",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("install output missing %q\noutput:\n%s", want, out)
