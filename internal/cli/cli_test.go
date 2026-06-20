@@ -2,13 +2,17 @@ package cli_test
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/plan"
 )
 
 func TestRootHelpIdentifiesDotsCLI(t *testing.T) {
@@ -1048,6 +1052,30 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("sandbox nvim symlink = %q, want %q", target, want)
 	}
 
+	// Derive the expected "ok" count from the loaded manifest rather than a
+	// hardcoded literal: install/status run for runtime.GOOS and the default
+	// profile, so a clean-home plan for the same inputs yields one create action
+	// per managed entry. On this freshly installed sandbox every managed entry
+	// must therefore report ok with zero conflict/drift.
+	loaded, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+	countPlan, err := plan.Build(*loaded, plan.Options{
+		Profile:    "default",
+		OS:         runtime.GOOS,
+		SourceRoot: sourceRoot,
+		Home:       t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	wantManaged := len(countPlan.Actions)
+	if wantManaged == 0 {
+		t.Fatalf("no managed entries apply to profile \"default\" on %s; derived plan is empty", runtime.GOOS)
+	}
+	wantSummary := fmt.Sprintf("Summary: %d ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported", wantManaged)
+
 	got := statusOut.String()
 	for _, want := range []string{
 		"ok",
@@ -1055,7 +1083,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		"configs/zellij/config.kdl -> " + zellijConfigTarget,
 		"configs/zellij/layouts/default.kdl -> " + zellijLayoutTarget,
 		"configs/nvim -> " + nvimTarget,
-		"Summary: 14 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
+		wantSummary,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status output missing %q\noutput:\n%s", want, got)

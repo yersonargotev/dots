@@ -1793,8 +1793,26 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 		t.Fatalf("Build() error = %v", err)
 	}
 
-	if len(p.Actions) != 14 {
-		t.Fatalf("len(Actions) = %d, want 14", len(p.Actions))
+	// Derive the expected action count from the loaded manifest instead of a
+	// hardcoded literal: every managed entry whose tags intersect the profile
+	// and that passes the OS filter must produce exactly one action. This is the
+	// same selection plan.Build applies, so adding or removing a dots.yaml entry
+	// never forces a magic-number bump here.
+	profile, ok := got.Profiles["default"]
+	if !ok {
+		t.Fatal("manifest missing profile \"default\"")
+	}
+	wantActions := 0
+	for _, entry := range got.Entries {
+		if manifest.SharesTag(entry.Tags, profile.Tags) && manifest.MatchesOS(entry.OS, "darwin") {
+			wantActions++
+		}
+	}
+	if wantActions == 0 {
+		t.Fatal("no managed entries apply to profile \"default\" on darwin; derived plan is empty")
+	}
+	if len(p.Actions) != wantActions {
+		t.Fatalf("len(Actions) = %d, want %d (derived from dots.yaml)", len(p.Actions), wantActions)
 	}
 	for _, action := range p.Actions {
 		if action.Status != plan.StatusCreate {
