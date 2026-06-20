@@ -46,18 +46,21 @@ type Provisioner struct {
 
 // ProvisionerSpec carries the declarative values dots owns for an allowlisted
 // tool; the tool owns how they render into agent config. The scalar/list flags
-// map 1:1 to gentle-ai's install flags. The Claude fields (Marketplace, Plugin,
+// map 1:1 to gentle-ai's install/uninstall flags. The Claude fields (Marketplace, Plugin,
 // From) describe a single idempotent `claude` invocation, and the codex MCP
 // fields (MCP, Command, Env) a single `codex mcp add` invocation. The three
 // dialects are mutually exclusive: a spec speaks exactly one of them.
 type ProvisionerSpec struct {
+	Action     string   `yaml:"action,omitempty"`
 	Scope      string   `yaml:"scope,omitempty"`
 	Channel    string   `yaml:"channel,omitempty"`
 	Persona    string   `yaml:"persona,omitempty"`
+	Preset     string   `yaml:"preset,omitempty"`
 	SDDMode    string   `yaml:"sdd-mode,omitempty"`
 	Agents     []string `yaml:"agents,omitempty"`
 	Components []string `yaml:"components,omitempty"`
 	Skills     []string `yaml:"skills,omitempty"`
+	Yes        bool     `yaml:"yes,omitempty"`
 	// Marketplace registers a Claude Code plugin marketplace from a source
 	// (GitHub repo, URL, or path), rendering `claude plugin marketplace add
 	// <source>`. The marketplace name is derived by Claude from the source.
@@ -266,6 +269,16 @@ func (m Manifest) Validate() error {
 			if prov.Spec.usesMCPFields() {
 				return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the gentle-ai tool", i)
 			}
+			action := strings.TrimSpace(prov.Spec.Action)
+			if !allowedGentleAIAction(action) {
+				return fmt.Errorf("provisioners[%d].spec.action must be one of install, uninstall", i)
+			}
+			if prov.Spec.Yes && action != "uninstall" {
+				return fmt.Errorf("provisioners[%d].spec.yes is only valid when action is uninstall", i)
+			}
+			if action == "uninstall" && prov.Spec.usesGentleAIInstallOnlyFlags() {
+				return fmt.Errorf("provisioners[%d].spec uninstall action must not set install-only fields (scope, channel, persona, preset, sdd-mode, skills)", i)
+			}
 			if persona := strings.TrimSpace(prov.Spec.Persona); persona != "" && !allowedPersona(persona) {
 				return fmt.Errorf("provisioners[%d].spec.persona must be one of gentleman, neutral", i)
 			}
@@ -335,13 +348,29 @@ func (s ProvisionerSpec) usesMCPFields() bool {
 
 // usesGentleAIFlags reports whether the spec sets any gentle-ai install flag.
 func (s ProvisionerSpec) usesGentleAIFlags() bool {
-	return strings.TrimSpace(s.Scope) != "" ||
+	return strings.TrimSpace(s.Action) != "" ||
+		strings.TrimSpace(s.Scope) != "" ||
 		strings.TrimSpace(s.Channel) != "" ||
 		strings.TrimSpace(s.Persona) != "" ||
+		strings.TrimSpace(s.Preset) != "" ||
 		strings.TrimSpace(s.SDDMode) != "" ||
 		hasNonEmptyString(s.Agents) ||
 		hasNonEmptyString(s.Components) ||
+		hasNonEmptyString(s.Skills) ||
+		s.Yes
+}
+
+func (s ProvisionerSpec) usesGentleAIInstallOnlyFlags() bool {
+	return strings.TrimSpace(s.Scope) != "" ||
+		strings.TrimSpace(s.Channel) != "" ||
+		strings.TrimSpace(s.Persona) != "" ||
+		strings.TrimSpace(s.Preset) != "" ||
+		strings.TrimSpace(s.SDDMode) != "" ||
 		hasNonEmptyString(s.Skills)
+}
+
+func allowedGentleAIAction(action string) bool {
+	return action == "" || action == "install" || action == "uninstall"
 }
 
 // validateClaudeSpec enforces the claude provisioner contract: it drives exactly
