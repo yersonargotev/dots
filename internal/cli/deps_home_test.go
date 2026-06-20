@@ -47,15 +47,6 @@ func writeProbeFont(t *testing.T, home string) {
 	}
 }
 
-func writeFontManifest(t *testing.T, dir string) string {
-	t.Helper()
-	path := filepath.Join(dir, "dots.yaml")
-	if err := os.WriteFile(path, []byte(fontManifest), 0o600); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
-	return path
-}
-
 func TestDepsCheckHomeFlagDetectsSandboxFont(t *testing.T) {
 	// The real home stays empty; the font only exists under the sandbox home
 	// passed via --home, so a "present" result proves detection honored the flag.
@@ -64,7 +55,7 @@ func TestDepsCheckHomeFlagDetectsSandboxFont(t *testing.T) {
 
 	sandbox := t.TempDir()
 	writeProbeFont(t, sandbox)
-	manifestPath := writeFontManifest(t, t.TempDir())
+	manifestPath := writeCLIManifest(t, t.TempDir(), fontManifest)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -95,7 +86,7 @@ func TestDepsCheckHomeFlagIgnoresRealHomeFont(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	sandbox := t.TempDir()
-	manifestPath := writeFontManifest(t, t.TempDir())
+	manifestPath := writeCLIManifest(t, t.TempDir(), fontManifest)
 
 	// A missing dependency is a finding, so deps check exits with code 2.
 	var out, errOut bytes.Buffer
@@ -121,7 +112,7 @@ func TestDepsPlanHomeFlagDetectsSandboxFont(t *testing.T) {
 
 	sandbox := t.TempDir()
 	writeProbeFont(t, sandbox)
-	manifestPath := writeFontManifest(t, t.TempDir())
+	manifestPath := writeCLIManifest(t, t.TempDir(), fontManifest)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
