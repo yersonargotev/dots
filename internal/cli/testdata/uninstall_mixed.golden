@@ -1,0 +1,8 @@
+Uninstall Plan
+
+  remove     /home/user/.zshrc
+  modified   /home/user/.gitconfig
+  not-owned  /home/user/.tmux.conf
+  skip       /home/user/.vimrc
+
+Summary: 1 to remove, 1 modified, 1 not-owned, 1 skipped
