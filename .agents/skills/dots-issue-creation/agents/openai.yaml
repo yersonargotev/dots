@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dots Issue Creation"
+  short_description: "Create dots GitHub issues with repo-specific templates and labels."
+  default_prompt: "Use this skill to create one or more yersonargotev/dots issues that follow the repo's real issue workflow."
