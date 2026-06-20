@@ -9,6 +9,7 @@ Environment:
   DOTS_VERSION           Release tag to install, for example v0.x.y. Defaults to latest.
   DOTS_RELEASE_BASE_URL  Release asset base URL. Defaults to https://github.com/yersonargotev/dots/releases/download.
   DOTS_REPOSITORY_URL    Source of Truth Git URL. Defaults to https://github.com/yersonargotev/dots.git.
+  DOTS_REPOSITORY_REF    Optional Source of Truth Git ref. Defaults to DOTS_VERSION when pinned; default branch for latest.
   DOTS_INSTALL_DIR       Directory where the dots command is installed. Defaults to ~/.local/bin.
   DOTS_SOURCE_ROOT       Optional development checkout/Installed Repository override passed to dots install.
   DOTS_OS                Test override for platform OS detection.
@@ -31,6 +32,7 @@ default_release_base_url="https://github.com/yersonargotev/dots/releases/downloa
 release_base_url="${DOTS_RELEASE_BASE_URL:-$default_release_base_url}"
 install_dir="${DOTS_INSTALL_DIR:-$HOME/.local/bin}"
 repository_url="${DOTS_REPOSITORY_URL:-https://github.com/yersonargotev/dots.git}"
+repository_ref="${DOTS_REPOSITORY_REF:-}"
 source_root="${DOTS_SOURCE_ROOT:-$HOME/.local/share/dots}"
 source_root_explicit="${DOTS_SOURCE_ROOT:-}"
 
@@ -117,17 +119,57 @@ install -m 0755 "$artifact_path" "$install_path"
 
 echo "Installed dots to $install_path"
 
+valid_source_root() {
+  local dir="$1"
+  [[ -f "$dir/dots.yaml" && -s "$dir/dots.yaml" ]]
+}
+
+clone_source_root() {
+  local destination="$1"
+  local parent
+  local tmp_clone
+  parent="$(dirname "$destination")"
+  mkdir -p "$parent"
+  tmp_clone="$(mktemp -d "$parent/.dots-clone.XXXXXX")"
+  cleanup_clone() {
+    rm -rf "$tmp_clone"
+  }
+  trap 'cleanup; cleanup_clone' EXIT
+
+  local clone_args=(clone --depth 1)
+  if [[ -n "$repository_ref" ]]; then
+    clone_args+=(--branch "$repository_ref")
+  elif [[ "$version" != "latest" ]]; then
+    clone_args+=(--branch "$version")
+  fi
+  clone_args+=("$repository_url" "$tmp_clone")
+
+  echo "Cloning Source of Truth to $destination"
+  git "${clone_args[@]}"
+  if ! valid_source_root "$tmp_clone"; then
+    fail "cloned Source of Truth does not contain a valid dots.yaml at repository root"
+  fi
+  mv "$tmp_clone" "$destination"
+  trap cleanup EXIT
+}
+
 if [[ -z "$source_root_explicit" ]]; then
   if [[ -e "$source_root" && ! -d "$source_root" ]]; then
     fail "default Installed Repository path exists but is not a directory: $source_root"
+  fi
+  if [[ -d "$source_root" ]]; then
+    if ! valid_source_root "$source_root"; then
+      if [[ -n "$(find "$source_root" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+        fail "default Installed Repository path exists but does not contain a valid dots.yaml: $source_root. Move it aside or set DOTS_SOURCE_ROOT."
+      fi
+      rmdir "$source_root"
+    fi
   fi
   if [[ ! -d "$source_root" ]]; then
     if ! command -v git >/dev/null 2>&1; then
       fail "git is required to clone the Source of Truth into $source_root"
     fi
-    mkdir -p "$(dirname "$source_root")"
-    echo "Cloning Source of Truth to $source_root"
-    git clone --depth 1 "$repository_url" "$source_root"
+    clone_source_root "$source_root"
   fi
 fi
 

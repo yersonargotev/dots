@@ -19,10 +19,10 @@ The Bootstrapper:
 1. Detects the current Supported Platform.
 2. Downloads the matching GitHub Release Artifact and `checksums.txt` from the latest release by default.
 3. Performs Checksum Verification before installing the binary to `~/.local/bin/dots`.
-4. Clones the Source of Truth to `~/.local/share/dots` when the default Installed Repository is missing.
+4. Clones the Source of Truth to `~/.local/share/dots` when the default Installed Repository is missing or empty, using `DOTS_VERSION` as the Git ref when pinned.
 5. Runs `dots install` so the Dotfiles CLI owns the Install Plan and file changes.
 
-Set `DOTS_VERSION=v0.x.y` only when you intentionally need to pin a specific release. Use `DOTS_SOURCE_ROOT=/path/to/checkout` for development checkouts.
+Set `DOTS_VERSION=v0.x.y` only when you intentionally need to pin a specific release; the default Source of Truth clone uses that tag too. Use `DOTS_REPOSITORY_REF=<ref>` only when the binary release and Source of Truth ref must differ. Use `DOTS_SOURCE_ROOT=/path/to/checkout` for development checkouts.
 
 Requirements: `curl` or `wget`, `sha256sum` or `shasum`, plus `git` for first-time bootstrap cloning. Make sure `~/.local/bin` is on your `PATH` after install.
 

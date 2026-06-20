@@ -45,7 +45,7 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolvedHome := resolveDepsHome(home)
-			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, defaultSourceRoot(resolvedHome)))
+			m, err := loadDepsManifest(cmd, file, resolvedHome)
 			if err != nil {
 				return err
 			}
@@ -86,7 +86,7 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolvedHome := resolveDepsHome(home)
-			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, defaultSourceRoot(resolvedHome)))
+			m, err := loadDepsManifest(cmd, file, resolvedHome)
 			if err != nil {
 				return err
 			}
@@ -133,7 +133,7 @@ func newDepsInstallCommand(profile *string) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolvedHome, _ := os.UserHomeDir()
-			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, defaultSourceRoot(resolvedHome)))
+			m, err := loadDepsManifest(cmd, file, resolvedHome)
 			if err != nil {
 				return err
 			}
@@ -197,6 +197,10 @@ func newDepsInstallCommand(profile *string) *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview dependency install actions without executing package managers")
 	cmd.Flags().BoolVar(&yes, "yes", false, "execute dependency install actions without interactive confirmation")
 	return cmd
+}
+
+func loadDepsManifest(cmd *cobra.Command, file, home string) (*manifest.Manifest, error) {
+	return manifest.LoadFile(resolveManifestPath(cmd, file, defaultSourceRoot(home)))
 }
 
 func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier) error {

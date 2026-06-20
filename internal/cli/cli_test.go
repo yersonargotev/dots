@@ -1800,7 +1800,7 @@ entries:
 	}
 }
 
-func TestDepsCommandsLoadDefaultManifestFromInstalledRepository(t *testing.T) {
+func TestDepsReadCommandsLoadDefaultManifestFromInstalledRepository(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", t.TempDir())
@@ -1820,15 +1820,34 @@ entries:
       - name: absenttool
 `)
 
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"deps", "check", "--home", home})
+	for _, tt := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "check",
+			args: []string{"deps", "check", "--home", home},
+			want: "missing  absenttool",
+		},
+		{
+			name: "plan",
+			args: []string{"deps", "plan", "--home", home},
+			want: "absenttool",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(tt.args)
 
-	requireFindings(t, cmd.Execute())
-	if got := out.String(); !strings.Contains(got, "missing  absenttool") {
-		t.Fatalf("deps check did not load default manifest from Installed Repository\noutput:\n%s", got)
+			requireFindings(t, cmd.Execute())
+			if got := out.String(); !strings.Contains(got, tt.want) {
+				t.Fatalf("deps %s did not load default manifest from Installed Repository\noutput:\n%s", tt.name, got)
+			}
+		})
 	}
 }
 
