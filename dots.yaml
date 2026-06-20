@@ -136,6 +136,40 @@ entries:
       - name: ghostty
         command: ghostty
         brew: ghostty
+  - source: configs/warp/settings.toml
+    target: ~/.warp/settings.toml
+    strategy: copy
+    tags:
+      - desktop
+    os:
+      - darwin
+  - source: configs/warp/keybindings.yaml
+    target: ~/.warp/keybindings.yaml
+    strategy: copy
+    tags:
+      - desktop
+    os:
+      - darwin
+  - source: configs/warp/settings.toml
+    target: ~/.config/warp-terminal/settings.toml
+    strategy: copy
+    tags:
+      - desktop
+    os:
+      - linux
+    dependencies:
+      - name: Warp
+        command: warp-terminal
+  - source: configs/warp/keybindings.yaml
+    target: ~/.config/warp-terminal/keybindings.yaml
+    strategy: copy
+    tags:
+      - desktop
+    os:
+      - linux
+    dependencies:
+      - name: Warp
+        command: warp-terminal
   - source: configs/atuin/config.toml
     target: ~/.config/atuin/config.toml
     strategy: symlink

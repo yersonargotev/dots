@@ -1,0 +1,12 @@
+# Warp portable preferences managed by dots.
+#
+# Keep this file intentionally small. Warp stores many account, cloud, agent,
+# session, and runtime preferences near this file; those are not part of the
+# repository-owned Source of Truth.
+
+[appearance.themes]
+theme = "dark"
+
+[appearance.text]
+font_name = "Cascadia Code NF"
+font_size = 20.0
