@@ -100,6 +100,10 @@ _Avoid_: distro support, package support level
 The preview of filesystem changes, conflicts, dependency findings, and backup requirements that the Dotfiles CLI computes before applying installation. It is shown during normal installation and is the output of dry-run mode.
 _Avoid_: preview, dry run output, change list
 
+**Uninstall Plan**:
+The preview of removals the Dotfiles CLI computes from the Installation Metadata before reversing an install, classifying each recorded target as remove, skip, modified, or not-owned. It is the mirror of the Install Plan and is the output of `dots uninstall --dry-run`.
+_Avoid_: removal preview, deletion list, reverse plan
+
 **Dotfiles Status**:
 The current alignment between a workstation and the repository-owned Source of Truth, including whether managed entries are installed, skipped, conflicting, or drifted.
 _Avoid_: health, sync state, installed state
