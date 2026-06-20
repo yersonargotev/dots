@@ -93,6 +93,16 @@ dots deps install --yes  # execute installable actions without prompting
 
 `dots deps install` executes package managers with direct argv only after confirmation. It does not bypass `sudo`, does not run manual-only guidance, and does not promise rollback, version constraints, reinstall, or upgrade behavior.
 
+For honest fresh-machine validation, `deps check` and `deps plan` accept `--home` to root font detection at a sandbox instead of your real home:
+
+```bash
+tmp=$(mktemp -d); mkdir -p "$tmp/home"
+dots deps check --file dots.yaml --home "$tmp/home"
+dots deps plan  --file dots.yaml --home "$tmp/home"
+```
+
+Unlike `doctor`/`install`, deps commands manage system-global tools rather than `$HOME` files, so they intentionally do not offer `--source-root`/`--state-root` (inert and misleading here), and `deps install` takes no `--home` (it would only relabel font detection while the real install still touches the system).
+
 List Backup Metadata created by safe installs or restores:
 
 ```bash
