@@ -72,7 +72,7 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 			// The plan references a target dots no longer records; never act on it.
 			continue
 		}
-		remove, err := stillRemovable(rec, opts.SourceRoot, opts.Force)
+		remove, err := stillRemovable(rec, opts.SourceRoot, home, opts.Force)
 		if err != nil {
 			return result, err
 		}
@@ -105,8 +105,8 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 // stillRemovable re-derives the record's status from current disk state using the
 // same classifier as the preview, so apply and preview never diverge. A record is
 // removed when it is still owned, or when it drifted and the caller forced it.
-func stillRemovable(rec state.Record, sourceRoot string, force bool) (bool, error) {
-	p, err := plan.BuildUninstall(state.Metadata{Entries: []state.Record{rec}}, plan.UninstallOptions{SourceRoot: sourceRoot})
+func stillRemovable(rec state.Record, sourceRoot, home string, force bool) (bool, error) {
+	p, err := plan.BuildUninstall(state.Metadata{Entries: []state.Record{rec}}, plan.UninstallOptions{SourceRoot: sourceRoot, Home: home})
 	if err != nil {
 		return false, err
 	}

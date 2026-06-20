@@ -82,7 +82,7 @@ func (e *env) saveMeta(t *testing.T) {
 
 func (e *env) buildPlan(t *testing.T) plan.UninstallPlan {
 	t.Helper()
-	p, err := plan.BuildUninstall(e.meta, plan.UninstallOptions{SourceRoot: e.sourceRoot})
+	p, err := plan.BuildUninstall(e.meta, plan.UninstallOptions{SourceRoot: e.sourceRoot, Home: e.home})
 	if err != nil {
 		t.Fatalf("BuildUninstall: %v", err)
 	}
@@ -257,7 +257,12 @@ func TestApplyRestoreBackupsRestoresLatestSetAfterRemoval(t *testing.T) {
 	}
 }
 
-func TestApplyRefusesTargetOutsideHome(t *testing.T) {
+// TestApplyLeavesTargetOutsideHomeUntouched covers a crafted or stale metadata
+// record whose target escapes HOME but, on disk, points exactly at the recorded
+// source. The confinement guard classifies it not-owned, so apply never inspects
+// or removes it and leaves its record in place rather than acting on something
+// dots cannot own.
+func TestApplyLeavesTargetOutsideHomeUntouched(t *testing.T) {
 	e := newEnv(t)
 	outside := t.TempDir()
 	src := e.writeSource(t, "evil", "evil\n")
@@ -268,15 +273,53 @@ func TestApplyRefusesTargetOutsideHome(t *testing.T) {
 	e.meta.Entries = append(e.meta.Entries, state.Record{Target: escaped, Source: "evil", Strategy: "symlink"})
 	e.saveMeta(t)
 
-	_, err := uninstall.Apply(e.buildPlan(t), uninstall.Options{
+	res := e.apply(t, uninstall.Options{})
+
+	if len(res.Removed) != 0 {
+		t.Fatalf("Removed = %v, want none for out-of-home target", res.Removed)
+	}
+	if _, statErr := os.Lstat(escaped); statErr != nil {
+		t.Fatalf("escaped target should be untouched, err = %v", statErr)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(escaped); !ok {
+		t.Fatal("out-of-home record should be kept, not pruned")
+	}
+}
+
+// TestApplyIgnoresForgedRemovableActionOutsideHome forces a plan that wrongly
+// marks an out-of-home target as remove, then proves apply does not trust the
+// plan: it re-classifies each record against current state and home, so the
+// forged action is skipped and the target is never deleted.
+func TestApplyIgnoresForgedRemovableActionOutsideHome(t *testing.T) {
+	e := newEnv(t)
+	outside := t.TempDir()
+	victim := filepath.Join(outside, ".victim")
+	if err := os.WriteFile(victim, []byte("do not touch\n"), 0o600); err != nil {
+		t.Fatalf("write victim: %v", err)
+	}
+	e.meta.Entries = append(e.meta.Entries, state.Record{Target: victim, Source: "victim", Strategy: "copy", Hash: "deadbeef"})
+	e.saveMeta(t)
+
+	forged := plan.UninstallPlan{Actions: []plan.UninstallAction{
+		{Target: victim, Source: "victim", Strategy: "copy", Status: plan.UninstallRemove},
+	}}
+
+	res, err := uninstall.Apply(forged, uninstall.Options{
 		SourceRoot: e.sourceRoot,
 		Home:       e.home,
 		StateRoot:  e.stateRoot,
 	})
-	if err == nil {
-		t.Fatal("Apply() = nil, want error for target outside home")
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
 	}
-	if _, statErr := os.Lstat(escaped); statErr != nil {
-		t.Fatalf("escaped target should be untouched, err = %v", statErr)
+	if len(res.Removed) != 0 {
+		t.Fatalf("Removed = %v, want none for forged out-of-home action", res.Removed)
+	}
+	got, err := os.ReadFile(victim)
+	if err != nil {
+		t.Fatalf("read victim: %v", err)
+	}
+	if string(got) != "do not touch\n" {
+		t.Fatalf("forged action modified out-of-home target: %q", got)
 	}
 }

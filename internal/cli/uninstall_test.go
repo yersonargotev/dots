@@ -164,6 +164,41 @@ func TestUninstallNoMetadataReports(t *testing.T) {
 	}
 }
 
+// TestUninstallDryRunDoesNotInspectTargetOutsideHome reproduces the review
+// finding: a metadata record pointing outside --home must never be inspected or
+// shown as remove. The confinement guard classifies it not-owned, so --dry-run
+// reports it as not-owned and the out-of-home file is left untouched.
+func TestUninstallDryRunDoesNotInspectTargetOutsideHome(t *testing.T) {
+	e := newInstalledEnv(t)
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "outside.txt")
+	if err := os.WriteFile(victim, []byte("content\n"), 0o600); err != nil {
+		t.Fatalf("write victim: %v", err)
+	}
+	// A copy record whose recorded hash matches the out-of-home file's content,
+	// so without the guard it would classify as remove.
+	hash, err := state.HashFile(victim)
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	e.meta.Entries = append(e.meta.Entries, state.Record{Target: victim, Source: "x/outside", Strategy: "copy", Hash: hash})
+	e.save(t)
+
+	out, err := e.run(t, "", "--dry-run")
+	if err != nil {
+		t.Fatalf("uninstall --dry-run error = %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "not-owned  "+victim) {
+		t.Fatalf("out-of-home target should be reported not-owned:\n%s", out)
+	}
+	if strings.Contains(out, "remove     "+victim) {
+		t.Fatalf("out-of-home target must not be shown as remove:\n%s", out)
+	}
+	if _, statErr := os.Lstat(victim); statErr != nil {
+		t.Fatalf("out-of-home target should be untouched: %v", statErr)
+	}
+}
+
 func TestUninstallRestoreBackupsReturnsPreInstallContent(t *testing.T) {
 	e := newInstalledEnv(t)
 	target := filepath.Join(e.home, ".zshrc")

@@ -41,7 +41,7 @@ func newUninstallCommand() *cobra.Command {
 				return err
 			}
 
-			p, err := plan.BuildUninstall(meta, plan.UninstallOptions{SourceRoot: paths.SourceRoot})
+			p, err := plan.BuildUninstall(meta, plan.UninstallOptions{SourceRoot: paths.SourceRoot, Home: paths.Home})
 			if err != nil {
 				return err
 			}

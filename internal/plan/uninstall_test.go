@@ -70,7 +70,7 @@ func (f uninstallFixture) target(name string) string {
 
 func (f uninstallFixture) build(t *testing.T, recs ...state.Record) plan.UninstallPlan {
 	t.Helper()
-	p, err := plan.BuildUninstall(state.Metadata{Version: 1, Entries: recs}, plan.UninstallOptions{SourceRoot: f.sourceRoot})
+	p, err := plan.BuildUninstall(state.Metadata{Version: 1, Entries: recs}, plan.UninstallOptions{SourceRoot: f.sourceRoot, Home: f.home})
 	if err != nil {
 		t.Fatalf("BuildUninstall() error = %v", err)
 	}
@@ -187,6 +187,81 @@ func TestBuildUninstallCopyMissingIsSkip(t *testing.T) {
 	rec := state.Record{Target: target, Source: "git/gitconfig", Strategy: "copy", Hash: "deadbeef"}
 	if got := statusFor(t, f.build(t, rec), target); got != plan.UninstallSkip {
 		t.Fatalf("status = %q, want skip", got)
+	}
+}
+
+// TestBuildUninstallTargetOutsideHomeIsNotOwnedWithoutInspection proves the
+// confinement guard runs before any filesystem inspection: a recorded target
+// outside HOME is classified not-owned even when, on disk, it would otherwise be
+// a perfect remove (a symlink resolving to the source, or a copy whose content
+// matches the recorded hash). If the builder hashed or readlink'd the target
+// before validating HOME, these would classify as remove — so not-owned is the
+// observable proof that no out-of-home filesystem operation happened.
+func TestBuildUninstallTargetOutsideHomeIsNotOwnedWithoutInspection(t *testing.T) {
+	f := newUninstallFixture(t)
+	outside := t.TempDir() // a sibling root, deliberately not under f.home
+
+	// A symlink outside HOME that points exactly at the recorded source.
+	src := f.writeSource(t, "shell/zshrc", "export A=1\n")
+	escapedLink := filepath.Join(outside, ".zshrc")
+	if err := os.Symlink(src, escapedLink); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	// A copy outside HOME whose content matches the recorded hash.
+	copyContent := "name = dots\n"
+	copySrc := f.writeSource(t, "git/gitconfig", copyContent)
+	hash, err := state.HashFile(copySrc)
+	if err != nil {
+		t.Fatalf("hash source: %v", err)
+	}
+	escapedCopy := filepath.Join(outside, ".gitconfig")
+	if err := os.WriteFile(escapedCopy, []byte(copyContent), 0o600); err != nil {
+		t.Fatalf("write escaped copy: %v", err)
+	}
+
+	p := f.build(t,
+		state.Record{Target: escapedLink, Source: "shell/zshrc", Strategy: "symlink"},
+		state.Record{Target: escapedCopy, Source: "git/gitconfig", Strategy: "copy", Hash: hash},
+	)
+
+	if got := statusFor(t, p, escapedLink); got != plan.UninstallNotOwned {
+		t.Fatalf("escaped symlink status = %q, want not-owned", got)
+	}
+	if got := statusFor(t, p, escapedCopy); got != plan.UninstallNotOwned {
+		t.Fatalf("escaped copy status = %q, want not-owned", got)
+	}
+}
+
+func TestBuildUninstallTargetBehindParentSymlinkEscapeIsNotOwned(t *testing.T) {
+	f := newUninstallFixture(t)
+	outside := t.TempDir()
+
+	// A parent component inside HOME that is a symlink pointing outside HOME. A
+	// lexical check alone would accept ~/escape/.zshrc; the parent symlink-escape
+	// guard must reject it before Lstat follows the link out of HOME.
+	if err := os.Symlink(outside, filepath.Join(f.home, "escape")); err != nil {
+		t.Fatalf("parent symlink: %v", err)
+	}
+	src := f.writeSource(t, "shell/zshrc", "export A=1\n")
+	target := filepath.Join(f.home, "escape", ".zshrc")
+	if err := os.Symlink(src, target); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	rec := state.Record{Target: target, Source: "shell/zshrc", Strategy: "symlink"}
+	if got := statusFor(t, f.build(t, rec), target); got != plan.UninstallNotOwned {
+		t.Fatalf("status = %q, want not-owned for parent-symlink escape", got)
+	}
+}
+
+func TestBuildUninstallRequiresHome(t *testing.T) {
+	_, err := plan.BuildUninstall(
+		state.Metadata{Entries: []state.Record{{Target: "/home/user/.zshrc", Strategy: "symlink"}}},
+		plan.UninstallOptions{SourceRoot: t.TempDir()},
+	)
+	if err == nil {
+		t.Fatal("BuildUninstall() = nil, want error when home is empty")
 	}
 }
 

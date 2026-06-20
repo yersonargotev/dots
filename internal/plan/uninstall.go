@@ -56,19 +56,31 @@ func (p UninstallPlan) Removable() bool {
 
 // UninstallOptions carries the resolved inputs needed to classify recorded
 // targets. SourceRoot is required to verify that a symlink still resolves to the
-// repository source dots recorded.
+// repository source dots recorded. Home is required so classification can confine
+// every filesystem inspection to the home sandbox.
 type UninstallOptions struct {
 	SourceRoot string
+	Home       string
 }
 
 // BuildUninstall computes the Uninstall Plan from Installation Metadata without
 // mutating the filesystem. Each recorded target is classified against current
 // disk state so the caller can preview exactly which targets are still owned,
 // which drifted, and which dots no longer recognizes.
+//
+// Classification confines itself to home: a recorded target is validated to be
+// inside the home sandbox, with no symlink escape through its parent chain,
+// before it is ever inspected. A target that fails that check is reported
+// not-owned and is never Lstat'd, readlink'd, or hashed, so even a crafted or
+// stale metadata record cannot make a preview read a path outside home.
 func BuildUninstall(meta state.Metadata, opts UninstallOptions) (UninstallPlan, error) {
+	if opts.Home == "" {
+		return UninstallPlan{}, fmt.Errorf("uninstall home is required")
+	}
+
 	plan := UninstallPlan{}
 	for _, rec := range meta.Entries {
-		status, err := uninstallStatus(rec, opts.SourceRoot)
+		status, err := uninstallStatus(rec, opts.SourceRoot, opts.Home)
 		if err != nil {
 			return UninstallPlan{}, err
 		}
@@ -82,7 +94,18 @@ func BuildUninstall(meta state.Metadata, opts UninstallOptions) (UninstallPlan, 
 	return plan, nil
 }
 
-func uninstallStatus(rec state.Record, sourceRoot string) (UninstallStatus, error) {
+func uninstallStatus(rec state.Record, sourceRoot, home string) (UninstallStatus, error) {
+	// Confinement before inspection: validate the target is lexically inside home
+	// and that no parent component escapes home through a symlink BEFORE any
+	// Lstat/Readlink/hash touches it. A target that fails is not dots-owned (install
+	// only ever writes inside home), so report not-owned without inspecting it.
+	if err := ValidateResolvedTarget(rec.Target, home); err != nil {
+		return UninstallNotOwned, nil
+	}
+	if err := ValidateTargetParentInsideHome(rec.Target, home); err != nil {
+		return UninstallNotOwned, nil
+	}
+
 	info, err := os.Lstat(rec.Target)
 	if os.IsNotExist(err) {
 		// A missing symlink can no longer be verified to point at the recorded
