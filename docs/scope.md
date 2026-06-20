@@ -83,7 +83,7 @@ v1 distribution starts with GitHub Release Artifacts plus Checksum Verification 
 
 ### The MVP Configuration Set keeps the feedback loop tight
 
-The bounded `dots.yaml` manifest is enough to prove symlink, template, copy, Local Extension Point, dependency, status, backup, conflict, and desktop-profile behavior. Pulling generated editor state, machine-local state, secrets, runtime caches, or non-portable app configuration into v1 would blur whether failures come from installer design or application-specific complexity.
+The bounded [`dots.yaml` manifest](manifest.md) is enough to prove symlink, template, copy, Local Extension Point, dependency, status, backup, conflict, and desktop-profile behavior. Pulling generated editor state, machine-local state, secrets, runtime caches, or non-portable app configuration into v1 would blur whether failures come from installer design or application-specific complexity.
 
 ## Alignment references
 
