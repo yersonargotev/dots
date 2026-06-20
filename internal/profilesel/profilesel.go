@@ -44,7 +44,9 @@ type Selector func(profileName, os string) (map[int]bool, error)
 // for every profile so switching profiles would not recover them. The reported
 // Count is the suggested profile's coverage of the skipped set, so the caller's
 // remediation message stays accurate even when no single profile is a superset of
-// every omission.
+// every omission. When possible, Skipped prefers a suggested profile whose
+// selection is a superset of the active profile so the user does not lose items
+// they already selected while adding skipped ones.
 func Skipped(profiles map[string]manifest.Profile, active, os string, sel Selector) (Hint, bool, error) {
 	activeSet, err := sel(active, os)
 	if err != nil {
@@ -80,15 +82,34 @@ func Skipped(profiles map[string]manifest.Profile, active, os string, sel Select
 	}
 
 	var (
-		suggested string
-		best      int
+		suggested     string
+		best          int
+		bestPreserves bool
 	)
 	for _, name := range others {
+		set := selections[name]
 		covered := 0
-		for i := range selections[name] {
+		for i := range set {
 			if skipped[i] {
 				covered++
 			}
+		}
+
+		preservesActive := covered > 0
+		for i := range activeSet {
+			if !set[i] {
+				preservesActive = false
+				break
+			}
+		}
+
+		if preservesActive != bestPreserves {
+			if preservesActive {
+				best = covered
+				suggested = name
+				bestPreserves = true
+			}
+			continue
 		}
 		if covered > best {
 			best = covered

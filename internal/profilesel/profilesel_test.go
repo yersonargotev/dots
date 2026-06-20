@@ -63,6 +63,32 @@ func TestSkipped(t *testing.T) {
 			wantCount:     1,   // union of skipped is {1,2}=2, but each other profile recovers only 1
 			wantSuggested: "a", // alphabetical tie-break on equal coverage
 		},
+		{
+			name:     "prefers superset over equal coverage candidate that drops active selection",
+			profiles: profileNames("agents", "desktop", "workstation"),
+			selections: map[string]map[int]bool{
+				"agents":      {0: true, 1: true},
+				"desktop":     {0: true, 2: true},
+				"workstation": {0: true, 1: true, 2: true},
+			},
+			active:        "agents",
+			wantOK:        true,
+			wantCount:     1,
+			wantSuggested: "workstation",
+		},
+		{
+			name:     "prefers superset over higher coverage candidate that drops active selection",
+			profiles: profileNames("active", "partial", "superset"),
+			selections: map[string]map[int]bool{
+				"active":   {0: true, 1: true},
+				"partial":  {0: true, 2: true, 3: true},
+				"superset": {0: true, 1: true, 2: true},
+			},
+			active:        "active",
+			wantOK:        true,
+			wantCount:     1,
+			wantSuggested: "superset",
+		},
 	}
 
 	for _, tt := range tests {
