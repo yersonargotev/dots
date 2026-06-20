@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dots PR Creation"
+  short_description: "Create dots pull requests with repo-specific labels, template, validation, and safety checks."
+  default_prompt: "Use this skill to prepare or open a yersonargotev/dots pull request that follows the repo's issue-first workflow."
