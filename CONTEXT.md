@@ -205,7 +205,7 @@ The ordered construction plan for the Dotfiles CLI, starting with the project sk
 _Avoid_: roadmap, build order, task list
 
 **Provisioner**:
-An allowlisted external agent-configuration tool the Dotfiles CLI drives declaratively after Dependencies and Managed Entries are in place. dots versions only the invocation — the tool plus its declarative spec — and renders it into one exact, idempotent command (such as a `gentle-ai install`, a `claude plugin install`, or a `codex mcp add`). It never versions the Regenerated Content the tool owns. The allowlist is closed, so dots is never a generic command runner.
+An allowlisted external agent-configuration tool the Dotfiles CLI drives declaratively after Dependencies and Managed Entries are in place. dots versions only the invocation — the tool plus its declarative spec — and renders it into one exact, idempotent command (such as a `gentle-ai install`, a `gentle-ai uninstall`, a `claude plugin install`, or a `codex mcp add`). It never versions the Regenerated Content the tool owns. The allowlist is closed, so dots is never a generic command runner.
 _Avoid_: hook, post-install script, command runner
 
 **Provisioner Spec**:
