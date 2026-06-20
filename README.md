@@ -116,6 +116,15 @@ dots --version
 dots install
 ```
 
+To reverse an install, `dots uninstall` removes only the symlinks and copied files `dots` recorded it owns, previewing first and skipping anything that drifted:
+
+```bash
+dots uninstall --dry-run          # preview the Uninstall Plan, change nothing
+dots uninstall                    # preview, then ask before removing
+dots uninstall --yes              # remove owned targets without prompting
+dots uninstall --restore-backups  # also restore each target's pre-install Backup Set
+```
+
 ## Core concepts
 
 | Concept | Meaning |
@@ -124,6 +133,7 @@ dots install
 | Install Manifest | The manifest that maps repository files to home-directory targets. |
 | Managed Entry | A target file or link managed by `dots`, such as shell, git, terminal, editor, or agent-tool config. |
 | Install Plan | The preview of create, replace, skip, or conflict actions before install applies changes. |
+| Uninstall Plan | The preview of remove, skip, modified, or not-owned actions before uninstall reverses an install, driven by the Installation Metadata. |
 | Installation Metadata | Local state used to remember what `dots` installed. |
 | Backup Set | A preserved copy of user-owned files before a restore or overwrite path changes them. |
 | Dependency Plan | OS-aware guidance for missing tools, including which actions are installable and which remain manual. |
@@ -146,6 +156,7 @@ The v1 scope focuses on safe repository-owned configuration declared in `dots.ya
 
 - [`CONTEXT.md`](CONTEXT.md) — domain vocabulary, architecture context, and project model.
 - [`docs/scope.md`](docs/scope.md) — v1 scope, non-goals, and deferred work.
+- [`docs/uninstall.md`](docs/uninstall.md) — the reversible `dots uninstall` command and its ownership-safety model.
 - [`docs/release.md`](docs/release.md) — release workflow, checksums, Homebrew, and Bootstrapper details.
 - [`AGENTS.md`](AGENTS.md) — shared guide for autonomous agents (also exposed as `CLAUDE.md`).
 - [`docs/agents/output-contract.md`](docs/agents/output-contract.md) — JSON envelope and semantic exit codes for agents and scripts.

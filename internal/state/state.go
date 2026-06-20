@@ -82,6 +82,26 @@ func (m Metadata) FindByTarget(target string) (Record, bool) {
 	return Record{}, false
 }
 
+// Remove returns a copy of the Metadata with every record whose Target appears
+// in targets dropped. The receiver is left unchanged so callers can prune
+// Installation Metadata after a successful uninstall removal without mutating the
+// version they loaded. Version and any unmatched records are preserved.
+func (m Metadata) Remove(targets ...string) Metadata {
+	drop := make(map[string]struct{}, len(targets))
+	for _, t := range targets {
+		drop[t] = struct{}{}
+	}
+
+	pruned := Metadata{Version: m.Version}
+	for _, r := range m.Entries {
+		if _, ok := drop[r.Target]; ok {
+			continue
+		}
+		pruned.Entries = append(pruned.Entries, r)
+	}
+	return pruned
+}
+
 // HashFile returns the hex-encoded SHA-256 of a regular file's content.
 func HashFile(path string) (string, error) {
 	info, err := os.Stat(path)
