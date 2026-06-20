@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
 )
 
 type resolvedPaths struct {
@@ -42,4 +44,16 @@ func defaultSourceRoot(home string) string {
 // Installation Metadata (installed.json) is recorded.
 func defaultStateRoot(home string) string {
 	return filepath.Join(home, ".local", "state", "dots")
+}
+
+// resolveManifestPath returns the Install Manifest path for a command. When
+// --file is omitted, the manifest belongs to the Installed Repository instead
+// of the caller's current directory, so a released binary can use the shared
+// Source of Truth at ~/.local/share/dots/dots.yaml from any cwd. Explicit
+// --file values keep normal caller-relative behavior for development and tests.
+func resolveManifestPath(cmd *cobra.Command, file, sourceRoot string) string {
+	if cmd.Flags().Changed("file") {
+		return file
+	}
+	return filepath.Join(sourceRoot, file)
 }

@@ -101,7 +101,7 @@ Install the latest published v0.x release with the checksum-verified Bootstrappe
 curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | bash
 ```
 
-The Bootstrapper downloads `checksums.txt` and the matching platform artifact from the latest GitHub Release by default, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, and then uses that tested binary for setup. Before any real-home install, verify the installed binary version:
+The Bootstrapper downloads `checksums.txt` and the matching platform artifact from the latest GitHub Release by default, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, clones the Source of Truth to `~/.local/share/dots` when needed, and then uses that tested binary for setup. When `DOTS_VERSION=vX.Y.Z` is pinned, the default Source of Truth clone uses the same Git ref; `latest` keeps using the repository default branch. Before any real-home install, verify the installed binary version:
 
 ```bash
 ~/.local/bin/dots --version
@@ -114,7 +114,7 @@ For development checkouts, pass the Installed Repository override through the Bo
 DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 ```
 
-`DOTS_VERSION` is optional. Use it only when you intentionally need to pin or test a specific release tag.
+`DOTS_VERSION` is optional. Use it only when you intentionally need to pin or test a specific release tag. Set `DOTS_REPOSITORY_REF` only when the release artifact and Source of Truth ref intentionally differ.
 
 ## Release details
 

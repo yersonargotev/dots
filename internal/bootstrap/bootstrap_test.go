@@ -87,12 +87,15 @@ func TestBootstrapperDelegatesWithoutSourceRootForDefaultInstalledRepository(t *
 	server := httptest.NewServer(http.FileServer(http.Dir(releaseRoot)))
 	t.Cleanup(server.Close)
 
+	sourceRepo := newBootstrapSourceRepo(t)
+	home := t.TempDir()
 	cmd := exec.Command("bash", filepath.Join(root, "scripts", "install.sh"))
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
-		"HOME="+t.TempDir(),
+		"HOME="+home,
 		"DOTS_VERSION="+version,
 		"DOTS_RELEASE_BASE_URL="+server.URL,
+		"DOTS_REPOSITORY_URL="+sourceRepo,
 		"DOTS_INSTALL_DIR="+filepath.Join(t.TempDir(), "bin"),
 		"DOTS_OS=linux",
 		"DOTS_ARCH=arm64",
@@ -108,6 +111,146 @@ func TestBootstrapperDelegatesWithoutSourceRootForDefaultInstalledRepository(t *
 	}
 	if strings.TrimSpace(string(gotArgs)) != "install" {
 		t.Fatalf("delegated args = %q, want %q", strings.TrimSpace(string(gotArgs)), "install")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".local", "share", "dots", "dots.yaml")); err != nil {
+		t.Fatalf("expected bootstrapper to clone default Installed Repository: %v\noutput:\n%s", err, output)
+	}
+}
+
+func TestBootstrapperClonesPinnedVersionRefForDefaultInstalledRepository(t *testing.T) {
+	root := repoRoot(t)
+	version := "v0.99.0"
+	artifact := "dots_v0.99.0_linux_arm64"
+	releaseRoot := t.TempDir()
+	versionDir := filepath.Join(releaseRoot, version)
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "dots-args.log")
+	artifactBody := fmt.Sprintf("#!/usr/bin/env bash\nset -euo pipefail\nprintf '%%s\\n' \"$*\" > %q\n", logPath)
+	writeFile(t, filepath.Join(versionDir, artifact), artifactBody, 0o644)
+	writeFile(t, filepath.Join(versionDir, "checksums.txt"), fmt.Sprintf("%s  %s\n", sha256Hex([]byte(artifactBody)), artifact), 0o644)
+
+	server := httptest.NewServer(http.FileServer(http.Dir(releaseRoot)))
+	t.Cleanup(server.Close)
+
+	sourceRepo := newBootstrapSourceRepo(t)
+	writeFile(t, filepath.Join(sourceRepo, "dots.yaml"), "version: 1\nprofiles: {default: {tags: [main]}}\nentries: []\n", 0o600)
+	runBootstrapGit(t, sourceRepo, "add", "dots.yaml")
+	runBootstrapGit(t, sourceRepo, "commit", "-m", "main change")
+
+	home := t.TempDir()
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "install.sh"))
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(),
+		"HOME="+home,
+		"DOTS_VERSION="+version,
+		"DOTS_RELEASE_BASE_URL="+server.URL,
+		"DOTS_REPOSITORY_URL="+sourceRepo,
+		"DOTS_INSTALL_DIR="+filepath.Join(t.TempDir(), "bin"),
+		"DOTS_OS=linux",
+		"DOTS_ARCH=arm64",
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bootstrap install failed: %v\n%s", err, output)
+	}
+
+	manifest, err := os.ReadFile(filepath.Join(home, ".local", "share", "dots", "dots.yaml"))
+	if err != nil {
+		t.Fatalf("expected cloned manifest: %v\noutput:\n%s", err, output)
+	}
+	if strings.Contains(string(manifest), "main") || !strings.Contains(string(manifest), "core") {
+		t.Fatalf("cloned manifest should come from %s tag, got:\n%s", version, manifest)
+	}
+}
+
+func TestBootstrapperRecoversEmptyDefaultInstalledRepository(t *testing.T) {
+	root := repoRoot(t)
+	version := "v0.99.0"
+	artifact := "dots_v0.99.0_linux_arm64"
+	releaseRoot := t.TempDir()
+	versionDir := filepath.Join(releaseRoot, version)
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "dots-args.log")
+	artifactBody := fmt.Sprintf("#!/usr/bin/env bash\nset -euo pipefail\nprintf '%%s\\n' \"$*\" > %q\n", logPath)
+	writeFile(t, filepath.Join(versionDir, artifact), artifactBody, 0o644)
+	writeFile(t, filepath.Join(versionDir, "checksums.txt"), fmt.Sprintf("%s  %s\n", sha256Hex([]byte(artifactBody)), artifact), 0o644)
+
+	server := httptest.NewServer(http.FileServer(http.Dir(releaseRoot)))
+	t.Cleanup(server.Close)
+
+	sourceRepo := newBootstrapSourceRepo(t)
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".local", "share", "dots"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "install.sh"))
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(),
+		"HOME="+home,
+		"DOTS_VERSION="+version,
+		"DOTS_RELEASE_BASE_URL="+server.URL,
+		"DOTS_REPOSITORY_URL="+sourceRepo,
+		"DOTS_INSTALL_DIR="+filepath.Join(t.TempDir(), "bin"),
+		"DOTS_OS=linux",
+		"DOTS_ARCH=arm64",
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bootstrap install failed: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".local", "share", "dots", "dots.yaml")); err != nil {
+		t.Fatalf("expected bootstrapper to replace empty Installed Repository: %v\noutput:\n%s", err, output)
+	}
+}
+
+func TestBootstrapperRejectsNonRecoverableDefaultInstalledRepository(t *testing.T) {
+	root := repoRoot(t)
+	version := "v0.99.0"
+	artifact := "dots_v0.99.0_linux_arm64"
+	releaseRoot := t.TempDir()
+	versionDir := filepath.Join(releaseRoot, version)
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "dots-args.log")
+	artifactBody := fmt.Sprintf("#!/usr/bin/env bash\nset -euo pipefail\nprintf '%%s\\n' \"$*\" > %q\n", logPath)
+	writeFile(t, filepath.Join(versionDir, artifact), artifactBody, 0o644)
+	writeFile(t, filepath.Join(versionDir, "checksums.txt"), fmt.Sprintf("%s  %s\n", sha256Hex([]byte(artifactBody)), artifact), 0o644)
+
+	server := httptest.NewServer(http.FileServer(http.Dir(releaseRoot)))
+	t.Cleanup(server.Close)
+
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".local", "share", "dots", "partial.txt"), "partial clone\n", 0o600)
+
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "install.sh"))
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(),
+		"HOME="+home,
+		"DOTS_VERSION="+version,
+		"DOTS_RELEASE_BASE_URL="+server.URL,
+		"DOTS_REPOSITORY_URL="+newBootstrapSourceRepo(t),
+		"DOTS_INSTALL_DIR="+filepath.Join(t.TempDir(), "bin"),
+		"DOTS_OS=linux",
+		"DOTS_ARCH=arm64",
+	)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("bootstrap should reject non-recoverable Installed Repository\n%s", output)
+	}
+	if !strings.Contains(string(output), "does not contain a valid dots.yaml") {
+		t.Fatalf("non-recoverable Installed Repository should be explained, got:\n%s", output)
+	}
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatalf("non-recoverable Installed Repository should not delegate to dots install; stat error: %v", err)
 	}
 }
 
@@ -136,6 +279,7 @@ func TestBootstrapperDefaultsToLatestReleaseArtifactWhenVersionIsUnset(t *testin
 		"HOME="+t.TempDir(),
 		"DOTS_RELEASE_BASE_URL="+server.URL,
 		"DOTS_INSTALL_DIR="+installDir,
+		"DOTS_SOURCE_ROOT="+filepath.Join(t.TempDir(), "checkout"),
 		"DOTS_OS=darwin",
 		"DOTS_ARCH=arm64",
 	)
@@ -156,8 +300,8 @@ func TestBootstrapperDefaultsToLatestReleaseArtifactWhenVersionIsUnset(t *testin
 	if err != nil {
 		t.Fatalf("expected bootstrapper to delegate to installed dots: %v\noutput:\n%s", err, output)
 	}
-	if strings.TrimSpace(string(gotArgs)) != "install" {
-		t.Fatalf("delegated args = %q, want %q", strings.TrimSpace(string(gotArgs)), "install")
+	if got := strings.TrimSpace(string(gotArgs)); !strings.HasPrefix(got, "install --source-root ") {
+		t.Fatalf("delegated args = %q, want install with explicit source root", got)
 	}
 }
 
@@ -278,6 +422,7 @@ func TestBootstrapperSelectsSupportedReleaseArtifacts(t *testing.T) {
 				"DOTS_VERSION="+version,
 				"DOTS_RELEASE_BASE_URL="+server.URL,
 				"DOTS_INSTALL_DIR="+installDir,
+				"DOTS_SOURCE_ROOT="+filepath.Join(t.TempDir(), "checkout"),
 				"DOTS_OS="+tt.os,
 				"DOTS_ARCH="+tt.arch,
 			)
@@ -289,6 +434,35 @@ func TestBootstrapperSelectsSupportedReleaseArtifacts(t *testing.T) {
 				t.Fatalf("bootstrap should download %s, got:\n%s", tt.artifact, output)
 			}
 		})
+	}
+}
+
+func newBootstrapSourceRepo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is required for bootstrap source clone test")
+	}
+	repo := t.TempDir()
+	runBootstrapGit(t, repo, "init", "-b", "main")
+	runBootstrapGit(t, repo, "config", "user.email", "dots@test.local")
+	runBootstrapGit(t, repo, "config", "user.name", "dots test")
+	writeFile(t, filepath.Join(repo, "dots.yaml"), "version: 1\nprofiles: {default: {tags: [core]}}\nentries: []\n", 0o600)
+	runBootstrapGit(t, repo, "add", "dots.yaml")
+	runBootstrapGit(t, repo, "commit", "-m", "initial")
+	runBootstrapGit(t, repo, "tag", "v0.99.0")
+	return repo
+}
+
+func runBootstrapGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_CONFIG_GLOBAL="+os.DevNull,
+		"GIT_CONFIG_NOSYSTEM=1",
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, output)
 	}
 }
 

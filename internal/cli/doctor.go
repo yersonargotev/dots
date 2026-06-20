@@ -27,12 +27,12 @@ func newDoctorCommand() *cobra.Command {
 		// misuse of the command, so do not dump the usage block on failure.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := manifest.LoadFile(file)
+			paths, err := resolvePaths(home, sourceRoot, stateRoot)
 			if err != nil {
 				return err
 			}
 
-			paths, err := resolvePaths(home, sourceRoot, stateRoot)
+			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, paths.SourceRoot))
 			if err != nil {
 				return err
 			}
