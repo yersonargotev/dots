@@ -51,6 +51,10 @@ func newBackupsListCommand() *cobra.Command {
 				return err
 			}
 
+			if wantsJSON(cmd) {
+				return emitOK(cmd, backupsListReport{StateRoot: paths.StateRoot, Metadata: meta})
+			}
+
 			if len(meta.Sets) == 0 {
 				fmt.Fprintf(cmd.OutOrStdout(), "No Backup Sets recorded in state root: %s\n", paths.StateRoot)
 				return nil
@@ -137,9 +141,11 @@ func newBackupsRestoreCommand() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			renderRestorePlan(out, set, items)
-
 			if dryRun {
+				if wantsJSON(cmd) {
+					return emitOK(cmd, backupsRestoreReport{DryRun: true, Set: set, Items: items})
+				}
+				renderRestorePlan(out, set, items)
 				fmt.Fprintln(out, "\nDry run: no files changed.")
 				return nil
 			}
@@ -151,7 +157,11 @@ func newBackupsRestoreCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return emitOK(cmd, backupsRestoreReport{DryRun: false, Set: set, Items: items, Result: result})
+			}
 
+			renderRestorePlan(out, set, items)
 			if result.SafetySet != nil {
 				fmt.Fprintf(out, "\nBacked up %s to Backup Set %s before restoring.\n", pluralizeTargets(len(result.SafetySet.Targets)), result.SafetySet.ID)
 			}

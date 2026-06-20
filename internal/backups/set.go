@@ -234,9 +234,9 @@ const (
 // RestoreItem is one preserved file mapped back to its original target, with the
 // action restoring it would take against the current filesystem.
 type RestoreItem struct {
-	Target     string
-	BackupFile string
-	Action     RestoreAction
+	Target     string        `json:"target"`
+	BackupFile string        `json:"-"`
+	Action     RestoreAction `json:"action"`
 }
 
 // PlanRestore computes, without changing anything, what restoring set would do.
@@ -277,8 +277,8 @@ type RestoreOptions struct {
 // when any existing target was overwritten, the safety Backup Set it recorded
 // first (nil when nothing needed overwriting).
 type RestoreResult struct {
-	Items     []RestoreItem
-	SafetySet *BackupSet
+	Items     []RestoreItem `json:"items"`
+	SafetySet *BackupSet    `json:"safety_set,omitempty"`
 }
 
 // Restore returns the targets recorded in set to their preserved content. It is

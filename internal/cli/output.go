@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 
@@ -31,9 +32,9 @@ const (
 	statusError    = "error"
 )
 
-// envelope is the single machine-readable shape every command emits under
-// --output json. Data carries the command's domain report; Error is set only on
-// the error envelope. The two are mutually exclusive.
+// envelope is the single machine-readable shape every result-producing command
+// emits under --output json. Data carries the command's domain report; Error is
+// set only on the error envelope. The two are mutually exclusive.
 type envelope struct {
 	SchemaVersion string `json:"schema_version"`
 	Command       string `json:"command"`
@@ -105,12 +106,32 @@ func emitReport(cmd *cobra.Command, report findingReport) error {
 // emitError writes the error envelope for Machine Output Mode to stdout, so an
 // agent always receives parseable output instead of a human "Error:" line.
 func emitError(w io.Writer, cmd *cobra.Command, cause error) {
+	emitRawError(w, commandName(cmd), cause)
+}
+
+func emitRawError(w io.Writer, command string, cause error) {
 	_ = writeEnvelope(w, envelope{
 		SchemaVersion: schemaVersion,
-		Command:       commandName(cmd),
+		Command:       command,
 		Status:        statusError,
 		Error:         cause.Error(),
 	})
+}
+
+func emitOK(cmd *cobra.Command, data any) error {
+	return writeEnvelope(cmd.OutOrStdout(), envelope{
+		SchemaVersion: schemaVersion,
+		Command:       commandName(cmd),
+		Status:        statusOK,
+		Data:          data,
+	})
+}
+
+func rejectInteractiveJSON(cmd *cobra.Command) error {
+	if wantsJSON(cmd) {
+		return fmt.Errorf("--output json requires --yes or --dry-run for commands that normally prompt")
+	}
+	return nil
 }
 
 func writeEnvelope(w io.Writer, env envelope) error {

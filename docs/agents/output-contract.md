@@ -18,18 +18,22 @@ dots plan   --output json
 dots deps check --output json
 ```
 
-Under `--output json`, the read-only diagnostic commands (`status`, `plan`,
-`doctor`, `deps check`) emit one centralized envelope. `install` and `update`
-accept the flag but still render text — their machine surface is deferred.
+Under `--output json`, every result-producing command emits one centralized
+envelope on stdout. Human-only surfaces such as help text, shell completion
+scripts, and parent commands without a selected subcommand return an error
+envelope instead of falling back to prose.
 
 Machine Output Mode implies non-interactive: it never writes a prompt onto the
-JSON stream. `--output json` owns stdout; diagnostics go to stderr, so
-`dots status --output json | jq` is always safe.
+JSON stream. Commands that would normally prompt require an explicit non-
+interactive choice such as `--dry-run` or `--yes`; otherwise they return an
+error envelope. `--output json` owns stdout; diagnostics and child-process
+progress go to stderr, so `dots status --output json | jq` is always safe.
 
 ## Envelope shape
 
-Every command renders the same envelope. The `data` object is the command's
-domain report, so the JSON and text surfaces never disagree on state.
+Every result-producing command renders the same envelope. The `data` object is
+the command's domain report, so the JSON and text surfaces never disagree on
+state.
 
 ```json
 {
@@ -69,14 +73,15 @@ Exit codes let a caller branch on the outcome without parsing output.
 
 | Code | Name           | Meaning                                                                 |
 |------|----------------|-------------------------------------------------------------------------|
-| `0`  | `ExitOK`       | Ran successfully and the workstation is aligned with the Source of Truth. |
+| `0`  | `ExitOK`       | Ran successfully: diagnostics found alignment, or an action command completed. |
 | `2`  | `ExitFindings` | Ran successfully but surfaced a non-error divergence to act on: Drift, an unresolved Conflict, a missing Dependency, or a doctor concern. |
 | `1`  | `ExitError`    | The command failed to run: bad manifest, I/O failure, or misuse.        |
 
-The `2` findings code applies only to the read-only diagnostic commands
-(`status`, `plan`, `doctor`, `deps`). Action commands (`install`, `update`)
-keep `0`/`1`. Reserving `1` for real failures means existing `|| handle-error`
-scripts never confuse a divergent-but-healthy run with a broken one.
+The `2` findings code applies only to read-only diagnostic commands such as
+`status`, `plan`, `doctor`, and dependency diagnostics. Action commands keep
+`0`/`1` even when their JSON payload includes a plan or preview. Reserving `1`
+for real failures means existing `|| handle-error` scripts never confuse a
+divergent-but-healthy run with a broken one.
 
 ```bash
 dots status --output json

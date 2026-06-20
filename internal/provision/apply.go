@@ -22,21 +22,21 @@ const (
 
 // RunItem is the outcome of one attempted Provisioner.
 type RunItem struct {
-	Tool       string
-	Executable string
-	Args       []string
-	Status     RunStatus
+	Tool       string    `json:"tool"`
+	Executable string    `json:"executable"`
+	Args       []string  `json:"args"`
+	Status     RunStatus `json:"status"`
 	// Missing holds the probes of absent dependencies when Status is
 	// RunStatusMissingDeps.
-	Missing []string
+	Missing []string `json:"missing,omitempty"`
 }
 
 // Report records the outcome of an Apply run. A Report is always returned, even
 // on failure, so the caller can show exactly how far provisioning got and never
 // leaves the run half-applied without an account of it.
 type Report struct {
-	Profile string
-	Items   []RunItem
+	Profile string    `json:"profile"`
+	Items   []RunItem `json:"items"`
 }
 
 // Apply runs every selected Provisioner in manifest order via the deps Runner

@@ -70,9 +70,9 @@ dots doctor
 
 ### Machine-readable output
 
-Scripts and agents can drive the read-only diagnostics (`status`, `plan`,
-`doctor`, `deps check`) through a stable JSON envelope and semantic exit codes
-instead of parsing human text:
+Scripts and agents can request a stable JSON envelope from result-producing
+commands with `--output json`. Read-only diagnostics also expose semantic
+findings exit codes, so callers can branch without parsing human text:
 
 ```bash
 dots status --output json   # exit 0 aligned, 2 findings to act on, 1 error

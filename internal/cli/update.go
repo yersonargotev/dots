@@ -56,8 +56,27 @@ func newUpdateCommand() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			if err := refreshRepository(out, paths.SourceRoot, dryRun); err != nil {
-				return err
+			var update gitrepo.Update
+			if wantsJSON(cmd) {
+				if dryRun {
+					update, err = gitrepo.Preview(paths.SourceRoot)
+				} else {
+					if !yes {
+						return rejectInteractiveJSON(cmd)
+					}
+					update, err = gitrepo.FastForward(paths.SourceRoot)
+				}
+				if errors.Is(err, gitrepo.ErrNotFastForward) {
+					return fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", paths.SourceRoot)
+				}
+				if err != nil {
+					return err
+				}
+			} else {
+				update, err = refreshRepository(out, paths.SourceRoot, dryRun)
+				if err != nil {
+					return err
+				}
 			}
 
 			// Load the manifest after the fast-forward so a manifest change pulled
@@ -88,18 +107,23 @@ func newUpdateCommand() *cobra.Command {
 				return err
 			}
 
-			renderPlan(out, p)
-			if err := renderSkippedEntryHint(out, *m, profile, runtime.GOOS); err != nil {
-				return err
-			}
-
 			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
 			if err != nil {
 				return err
 			}
-			renderProvisionPlan(out, provPlan)
-			if err := renderSkippedProvisionerHint(out, *m, profile, runtime.GOOS); err != nil {
-				return err
+			if wantsJSON(cmd) {
+				if dryRun {
+					return emitOK(cmd, updateReport{DryRun: true, Update: update, Plan: p, Provisioners: provPlan})
+				}
+			} else {
+				renderPlan(out, p)
+				if err := renderSkippedEntryHint(out, *m, profile, runtime.GOOS); err != nil {
+					return err
+				}
+				renderProvisionPlan(out, provPlan)
+				if err := renderSkippedProvisionerHint(out, *m, profile, runtime.GOOS); err != nil {
+					return err
+				}
 			}
 
 			if dryRun {
@@ -111,13 +135,22 @@ func newUpdateCommand() *cobra.Command {
 				return err
 			}
 			if !applied {
+				if wantsJSON(cmd) {
+					return emitOK(cmd, updateReport{DryRun: false, Update: update, Plan: p, Provisioners: provPlan})
+				}
 				return nil
 			}
 
 			// Mirror install: managed agent configuration stays aligned with the
 			// Source of Truth only if the same provisioners install runs are
 			// re-applied after an update, not just the file plan.
-			return runProvisioners(cmd, *m, profile, paths.Home)
+			if err := runProvisioners(cmd, *m, profile, paths.Home); err != nil {
+				return err
+			}
+			if wantsJSON(cmd) {
+				return emitOK(cmd, updateReport{DryRun: false, Update: update, Plan: p, Provisioners: provPlan})
+			}
+			return nil
 		},
 	}
 
@@ -136,7 +169,7 @@ func newUpdateCommand() *cobra.Command {
 // update of the Installed Repository, reporting exactly what changed. It maps
 // the gitrepo divergence sentinel to a user-facing message that points back to
 // manual resolution, keeping dots out of automatic merge/rebase behavior.
-func refreshRepository(out io.Writer, sourceRoot string, dryRun bool) error {
+func refreshRepository(out io.Writer, sourceRoot string, dryRun bool) (gitrepo.Update, error) {
 	var (
 		upd gitrepo.Update
 		err error
@@ -147,13 +180,13 @@ func refreshRepository(out io.Writer, sourceRoot string, dryRun bool) error {
 		upd, err = gitrepo.FastForward(sourceRoot)
 	}
 	if errors.Is(err, gitrepo.ErrNotFastForward) {
-		return fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", sourceRoot)
+		return gitrepo.Update{}, fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", sourceRoot)
 	}
 	if err != nil {
-		return err
+		return gitrepo.Update{}, err
 	}
 	renderUpdate(out, upd, dryRun)
-	return nil
+	return upd, nil
 }
 
 // renderUpdate writes a deterministic summary of the fast-forward so the user
