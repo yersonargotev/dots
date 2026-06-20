@@ -117,8 +117,16 @@ func newBackupsRestoreCommand() *cobra.Command {
 			// inside the home sandbox regardless of where the state root lives.
 			// Trusting an explicit external state root's *location* must never
 			// extend to trusting the *targets* recorded in its metadata.
+			//
+			// Validate the parent path rather than rejecting a symlink leaf: the
+			// normal install replace flow can leave a managed symlink at the
+			// target, and restore must be able to back up and remove that symlink
+			// without following it.
 			for _, target := range set.Targets {
-				if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(target, paths.Home, "restore target"); err != nil {
+				if err := plan.ValidateResolvedTarget(target, paths.Home); err != nil {
+					return err
+				}
+				if err := plan.ValidateTargetParentInsideHome(target, paths.Home); err != nil {
 					return err
 				}
 			}
