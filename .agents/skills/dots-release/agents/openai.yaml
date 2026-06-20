@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dots Release"
+  short_description: "Publish dots releases safely."
+  default_prompt: "Use this skill to clean merged branches and publish a dots v0.x release."
