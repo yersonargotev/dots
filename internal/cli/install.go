@@ -64,18 +64,27 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
-			renderPlan(cmd.OutOrStdout(), p)
-			if err := renderSkippedEntryHint(cmd.OutOrStdout(), *m, profile, runtime.GOOS); err != nil {
-				return err
-			}
-
 			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
 			if err != nil {
 				return err
 			}
-			renderProvisionPlan(cmd.OutOrStdout(), provPlan)
-			if err := renderSkippedProvisionerHint(cmd.OutOrStdout(), *m, profile, runtime.GOOS); err != nil {
-				return err
+
+			if wantsJSON(cmd) {
+				if dryRun {
+					return emitOK(cmd, installReport{DryRun: true, Plan: p, Provisioners: provPlan})
+				}
+				if !yes {
+					return rejectInteractiveJSON(cmd)
+				}
+			} else {
+				renderPlan(cmd.OutOrStdout(), p)
+				if err := renderSkippedEntryHint(cmd.OutOrStdout(), *m, profile, runtime.GOOS); err != nil {
+					return err
+				}
+				renderProvisionPlan(cmd.OutOrStdout(), provPlan)
+				if err := renderSkippedProvisionerHint(cmd.OutOrStdout(), *m, profile, runtime.GOOS); err != nil {
+					return err
+				}
 			}
 
 			if dryRun {
@@ -87,10 +96,19 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			if !applied {
+				if wantsJSON(cmd) {
+					return emitOK(cmd, installReport{DryRun: false, Plan: p, Provisioners: provPlan})
+				}
 				return nil
 			}
 
-			return runProvisioners(cmd, *m, profile, paths.Home)
+			if err := runProvisioners(cmd, *m, profile, paths.Home); err != nil {
+				return err
+			}
+			if wantsJSON(cmd) {
+				return emitOK(cmd, installReport{DryRun: false, Plan: p, Provisioners: provPlan})
+			}
+			return nil
 		},
 	}
 
@@ -116,15 +134,21 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile, home stri
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	stdout := cmd.OutOrStdout()
+	if wantsJSON(cmd) {
+		stdout = cmd.ErrOrStderr()
+	}
 	runner := provisionExecRunner{
 		ctx:    ctx,
 		home:   home,
 		stdin:  cmd.InOrStdin(),
-		stdout: cmd.OutOrStdout(),
+		stdout: stdout,
 		stderr: cmd.ErrOrStderr(),
 	}
 	report, err := provision.Apply(m, provision.Options{Profile: profile, OS: runtime.GOOS}, lookupCommand, fontInstalled(runtime.GOOS, home), runner)
-	renderProvisionReport(cmd.OutOrStdout(), report)
+	if !wantsJSON(cmd) {
+		renderProvisionReport(cmd.OutOrStdout(), report)
+	}
 	if err != nil {
 		return err
 	}

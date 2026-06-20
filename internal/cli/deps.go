@@ -152,12 +152,22 @@ func newDepsInstallCommand(profile *string) *cobra.Command {
 			}
 
 			if dryRun {
+				if wantsJSON(cmd) {
+					return emitOK(cmd, depsInstallDryRunReport{DryRun: true, Report: report})
+				}
 				renderDepsInstallDryRun(cmd.OutOrStdout(), report)
 				return nil
 			}
 
+			if wantsJSON(cmd) && !yes {
+				return rejectInteractiveJSON(cmd)
+			}
+
 			if yes {
 				if !hasInstallablePreviewAction(report) {
+					if wantsJSON(cmd) {
+						return emitOK(cmd, depsInstallDryRunReport{DryRun: false, Report: report})
+					}
 					renderDepsInstallPreview(cmd.OutOrStdout(), report)
 					return nil
 				}
@@ -189,16 +199,29 @@ func newDepsInstallCommand(profile *string) *cobra.Command {
 
 func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier) error {
 	home, _ := os.UserHomeDir()
+	stdout := cmd.OutOrStdout()
+	if wantsJSON(cmd) {
+		stdout = cmd.ErrOrStderr()
+	}
 	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, depsExecRunner{
 		ctx:    cmd.Context(),
 		stdin:  cmd.InOrStdin(),
-		stdout: cmd.OutOrStdout(),
+		stdout: stdout,
 		stderr: cmd.ErrOrStderr(),
 	})
+	if err != nil {
+		if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
+			renderDepsInstall(cmd.OutOrStdout(), report)
+		}
+		return err
+	}
+	if wantsJSON(cmd) {
+		return emitOK(cmd, depsInstallRunReport{DryRun: false, Report: report})
+	}
 	if report.Profile != "" || len(report.Items) > 0 {
 		renderDepsInstall(cmd.OutOrStdout(), report)
 	}
-	return err
+	return nil
 }
 
 func confirmDepsInstall(r io.Reader, w io.Writer) (bool, error) {

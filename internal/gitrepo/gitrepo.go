@@ -22,9 +22,9 @@ var ErrNotFastForward = errors.New("installed repository cannot be fast-forwarde
 // Update describes the fast-forward an update did apply (FastForward) or would
 // apply (Preview), so callers can report exactly what changed.
 type Update struct {
-	OldRev   string
-	NewRev   string
-	Incoming []string
+	OldRev   string   `json:"old_rev"`
+	NewRev   string   `json:"new_rev"`
+	Incoming []string `json:"incoming"`
 }
 
 // Changed reports whether the update moves (or would move) HEAD.

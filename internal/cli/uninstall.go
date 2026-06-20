@@ -47,13 +47,22 @@ func newUninstallCommand() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			if len(p.Actions) == 0 {
-				fmt.Fprintf(out, "No recorded targets to uninstall in state root: %s\n", paths.StateRoot)
-				return nil
-			}
+			if wantsJSON(cmd) {
+				if dryRun || len(p.Actions) == 0 {
+					return emitOK(cmd, uninstallReport{DryRun: dryRun, StateRoot: paths.StateRoot, Plan: p})
+				}
+				if !yes {
+					return rejectInteractiveJSON(cmd)
+				}
+			} else {
+				if len(p.Actions) == 0 {
+					fmt.Fprintf(out, "No recorded targets to uninstall in state root: %s\n", paths.StateRoot)
+					return nil
+				}
 
-			renderUninstallPlan(out, p)
-			renderModifiedHint(out, p, force)
+				renderUninstallPlan(out, p)
+				renderModifiedHint(out, p, force)
+			}
 
 			if dryRun {
 				fmt.Fprintln(out, "\nDry run: no files changed.")
@@ -87,6 +96,9 @@ func newUninstallCommand() *cobra.Command {
 				return err
 			}
 
+			if wantsJSON(cmd) {
+				return emitOK(cmd, uninstallReport{DryRun: false, StateRoot: paths.StateRoot, Plan: p, Result: res})
+			}
 			fmt.Fprintf(out, "\nRemoved %s.\n", pluralizeTargets(len(res.Removed)))
 			if restoreBackups && len(res.RestoredSets) > 0 {
 				fmt.Fprintf(out, "Restored %s from preserved Backup Sets.\n", pluralizeBackupSets(len(res.RestoredSets)))

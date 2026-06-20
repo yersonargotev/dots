@@ -33,10 +33,10 @@ type Options struct {
 // Result reports what Apply did so the caller can summarize the outcome.
 type Result struct {
 	// Removed lists the targets successfully deleted, in plan order.
-	Removed []string
+	Removed []string `json:"removed"`
 	// RestoredSets lists the IDs of Backup Sets restored when RestoreBackups is
 	// set, each restored at most once even if it covers several removed targets.
-	RestoredSets []string
+	RestoredSets []string `json:"restored_sets"`
 }
 
 // Apply removes the dots-owned targets in an Uninstall Plan. It re-classifies

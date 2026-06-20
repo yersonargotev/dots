@@ -18,20 +18,20 @@ const (
 
 // InstallPreview is one dry-run installation preview item.
 type InstallPreview struct {
-	Dependency string
-	Status     InstallPreviewStatus
-	Package    string
-	Executable string
-	Args       []string
-	Manual     string
+	Dependency string               `json:"dependency"`
+	Status     InstallPreviewStatus `json:"status"`
+	Package    string               `json:"package,omitempty"`
+	Executable string               `json:"executable,omitempty"`
+	Args       []string             `json:"args,omitempty"`
+	Manual     string               `json:"manual,omitempty"`
 }
 
 // InstallDryRunReport previews the install actions for a Profile without
 // invoking any package manager.
 type InstallDryRunReport struct {
-	Profile string
-	Tier    Tier
-	Items   []InstallPreview
+	Profile string           `json:"profile"`
+	Tier    Tier             `json:"tier"`
+	Items   []InstallPreview `json:"items"`
 }
 
 // Runner executes one argv-shaped install action.
@@ -51,19 +51,19 @@ const (
 
 // InstallItem is the result of one attempted dependency installation.
 type InstallItem struct {
-	Dependency string
-	Status     InstallStatus
-	Package    string
-	Executable string
-	Args       []string
-	Manual     string
+	Dependency string        `json:"dependency"`
+	Status     InstallStatus `json:"status"`
+	Package    string        `json:"package,omitempty"`
+	Executable string        `json:"executable,omitempty"`
+	Args       []string      `json:"args,omitempty"`
+	Manual     string        `json:"manual,omitempty"`
 }
 
 // InstallReport records the stable dots summary for a real install run.
 type InstallReport struct {
-	Profile string
-	Tier    Tier
-	Items   []InstallItem
+	Profile string        `json:"profile"`
+	Tier    Tier          `json:"tier"`
+	Items   []InstallItem `json:"items"`
 }
 
 // InstallDryRun computes the install preview for missing Dependencies without

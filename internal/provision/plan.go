@@ -17,17 +17,17 @@ type Options struct {
 // plus the HOME-relative roots the tool will affect, shown so the user can judge
 // the blast radius before confirming.
 type Step struct {
-	Tool       string
-	Executable string
-	Args       []string
-	Targets    []string
+	Tool       string   `json:"tool"`
+	Executable string   `json:"executable"`
+	Args       []string `json:"args"`
+	Targets    []string `json:"targets"`
 }
 
 // Plan is the preview of Provisioner steps the installer would run for a
 // Profile, in manifest order.
 type Plan struct {
-	Profile string
-	Steps   []Step
+	Profile string `json:"profile"`
+	Steps   []Step `json:"steps"`
 }
 
 // Select gathers the Provisioners that belong to the Profile (their tags

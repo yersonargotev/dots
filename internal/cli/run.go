@@ -40,6 +40,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	root.SetArgs(args)
 	root.SetOut(stdout)
 	root.SetErr(stderr)
+	if code, handled := preflightOutputMode(root, args, stdout, stderr); handled {
+		return code
+	}
+	if value, ok, _ := outputArgValue(args); ok && value == outputJSON {
+		root.SilenceUsage = true
+	}
 
 	// ExecuteC returns the command that actually ran so the error envelope can be
 	// labeled and the output mode read from its inherited flags.
