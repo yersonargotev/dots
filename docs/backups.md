@@ -71,6 +71,25 @@ Planned changes:
 Dry run: no files changed.
 ```
 
+## Sandbox validation
+
+Before using `dots install` against a real home directory, validate the safety
+guarantee in a temporary sandbox: create a small manifest, pre-create the target
+file under `--home`, run `dots install --no-tui` and choose `replace`, then run
+`dots backups restore <set>` with the same `--home` and `--state-root`. The
+expected result is:
+
+- install records a `pre-install conflict protection` Backup Set before
+  replacing the user-owned target;
+- the managed file or symlink is installed under the sandbox home;
+- restore returns the original content; and
+- restore records a `pre-restore safety backup` for the managed state it
+  overwrote.
+
+The regression test `TestInstallReplaceAndBackupRestoreEndToEndUsesSandbox`
+covers this journey with temporary `--home`, `--source-root`, and `--state-root`
+paths only.
+
 ## References
 
 - [`docs/scope.md`](scope.md) — automatic backup restore was deferred from v1 and delivered in v1.1.
