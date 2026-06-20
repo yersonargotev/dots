@@ -190,7 +190,7 @@ func validatePlan(p plan.Plan, opts Options) ([]string, error) {
 				if err := validateTargetParentInsideHome(action.Target, home); err != nil {
 					return nil, err
 				}
-				if err := validateBackupableTarget(action.Target); err != nil {
+				if err := plan.ValidateBackupableTarget(action.Target); err != nil {
 					return nil, err
 				}
 				if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
@@ -417,17 +417,6 @@ func applyAdopt(action plan.Action, source string, opts Options) error {
 		return err
 	}
 	return nil
-}
-
-func validateBackupableTarget(target string) error {
-	info, err := os.Lstat(target)
-	if err != nil {
-		return fmt.Errorf("stat conflict target %s: %w", target, err)
-	}
-	if info.Mode().IsRegular() || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nil
-	}
-	return fmt.Errorf("backup target %s is not a regular file, directory, or symlink", target)
 }
 
 func validateAdoptableTarget(target, home string) error {
