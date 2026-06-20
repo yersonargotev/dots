@@ -63,21 +63,21 @@ Because no fast-forward is applied in a dry run, the rendered plan reflects the 
 
 ## Profiles and provisioners
 
-Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects only `core`-tagged provisioners (gentle-ai); the chrome-devtools integration for Claude, Codex, and the OpenCode overlay is tagged `desktop` and is only provisioned under `--profile desktop`. This is design-intent — chrome-devtools drives a real browser and does not belong in headless or server installs.
+Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects no provisioners. The `desktop` profile selects only desktop integrations such as chrome-devtools for Claude, Codex, and the OpenCode overlay. The `agents` profile selects gentle-ai setup/cleanup provisioners. Use `workstation` when you explicitly want both desktop integrations and agent setup. This is design-intent: desktop installs should configure desktop tools, not opt into SDD or gentle-dev agent setup.
 
 The gentle-ai provisioner can model cleanup before install by using separate entries in manifest order. Missing `action` still defaults to `install`; `yes` is only valid for `uninstall` because it confirms a cleanup action:
 
 ```yaml
 provisioners:
   - tool: gentle-ai
-    tags: [core]
+    tags: [agents]
     spec:
       action: uninstall
       agents: [codex, claude-code, opencode]
       components: [sdd]
       yes: true
   - tool: gentle-ai
-    tags: [core]
+    tags: [agents]
     spec:
       preset: custom
       agents: [codex, claude-code]
@@ -87,7 +87,7 @@ provisioners:
 To keep that requirement discoverable, both `install` and `update` print a one-line hint when the active profile skips provisioners another profile would select on this OS:
 
 ```
-Note: profile "default" skips 3 provisioner(s); run with --profile desktop to include them.
+Note: profile "default" skips 7 provisioner(s); run with --profile workstation to include them.
 ```
 
 File entries are profile-scoped the same way, and the `default` profile silently omits the `desktop`-tagged ones (the Ghostty and Zed configs, plus the OpenCode MCP overlay). To close the same discoverability gap, both commands print a parallel hint for skipped file entries:

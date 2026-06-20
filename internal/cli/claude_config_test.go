@@ -11,14 +11,14 @@ import (
 	"github.com/yersonargotev/dots/internal/cli"
 )
 
-// TestClaudeDefaultProfileSeedsUserBaselineInSandbox proves that dots seeds the
+// TestClaudeAgentsProfileSeedsUserBaselineInSandbox proves that dots seeds the
 // user-owned Claude settings baseline and the portable statusLine script with a
 // copy strategy (regular files, not symlinks) before the gentle-ai provisioner
 // runs, that the provisioner is invoked for the claude-code agent, and that the
 // provisioner never escapes the threaded sandbox HOME. The gentle-ai/engram
 // tools are stubbed so the provisioner step exits cleanly without merging its
 // own keys, keeping the sandbox aligned.
-func TestClaudeDefaultProfileSeedsUserBaselineInSandbox(t *testing.T) {
+func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -44,7 +44,7 @@ func TestClaudeDefaultProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	install.SetArgs([]string{
 		"install",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
-		"--profile", "default",
+		"--profile", "agents",
 		"--source-root", repoRoot,
 		"--home", home,
 		"--state-root", stateRoot,
@@ -258,7 +258,7 @@ JSON
 	install.SetArgs([]string{
 		"install",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
-		"--profile", "default",
+		"--profile", "agents",
 		"--source-root", repoRoot,
 		"--home", home,
 		"--state-root", stateRoot,
@@ -275,7 +275,7 @@ JSON
 	statusCmd.SetArgs([]string{
 		"status",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
-		"--profile", "default",
+		"--profile", "agents",
 		"--source-root", repoRoot,
 		"--home", home,
 		"--state-root", stateRoot,
