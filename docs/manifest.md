@@ -37,10 +37,12 @@ A Profile is selected by commands such as `dots plan`, `dots install`,
 
 Current Profiles:
 
-| Profile | Tags | Profile Dependencies |
-|---------|------|----------------------|
-| `default` | `core` | None |
-| `desktop` | `core`, `desktop` | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
+| Profile | Tags | Intent | Profile Dependencies |
+|---------|------|--------|----------------------|
+| `default` | `core` | Core dotfiles without provisioners. | None |
+| `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
+| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai agent setup/cleanup. | None |
+| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
 
 ## Managed Entries
 
@@ -176,9 +178,9 @@ Current Provisioners:
 
 | Tool | Tags | OS | Rendered intent | Dependencies |
 |------|------|----|-----------------|--------------|
-| `gentle-ai` | `core` | all | Uninstall `sdd` for `codex`, `claude-code`, and `opencode` with `--yes`. | `gentle-ai` |
-| `gentle-ai` | `core` | all | Install global stable neutral custom setup for `codex` with `engram`, `context7`, and `persona`. | `gentle-ai`, `engram` |
-| `gentle-ai` | `core` | all | Install global stable neutral custom setup for `claude-code` with `engram`, `context7`, `persona`, and `permissions`. | `gentle-ai`, `engram` |
+| `gentle-ai` | `agents` | all | Uninstall `sdd` for `codex`, `claude-code`, and `opencode` with `--yes`. | `gentle-ai` |
+| `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `codex` with `engram`, `context7`, and `persona`. | `gentle-ai`, `engram` |
+| `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `claude-code` with `engram`, `context7`, `persona`, and `permissions`. | `gentle-ai`, `engram` |
 | `claude` | `desktop` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `desktop` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `desktop` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |

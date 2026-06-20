@@ -11,6 +11,19 @@ profiles:
       - name: Desktop Nerd Font
         brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
+  agents:
+    tags:
+      - core
+      - agents
+  workstation:
+    tags:
+      - core
+      - desktop
+      - agents
+    dependencies:
+      - name: Desktop Nerd Font
+        brew_cask: font-cascadia-code-nf
+        font_match: "CascadiaCodeNF*"
 entries:
   - source: configs/zsh/zshrc
     target: ~/.zshrc
@@ -295,7 +308,7 @@ entries:
 provisioners:
   - tool: gentle-ai
     tags:
-      - core
+      - agents
     spec:
       action: uninstall
       agents:
@@ -311,7 +324,7 @@ provisioners:
         brew: gentleman-programming/tap/gentle-ai
   - tool: gentle-ai
     tags:
-      - core
+      - agents
     spec:
       scope: global
       channel: stable
@@ -332,7 +345,7 @@ provisioners:
         brew: gentleman-programming/tap/engram
   - tool: gentle-ai
     tags:
-      - core
+      - agents
     spec:
       scope: global
       channel: stable

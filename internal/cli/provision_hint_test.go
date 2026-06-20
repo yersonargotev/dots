@@ -47,6 +47,33 @@ provisioners:
       - name: codex
 `
 
+const skippedSupersetProvisionerHintManifest = `version: 1
+profiles:
+  default:
+    tags: [core]
+  desktop:
+    tags: [core, desktop]
+  agents:
+    tags: [core, agents]
+  workstation:
+    tags: [core, desktop, agents]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: claude
+    tags: [desktop]
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+  - tool: codex
+    tags: [agents]
+    spec:
+      mcp: chrome-devtools
+      command: [npx, -y, chrome-devtools-mcp@latest]
+`
+
 const skippedEntryHintManifest = `version: 1
 profiles:
   default:
@@ -142,6 +169,50 @@ func TestUpdateDryRunHintsSkippedDesktopEntries(t *testing.T) {
 	want := `Note: profile "default" skips 2 file entries; run with --profile desktop to include them.`
 	if !strings.Contains(out, want) {
 		t.Fatalf("update --dry-run output missing skipped-entry hint %q\noutput:\n%s", want, out)
+	}
+}
+
+// TestInstallDryRunPrefersSupersetProvisionerHint proves the hint recommends a
+// profile that preserves the active provisioners and adds the skipped ones.
+func TestInstallDryRunPrefersSupersetProvisionerHint(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile string
+		want    string
+	}{
+		{
+			name:    "desktop keeps desktop provisioners and adds agents",
+			profile: "desktop",
+			want:    `Note: profile "desktop" skips 1 provisioner(s); run with --profile workstation to include them.`,
+		},
+		{
+			name:    "agents keeps agent provisioners and adds desktop",
+			profile: "agents",
+			want:    `Note: profile "agents" skips 1 provisioner(s); run with --profile workstation to include them.`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			sourceRoot := t.TempDir()
+			t.Setenv("HOME", t.TempDir())
+			writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+			manifestPath := writeCLIManifest(t, home, skippedSupersetProvisionerHintManifest)
+
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs([]string{"install", "--dry-run", "--profile", tt.profile, "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+			}
+			if !strings.Contains(out.String(), tt.want) {
+				t.Fatalf("install --dry-run output missing skipped-provisioner hint %q\noutput:\n%s", tt.want, out.String())
+			}
+		})
 	}
 }
 

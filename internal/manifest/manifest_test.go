@@ -8,6 +8,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/provision"
 )
 
 func TestLoadFileAcceptsMinimalValidManifest(t *testing.T) {
@@ -425,6 +426,11 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	if claudeInstall == nil {
 		t.Fatal("repository manifest missing gentle-ai claude basic install provisioner")
 	}
+	for _, prov := range []*manifest.Provisioner{cleanup, codexInstall, claudeInstall} {
+		if !sameStrings(prov.Tags, []string{"agents"}) {
+			t.Fatalf("gentle-ai provisioner tags = %#v, want [agents] so desktop installs do not apply SDD/gentle-dev agent setup", prov.Tags)
+		}
+	}
 	if cleanup.Spec.Yes != true {
 		t.Fatalf("gentle-ai cleanup yes = %v, want true", cleanup.Spec.Yes)
 	}
@@ -456,6 +462,44 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 		if &got.Provisioners[i] == codexInstall || &got.Provisioners[i] == claudeInstall {
 			t.Fatal("gentle-ai install provisioner appears before cleanup")
 		}
+	}
+}
+
+func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	desktop, err := provision.Build(*got, provision.Options{Profile: "desktop", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("provision.Build(desktop) error = %v", err)
+	}
+	for _, step := range desktop.Steps {
+		if step.Tool == "gentle-ai" {
+			t.Fatalf("desktop profile selected gentle-ai provisioner args %#v; desktop must not install SDD or gentle-dev agent setup", step.Args)
+		}
+	}
+
+	agents, err := provision.Build(*got, provision.Options{Profile: "agents", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("provision.Build(agents) error = %v", err)
+	}
+	if len(agents.Steps) == 0 {
+		t.Fatal("agents profile selected no provisioners, want gentle-ai setup there")
+	}
+	foundGentleAI := false
+	for _, step := range agents.Steps {
+		if step.Tool == "gentle-ai" {
+			foundGentleAI = true
+			break
+		}
+	}
+	if !foundGentleAI {
+		t.Fatal("agents profile did not select gentle-ai provisioners")
 	}
 }
 
