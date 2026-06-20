@@ -8,6 +8,7 @@ Install the dots CLI from a checksum-verified GitHub Release Artifact, then dele
 Environment:
   DOTS_VERSION           Release tag to install, for example v0.x.y. Defaults to latest.
   DOTS_RELEASE_BASE_URL  Release asset base URL. Defaults to https://github.com/yersonargotev/dots/releases/download.
+  DOTS_REPOSITORY_URL    Source of Truth Git URL. Defaults to https://github.com/yersonargotev/dots.git.
   DOTS_INSTALL_DIR       Directory where the dots command is installed. Defaults to ~/.local/bin.
   DOTS_SOURCE_ROOT       Optional development checkout/Installed Repository override passed to dots install.
   DOTS_OS                Test override for platform OS detection.
@@ -29,7 +30,9 @@ version="${DOTS_VERSION:-latest}"
 default_release_base_url="https://github.com/yersonargotev/dots/releases/download"
 release_base_url="${DOTS_RELEASE_BASE_URL:-$default_release_base_url}"
 install_dir="${DOTS_INSTALL_DIR:-$HOME/.local/bin}"
-source_root="${DOTS_SOURCE_ROOT:-}"
+repository_url="${DOTS_REPOSITORY_URL:-https://github.com/yersonargotev/dots.git}"
+source_root="${DOTS_SOURCE_ROOT:-$HOME/.local/share/dots}"
+source_root_explicit="${DOTS_SOURCE_ROOT:-}"
 
 case "${DOTS_OS:-$(uname -s)}" in
   Darwin|darwin) goos="darwin" ;;
@@ -114,8 +117,22 @@ install -m 0755 "$artifact_path" "$install_path"
 
 echo "Installed dots to $install_path"
 
+if [[ -z "$source_root_explicit" ]]; then
+  if [[ -e "$source_root" && ! -d "$source_root" ]]; then
+    fail "default Installed Repository path exists but is not a directory: $source_root"
+  fi
+  if [[ ! -d "$source_root" ]]; then
+    if ! command -v git >/dev/null 2>&1; then
+      fail "git is required to clone the Source of Truth into $source_root"
+    fi
+    mkdir -p "$(dirname "$source_root")"
+    echo "Cloning Source of Truth to $source_root"
+    git clone --depth 1 "$repository_url" "$source_root"
+  fi
+fi
+
 args=(install)
-if [[ -n "$source_root" ]]; then
+if [[ -n "$source_root_explicit" ]]; then
   args+=(--source-root "$source_root")
 fi
 

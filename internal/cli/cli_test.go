@@ -1732,3 +1732,116 @@ func TestBackupsListCommandRejectsDefaultMetadataLeafSymlinkEscapeBeforeReadingM
 		t.Fatal("backups list Execute() error = nil, want Backup Metadata leaf symlink escape error")
 	}
 }
+
+func TestCommandsLoadDefaultManifestFromInstalledRepository(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Chdir(t.TempDir())
+
+	sourceRoot := filepath.Join(home, ".local", "share", "dots")
+	writeCLIInstalledRepository(t, sourceRoot, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    os: [darwin, linux]
+`)
+
+	for _, tt := range []struct {
+		name         string
+		args         []string
+		want         string
+		wantFindings bool
+	}{
+		{
+			name: "plan",
+			args: []string{"plan", "--home", home},
+			want: "Summary: 1 create, 0 conflict, 0 unchanged, 0 missing-source",
+		},
+		{
+			name: "install dry run",
+			args: []string{"install", "--dry-run", "--home", home},
+			want: "Summary: 1 create, 0 conflict, 0 unchanged, 0 missing-source",
+		},
+		{
+			name:         "status",
+			args:         []string{"status", "--home", home},
+			want:         "missing",
+			wantFindings: true,
+		},
+		{
+			name:         "doctor",
+			args:         []string{"doctor", "--home", home},
+			want:         `Doctor for profile "default"`,
+			wantFindings: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := cli.NewRootCommand()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(tt.args)
+
+			err := cmd.Execute()
+			if tt.wantFindings {
+				requireFindings(t, err)
+			} else if err != nil {
+				t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+			}
+			if got := out.String(); !strings.Contains(got, tt.want) {
+				t.Fatalf("output missing %q\noutput:\n%s", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestDepsCommandsLoadDefaultManifestFromInstalledRepository(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+	t.Chdir(t.TempDir())
+
+	sourceRoot := filepath.Join(home, ".local", "share", "dots")
+	writeCLIInstalledRepository(t, sourceRoot, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: absenttool
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "check", "--home", home})
+
+	requireFindings(t, cmd.Execute())
+	if got := out.String(); !strings.Contains(got, "missing  absenttool") {
+		t.Fatalf("deps check did not load default manifest from Installed Repository\noutput:\n%s", got)
+	}
+}
+
+func writeCLIInstalledRepository(t *testing.T, sourceRoot, manifestContent string) {
+	t.Helper()
+	srcPath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(srcPath, []byte("export A=1\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "dots.yaml"), []byte(manifestContent), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+}

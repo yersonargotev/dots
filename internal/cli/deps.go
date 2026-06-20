@@ -44,7 +44,8 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 		// misuse of the command, so do not dump the usage block on failure.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := manifest.LoadFile(file)
+			resolvedHome := resolveDepsHome(home)
+			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, defaultSourceRoot(resolvedHome)))
 			if err != nil {
 				return err
 			}
@@ -52,7 +53,7 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 			report, err := deps.Check(*m, deps.Options{
 				Profile: *profile,
 				OS:      runtime.GOOS,
-			}, lookupCommand, fontInstalled(runtime.GOOS, resolveDepsHome(home)))
+			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome))
 			if err != nil {
 				return err
 			}
@@ -84,7 +85,8 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 		// not misuse of the command, so do not dump the usage block on failure.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := manifest.LoadFile(file)
+			resolvedHome := resolveDepsHome(home)
+			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, defaultSourceRoot(resolvedHome)))
 			if err != nil {
 				return err
 			}
@@ -97,7 +99,7 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 			report, err := deps.Plan(*m, deps.Options{
 				Profile: *profile,
 				OS:      runtime.GOOS,
-			}, lookupCommand, fontInstalled(runtime.GOOS, resolveDepsHome(home)), resolvedTier)
+			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
 			if err != nil {
 				return err
 			}
@@ -130,7 +132,8 @@ func newDepsInstallCommand(profile *string) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := manifest.LoadFile(file)
+			resolvedHome, _ := os.UserHomeDir()
+			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, defaultSourceRoot(resolvedHome)))
 			if err != nil {
 				return err
 			}
@@ -145,8 +148,7 @@ func newDepsInstallCommand(profile *string) *cobra.Command {
 				OS:      runtime.GOOS,
 			}
 
-			home, _ := os.UserHomeDir()
-			report, err := deps.InstallDryRun(*m, options, lookupCommand, fontInstalled(runtime.GOOS, home), resolvedTier)
+			report, err := deps.InstallDryRun(*m, options, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
 			if err != nil {
 				return err
 			}

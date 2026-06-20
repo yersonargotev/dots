@@ -101,7 +101,7 @@ Install the latest published v0.x release with the checksum-verified Bootstrappe
 curl -fsSL https://raw.githubusercontent.com/yersonargotev/dots/main/scripts/install.sh | bash
 ```
 
-The Bootstrapper downloads `checksums.txt` and the matching platform artifact from the latest GitHub Release by default, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, and then uses that tested binary for setup. Before any real-home install, verify the installed binary version:
+The Bootstrapper downloads `checksums.txt` and the matching platform artifact from the latest GitHub Release by default, verifies the SHA-256 checksum, installs the executable as `~/.local/bin/dots`, clones the Source of Truth to `~/.local/share/dots` when needed, and then uses that tested binary for setup. Before any real-home install, verify the installed binary version:
 
 ```bash
 ~/.local/bin/dots --version

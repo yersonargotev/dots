@@ -38,12 +38,12 @@ func newInstallCommand() *cobra.Command {
 		// Domain installation failures are user-facing conflicts, not command misuse.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := manifest.LoadFile(file)
+			paths, err := resolvePaths(home, sourceRoot, stateRoot)
 			if err != nil {
 				return err
 			}
 
-			paths, err := resolvePaths(home, sourceRoot, stateRoot)
+			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, paths.SourceRoot))
 			if err != nil {
 				return err
 			}

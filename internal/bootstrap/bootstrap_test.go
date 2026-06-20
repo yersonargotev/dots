@@ -87,12 +87,15 @@ func TestBootstrapperDelegatesWithoutSourceRootForDefaultInstalledRepository(t *
 	server := httptest.NewServer(http.FileServer(http.Dir(releaseRoot)))
 	t.Cleanup(server.Close)
 
+	sourceRepo := newBootstrapSourceRepo(t)
+	home := t.TempDir()
 	cmd := exec.Command("bash", filepath.Join(root, "scripts", "install.sh"))
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
-		"HOME="+t.TempDir(),
+		"HOME="+home,
 		"DOTS_VERSION="+version,
 		"DOTS_RELEASE_BASE_URL="+server.URL,
+		"DOTS_REPOSITORY_URL="+sourceRepo,
 		"DOTS_INSTALL_DIR="+filepath.Join(t.TempDir(), "bin"),
 		"DOTS_OS=linux",
 		"DOTS_ARCH=arm64",
@@ -108,6 +111,9 @@ func TestBootstrapperDelegatesWithoutSourceRootForDefaultInstalledRepository(t *
 	}
 	if strings.TrimSpace(string(gotArgs)) != "install" {
 		t.Fatalf("delegated args = %q, want %q", strings.TrimSpace(string(gotArgs)), "install")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".local", "share", "dots", "dots.yaml")); err != nil {
+		t.Fatalf("expected bootstrapper to clone default Installed Repository: %v\noutput:\n%s", err, output)
 	}
 }
 
@@ -136,6 +142,7 @@ func TestBootstrapperDefaultsToLatestReleaseArtifactWhenVersionIsUnset(t *testin
 		"HOME="+t.TempDir(),
 		"DOTS_RELEASE_BASE_URL="+server.URL,
 		"DOTS_INSTALL_DIR="+installDir,
+		"DOTS_SOURCE_ROOT="+filepath.Join(t.TempDir(), "checkout"),
 		"DOTS_OS=darwin",
 		"DOTS_ARCH=arm64",
 	)
@@ -156,8 +163,8 @@ func TestBootstrapperDefaultsToLatestReleaseArtifactWhenVersionIsUnset(t *testin
 	if err != nil {
 		t.Fatalf("expected bootstrapper to delegate to installed dots: %v\noutput:\n%s", err, output)
 	}
-	if strings.TrimSpace(string(gotArgs)) != "install" {
-		t.Fatalf("delegated args = %q, want %q", strings.TrimSpace(string(gotArgs)), "install")
+	if got := strings.TrimSpace(string(gotArgs)); !strings.HasPrefix(got, "install --source-root ") {
+		t.Fatalf("delegated args = %q, want install with explicit source root", got)
 	}
 }
 
@@ -278,6 +285,7 @@ func TestBootstrapperSelectsSupportedReleaseArtifacts(t *testing.T) {
 				"DOTS_VERSION="+version,
 				"DOTS_RELEASE_BASE_URL="+server.URL,
 				"DOTS_INSTALL_DIR="+installDir,
+				"DOTS_SOURCE_ROOT="+filepath.Join(t.TempDir(), "checkout"),
 				"DOTS_OS="+tt.os,
 				"DOTS_ARCH="+tt.arch,
 			)
@@ -289,6 +297,30 @@ func TestBootstrapperSelectsSupportedReleaseArtifacts(t *testing.T) {
 				t.Fatalf("bootstrap should download %s, got:\n%s", tt.artifact, output)
 			}
 		})
+	}
+}
+
+func newBootstrapSourceRepo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is required for bootstrap source clone test")
+	}
+	repo := t.TempDir()
+	runBootstrapGit(t, repo, "init", "-b", "main")
+	runBootstrapGit(t, repo, "config", "user.email", "dots@test.local")
+	runBootstrapGit(t, repo, "config", "user.name", "dots test")
+	writeFile(t, filepath.Join(repo, "dots.yaml"), "version: 1\nprofiles: {default: {tags: [core]}}\nentries: []\n", 0o600)
+	runBootstrapGit(t, repo, "add", "dots.yaml")
+	runBootstrapGit(t, repo, "commit", "-m", "initial")
+	return repo
+}
+
+func runBootstrapGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, output)
 	}
 }
 
