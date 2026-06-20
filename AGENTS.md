@@ -58,6 +58,22 @@ SANDBOX="$(mktemp -d)"
 dots doctor --home "$SANDBOX"   # inspect without touching real config
 ```
 
+`deps` is the exception: it manages system-global tools and package managers,
+not `$HOME` files, so it has no `--source-root`/`--state-root` to sandbox and
+those flags are not offered. The only honest sandbox knob is `--home` on
+`deps check` and `deps plan`, which roots **font detection** at the environment
+under test instead of the operator's real home:
+
+```bash
+SANDBOX="$(mktemp -d)"; mkdir -p "$SANDBOX/home"
+dots deps check --file dots.yaml --home "$SANDBOX/home"
+dots deps plan  --file dots.yaml --home "$SANDBOX/home"
+```
+
+`deps install` takes no `--home`: it would only relabel font detection while the
+real install still hits the system, so its guardrails stay `--dry-run` and
+confirmation instead.
+
 ## Contribution conventions
 
 - **Issue first.** Issues and PRDs live in GitHub Issues for `yersonargotev/dots`.

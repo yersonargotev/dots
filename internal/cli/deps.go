@@ -32,7 +32,10 @@ func newDepsCommand() *cobra.Command {
 }
 
 func newDepsCheckCommand(profile *string) *cobra.Command {
-	var file string
+	var (
+		file string
+		home string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "check",
@@ -46,11 +49,10 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 				return err
 			}
 
-			home, _ := os.UserHomeDir()
 			report, err := deps.Check(*m, deps.Options{
 				Profile: *profile,
 				OS:      runtime.GOOS,
-			}, lookupCommand, fontInstalled(runtime.GOOS, home))
+			}, lookupCommand, fontInstalled(runtime.GOOS, resolveDepsHome(home)))
 			if err != nil {
 				return err
 			}
@@ -63,6 +65,7 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
+	cmd.Flags().StringVar(&home, "home", "", "home directory rooting per-user font detection (default: the current user's home); use a sandbox path for honest fresh-machine validation")
 	return cmd
 }
 
@@ -70,6 +73,7 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 	var (
 		file string
 		tier string
+		home string
 	)
 
 	cmd := &cobra.Command{
@@ -90,11 +94,10 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 				return err
 			}
 
-			home, _ := os.UserHomeDir()
 			report, err := deps.Plan(*m, deps.Options{
 				Profile: *profile,
 				OS:      runtime.GOOS,
-			}, lookupCommand, fontInstalled(runtime.GOOS, home), resolvedTier)
+			}, lookupCommand, fontInstalled(runtime.GOOS, resolveDepsHome(home)), resolvedTier)
 			if err != nil {
 				return err
 			}
@@ -108,6 +111,7 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
 	cmd.Flags().StringVar(&tier, "tier", "", "override the dependency plan tier (homebrew, debian, fedora, arch, generic); default: auto-detect from the host")
+	cmd.Flags().StringVar(&home, "home", "", "home directory rooting per-user font detection (default: the current user's home); use a sandbox path for honest fresh-machine validation")
 	return cmd
 }
 
@@ -270,6 +274,20 @@ func fontDirectories(goos, home string) []string {
 		)
 	}
 	return append(dirs, "/usr/share/fonts", "/usr/local/share/fonts")
+}
+
+// resolveDepsHome returns the home directory used to root per-user font
+// directories during deps font detection. An explicit --home wins so sandbox
+// readiness checks scan the environment under test rather than the operator's
+// real home; otherwise it falls back to the current user's home. A missing home
+// is not fatal: fontDirectories omits the per-user locations and detection
+// degrades to the system directories.
+func resolveDepsHome(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	home, _ := os.UserHomeDir()
+	return home
 }
 
 // fontInstalled is the production FontLookup: it scans the OS font directories
