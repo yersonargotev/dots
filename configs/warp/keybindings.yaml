@@ -1,0 +1,6 @@
+# Warp portable keybindings managed by dots.
+#
+# This file contains only authored shortcuts that should follow the user across
+# supported desktop machines. Do not copy Warp's full generated/default keyset.
+---
+"input:clear_screen": alt-shift-K
