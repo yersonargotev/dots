@@ -19,6 +19,10 @@ profiles:
     tags:
       - core
       - web
+    dependencies:
+      - name: Playwright CLI
+        command: playwright-cli
+        brew: playwright-cli
   workstation:
     tags:
       - core
@@ -391,6 +395,22 @@ provisioners:
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+  - tool: skills
+    tags:
+      - web
+    spec:
+      package: microsoft/playwright-cli
+      agents:
+        - codex
+        - claude-code
+        - antigravity
+      skills:
+        - playwright-cli
+      global: true
+      copy: true
+    dependencies:
+      - name: npx
+        command: npx
   - tool: skills
     tags:
       - web
