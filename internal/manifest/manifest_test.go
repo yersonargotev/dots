@@ -378,7 +378,7 @@ provisioners:
     tags: [agents]
     spec:
       package: vercel-labs/agent-skills
-      agents: [codex, claude-code]
+      agents: [codex, claude-code, antigravity]
       skills: [web-design-guidelines]
       global: true
       copy: true
@@ -405,8 +405,8 @@ provisioners:
 	if skills.Spec.Package != "vercel-labs/agent-skills" {
 		t.Fatalf("Provisioner[0].Spec.Package = %q, want vercel-labs/agent-skills", skills.Spec.Package)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code"}) {
-		t.Fatalf("Provisioner[0].Spec.Agents = %#v, want [codex claude-code]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
+		t.Fatalf("Provisioner[0].Spec.Agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
 	}
 	if !sameStrings(skills.Spec.Skills, []string{"web-design-guidelines"}) {
 		t.Fatalf("Provisioner[0].Spec.Skills = %#v, want [web-design-guidelines]", skills.Spec.Skills)
@@ -473,8 +473,8 @@ func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
 	if !hasString(skills.Tags, "agents") {
 		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
 	}
 	if !sameStrings(skills.Spec.Skills, []string{"web-design-guidelines"}) {
 		t.Errorf("skills provisioner skills = %#v, want [web-design-guidelines]", skills.Spec.Skills)

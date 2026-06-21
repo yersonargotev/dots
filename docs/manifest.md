@@ -204,7 +204,7 @@ Current Provisioners:
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `codex` with `engram`, `context7`, and `persona`. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `claude-code` with `engram`, `context7`, `persona`, and `permissions`. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `antigravity` with `engram`, `context7`, and `persona` only; no `sdd` or `permissions`. | `gentle-ai`, `engram` |
-| `skills` | `agents` | all | Install `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `agents` | all | Install `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `desktop` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `desktop` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `desktop` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |

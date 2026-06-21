@@ -395,6 +395,7 @@ provisioners:
       agents:
         - codex
         - claude-code
+        - antigravity
       skills:
         - web-design-guidelines
       global: true

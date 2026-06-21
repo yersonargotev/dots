@@ -152,6 +152,8 @@ func skillsRoots(agents []string) []string {
 			roots = append(roots, "~/.codex/skills")
 		case "claude-code":
 			roots = append(roots, "~/.claude/skills")
+		case "antigravity":
+			roots = append(roots, "~/.gemini/antigravity/skills")
 		default:
 			roots = append(roots, "~/.agents/skills")
 		}

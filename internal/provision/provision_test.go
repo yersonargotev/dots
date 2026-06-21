@@ -166,7 +166,7 @@ func TestRenderCommand(t *testing.T) {
 				Tool: "skills",
 				Spec: manifest.ProvisionerSpec{
 					Package: " vercel-labs/agent-skills ",
-					Agents:  []string{"codex", "claude-code"},
+					Agents:  []string{"codex", "claude-code", "antigravity"},
 					Skills:  []string{"web-design-guidelines", "skill-creator"},
 					Global:  true,
 					Copy:    true,
@@ -177,6 +177,7 @@ func TestRenderCommand(t *testing.T) {
 				"--yes", "skills@1.5.12", "add", "vercel-labs/agent-skills",
 				"--agent", "codex",
 				"--agent", "claude-code",
+				"--agent", "antigravity",
 				"--skill", "web-design-guidelines",
 				"--skill", "skill-creator",
 				"--global",
