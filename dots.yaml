@@ -15,6 +15,10 @@ profiles:
     tags:
       - core
       - agents
+  web:
+    tags:
+      - core
+      - web
   workstation:
     tags:
       - core
@@ -298,7 +302,7 @@ entries:
     target: ~/.config/opencode-dots.json
     strategy: symlink
     tags:
-      - desktop
+      - web
     os:
       - darwin
       - linux
@@ -389,7 +393,22 @@ provisioners:
         brew: gentleman-programming/tap/engram
   - tool: skills
     tags:
-      - agents
+      - web
+    spec:
+      package: anthropics/skills
+      agents:
+        - codex
+        - claude-code
+        - antigravity
+      skills:
+        - frontend-design
+      global: true
+    dependencies:
+      - name: npx
+        command: npx
+  - tool: skills
+    tags:
+      - web
     spec:
       package: vercel-labs/agent-skills
       agents:
@@ -397,6 +416,9 @@ provisioners:
         - claude-code
         - antigravity
       skills:
+        - vercel-react-best-practices
+        - vercel-composition-patterns
+        - vercel-react-view-transitions
         - web-design-guidelines
       global: true
     dependencies:
@@ -433,7 +455,7 @@ provisioners:
         command: npx
   - tool: claude
     tags:
-      - desktop
+      - web
     os:
       - darwin
       - linux
@@ -444,7 +466,7 @@ provisioners:
         command: claude
   - tool: claude
     tags:
-      - desktop
+      - web
     os:
       - darwin
       - linux
@@ -456,7 +478,7 @@ provisioners:
         command: claude
   - tool: codex
     tags:
-      - desktop
+      - web
     os:
       - darwin
       - linux

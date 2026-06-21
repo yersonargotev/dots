@@ -42,7 +42,8 @@ Current Profiles:
 | `default` | `core` | Core dotfiles without provisioners. | None |
 | `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
 | `agents` | `core`, `agents` | Core dotfiles plus gentle-ai agent setup/cleanup. | None |
-| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
+| `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | None |
+| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
 
 ## Managed Entries
 
@@ -86,7 +87,7 @@ Current Managed Entries:
 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `core` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `core` | `darwin`, `linux` | None |
-| `configs/opencode/mcp.json` | `~/.config/opencode-dots.json` | `symlink` | `desktop` | `darwin`, `linux` | `opencode` |
+| `configs/opencode/mcp.json` | `~/.config/opencode-dots.json` | `symlink` | `web` | `darwin`, `linux` | `opencode` |
 
 ## Dependencies
 
@@ -204,11 +205,12 @@ Current Provisioners:
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `codex` with `engram`, `context7`, and `persona`. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `claude-code` with `engram`, `context7`, `persona`, and `permissions`. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `antigravity` with `engram`, `context7`, and `persona` only; no `sdd` or `permissions`. | `gentle-ai`, `engram` |
-| `skills` | `agents` | all | Install `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `web` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `web` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `agents` | all | Install the reviewed Matt Pocock engineering skill set from `mattpocock/skills/skills/engineering` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
-| `claude` | `desktop` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
-| `claude` | `desktop` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
-| `codex` | `desktop` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
+| `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
+| `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
+| `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
 | `codex` | `desktop` | `darwin`, `linux` | Add MCP server `codegraph` using `codegraph serve --mcp`. | `codex`, `codegraph` |
 
 ## Selection rules
