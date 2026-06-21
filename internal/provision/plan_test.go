@@ -120,8 +120,8 @@ func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 	if !reflect.DeepEqual(step.Args, wantArgs) {
 		t.Fatalf("Step.Args = %#v, want %#v", step.Args, wantArgs)
 	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.codex", "~/.config/opencode", "~/.gentle-ai"}) {
-		t.Fatalf("Step.Targets = %#v, want [~/.claude ~/.codex ~/.config/opencode ~/.gentle-ai]", step.Targets)
+	if !reflect.DeepEqual(step.Targets, []string{"~/.codex", "~/.config/opencode", "~/.gentle-ai"}) {
+		t.Fatalf("Step.Targets = %#v, want [~/.codex ~/.config/opencode ~/.gentle-ai]", step.Targets)
 	}
 }
 
@@ -225,6 +225,30 @@ func TestPlanResolvesCodeGraphCodexProvisioner(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesClaudeCodeGentleAIProvisioner(t *testing.T) {
+	prov := manifest.Provisioner{
+		Tool: "gentle-ai", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"claude-code"}},
+	}
+	m := manifestWithProvisioners(prov)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
+	}
+
+	step := p.Steps[0]
+	if !reflect.DeepEqual(step.Args, []string{"install", "--scope", "global", "--agents", "claude-code"}) {
+		t.Fatalf("claude-code gentle-ai args = %#v", step.Args)
+	}
+	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.gentle-ai"}) {
+		t.Fatalf("claude-code targets = %#v, want [~/.claude ~/.gentle-ai]", step.Targets)
+	}
+}
+
 func TestPlanResolvesAntigravityGentleAIProvisioner(t *testing.T) {
 	prov := manifest.Provisioner{
 		Tool: "gentle-ai", Tags: []string{"core"},
@@ -244,8 +268,8 @@ func TestPlanResolvesAntigravityGentleAIProvisioner(t *testing.T) {
 	if !reflect.DeepEqual(step.Args, []string{"install", "--scope", "global", "--agents", "antigravity"}) {
 		t.Fatalf("antigravity gentle-ai args = %#v", step.Args)
 	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.gemini", "~/.gentle-ai"}) {
-		t.Fatalf("antigravity targets = %#v, want [~/.claude ~/.gemini ~/.gentle-ai]", step.Targets)
+	if !reflect.DeepEqual(step.Targets, []string{"~/.gemini", "~/.gentle-ai"}) {
+		t.Fatalf("antigravity targets = %#v, want [~/.gemini ~/.gentle-ai]", step.Targets)
 	}
 }
 

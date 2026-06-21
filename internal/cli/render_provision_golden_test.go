@@ -24,7 +24,7 @@ func TestRenderProvisionPlanGolden(t *testing.T) {
 						Tool:       "gentle-ai",
 						Executable: "gentle-ai",
 						Args:       []string{"install", "--scope", "global", "--persona", "neutral", "--agents", "codex"},
-						Targets:    []string{"~/.claude", "~/.codex", "~/.gentle-ai"},
+						Targets:    []string{"~/.codex", "~/.gentle-ai"},
 					},
 				},
 			},
