@@ -487,6 +487,44 @@ func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestIncludesMattPocockEngineeringSkillsProvisioner(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var skills *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool == "skills" && prov.Spec.Package == "mattpocock/skills/skills/engineering" {
+			skills = prov
+		}
+	}
+
+	if skills == nil {
+		t.Fatal("repository manifest missing skills provisioner for mattpocock/skills/skills/engineering")
+	}
+	if !hasString(skills.Tags, "agents") {
+		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
+	}
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	}
+	wantSkills := []string{"ask-matt", "codebase-design", "diagnosing-bugs", "domain-modeling", "grill-with-docs", "implement", "improve-codebase-architecture", "prototype", "resolving-merge-conflicts", "setup-matt-pocock-skills", "tdd", "to-issues", "to-prd", "triage"}
+	if !sameStrings(skills.Spec.Skills, wantSkills) {
+		t.Errorf("skills provisioner skills = %#v, want %#v", skills.Spec.Skills, wantSkills)
+	}
+	if !skills.Spec.Global || !skills.Spec.Copy {
+		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
+	}
+	if !hasDependency(skills.Dependencies, "npx") {
+		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
+	}
+}
+
 func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
