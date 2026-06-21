@@ -69,7 +69,7 @@ Because no fast-forward is applied in a dry run, the rendered plan reflects the 
 
 ## Profiles and provisioners
 
-Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects no provisioners. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai setup/cleanup provisioners. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. Use `workstation` when you explicitly want both desktop integrations and agent setup; web tooling remains a separate opt-in. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, or browser/frontend tooling.
+Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects no provisioners. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai setup/cleanup provisioners. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
 
 The gentle-ai provisioner can model cleanup before install by using separate entries in manifest order. Missing `action` still defaults to `install`; `yes` is only valid for `uninstall` because it confirms a cleanup action:
 
@@ -93,7 +93,7 @@ provisioners:
 To keep that requirement discoverable, both `install` and `update` print a one-line hint when the active profile skips provisioners another profile would select on this OS:
 
 ```
-Note: profile "default" skips provisioner(s); run with --profile agents, --profile desktop, or --profile web to include the relevant group.
+Note: profile "default" skips provisioner(s); run with --profile agents, --profile desktop, --profile mobile, or --profile web to include the relevant group.
 ```
 
 File entries are profile-scoped the same way, and the `default` profile silently omits profile-specific entries such as the `desktop` Ghostty/Zed configs and the `web` OpenCode MCP overlay. To close the same discoverability gap, both commands print a parallel hint for skipped file entries:
