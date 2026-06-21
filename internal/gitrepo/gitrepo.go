@@ -22,9 +22,10 @@ var ErrNotFastForward = errors.New("installed repository cannot be fast-forwarde
 // Update describes the fast-forward an update did apply (FastForward) or would
 // apply (Preview), so callers can report exactly what changed.
 type Update struct {
-	OldRev   string   `json:"old_rev"`
-	NewRev   string   `json:"new_rev"`
-	Incoming []string `json:"incoming"`
+	OldRev           string   `json:"old_rev"`
+	NewRev           string   `json:"new_rev"`
+	Incoming         []string `json:"incoming"`
+	PreservedChanges string   `json:"preserved_changes,omitempty"`
 }
 
 // Changed reports whether the update moves (or would move) HEAD.
@@ -47,6 +48,25 @@ func IsClean(dir string) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(out) == "", nil
+}
+
+// PreserveLocalChanges moves any uncommitted Installed Repository changes into
+// Git's stash and leaves the work tree clean for a safe fast-forward. The stash
+// is intentionally not re-applied automatically: the Installed Repository is the
+// Source of Truth clone, so local edits are preserved for inspection without
+// blocking customers from receiving the latest reviewed manifest.
+func PreserveLocalChanges(dir string) (string, bool, error) {
+	clean, err := IsClean(dir)
+	if err != nil {
+		return "", false, err
+	}
+	if clean {
+		return "", false, nil
+	}
+	if _, err := run(dir, "stash", "push", "--include-untracked", "-m", "dots update preserved local Installed Repository changes"); err != nil {
+		return "", false, fmt.Errorf("preserve local changes for %s: %w", dir, err)
+	}
+	return "stash@{0}", true, nil
 }
 
 // Preview fetches remote refs and reports the fast-forward an update would apply
@@ -109,6 +129,57 @@ func FastForward(dir string) (Update, error) {
 		return Update{}, err
 	}
 	return Update{OldRev: old, NewRev: newRev, Incoming: incoming}, nil
+}
+
+// FastForwardPreservingLocalChanges verifies that dir can fast-forward before
+// moving local changes out of the work tree. This preserves the fast-forward-only
+// safety invariant: when the branch has diverged, dots returns ErrNotFastForward
+// without mutating the user's Installed Repository state.
+func FastForwardPreservingLocalChanges(dir string) (Update, error) {
+	old, err := head(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	if err := fetch(dir); err != nil {
+		return Update{}, err
+	}
+	upstream, err := upstreamRev(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	if old != upstream && !canFastForward(dir) {
+		return Update{}, ErrNotFastForward
+	}
+
+	var incoming []string
+	if old != upstream {
+		incoming, err = incomingCommits(dir)
+		if err != nil {
+			return Update{}, err
+		}
+	}
+
+	preserved, stashed, err := PreserveLocalChanges(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	upd := Update{OldRev: old, NewRev: old, Incoming: incoming}
+	if stashed {
+		upd.PreservedChanges = preserved
+	}
+	if old == upstream {
+		return upd, nil
+	}
+
+	if _, err := run(dir, "merge", "--ff-only", "@{u}"); err != nil {
+		return Update{}, ErrNotFastForward
+	}
+	newRev, err := head(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	upd.NewRev = newRev
+	return upd, nil
 }
 
 func head(dir string) (string, error) {

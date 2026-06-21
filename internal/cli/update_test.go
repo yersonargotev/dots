@@ -147,12 +147,12 @@ entries:
 	}
 }
 
-func TestUpdateStopsOnDirtyRepo(t *testing.T) {
+func TestUpdatePreservesDirtyRepoThenFastForwards(t *testing.T) {
 	requireGitCLI(t)
 	home := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 
-	_, sourceRoot := newInstalledRepo(t, map[string]string{
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
 		"configs/zsh/zshrc": "export A=1\n",
 		"dots.yaml": `version: 1
 profiles:
@@ -165,10 +165,66 @@ entries:
     tags: [core]
 `,
 	})
+	advanceUpstream(t, origin, "update zsh config", map[string]string{
+		"configs/zsh/zshrc": "export A=2\n",
+	})
+
 	// A local edit makes the Installed Repository dirty.
 	localPath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
 	if err := os.WriteFile(localPath, []byte("local edit\n"), 0o600); err != nil {
 		t.Fatalf("write local edit: %v", err)
+	}
+
+	out := runUpdate(t, "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot)
+
+	if !strings.Contains(out, "Preserved local Installed Repository changes in stash@{0}") {
+		t.Fatalf("update output missing preserved-changes notice\noutput:\n%s", out)
+	}
+	got, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("read updated source: %v", err)
+	}
+	if string(got) != "export A=2\n" {
+		t.Fatalf("source after update = %q, want upstream content", got)
+	}
+	stashes := runGitOutput(t, sourceRoot, "stash", "list")
+	if !strings.Contains(stashes, "dots update preserved local Installed Repository changes") {
+		t.Fatalf("local edit was not preserved in stash\nstash list:\n%s", stashes)
+	}
+}
+
+func TestUpdateDirtyDivergedRepoDoesNotStash(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/zsh/zshrc": "export A=1\n",
+		"dots.yaml": `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`,
+	})
+	advanceUpstream(t, origin, "update zsh config", map[string]string{
+		"configs/zsh/zshrc": "export A=2\n",
+	})
+
+	writeRepoFiles(t, sourceRoot, map[string]string{
+		"local-only.txt": "local commit\n",
+	})
+	runGit(t, sourceRoot, "add", "-A")
+	runGit(t, sourceRoot, "commit", "-m", "local commit")
+
+	localPath := filepath.Join(sourceRoot, "configs/zsh/zshrc")
+	if err := os.WriteFile(localPath, []byte("dirty local edit\n"), 0o600); err != nil {
+		t.Fatalf("write dirty local edit: %v", err)
 	}
 
 	cmd := cli.NewRootCommand()
@@ -178,15 +234,23 @@ entries:
 	cmd.SetArgs([]string{"update", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot})
 	if err := cmd.Execute(); err == nil {
-		t.Fatalf("update Execute() error = nil, want dirty-repo error\noutput:\n%s", out.String())
+		t.Fatalf("update Execute() error = nil, want divergence error\noutput:\n%s", out.String())
 	}
-	// The local edit must be preserved, never overwritten.
+
 	got, err := os.ReadFile(localPath)
 	if err != nil {
-		t.Fatalf("read local edit: %v", err)
+		t.Fatalf("read dirty local edit: %v", err)
 	}
-	if string(got) != "local edit\n" {
-		t.Fatalf("local edit overwritten: got %q", got)
+	if string(got) != "dirty local edit\n" {
+		t.Fatalf("dirty local edit was mutated: got %q", got)
+	}
+	status := runGitOutput(t, sourceRoot, "status", "--short")
+	if !strings.Contains(status, "M configs/zsh/zshrc") {
+		t.Fatalf("dirty work tree was not preserved\nstatus:\n%s", status)
+	}
+	stashes := runGitOutput(t, sourceRoot, "stash", "list")
+	if strings.Contains(stashes, "dots update preserved local Installed Repository changes") {
+		t.Fatalf("diverged update stashed before proving fast-forwardability\nstash list:\n%s", stashes)
 	}
 }
 
@@ -342,6 +406,11 @@ func gitIdentity(t *testing.T, dir string) {
 
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
+	_ = runGitOutput(t, dir, args...)
+}
+
+func runGitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
 	cmd := exec.Command("git", args...)
 	if dir != "" {
 		cmd.Dir = dir
@@ -353,5 +422,8 @@ func runGit(t *testing.T, dir string, args ...string) {
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
+	} else {
+		return string(out)
 	}
+	return ""
 }
