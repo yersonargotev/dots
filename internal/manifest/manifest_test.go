@@ -593,6 +593,55 @@ func TestRepositoryManifestIncludesAnthropicFrontendDesignSkillProvisioner(t *te
 	}
 }
 
+func TestRepositoryManifestMobileProfileIncludesDartAndFlutterSkills(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	mobile, ok := got.Profiles["mobile"]
+	if !ok {
+		t.Fatal("repository manifest missing mobile profile")
+	}
+	if !sameStrings(mobile.Tags, []string{"core", "mobile"}) {
+		t.Fatalf("mobile profile tags = %#v, want [core mobile]", mobile.Tags)
+	}
+
+	for _, pkg := range []string{"dart-lang/skills", "flutter/skills"} {
+		t.Run(pkg, func(t *testing.T) {
+			var skills *manifest.Provisioner
+			for i := range got.Provisioners {
+				prov := &got.Provisioners[i]
+				if prov.Tool == "skills" && prov.Spec.Package == pkg {
+					skills = prov
+				}
+			}
+
+			if skills == nil {
+				t.Fatalf("repository manifest missing skills provisioner for %s", pkg)
+			}
+			if !hasString(skills.Tags, "mobile") {
+				t.Errorf("skills provisioner %#v missing mobile tag", skills.Spec)
+			}
+			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
+				t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+			}
+			if len(skills.Spec.Skills) != 0 {
+				t.Errorf("skills provisioner skills = %#v, want empty so the upstream package default installs all skills", skills.Spec.Skills)
+			}
+			if !skills.Spec.Global {
+				t.Errorf("skills provisioner global = false, want true")
+			}
+			if !hasDependency(skills.Dependencies, "npx") {
+				t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
+			}
+		})
+	}
+}
+
 func TestRepositoryManifestIncludesMattPocockEngineeringSkillsProvisioner(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")

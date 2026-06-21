@@ -23,6 +23,10 @@ profiles:
       - name: Playwright CLI
         command: playwright-cli
         brew: playwright-cli
+  mobile:
+    tags:
+      - core
+      - mobile
   workstation:
     tags:
       - core
@@ -440,6 +444,32 @@ provisioners:
         - vercel-composition-patterns
         - vercel-react-view-transitions
         - web-design-guidelines
+      global: true
+    dependencies:
+      - name: npx
+        command: npx
+  - tool: skills
+    tags:
+      - mobile
+    spec:
+      package: dart-lang/skills
+      agents:
+        - codex
+        - claude-code
+        - antigravity
+      global: true
+    dependencies:
+      - name: npx
+        command: npx
+  - tool: skills
+    tags:
+      - mobile
+    spec:
+      package: flutter/skills
+      agents:
+        - codex
+        - claude-code
+        - antigravity
       global: true
     dependencies:
       - name: npx

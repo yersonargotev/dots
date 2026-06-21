@@ -43,6 +43,7 @@ Current Profiles:
 | `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
 | `agents` | `core`, `agents` | Core dotfiles plus gentle-ai agent setup/cleanup. | None |
 | `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | None |
+| `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills. | None |
 | `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
 
 ## Managed Entries
@@ -208,6 +209,8 @@ Current Provisioners:
 | `skills` | `web` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
 | `skills` | `web` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `web` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `mobile` | all | Install the upstream Dart skill package from `dart-lang/skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `mobile` | all | Install the upstream Flutter skill package from `flutter/skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `agents` | all | Install the reviewed Matt Pocock engineering skill set from `mattpocock/skills/skills/engineering` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
