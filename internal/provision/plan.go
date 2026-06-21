@@ -111,7 +111,8 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 // ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
 // servers in ~/.codex/config.toml, under ~/.codex. skills.sh installs global
 // skills under the user-level agent skill directories selected by its --agent
-// flags.
+// flags. For skills@1.5.12, codex and antigravity share ~/.agents/skills;
+// claude-code uses ~/.claude/skills.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
 	case "gentle-ai":
@@ -146,17 +147,17 @@ func skillsRoots(agents []string) []string {
 		return []string{"~/.agents/skills"}
 	}
 	roots := make([]string, 0, len(cleanAgents))
+	seen := map[string]bool{}
 	for _, agent := range cleanAgents {
-		switch agent {
-		case "codex":
-			roots = append(roots, "~/.codex/skills")
-		case "claude-code":
-			roots = append(roots, "~/.claude/skills")
-		case "antigravity":
-			roots = append(roots, "~/.gemini/antigravity/skills")
-		default:
-			roots = append(roots, "~/.agents/skills")
+		root := "~/.agents/skills"
+		if agent == "claude-code" {
+			root = "~/.claude/skills"
 		}
+		if seen[root] {
+			continue
+		}
+		seen[root] = true
+		roots = append(roots, root)
 	}
 	return roots
 }
