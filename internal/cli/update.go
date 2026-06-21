@@ -58,14 +58,7 @@ func newUpdateCommand() *cobra.Command {
 					if !yes {
 						return rejectInteractiveJSON(cmd)
 					}
-					preserved, ok, err := gitrepo.PreserveLocalChanges(paths.SourceRoot)
-					if err != nil {
-						return err
-					}
-					update, err = gitrepo.FastForward(paths.SourceRoot)
-					if ok {
-						update.PreservedChanges = preserved
-					}
+					update, err = gitrepo.FastForwardPreservingLocalChanges(paths.SourceRoot)
 				}
 				if errors.Is(err, gitrepo.ErrNotFastForward) {
 					return fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", paths.SourceRoot)
@@ -173,22 +166,13 @@ func newUpdateCommand() *cobra.Command {
 // manual resolution, keeping dots out of automatic merge/rebase behavior.
 func refreshRepository(out io.Writer, sourceRoot string, dryRun bool) (gitrepo.Update, error) {
 	var (
-		upd       gitrepo.Update
-		err       error
-		preserved string
-		stashed   bool
+		upd gitrepo.Update
+		err error
 	)
 	if dryRun {
 		upd, err = gitrepo.Preview(sourceRoot)
 	} else {
-		preserved, stashed, err = gitrepo.PreserveLocalChanges(sourceRoot)
-		if err != nil {
-			return gitrepo.Update{}, err
-		}
-		upd, err = gitrepo.FastForward(sourceRoot)
-		if stashed {
-			upd.PreservedChanges = preserved
-		}
+		upd, err = gitrepo.FastForwardPreservingLocalChanges(sourceRoot)
 	}
 	if errors.Is(err, gitrepo.ErrNotFastForward) {
 		return gitrepo.Update{}, fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", sourceRoot)

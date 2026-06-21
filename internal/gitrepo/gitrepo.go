@@ -131,6 +131,57 @@ func FastForward(dir string) (Update, error) {
 	return Update{OldRev: old, NewRev: newRev, Incoming: incoming}, nil
 }
 
+// FastForwardPreservingLocalChanges verifies that dir can fast-forward before
+// moving local changes out of the work tree. This preserves the fast-forward-only
+// safety invariant: when the branch has diverged, dots returns ErrNotFastForward
+// without mutating the user's Installed Repository state.
+func FastForwardPreservingLocalChanges(dir string) (Update, error) {
+	old, err := head(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	if err := fetch(dir); err != nil {
+		return Update{}, err
+	}
+	upstream, err := upstreamRev(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	if old != upstream && !canFastForward(dir) {
+		return Update{}, ErrNotFastForward
+	}
+
+	var incoming []string
+	if old != upstream {
+		incoming, err = incomingCommits(dir)
+		if err != nil {
+			return Update{}, err
+		}
+	}
+
+	preserved, stashed, err := PreserveLocalChanges(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	upd := Update{OldRev: old, NewRev: old, Incoming: incoming}
+	if stashed {
+		upd.PreservedChanges = preserved
+	}
+	if old == upstream {
+		return upd, nil
+	}
+
+	if _, err := run(dir, "merge", "--ff-only", "@{u}"); err != nil {
+		return Update{}, ErrNotFastForward
+	}
+	newRev, err := head(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	upd.NewRev = newRev
+	return upd, nil
+}
+
 func head(dir string) (string, error) {
 	out, err := run(dir, "rev-parse", "--short", "HEAD")
 	if err != nil {
