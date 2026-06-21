@@ -5,7 +5,7 @@
 ## What it does
 
 1. **Validates Git state.** The source root must be a Git work tree. If it is not, `update` stops with an error instead of guessing.
-2. **Refuses to overwrite local work.** If the repository has any uncommitted changes (modified, staged, or untracked files), `update` reports the dirty state and stops. It never stashes, resets, or discards local changes on your behalf.
+2. **Preserves local Installed Repository changes.** If the repository has uncommitted changes (modified, staged, or untracked files), `update` moves them into Git's stash before continuing. This keeps customer updates self-healing while preserving local edits for inspection instead of discarding them.
 3. **Fast-forwards only.** `update` fetches the upstream and advances the branch with `git merge --ff-only`. If the branch has diverged from its upstream, it cannot be fast-forwarded; `update` reports the divergence and asks you to resolve it manually with Git. It never performs an automatic merge or rebase.
 4. **Recomputes the Install Plan.** After the fast-forward, the manifest is loaded from the updated repository (so a manifest change pulled from upstream is honored) and a fresh Install Plan is computed against the current workstation state, surfacing any new Conflicts or Drift.
 5. **Applies safely.** The post-update install resolves conflicts exactly like `dots install`: interactive TUI by default, text prompts with `--no-tui`, or the conservative skip default with `--yes`. Any `replace` still creates a [Backup Set](../CONTEXT.md) before touching an existing target.
@@ -20,7 +20,13 @@ Updated Installed Repository a1b2c3d -> e4f5a6b:
   e4f5a6b add tmux config
 ```
 
-Because the update path is fast-forward only, the local revision is always a strict ancestor of the new revision. This keeps the model auditable (you can always inspect the exact commits applied) and avoids dots ever rewriting history or fabricating merge commits. To roll back, use Git directly in the Installed Repository.
+Because the update path is fast-forward only, the local revision is always a strict ancestor of the new revision. This keeps the model auditable (you can always inspect the exact commits applied) and avoids dots ever rewriting history or fabricating merge commits. If local Installed Repository changes were present, `update` reports the stash reference that preserved them, for example:
+
+```
+Preserved local Installed Repository changes in stash@{0}.
+```
+
+To inspect those preserved edits, use Git directly in the Installed Repository. To roll back, use Git directly in the Installed Repository.
 
 ## Post-update conflict handling
 

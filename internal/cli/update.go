@@ -31,8 +31,9 @@ func newUpdateCommand() *cobra.Command {
 		Short: "Update the Installed Repository and re-run the safe install flow",
 		Long: "update fast-forwards the Installed Repository (default ~/.local/share/dots) to its " +
 			"upstream, then recomputes the Install Plan and re-runs the selected provisioners so managed " +
-			"configuration stays aligned with the Source of Truth. It refuses to touch a repository with " +
-			"local changes and only ever applies a clean fast-forward, never a merge or rebase. Conflicts " +
+			"configuration stays aligned with the Source of Truth. If the Installed Repository has local " +
+			"changes, update preserves them in Git's stash before continuing, and only ever applies a clean " +
+			"fast-forward, never a merge or rebase. Conflicts " +
 			"during the post-update install are resolved exactly like dots install, creating a Backup Set " +
 			"before any replacement.",
 		// Domain failures (dirty repo, divergence, conflicts) are user-facing
@@ -47,13 +48,6 @@ func newUpdateCommand() *cobra.Command {
 			if !gitrepo.IsRepo(paths.SourceRoot) {
 				return fmt.Errorf("installed repository %s is not a git repository; clone the Source of Truth before updating", paths.SourceRoot)
 			}
-			clean, err := gitrepo.IsClean(paths.SourceRoot)
-			if err != nil {
-				return err
-			}
-			if !clean {
-				return fmt.Errorf("installed repository %s has local changes; commit or discard them before updating", paths.SourceRoot)
-			}
 
 			out := cmd.OutOrStdout()
 			var update gitrepo.Update
@@ -64,7 +58,14 @@ func newUpdateCommand() *cobra.Command {
 					if !yes {
 						return rejectInteractiveJSON(cmd)
 					}
+					preserved, ok, err := gitrepo.PreserveLocalChanges(paths.SourceRoot)
+					if err != nil {
+						return err
+					}
 					update, err = gitrepo.FastForward(paths.SourceRoot)
+					if ok {
+						update.PreservedChanges = preserved
+					}
 				}
 				if errors.Is(err, gitrepo.ErrNotFastForward) {
 					return fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", paths.SourceRoot)
@@ -166,18 +167,28 @@ func newUpdateCommand() *cobra.Command {
 }
 
 // refreshRepository previews (dry run) or applies (real run) the fast-forward
-// update of the Installed Repository, reporting exactly what changed. It maps
+// update of the Installed Repository, preserving local changes before a real
+// update so customers do not need to recover with manual Git commands. It maps
 // the gitrepo divergence sentinel to a user-facing message that points back to
 // manual resolution, keeping dots out of automatic merge/rebase behavior.
 func refreshRepository(out io.Writer, sourceRoot string, dryRun bool) (gitrepo.Update, error) {
 	var (
-		upd gitrepo.Update
-		err error
+		upd       gitrepo.Update
+		err       error
+		preserved string
+		stashed   bool
 	)
 	if dryRun {
 		upd, err = gitrepo.Preview(sourceRoot)
 	} else {
+		preserved, stashed, err = gitrepo.PreserveLocalChanges(sourceRoot)
+		if err != nil {
+			return gitrepo.Update{}, err
+		}
 		upd, err = gitrepo.FastForward(sourceRoot)
+		if stashed {
+			upd.PreservedChanges = preserved
+		}
 	}
 	if errors.Is(err, gitrepo.ErrNotFastForward) {
 		return gitrepo.Update{}, fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", sourceRoot)
@@ -192,6 +203,9 @@ func refreshRepository(out io.Writer, sourceRoot string, dryRun bool) (gitrepo.U
 // renderUpdate writes a deterministic summary of the fast-forward so the user
 // sees which commits were (or would be) applied before the Install Plan.
 func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
+	if upd.PreservedChanges != "" {
+		fmt.Fprintf(out, "Preserved local Installed Repository changes in %s.\n", upd.PreservedChanges)
+	}
 	if !upd.Changed() {
 		fmt.Fprintf(out, "Installed Repository already up to date at %s.\n\n", upd.OldRev)
 		return

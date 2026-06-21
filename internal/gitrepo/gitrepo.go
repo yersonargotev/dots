@@ -22,9 +22,10 @@ var ErrNotFastForward = errors.New("installed repository cannot be fast-forwarde
 // Update describes the fast-forward an update did apply (FastForward) or would
 // apply (Preview), so callers can report exactly what changed.
 type Update struct {
-	OldRev   string   `json:"old_rev"`
-	NewRev   string   `json:"new_rev"`
-	Incoming []string `json:"incoming"`
+	OldRev           string   `json:"old_rev"`
+	NewRev           string   `json:"new_rev"`
+	Incoming         []string `json:"incoming"`
+	PreservedChanges string   `json:"preserved_changes,omitempty"`
 }
 
 // Changed reports whether the update moves (or would move) HEAD.
@@ -47,6 +48,25 @@ func IsClean(dir string) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(out) == "", nil
+}
+
+// PreserveLocalChanges moves any uncommitted Installed Repository changes into
+// Git's stash and leaves the work tree clean for a safe fast-forward. The stash
+// is intentionally not re-applied automatically: the Installed Repository is the
+// Source of Truth clone, so local edits are preserved for inspection without
+// blocking customers from receiving the latest reviewed manifest.
+func PreserveLocalChanges(dir string) (string, bool, error) {
+	clean, err := IsClean(dir)
+	if err != nil {
+		return "", false, err
+	}
+	if clean {
+		return "", false, nil
+	}
+	if _, err := run(dir, "stash", "push", "--include-untracked", "-m", "dots update preserved local Installed Repository changes"); err != nil {
+		return "", false, fmt.Errorf("preserve local changes for %s: %w", dir, err)
+	}
+	return "stash@{0}", true, nil
 }
 
 // Preview fetches remote refs and reports the fast-forward an update would apply
