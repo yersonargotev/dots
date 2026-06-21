@@ -1269,6 +1269,72 @@ provisioners:
 			want: "provisioners[0].spec.package is required for the skills tool",
 		},
 		{
+			name: "skills spec rejects flag-like package",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: --help
+      global: true
+`,
+			want: "provisioners[0].spec.package must be a package reference, not a CLI flag",
+		},
+		{
+			name:        "skills spec rejects package control characters",
+			provisioner: "  - tool: skills\n    tags: [core]\n    spec:\n      package: \"vercel-labs/agent-skills\\u001f\"\n      global: true\n",
+			want:        "provisioners[0].spec.package must not contain control characters",
+		},
+		{
+			name: "skills spec rejects package outside allowlisted ref format",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: agent-skills
+      global: true
+`,
+			want: "provisioners[0].spec.package must be an owner/repo package reference with optional path or @ref",
+		},
+		{
+			name: "skills spec requires global true when missing",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: vercel-labs/agent-skills
+`,
+			want: "provisioners[0].spec.global must be true for the skills tool",
+		},
+		{
+			name: "skills spec requires global true when false",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: vercel-labs/agent-skills
+      global: false
+`,
+			want: "provisioners[0].spec.global must be true for the skills tool",
+		},
+		{
+			name: "skills spec rejects flag-like agent",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: vercel-labs/agent-skills
+      agents: [--global]
+      global: true
+`,
+			want: "provisioners[0].spec.agents[0] must be data, not a CLI flag",
+		},
+		{
+			name: "skills spec rejects flag-like skill",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: vercel-labs/agent-skills
+      skills: [--help]
+      global: true
+`,
+			want: "provisioners[0].spec.skills[0] must be data, not a CLI flag",
+		},
+		{
 			name: "skills spec mixes gentle-ai scalar fields",
 			provisioner: `  - tool: skills
     tags: [core]

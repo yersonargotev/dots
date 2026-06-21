@@ -174,7 +174,7 @@ func TestRenderCommand(t *testing.T) {
 			},
 			wantExec: "npx",
 			wantArgs: []string{
-				"skills", "add", "vercel-labs/agent-skills",
+				"--yes", "skills@1.5.12", "add", "vercel-labs/agent-skills",
 				"--agent", "codex",
 				"--agent", "claude-code",
 				"--skill", "web-design-guidelines",

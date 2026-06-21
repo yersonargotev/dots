@@ -12,6 +12,8 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 )
 
+const skillsCLIPackage = "skills@1.5.12"
+
 // RenderCommand resolves a Provisioner into the exact executable and argv that
 // would run it. It is PURE: it performs no I/O and never invokes the tool, so it
 // is safe to render in a dry-run. The tool name is the binary name, enforced by
@@ -86,12 +88,11 @@ func renderCodexArgs(spec manifest.ProvisionerSpec) []string {
 	return append(args, cleanList(spec.Command)...)
 }
 
-// renderSkillsArgs renders one allowlisted skills.sh install:
-// `npx skills add <package>` with deterministic repeated flags for selected
-// agents and skill names. Validation guarantees Package is set before this is
-// reached.
+// renderSkillsArgs renders one allowlisted skills.sh install through a pinned
+// npm CLI package, with deterministic repeated flags for selected agents and
+// skill names. Validation guarantees Package is set before this is reached.
 func renderSkillsArgs(spec manifest.ProvisionerSpec) []string {
-	args := []string{"skills", "add", strings.TrimSpace(spec.Package)}
+	args := []string{"--yes", skillsCLIPackage, "add", strings.TrimSpace(spec.Package)}
 	for _, agent := range cleanList(spec.Agents) {
 		args = append(args, "--agent", agent)
 	}

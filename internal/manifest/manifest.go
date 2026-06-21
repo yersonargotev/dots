@@ -4,10 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	skillsPackageRefPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*(@[A-Za-z0-9][A-Za-z0-9._./-]*)?$`)
+	skillsDataValuePattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 )
 
 type Manifest struct {
@@ -49,7 +56,7 @@ type Provisioner struct {
 // map 1:1 to gentle-ai's install/uninstall flags. The Claude fields (Marketplace, Plugin,
 // From) describe a single idempotent `claude` invocation, the codex MCP fields
 // (MCP, Command, Env) a single `codex mcp add` invocation, and Package drives
-// one `npx skills add` invocation. The dialects are mutually exclusive: a spec
+// one `npx --yes skills@1.5.12 add` invocation. The dialects are mutually exclusive: a spec
 // speaks exactly one of them.
 type ProvisionerSpec struct {
 	Action     string   `yaml:"action,omitempty"`
@@ -84,8 +91,8 @@ type ProvisionerSpec struct {
 	// deterministic. It is optional and only valid alongside MCP.
 	Env map[string]string `yaml:"env,omitempty"`
 	// Package is the external skills.sh source reference passed to
-	// `npx skills add <package>`, such as `owner/repo` or a git URL. It is only
-	// valid for the skills provisioner.
+	// `npx --yes skills@1.5.12 add <package>`, constrained to an owner/repo ref with an
+	// optional path or @ref. It is only valid for the skills provisioner.
 	Package string `yaml:"package,omitempty"`
 	// Global installs skills into user-level agent directories instead of the
 	// current project, rendering `--global` for the skills provisioner.
@@ -455,7 +462,7 @@ func validateCodexSpec(s ProvisionerSpec, i int) error {
 }
 
 // validateSkillsSpec enforces the skills.sh provisioner contract: it drives one
-// exact `npx skills add <package>` invocation with optional target agents and
+// exact `npx --yes skills@1.5.12 add <package>` invocation with optional target agents and
 // selected skill names. It does not accept gentle-ai scalar/action fields,
 // Claude plugin fields, or Codex MCP fields.
 func validateSkillsSpec(s ProvisionerSpec, i int) error {
@@ -478,13 +485,60 @@ func validateSkillsSpec(s ProvisionerSpec, i int) error {
 	if strings.TrimSpace(s.Package) == "" {
 		return fmt.Errorf("provisioners[%d].spec.package is required for the skills tool", i)
 	}
+	if err := validateSkillsPackageRef(s.Package, fmt.Sprintf("provisioners[%d].spec.package", i)); err != nil {
+		return err
+	}
+	if !s.Global {
+		return fmt.Errorf("provisioners[%d].spec.global must be true for the skills tool", i)
+	}
 	if j, ok := indexOfEmptyString(s.Agents); ok {
 		return fmt.Errorf("provisioners[%d].spec.agents[%d] must not be empty", i, j)
 	}
 	if j, ok := indexOfEmptyString(s.Skills); ok {
 		return fmt.Errorf("provisioners[%d].spec.skills[%d] must not be empty", i, j)
 	}
+	if err := validateSkillsDataValues(s.Agents, fmt.Sprintf("provisioners[%d].spec.agents", i)); err != nil {
+		return err
+	}
+	if err := validateSkillsDataValues(s.Skills, fmt.Sprintf("provisioners[%d].spec.skills", i)); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateSkillsPackageRef(value, path string) error {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "-") {
+		return fmt.Errorf("%s must be a package reference, not a CLI flag", path)
+	}
+	if containsControl(value) {
+		return fmt.Errorf("%s must not contain control characters", path)
+	}
+	if strings.ContainsAny(value, " \t") || !skillsPackageRefPattern.MatchString(value) {
+		return fmt.Errorf("%s must be an owner/repo package reference with optional path or @ref", path)
+	}
+	return nil
+}
+
+func validateSkillsDataValues(values []string, path string) error {
+	for i, value := range values {
+		itemPath := fmt.Sprintf("%s[%d]", path, i)
+		if containsControl(value) {
+			return fmt.Errorf("%s must not contain control characters", itemPath)
+		}
+		value = strings.TrimSpace(value)
+		if strings.HasPrefix(value, "-") {
+			return fmt.Errorf("%s must be data, not a CLI flag", itemPath)
+		}
+		if !skillsDataValuePattern.MatchString(value) {
+			return fmt.Errorf("%s must contain only letters, digits, dots, underscores, and hyphens", itemPath)
+		}
+	}
+	return nil
+}
+
+func containsControl(value string) bool {
+	return strings.ContainsFunc(value, unicode.IsControl)
 }
 
 // SharesTag reports whether an item's tags intersect a profile's tags. It is

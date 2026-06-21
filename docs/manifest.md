@@ -178,16 +178,20 @@ Constraints:
 
 Supported fields: `package`, `agents`, `skills`, `global`, and `copy`.
 
-`skills` renders one exact `npx skills add <package>` command. `package` is an
-external skills.sh source reference such as `owner/repo`, a GitHub URL, a direct
-path to a skill in a repo, or another git URL supported by skills.sh.
+`skills` renders one exact `npx --yes skills@1.5.12 add <package>` command.
+`package` is an external skills.sh source reference constrained to an `owner/repo`
+form with an optional repo path or `@ref`, such as `vercel-labs/agent-skills`.
 
 Constraints:
 
-- `package` is required.
-- `agents` renders repeated `--agent` flags.
-- `skills` renders repeated `--skill` flags.
-- `global` renders `--global`.
+- `package` is required, must match the allowed package-reference format, and
+  must not start with `-` or contain control characters.
+- `agents` renders repeated `--agent` flags; values must be data tokens, not
+  flag-like strings.
+- `skills` renders repeated `--skill` flags; values must be data tokens, not
+  flag-like strings.
+- `global` is required and must be `true`; local skills installs are not modeled
+  yet because they write relative to the process working directory.
 - `copy` renders `--copy`.
 - Skills specs must not mix gentle-ai scalar/action fields, Claude fields, or
   Codex MCP fields.
@@ -200,7 +204,7 @@ Current Provisioners:
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `codex` with `engram`, `context7`, and `persona`. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `claude-code` with `engram`, `context7`, `persona`, and `permissions`. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `antigravity` with `engram`, `context7`, and `persona` only; no `sdd` or `permissions`. | `gentle-ai`, `engram` |
-| `skills` | `agents` | all | Install `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex` and `claude-code`. | `npx` |
+| `skills` | `agents` | all | Install `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `desktop` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `desktop` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `desktop` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |

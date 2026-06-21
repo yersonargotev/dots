@@ -37,7 +37,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					Provisioners: provision.Plan{
 						Profile: "default",
 						Steps: []provision.Step{
-							{Tool: "skills", Executable: "npx", Args: []string{"skills", "add", "vercel-labs/agent-skills"}, Targets: []string{"~/.agents/skills"}},
+							{Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "vercel-labs/agent-skills"}, Targets: []string{"~/.agents/skills"}},
 						},
 					},
 				},

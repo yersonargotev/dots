@@ -298,7 +298,7 @@ func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 		t.Fatalf("skills step tool/executable = %q/%q, want skills/npx", step.Tool, step.Executable)
 	}
 	wantArgs := []string{
-		"skills", "add", "vercel-labs/agent-skills",
+		"--yes", "skills@1.5.12", "add", "vercel-labs/agent-skills",
 		"--agent", "codex",
 		"--agent", "claude-code",
 		"--skill", "web-design-guidelines",

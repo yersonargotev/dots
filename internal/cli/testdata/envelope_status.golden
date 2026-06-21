@@ -25,7 +25,8 @@
           "tool": "skills",
           "executable": "npx",
           "args": [
-            "skills",
+            "--yes",
+            "skills@1.5.12",
             "add",
             "vercel-labs/agent-skills"
           ],
