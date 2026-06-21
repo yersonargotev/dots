@@ -28,10 +28,19 @@ func TestEnvelopeGolden(t *testing.T) {
 				SchemaVersion: schemaVersion,
 				Command:       "status",
 				Status:        statusFindings,
-				Data: status.Report{Profile: "default", Entries: []status.Entry{
-					{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", State: status.StateOK},
-					{Source: "configs/git/config", Target: "/home/user/.gitconfig", Strategy: "copy", State: status.StateMissing},
-				}},
+				Data: statusReport{
+					Profile: "default",
+					Entries: []status.Entry{
+						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", State: status.StateOK},
+						{Source: "configs/git/config", Target: "/home/user/.gitconfig", Strategy: "copy", State: status.StateMissing},
+					},
+					Provisioners: provision.Plan{
+						Profile: "default",
+						Steps: []provision.Step{
+							{Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "vercel-labs/agent-skills"}, Targets: []string{"~/.agents/skills"}},
+						},
+					},
+				},
 			},
 			golden: "envelope_status.golden",
 		},

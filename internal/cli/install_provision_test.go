@@ -267,6 +267,58 @@ provisioners:
 	}
 }
 
+// TestInstallWritesCodexCodeGraphOverlayAfterSkillsProvisioner proves a
+// skills-only provisioner targeting Codex also qualifies for the post-provision
+// Codex layer.
+func TestInstallWritesCodexCodeGraphOverlayAfterSkillsProvisioner(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "npx"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, sandboxHome, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: skills
+    tags: [core]
+    spec:
+      package: vercel-labs/agent-skills
+      agents: [codex]
+      skills: [web-design-guidelines]
+      global: true
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	if _, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); err != nil {
+		t.Fatalf("read sandbox Codex AGENTS.md after skills provisioner: %v\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	}
+}
+
 // TestInstallExecutesClaudeProvisionerHomeThreaded proves a claude provisioner
 // renders and runs the exact `claude plugin ...` invocations, in manifest order,
 // under the sandbox HOME and never the inherited one.

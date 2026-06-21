@@ -387,6 +387,21 @@ provisioners:
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+  - tool: skills
+    tags:
+      - agents
+    spec:
+      package: vercel-labs/agent-skills
+      agents:
+        - codex
+        - claude-code
+        - antigravity
+      skills:
+        - web-design-guidelines
+      global: true
+    dependencies:
+      - name: npx
+        command: npx
   - tool: claude
     tags:
       - desktop
