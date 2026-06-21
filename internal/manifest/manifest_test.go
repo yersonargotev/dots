@@ -439,8 +439,8 @@ func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) 
 	if codex == nil {
 		t.Fatal("repository manifest missing codex MCP provisioner for chrome-devtools")
 	}
-	if !hasString(codex.Tags, "desktop") {
-		t.Errorf("codex provisioner %#v missing desktop tag", codex.Spec)
+	if !hasString(codex.Tags, "web") {
+		t.Errorf("codex provisioner %#v missing web tag", codex.Spec)
 	}
 	if !sameStrings(codex.OS, []string{"darwin", "linux"}) {
 		t.Errorf("codex provisioner OS = %#v, want [darwin linux]", codex.OS)
@@ -470,14 +470,57 @@ func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
 	if skills == nil {
 		t.Fatal("repository manifest missing skills provisioner for vercel-labs/agent-skills")
 	}
-	if !hasString(skills.Tags, "agents") {
-		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
+	if !hasString(skills.Tags, "web") {
+		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
 	}
 	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
 		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
 	}
-	if !sameStrings(skills.Spec.Skills, []string{"web-design-guidelines"}) {
-		t.Errorf("skills provisioner skills = %#v, want [web-design-guidelines]", skills.Spec.Skills)
+	wantSkills := []string{
+		"vercel-react-best-practices",
+		"vercel-composition-patterns",
+		"vercel-react-view-transitions",
+		"web-design-guidelines",
+	}
+	if !sameStrings(skills.Spec.Skills, wantSkills) {
+		t.Errorf("skills provisioner skills = %#v, want %#v", skills.Spec.Skills, wantSkills)
+	}
+	if !skills.Spec.Global {
+		t.Errorf("skills provisioner global = false, want true")
+	}
+	if !hasDependency(skills.Dependencies, "npx") {
+		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
+	}
+}
+
+func TestRepositoryManifestIncludesAnthropicFrontendDesignSkillProvisioner(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var skills *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool == "skills" && prov.Spec.Package == "anthropics/skills" {
+			skills = prov
+		}
+	}
+
+	if skills == nil {
+		t.Fatal("repository manifest missing skills provisioner for anthropics/skills")
+	}
+	if !hasString(skills.Tags, "web") {
+		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
+	}
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	}
+	if !sameStrings(skills.Spec.Skills, []string{"frontend-design"}) {
+		t.Errorf("skills provisioner skills = %#v, want [frontend-design]", skills.Spec.Skills)
 	}
 	if !skills.Spec.Global {
 		t.Errorf("skills provisioner global = false, want true")
@@ -712,8 +755,8 @@ func TestRepositoryManifestIncludesChromeDevToolsPluginProvisioners(t *testing.T
 	}
 
 	for _, prov := range []*manifest.Provisioner{market, plugin} {
-		if !hasString(prov.Tags, "desktop") {
-			t.Errorf("claude provisioner %#v missing desktop tag", prov.Spec)
+		if !hasString(prov.Tags, "web") {
+			t.Errorf("claude provisioner %#v missing web tag", prov.Spec)
 		}
 		if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
 			t.Errorf("claude provisioner OS = %#v, want [darwin linux]", prov.OS)
