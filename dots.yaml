@@ -476,6 +476,21 @@ provisioners:
         command: npx
   - tool: skills
     tags:
+      - mobile
+    spec:
+      package: android/skills
+      agents:
+        - codex
+        - claude-code
+        - antigravity
+      skills:
+        - android-cli
+      global: true
+    dependencies:
+      - name: npx
+        command: npx
+  - tool: skills
+    tags:
       - agents
     spec:
       package: mattpocock/skills/skills/engineering

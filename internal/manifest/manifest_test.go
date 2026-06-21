@@ -593,7 +593,7 @@ func TestRepositoryManifestIncludesAnthropicFrontendDesignSkillProvisioner(t *te
 	}
 }
 
-func TestRepositoryManifestMobileProfileIncludesDartAndFlutterSkills(t *testing.T) {
+func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -610,18 +610,27 @@ func TestRepositoryManifestMobileProfileIncludesDartAndFlutterSkills(t *testing.
 		t.Fatalf("mobile profile tags = %#v, want [core mobile]", mobile.Tags)
 	}
 
-	for _, pkg := range []string{"dart-lang/skills", "flutter/skills"} {
-		t.Run(pkg, func(t *testing.T) {
+	mobileSkillPackages := []struct {
+		name       string
+		wantSkills []string
+	}{
+		{name: "dart-lang/skills"},
+		{name: "flutter/skills"},
+		{name: "android/skills", wantSkills: []string{"android-cli"}},
+	}
+
+	for _, pkg := range mobileSkillPackages {
+		t.Run(pkg.name, func(t *testing.T) {
 			var skills *manifest.Provisioner
 			for i := range got.Provisioners {
 				prov := &got.Provisioners[i]
-				if prov.Tool == "skills" && prov.Spec.Package == pkg {
+				if prov.Tool == "skills" && prov.Spec.Package == pkg.name {
 					skills = prov
 				}
 			}
 
 			if skills == nil {
-				t.Fatalf("repository manifest missing skills provisioner for %s", pkg)
+				t.Fatalf("repository manifest missing skills provisioner for %s", pkg.name)
 			}
 			if !hasString(skills.Tags, "mobile") {
 				t.Errorf("skills provisioner %#v missing mobile tag", skills.Spec)
@@ -629,8 +638,8 @@ func TestRepositoryManifestMobileProfileIncludesDartAndFlutterSkills(t *testing.
 			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
 				t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
 			}
-			if len(skills.Spec.Skills) != 0 {
-				t.Errorf("skills provisioner skills = %#v, want empty so the upstream package default installs all skills", skills.Spec.Skills)
+			if !sameStrings(skills.Spec.Skills, pkg.wantSkills) {
+				t.Errorf("skills provisioner skills = %#v, want %#v", skills.Spec.Skills, pkg.wantSkills)
 			}
 			if !skills.Spec.Global {
 				t.Errorf("skills provisioner global = false, want true")

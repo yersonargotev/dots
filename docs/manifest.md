@@ -211,6 +211,7 @@ Current Provisioners:
 | `skills` | `web` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `mobile` | all | Install the upstream Dart skill package from `dart-lang/skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `mobile` | all | Install the upstream Flutter skill package from `flutter/skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `mobile` | all | Install `android-cli` from `android/skills` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `agents` | all | Install the reviewed Matt Pocock engineering skill set from `mattpocock/skills/skills/engineering` globally for `codex`, `claude-code`, and `antigravity` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
