@@ -225,6 +225,30 @@ func TestPlanResolvesCodeGraphCodexProvisioner(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesAntigravityGentleAIProvisioner(t *testing.T) {
+	prov := manifest.Provisioner{
+		Tool: "gentle-ai", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"antigravity"}},
+	}
+	m := manifestWithProvisioners(prov)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
+	}
+
+	step := p.Steps[0]
+	if !reflect.DeepEqual(step.Args, []string{"install", "--scope", "global", "--agents", "antigravity"}) {
+		t.Fatalf("antigravity gentle-ai args = %#v", step.Args)
+	}
+	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.gemini", "~/.gentle-ai"}) {
+		t.Fatalf("antigravity targets = %#v, want [~/.claude ~/.gemini ~/.gentle-ai]", step.Targets)
+	}
+}
+
 func TestPlanEmptyWhenNoProvisionerSelected(t *testing.T) {
 	prov := manifest.Provisioner{
 		Tool: "gentle-ai", Tags: []string{"desktop"},

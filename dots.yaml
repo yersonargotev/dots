@@ -315,6 +315,7 @@ provisioners:
         - codex
         - claude-code
         - opencode
+        - antigravity
       components:
         - sdd
       yes: true
@@ -358,6 +359,27 @@ provisioners:
         - context7
         - persona
         - permissions
+    dependencies:
+      - name: gentle-ai
+        command: gentle-ai
+        brew: gentleman-programming/tap/gentle-ai
+      - name: engram
+        command: engram
+        brew: gentleman-programming/tap/engram
+  - tool: gentle-ai
+    tags:
+      - agents
+    spec:
+      scope: global
+      channel: stable
+      persona: neutral
+      preset: custom
+      agents:
+        - antigravity
+      components:
+        - engram
+        - context7
+        - persona
     dependencies:
       - name: gentle-ai
         command: gentle-ai
