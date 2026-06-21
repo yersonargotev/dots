@@ -560,20 +560,24 @@ provisioners:
     dependencies:
       - name: codex
         command: codex
-  - tool: codex
+  - tool: codegraph
     tags:
-      - desktop
+      - agents
     os:
       - darwin
       - linux
     spec:
-      mcp: codegraph
-      command:
-        - codegraph
-        - serve
-        - --mcp
+      scope: global
+      agents:
+        - codex
+        - claude
+        - antigravity
+        - opencode
+      yes: true
     dependencies:
-      - name: codex
-        command: codex
-      - name: codegraph
-        command: codegraph
+      - name: curl
+        command: curl
+        brew: curl
+        apt: curl
+        dnf: curl
+        pacman: curl

@@ -167,6 +167,9 @@ func selectedProvisionersAffectCodex(selected []manifest.Provisioner) bool {
 		if prov.Tool == "codex" {
 			return true
 		}
+		if prov.Tool == "codegraph" && provisionerAgentsInclude(prov, "codex") {
+			return true
+		}
 		if prov.Tool == "gentle-ai" && provisionerAgentsInclude(prov, "codex") {
 			return true
 		}

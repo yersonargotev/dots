@@ -361,6 +361,57 @@ provisioners:
 	}
 }
 
+func TestLoadFileParsesCodeGraphProvisioner(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: codegraph
+    tags: [agents]
+    os: [darwin, linux]
+    spec:
+      scope: global
+      agents: [codex, claude, antigravity, opencode]
+      yes: true
+    dependencies:
+      - name: curl
+        command: curl
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if len(got.Provisioners) != 1 {
+		t.Fatalf("Provisioners len = %d, want 1", len(got.Provisioners))
+	}
+	codegraph := got.Provisioners[0]
+	if codegraph.Tool != "codegraph" {
+		t.Fatalf("Provisioner[0].Tool = %q, want codegraph", codegraph.Tool)
+	}
+	if codegraph.Spec.Scope != "global" || !codegraph.Spec.Yes {
+		t.Fatalf("Provisioner[0].Spec scalar flags = %#v, want global/yes", codegraph.Spec)
+	}
+	if !sameStrings(codegraph.Spec.Agents, []string{"codex", "claude", "antigravity", "opencode"}) {
+		t.Fatalf("Provisioner[0].Spec.Agents = %#v, want [codex claude antigravity opencode]", codegraph.Spec.Agents)
+	}
+	if codegraph.Dependencies[0].Name != "curl" || codegraph.Dependencies[0].Command != "curl" {
+		t.Fatalf("Provisioner[0].Dependencies[0] = %#v, want curl command dependency", codegraph.Dependencies[0])
+	}
+}
+
 func TestLoadFileParsesSkillsProvisioner(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")
@@ -811,7 +862,7 @@ func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *te
 	}
 }
 
-func TestRepositoryManifestIncludesCodeGraphCodexProvisioner(t *testing.T) {
+func TestRepositoryManifestIncludesCodeGraphProvisioner(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -820,28 +871,31 @@ func TestRepositoryManifestIncludesCodeGraphCodexProvisioner(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	var codex *manifest.Provisioner
+	var codegraph *manifest.Provisioner
 	for i := range got.Provisioners {
 		prov := &got.Provisioners[i]
-		if prov.Tool == "codex" && prov.Spec.MCP == "codegraph" {
-			codex = prov
+		if prov.Tool == "codegraph" {
+			codegraph = prov
 		}
 	}
 
-	if codex == nil {
-		t.Fatal("repository manifest missing codex MCP provisioner for codegraph")
+	if codegraph == nil {
+		t.Fatal("repository manifest missing codegraph provisioner")
 	}
-	if !hasString(codex.Tags, "desktop") {
-		t.Errorf("codegraph codex provisioner %#v missing desktop tag", codex.Spec)
+	if !hasString(codegraph.Tags, "agents") {
+		t.Errorf("codegraph provisioner %#v missing agents tag", codegraph.Spec)
 	}
-	if !sameStrings(codex.OS, []string{"darwin", "linux"}) {
-		t.Errorf("codegraph codex provisioner OS = %#v, want [darwin linux]", codex.OS)
+	if !sameStrings(codegraph.OS, []string{"darwin", "linux"}) {
+		t.Errorf("codegraph provisioner OS = %#v, want [darwin linux]", codegraph.OS)
 	}
-	if !sameStrings(codex.Spec.Command, []string{"codegraph", "serve", "--mcp"}) {
-		t.Errorf("codegraph codex command = %#v, want [codegraph serve --mcp]", codex.Spec.Command)
+	if codegraph.Spec.Scope != "global" || !codegraph.Spec.Yes {
+		t.Errorf("codegraph provisioner scalar flags = %#v, want global/yes", codegraph.Spec)
 	}
-	if !hasDependency(codex.Dependencies, "codegraph") {
-		t.Errorf("codegraph codex provisioner missing codegraph dependency: %#v", codex.Dependencies)
+	if !sameStrings(codegraph.Spec.Agents, []string{"codex", "claude", "antigravity", "opencode"}) {
+		t.Errorf("codegraph provisioner agents = %#v, want [codex claude antigravity opencode]", codegraph.Spec.Agents)
+	}
+	if !hasDependency(codegraph.Dependencies, "curl") {
+		t.Errorf("codegraph provisioner missing curl dependency: %#v", codegraph.Dependencies)
 	}
 }
 
@@ -1331,7 +1385,7 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be one of claude, codex, gentle-ai, skills",
+			want: "provisioners[0].tool must be one of claude, codegraph, codex, gentle-ai, skills",
 		},
 		{
 			name: "claude spec sets neither marketplace nor plugin",
@@ -1460,6 +1514,37 @@ provisioners:
       from: chrome-devtools-plugins
 `,
 			want: "provisioners[0].spec must not set claude fields (marketplace, plugin, from) for the codex tool",
+		},
+		{
+			name: "codegraph spec requires agents",
+			provisioner: `  - tool: codegraph
+    tags: [core]
+    spec:
+      scope: global
+      yes: true
+`,
+			want: "provisioners[0].spec.agents is required for the codegraph tool",
+		},
+		{
+			name: "codegraph spec rejects unsupported scope",
+			provisioner: `  - tool: codegraph
+    tags: [core]
+    spec:
+      scope: workspace
+      agents: [codex]
+      yes: true
+`,
+			want: "provisioners[0].spec.scope must be one of global, local for the codegraph tool",
+		},
+		{
+			name: "codegraph spec requires yes",
+			provisioner: `  - tool: codegraph
+    tags: [core]
+    spec:
+      scope: global
+      agents: [codex]
+`,
+			want: "provisioners[0].spec.yes must be true for the codegraph tool",
 		},
 		{
 			name: "skills spec without package",

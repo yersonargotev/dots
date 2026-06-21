@@ -161,6 +161,25 @@ func TestRenderCommand(t *testing.T) {
 			wantArgs: []string{"mcp", "add", "chrome-devtools", "--", "npx", "chrome-devtools-mcp@latest"},
 		},
 		{
+			name: "codegraph install renders official bootstrap script for selected agents",
+			prov: manifest.Provisioner{
+				Tool: "codegraph",
+				Spec: manifest.ProvisionerSpec{
+					Scope:  "global",
+					Agents: []string{"codex", "claude", "antigravity", "opencode"},
+					Yes:    true,
+				},
+			},
+			wantExec: "sh",
+			wantArgs: []string{
+				"-c",
+				"set -eu\nif ! command -v codegraph >/dev/null 2>&1; then\n\tcurl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh\nfi\nexport PATH=\"$HOME/.local/bin:$PATH\"\ncodegraph install --target \"$1\" --location \"$2\" --yes",
+				"codegraph-install",
+				"codex,claude,antigravity,opencode",
+				"global",
+			},
+		},
+		{
 			name: "skills add renders package with repeated agent and skill flags",
 			prov: manifest.Provisioner{
 				Tool: "skills",

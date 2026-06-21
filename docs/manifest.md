@@ -128,7 +128,8 @@ Current dependency package coverage:
 | `engram` | `engram` | `gentleman-programming/tap/engram` | Manual | Manual | Manual |
 | `claude` | `claude` | Manual | Manual | Manual | Manual |
 | `codex` | `codex` | Manual | Manual | Manual | Manual |
-| `codegraph` | `codegraph` | Manual | Manual | Manual | Manual |
+| `curl` | `curl` | `curl` | `curl` | `curl` | `curl` |
+| `npx` | `npx` | Manual | Manual | Manual | Manual |
 
 ## Provisioners
 
@@ -137,7 +138,7 @@ installed and only after their declared Dependencies are present.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
-| `tool` | Yes | `gentle-ai`, `claude`, `codex`, or `skills`. |
+| `tool` | Yes | `gentle-ai`, `claude`, `codex`, `codegraph`, or `skills`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `spec` | Yes | Tool-specific declaration. Each spec must speak exactly one tool dialect. |
@@ -175,6 +176,26 @@ Constraints:
 - `command` must contain at least one non-empty argument.
 - `env` keys must not be empty.
 - Codex specs must not mix gentle-ai or Claude fields.
+
+### `codegraph` spec
+
+Supported fields: `scope`, `agents`, and `yes`.
+
+`codegraph` renders one fixed shell invocation. It first checks whether
+`codegraph` is already on `PATH`; when missing, it runs CodeGraph's official
+`curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh`
+bootstrap, adds `$HOME/.local/bin` to the child process `PATH`, and then runs
+`codegraph install` to wire MCP config plus instructions for the selected
+agents.
+
+Constraints:
+
+- `agents` is required and renders the comma-separated `--target` list.
+- `scope`, when set, must be `global` or `local` and renders `--location`.
+- `yes` is required and must be `true`; it renders CodeGraph's non-interactive
+  `--yes` flag.
+- CodeGraph specs must not mix gentle-ai action/channel/persona/preset/sdd,
+  Claude, Codex MCP, or skills.sh fields.
 
 ### `skills` spec
 
@@ -216,7 +237,7 @@ Current Provisioners:
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
-| `codex` | `desktop` | `darwin`, `linux` | Add MCP server `codegraph` using `codegraph serve --mcp`. | `codex`, `codegraph` |
+| `codegraph` | `agents` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. | `curl` |
 
 ## Selection rules
 

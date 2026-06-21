@@ -35,6 +35,7 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	stubDir := t.TempDir()
 	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/gentle-ai-args\"\n")
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/codegraph-args\"\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	install := cli.NewRootCommand()
@@ -187,9 +188,19 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	if strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code,opencode") {
 		t.Fatalf("provisioner argv = %q, want basic install without opencode", gotArgs)
 	}
+	gotCodeGraphArgs, err := os.ReadFile(filepath.Join(home, "codegraph-args"))
+	if err != nil {
+		t.Fatalf("codegraph provisioner did not run under the sandbox HOME %q: %v", home, err)
+	}
+	if !strings.Contains(string(gotCodeGraphArgs), "install --target codex,claude,antigravity,opencode --location global --yes") {
+		t.Fatalf("codegraph argv = %q, want CodeGraph installer for codex, claude, antigravity, and opencode", gotCodeGraphArgs)
+	}
 	// And it must never have escaped into the inherited real HOME.
 	if _, err := os.Stat(filepath.Join(realHome, "gentle-ai-args")); err == nil {
 		t.Fatalf("provisioner wrote into the inherited HOME %q instead of the sandbox", realHome)
+	}
+	if _, err := os.Stat(filepath.Join(realHome, "codegraph-args")); err == nil {
+		t.Fatalf("codegraph provisioner wrote into the inherited HOME %q instead of the sandbox", realHome)
 	}
 	if _, err := os.Stat(filepath.Join(realHome, ".config", "opencode", "opencode.json")); err == nil {
 		t.Fatalf("OpenCode generated config escaped into the inherited HOME %q", realHome)
@@ -256,6 +267,7 @@ cat > "$HOME/.claude/settings.json" <<'JSON'
 JSON
 `)
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	install := cli.NewRootCommand()

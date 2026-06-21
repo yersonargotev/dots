@@ -109,10 +109,11 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 // ~/.claude for claude-code, ~/.codex for codex, ~/.config/opencode for opencode,
 // and ~/.gemini for antigravity. claude writes marketplace and plugin state under
 // ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
-// servers in ~/.codex/config.toml, under ~/.codex. skills.sh installs global
-// skills under the user-level agent skill directories selected by its --agent
-// flags. For skills@1.5.12, codex and antigravity share ~/.agents/skills;
-// claude-code uses ~/.claude/skills.
+// servers in ~/.codex/config.toml, under ~/.codex. codegraph writes MCP config
+// and instructions for the selected agents. skills.sh installs global skills
+// under the user-level agent skill directories selected by its --agent flags.
+// For skills@1.5.12, codex and antigravity share ~/.agents/skills; claude-code
+// uses ~/.claude/skills.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
 	case "gentle-ai":
@@ -134,11 +135,43 @@ func managedRoots(prov manifest.Provisioner) []string {
 		return []string{"~/.claude", "~/.claude.json"}
 	case "codex":
 		return []string{"~/.codex"}
+	case "codegraph":
+		return codeGraphRoots(prov.Spec.Agents)
 	case "skills":
 		return skillsRoots(prov.Spec.Agents)
 	default:
 		return nil
 	}
+}
+
+func codeGraphRoots(agents []string) []string {
+	cleanAgents := cleanAgentList(agents)
+	if len(cleanAgents) == 0 {
+		return []string{"~/.codex", "~/.claude", "~/.claude.json", "~/.config/opencode", "~/.gemini"}
+	}
+	var roots []string
+	seen := map[string]bool{}
+	add := func(root string) {
+		if seen[root] {
+			return
+		}
+		seen[root] = true
+		roots = append(roots, root)
+	}
+	for _, agent := range cleanAgents {
+		switch agent {
+		case "codex":
+			add("~/.codex")
+		case "claude":
+			add("~/.claude")
+			add("~/.claude.json")
+		case "opencode":
+			add("~/.config/opencode")
+		case "antigravity":
+			add("~/.gemini")
+		}
+	}
+	return roots
 }
 
 func skillsRoots(agents []string) []string {

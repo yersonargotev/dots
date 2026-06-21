@@ -197,15 +197,16 @@ func TestPlanResolvesCodexProvisioner(t *testing.T) {
 	}
 }
 
-func TestPlanResolvesCodeGraphCodexProvisioner(t *testing.T) {
-	codex := manifest.Provisioner{
-		Tool: "codex", Tags: []string{"core"},
+func TestPlanResolvesCodeGraphProvisioner(t *testing.T) {
+	codegraph := manifest.Provisioner{
+		Tool: "codegraph", Tags: []string{"core"},
 		Spec: manifest.ProvisionerSpec{
-			MCP:     "codegraph",
-			Command: []string{"codegraph", "serve", "--mcp"},
+			Scope:  "global",
+			Agents: []string{"codex", "claude", "antigravity", "opencode"},
+			Yes:    true,
 		},
 	}
-	m := manifestWithProvisioners(codex)
+	m := manifestWithProvisioners(codegraph)
 
 	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
 	if err != nil {
@@ -216,12 +217,22 @@ func TestPlanResolvesCodeGraphCodexProvisioner(t *testing.T) {
 	}
 
 	step := p.Steps[0]
-	wantArgs := []string{"mcp", "add", "codegraph", "--", "codegraph", "serve", "--mcp"}
-	if !reflect.DeepEqual(step.Args, wantArgs) {
-		t.Fatalf("codegraph codex args = %#v, want %#v", step.Args, wantArgs)
+	if step.Executable != "sh" {
+		t.Fatalf("codegraph step executable = %q, want sh", step.Executable)
 	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.codex"}) {
-		t.Fatalf("codegraph codex targets = %#v, want [~/.codex]", step.Targets)
+	wantArgs := []string{
+		"-c",
+		"set -eu\nif ! command -v codegraph >/dev/null 2>&1; then\n\tcurl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh\nfi\nexport PATH=\"$HOME/.local/bin:$PATH\"\ncodegraph install --target \"$1\" --location \"$2\" --yes",
+		"codegraph-install",
+		"codex,claude,antigravity,opencode",
+		"global",
+	}
+	if !reflect.DeepEqual(step.Args, wantArgs) {
+		t.Fatalf("codegraph args = %#v, want %#v", step.Args, wantArgs)
+	}
+	wantTargets := []string{"~/.codex", "~/.claude", "~/.claude.json", "~/.gemini", "~/.config/opencode"}
+	if !reflect.DeepEqual(step.Targets, wantTargets) {
+		t.Fatalf("codegraph targets = %#v, want %#v", step.Targets, wantTargets)
 	}
 }
 
