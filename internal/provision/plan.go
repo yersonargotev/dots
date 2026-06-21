@@ -104,19 +104,26 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 
 // managedRoots returns the well-known HOME-relative roots an allowlisted tool
 // manages, used as the advisory blast radius in the plan. gentle-ai owns its own
-// state under ~/.gentle-ai, the Claude agent layer under ~/.claude, and selected
-// agent-specific configuration roots. claude writes marketplace and plugin state
-// under ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex
-// records MCP servers in ~/.codex/config.toml, under ~/.codex.
+// state under ~/.gentle-ai plus the selected agent-specific configuration roots:
+// ~/.claude for claude-code, ~/.codex for codex, ~/.config/opencode for opencode,
+// and ~/.gemini for antigravity. claude writes marketplace and plugin state under
+// ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
+// servers in ~/.codex/config.toml, under ~/.codex.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
 	case "gentle-ai":
-		roots := []string{"~/.claude"}
+		var roots []string
+		if includes(prov.Spec.Agents, "claude-code") {
+			roots = append(roots, "~/.claude")
+		}
 		if includes(prov.Spec.Agents, "codex") {
 			roots = append(roots, "~/.codex")
 		}
 		if includes(prov.Spec.Agents, "opencode") {
 			roots = append(roots, "~/.config/opencode")
+		}
+		if includes(prov.Spec.Agents, "antigravity") {
+			roots = append(roots, "~/.gemini")
 		}
 		return append(roots, "~/.gentle-ai")
 	case "claude":

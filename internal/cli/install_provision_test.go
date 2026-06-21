@@ -66,7 +66,7 @@ func TestInstallDryRunRendersProvisionerWithoutInvoking(t *testing.T) {
 	for _, want := range []string{
 		`Provisioners for profile "default"`,
 		"gentle-ai install --scope global --persona neutral --agents codex",
-		"affects: ~/.claude, ~/.codex, ~/.gentle-ai",
+		"affects: ~/.codex, ~/.gentle-ai",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("dry-run output missing %q\noutput:\n%s", want, got)
