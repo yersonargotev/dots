@@ -47,9 +47,10 @@ type Provisioner struct {
 // ProvisionerSpec carries the declarative values dots owns for an allowlisted
 // tool; the tool owns how they render into agent config. The scalar/list flags
 // map 1:1 to gentle-ai's install/uninstall flags. The Claude fields (Marketplace, Plugin,
-// From) describe a single idempotent `claude` invocation, and the codex MCP
-// fields (MCP, Command, Env) a single `codex mcp add` invocation. The three
-// dialects are mutually exclusive: a spec speaks exactly one of them.
+// From) describe a single idempotent `claude` invocation, the codex MCP fields
+// (MCP, Command, Env) a single `codex mcp add` invocation, and Package drives
+// one `npx skills add` invocation. The dialects are mutually exclusive: a spec
+// speaks exactly one of them.
 type ProvisionerSpec struct {
 	Action     string   `yaml:"action,omitempty"`
 	Scope      string   `yaml:"scope,omitempty"`
@@ -82,6 +83,16 @@ type ProvisionerSpec struct {
 	// `--env KEY=VALUE` flags in sorted-key order so the command stays
 	// deterministic. It is optional and only valid alongside MCP.
 	Env map[string]string `yaml:"env,omitempty"`
+	// Package is the external skills.sh source reference passed to
+	// `npx skills add <package>`, such as `owner/repo` or a git URL. It is only
+	// valid for the skills provisioner.
+	Package string `yaml:"package,omitempty"`
+	// Global installs skills into user-level agent directories instead of the
+	// current project, rendering `--global` for the skills provisioner.
+	Global bool `yaml:"global,omitempty"`
+	// Copy asks skills.sh to copy files instead of symlinking them into the
+	// target agent directories.
+	Copy bool `yaml:"copy,omitempty"`
 }
 
 // Dependency is an external tool a Managed Entry needs to work correctly. dots
@@ -237,7 +248,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of claude, codex, gentle-ai", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of claude, codex, gentle-ai, skills", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -262,12 +273,19 @@ func (m Manifest) Validate() error {
 			if err := validateCodexSpec(prov.Spec, i); err != nil {
 				return err
 			}
+		case "skills":
+			if err := validateSkillsSpec(prov.Spec, i); err != nil {
+				return err
+			}
 		default:
 			if prov.Spec.usesClaudeFields() {
 				return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the gentle-ai tool", i)
 			}
 			if prov.Spec.usesMCPFields() {
 				return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the gentle-ai tool", i)
+			}
+			if prov.Spec.usesSkillsFields() {
+				return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the gentle-ai tool", i)
 			}
 			action := strings.TrimSpace(prov.Spec.Action)
 			if !allowedGentleAIAction(action) {
@@ -327,7 +345,7 @@ func validateDependency(dep Dependency, path string) error {
 // an empty spec would render a bare command with nothing to do, so validation
 // rejects it.
 func (s ProvisionerSpec) IsEmpty() bool {
-	return !s.usesGentleAIFlags() && !s.usesClaudeFields() && !s.usesMCPFields()
+	return !s.usesGentleAIFlags() && !s.usesClaudeFields() && !s.usesMCPFields() && !s.usesSkillsFields()
 }
 
 // usesClaudeFields reports whether the spec sets any Claude-specific field. It
@@ -344,6 +362,15 @@ func (s ProvisionerSpec) usesMCPFields() bool {
 	return strings.TrimSpace(s.MCP) != "" ||
 		hasNonEmptyString(s.Command) ||
 		len(s.Env) > 0
+}
+
+// usesSkillsFields reports whether the spec sets any skills.sh field. Agents
+// and Skills are intentionally shared names between gentle-ai and skills.sh, so
+// they are not counted here; validation decides which tool owns those lists.
+func (s ProvisionerSpec) usesSkillsFields() bool {
+	return strings.TrimSpace(s.Package) != "" ||
+		s.Global ||
+		s.Copy
 }
 
 // usesGentleAIFlags reports whether the spec sets any gentle-ai install flag.
@@ -383,6 +410,9 @@ func validateClaudeSpec(s ProvisionerSpec, i int) error {
 	if s.usesMCPFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the claude tool", i)
 	}
+	if s.usesSkillsFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the claude tool", i)
+	}
 	hasMarketplace := strings.TrimSpace(s.Marketplace) != ""
 	hasPlugin := strings.TrimSpace(s.Plugin) != ""
 	if hasMarketplace == hasPlugin {
@@ -407,6 +437,9 @@ func validateCodexSpec(s ProvisionerSpec, i int) error {
 	if s.usesClaudeFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the codex tool", i)
 	}
+	if s.usesSkillsFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the codex tool", i)
+	}
 	if strings.TrimSpace(s.MCP) == "" {
 		return fmt.Errorf("provisioners[%d].spec.mcp is required for the codex tool", i)
 	}
@@ -417,6 +450,39 @@ func validateCodexSpec(s ProvisionerSpec, i int) error {
 		if strings.TrimSpace(key) == "" {
 			return fmt.Errorf("provisioners[%d].spec.env has an empty key", i)
 		}
+	}
+	return nil
+}
+
+// validateSkillsSpec enforces the skills.sh provisioner contract: it drives one
+// exact `npx skills add <package>` invocation with optional target agents and
+// selected skill names. It does not accept gentle-ai scalar/action fields,
+// Claude plugin fields, or Codex MCP fields.
+func validateSkillsSpec(s ProvisionerSpec, i int) error {
+	if s.usesClaudeFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the skills tool", i)
+	}
+	if s.usesMCPFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the skills tool", i)
+	}
+	if strings.TrimSpace(s.Action) != "" ||
+		strings.TrimSpace(s.Scope) != "" ||
+		strings.TrimSpace(s.Channel) != "" ||
+		strings.TrimSpace(s.Persona) != "" ||
+		strings.TrimSpace(s.Preset) != "" ||
+		strings.TrimSpace(s.SDDMode) != "" ||
+		hasNonEmptyString(s.Components) ||
+		s.Yes {
+		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai fields (action, scope, channel, persona, preset, sdd-mode, components, yes) for the skills tool", i)
+	}
+	if strings.TrimSpace(s.Package) == "" {
+		return fmt.Errorf("provisioners[%d].spec.package is required for the skills tool", i)
+	}
+	if j, ok := indexOfEmptyString(s.Agents); ok {
+		return fmt.Errorf("provisioners[%d].spec.agents[%d] must not be empty", i, j)
+	}
+	if j, ok := indexOfEmptyString(s.Skills); ok {
+		return fmt.Errorf("provisioners[%d].spec.skills[%d] must not be empty", i, j)
 	}
 	return nil
 }
@@ -505,11 +571,11 @@ func allowedOS(osName string) bool {
 }
 
 // allowedProvisionerTool enforces the provisioner allowlist. dots is never a
-// generic command runner: gentle-ai, claude, and codex are the only accepted
-// provisioner tools, each driven through a fixed set of subcommands.
+// generic command runner: gentle-ai, claude, codex, and skills are the only
+// accepted provisioner tools, each driven through a fixed set of subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "gentle-ai", "claude", "codex":
+	case "gentle-ai", "claude", "codex", "skills":
 		return true
 	default:
 		return false

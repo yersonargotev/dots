@@ -22,6 +22,8 @@ func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 		return p.Tool, renderClaudeArgs(p.Spec)
 	case "codex":
 		return p.Tool, renderCodexArgs(p.Spec)
+	case "skills":
+		return "npx", renderSkillsArgs(p.Spec)
 	default:
 		return p.Tool, renderGentleAIArgs(p.Spec)
 	}
@@ -82,6 +84,27 @@ func renderCodexArgs(spec manifest.ProvisionerSpec) []string {
 	}
 	args = append(args, "--")
 	return append(args, cleanList(spec.Command)...)
+}
+
+// renderSkillsArgs renders one allowlisted skills.sh install:
+// `npx skills add <package>` with deterministic repeated flags for selected
+// agents and skill names. Validation guarantees Package is set before this is
+// reached.
+func renderSkillsArgs(spec manifest.ProvisionerSpec) []string {
+	args := []string{"skills", "add", strings.TrimSpace(spec.Package)}
+	for _, agent := range cleanList(spec.Agents) {
+		args = append(args, "--agent", agent)
+	}
+	for _, skill := range cleanList(spec.Skills) {
+		args = append(args, "--skill", skill)
+	}
+	if spec.Global {
+		args = append(args, "--global")
+	}
+	if spec.Copy {
+		args = append(args, "--copy")
+	}
+	return args
 }
 
 func appendScalarFlag(args []string, flag, value string) []string {

@@ -2,6 +2,7 @@ package provision
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/profilesel"
@@ -108,7 +109,9 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 // ~/.claude for claude-code, ~/.codex for codex, ~/.config/opencode for opencode,
 // and ~/.gemini for antigravity. claude writes marketplace and plugin state under
 // ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
-// servers in ~/.codex/config.toml, under ~/.codex.
+// servers in ~/.codex/config.toml, under ~/.codex. skills.sh installs global
+// skills under the user-level agent skill directories selected by its --agent
+// flags.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
 	case "gentle-ai":
@@ -130,9 +133,44 @@ func managedRoots(prov manifest.Provisioner) []string {
 		return []string{"~/.claude", "~/.claude.json"}
 	case "codex":
 		return []string{"~/.codex"}
+	case "skills":
+		return skillsRoots(prov.Spec.Agents)
 	default:
 		return nil
 	}
+}
+
+func skillsRoots(agents []string) []string {
+	cleanAgents := cleanAgentList(agents)
+	if len(cleanAgents) == 0 {
+		return []string{"~/.agents/skills"}
+	}
+	roots := make([]string, 0, len(cleanAgents))
+	for _, agent := range cleanAgents {
+		switch agent {
+		case "codex":
+			roots = append(roots, "~/.codex/skills")
+		case "claude-code":
+			roots = append(roots, "~/.claude/skills")
+		default:
+			roots = append(roots, "~/.agents/skills")
+		}
+	}
+	return roots
+}
+
+func cleanAgentList(values []string) []string {
+	cleaned := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		cleaned = append(cleaned, value)
+	}
+	return cleaned
 }
 
 func includes(values []string, want string) bool {

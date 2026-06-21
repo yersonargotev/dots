@@ -6,8 +6,19 @@ import (
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/status"
 	"github.com/yersonargotev/dots/internal/uninstall"
 )
+
+type statusReport struct {
+	Profile      string         `json:"profile"`
+	Entries      []status.Entry `json:"entries"`
+	Provisioners provision.Plan `json:"provisioners"`
+}
+
+func (r statusReport) HasFindings() bool {
+	return status.Report{Profile: r.Profile, Entries: r.Entries}.HasFindings()
+}
 
 type versionReport struct {
 	Version string `json:"version"`

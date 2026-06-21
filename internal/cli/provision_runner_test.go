@@ -130,6 +130,61 @@ printf ok > "$HOME/first-attempt"
 	}
 }
 
+func TestRunProvisionersThreadsHomeToSkillsProvisioner(t *testing.T) {
+	home := t.TempDir()
+	stubDir := t.TempDir()
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	script := `#!/bin/sh
+if [ "$1" != "skills" ] || [ "$2" != "add" ]; then
+  exit 9
+fi
+printf '%s\n' "$*" > "$HOME/skills-args"
+`
+	if err := os.WriteFile(filepath.Join(stubDir, "npx"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write npx stub: %v", err)
+	}
+
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {Tags: []string{"agents"}},
+		},
+		Entries: []manifest.Entry{
+			{Source: "configs/zsh/zshrc", Target: "~/.zshrc", Strategy: "symlink", Tags: []string{"agents"}},
+		},
+		Provisioners: []manifest.Provisioner{
+			{
+				Tool: "skills", Tags: []string{"agents"},
+				Spec: manifest.ProvisionerSpec{
+					Package: "vercel-labs/agent-skills",
+					Agents:  []string{"codex"},
+					Skills:  []string{"web-design-guidelines"},
+					Global:  true,
+				},
+			},
+		},
+	}
+
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	if err := runProvisioners(cmd, m, "default", home); err != nil {
+		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	got, err := os.ReadFile(filepath.Join(home, "skills-args"))
+	if err != nil {
+		t.Fatalf("skills provisioner did not write into sandbox home %q: %v", home, err)
+	}
+	want := "skills add vercel-labs/agent-skills --agent codex --skill web-design-guidelines --global\n"
+	if string(got) != want {
+		t.Fatalf("skills args = %q, want %q", got, want)
+	}
+}
+
 func containsEnv(env []string, want string) bool {
 	for _, kv := range env {
 		if kv == want {

@@ -37,7 +37,7 @@ state.
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -56,7 +56,7 @@ On failure the envelope is still valid JSON:
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
@@ -94,11 +94,12 @@ esac
 
 ## Contract scope
 
-The envelope carries the machine-meaningful report, not everything the text
-surface prints:
+The envelope carries the machine-meaningful report, not every piece of human
+prose the text surface prints:
 
-- `status`'s informational provisioner listing is text-only; read machine-readable
-  Provisioner readiness from `doctor` instead.
+- `status` includes selected Provisioner commands as read-only context under
+  `data.provisioners`, but these do not affect the status finding decision.
+  Read dependency readiness for those commands from `doctor`.
 - `plan`'s `resolved_source` (a per-machine absolute path) and `deps`'s
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the

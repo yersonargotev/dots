@@ -361,6 +361,64 @@ provisioners:
 	}
 }
 
+func TestLoadFileParsesSkillsProvisioner(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: skills
+    tags: [agents]
+    spec:
+      package: vercel-labs/agent-skills
+      agents: [codex, claude-code]
+      skills: [web-design-guidelines]
+      global: true
+      copy: true
+    dependencies:
+      - name: npx
+        command: npx
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if len(got.Provisioners) != 1 {
+		t.Fatalf("Provisioners len = %d, want 1", len(got.Provisioners))
+	}
+	skills := got.Provisioners[0]
+	if skills.Tool != "skills" {
+		t.Fatalf("Provisioner[0].Tool = %q, want skills", skills.Tool)
+	}
+	if skills.Spec.Package != "vercel-labs/agent-skills" {
+		t.Fatalf("Provisioner[0].Spec.Package = %q, want vercel-labs/agent-skills", skills.Spec.Package)
+	}
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code"}) {
+		t.Fatalf("Provisioner[0].Spec.Agents = %#v, want [codex claude-code]", skills.Spec.Agents)
+	}
+	if !sameStrings(skills.Spec.Skills, []string{"web-design-guidelines"}) {
+		t.Fatalf("Provisioner[0].Spec.Skills = %#v, want [web-design-guidelines]", skills.Spec.Skills)
+	}
+	if !skills.Spec.Global || !skills.Spec.Copy {
+		t.Fatalf("Provisioner[0].Spec global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
+	}
+	if skills.Dependencies[0].Name != "npx" || skills.Dependencies[0].Command != "npx" {
+		t.Fatalf("Provisioner[0].Dependencies[0] = %#v, want npx command dependency", skills.Dependencies[0])
+	}
+}
+
 func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
@@ -389,6 +447,43 @@ func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) 
 	}
 	if !hasDependency(codex.Dependencies, "codex") {
 		t.Errorf("codex provisioner missing codex dependency: %#v", codex.Dependencies)
+	}
+}
+
+func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var skills *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool == "skills" && prov.Spec.Package == "vercel-labs/agent-skills" {
+			skills = prov
+		}
+	}
+
+	if skills == nil {
+		t.Fatal("repository manifest missing skills provisioner for vercel-labs/agent-skills")
+	}
+	if !hasString(skills.Tags, "agents") {
+		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
+	}
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code]", skills.Spec.Agents)
+	}
+	if !sameStrings(skills.Spec.Skills, []string{"web-design-guidelines"}) {
+		t.Errorf("skills provisioner skills = %#v, want [web-design-guidelines]", skills.Spec.Skills)
+	}
+	if !skills.Spec.Global {
+		t.Errorf("skills provisioner global = false, want true")
+	}
+	if !hasDependency(skills.Dependencies, "npx") {
+		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
 	}
 }
 
@@ -1034,7 +1129,7 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be one of claude, codex, gentle-ai",
+			want: "provisioners[0].tool must be one of claude, codex, gentle-ai, skills",
 		},
 		{
 			name: "claude spec sets neither marketplace nor plugin",
@@ -1105,6 +1200,16 @@ provisioners:
 			want: "provisioners[0].spec must not set codex MCP fields (mcp, command, env) for the gentle-ai tool",
 		},
 		{
+			name: "gentle-ai spec mixes skills fields",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+      package: vercel-labs/agent-skills
+`,
+			want: "provisioners[0].spec must not set skills.sh fields (package, global, copy) for the gentle-ai tool",
+		},
+		{
 			name: "claude spec mixes codex mcp fields",
 			provisioner: `  - tool: claude
     tags: [core]
@@ -1153,6 +1258,45 @@ provisioners:
       from: chrome-devtools-plugins
 `,
 			want: "provisioners[0].spec must not set claude fields (marketplace, plugin, from) for the codex tool",
+		},
+		{
+			name: "skills spec without package",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      agents: [codex]
+`,
+			want: "provisioners[0].spec.package is required for the skills tool",
+		},
+		{
+			name: "skills spec mixes gentle-ai scalar fields",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: vercel-labs/agent-skills
+      persona: neutral
+`,
+			want: "provisioners[0].spec must not set gentle-ai fields (action, scope, channel, persona, preset, sdd-mode, components, yes) for the skills tool",
+		},
+		{
+			name: "skills spec mixes claude fields",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: vercel-labs/agent-skills
+      plugin: chrome-devtools-mcp
+`,
+			want: "provisioners[0].spec must not set claude fields (marketplace, plugin, from) for the skills tool",
+		},
+		{
+			name: "skills spec mixes codex fields",
+			provisioner: `  - tool: skills
+    tags: [core]
+    spec:
+      package: vercel-labs/agent-skills
+      mcp: chrome-devtools
+`,
+			want: "provisioners[0].spec must not set codex MCP fields (mcp, command, env) for the skills tool",
 		},
 		{
 			name: "missing spec",

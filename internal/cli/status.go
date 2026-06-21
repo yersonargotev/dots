@@ -62,16 +62,21 @@ func newStatusCommand() *cobra.Command {
 				return err
 			}
 
-			// Declared provisioners make no alignment claim, so only the Dotfiles
-			// Status entries decide findings; the JSON envelope therefore carries
-			// the report, while the text surface also lists provisioners.
-			return renderOrEmit(cmd, report, func() error {
-				renderStatus(cmd.OutOrStdout(), report)
+			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
+			if err != nil {
+				return err
+			}
+			fullReport := statusReport{
+				Profile:      report.Profile,
+				Entries:      report.Entries,
+				Provisioners: provPlan,
+			}
 
-				provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
-				if err != nil {
-					return err
-				}
+			// Declared provisioners make no alignment claim, so only the Dotfiles
+			// Status entries decide findings; both text and JSON still include the
+			// resolved provisioner commands as read-only context.
+			return renderOrEmit(cmd, fullReport, func() error {
+				renderStatus(cmd.OutOrStdout(), report)
 				renderStatusProvisioners(cmd.OutOrStdout(), provPlan)
 				return nil
 			})

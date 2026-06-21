@@ -135,7 +135,7 @@ installed and only after their declared Dependencies are present.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
-| `tool` | Yes | `gentle-ai`, `claude`, or `codex`. |
+| `tool` | Yes | `gentle-ai`, `claude`, `codex`, or `skills`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `spec` | Yes | Tool-specific declaration. Each spec must speak exactly one tool dialect. |
@@ -174,6 +174,24 @@ Constraints:
 - `env` keys must not be empty.
 - Codex specs must not mix gentle-ai or Claude fields.
 
+### `skills` spec
+
+Supported fields: `package`, `agents`, `skills`, `global`, and `copy`.
+
+`skills` renders one exact `npx skills add <package>` command. `package` is an
+external skills.sh source reference such as `owner/repo`, a GitHub URL, a direct
+path to a skill in a repo, or another git URL supported by skills.sh.
+
+Constraints:
+
+- `package` is required.
+- `agents` renders repeated `--agent` flags.
+- `skills` renders repeated `--skill` flags.
+- `global` renders `--global`.
+- `copy` renders `--copy`.
+- Skills specs must not mix gentle-ai scalar/action fields, Claude fields, or
+  Codex MCP fields.
+
 Current Provisioners:
 
 | Tool | Tags | OS | Rendered intent | Dependencies |
@@ -182,6 +200,7 @@ Current Provisioners:
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `codex` with `engram`, `context7`, and `persona`. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `claude-code` with `engram`, `context7`, `persona`, and `permissions`. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `antigravity` with `engram`, `context7`, and `persona` only; no `sdd` or `permissions`. | `gentle-ai`, `engram` |
+| `skills` | `agents` | all | Install `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex` and `claude-code`. | `npx` |
 | `claude` | `desktop` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `desktop` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `desktop` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
@@ -202,3 +221,4 @@ Current Provisioners:
 - [`docs/adr/0003-claude-plugin-provisioner.md`](adr/0003-claude-plugin-provisioner.md) records the Claude plugin provisioner decision.
 - [`docs/adr/0004-codex-mcp-provisioner.md`](adr/0004-codex-mcp-provisioner.md) records the Codex MCP provisioner decision.
 - [`docs/adr/0005-opencode-mcp-config-overlay.md`](adr/0005-opencode-mcp-config-overlay.md) records the OpenCode config overlay decision.
+- [`docs/adr/0007-hybrid-skill-provisioning.md`](adr/0007-hybrid-skill-provisioning.md) records the hybrid repo-owned/external skill ownership decision.

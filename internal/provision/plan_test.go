@@ -273,6 +273,45 @@ func TestPlanResolvesAntigravityGentleAIProvisioner(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesSkillsProvisioner(t *testing.T) {
+	skills := manifest.Provisioner{
+		Tool: "skills", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{
+			Package: "vercel-labs/agent-skills",
+			Agents:  []string{"codex", "claude-code"},
+			Skills:  []string{"web-design-guidelines"},
+			Global:  true,
+		},
+	}
+	m := manifestWithProvisioners(skills)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
+	}
+
+	step := p.Steps[0]
+	if step.Tool != "skills" || step.Executable != "npx" {
+		t.Fatalf("skills step tool/executable = %q/%q, want skills/npx", step.Tool, step.Executable)
+	}
+	wantArgs := []string{
+		"skills", "add", "vercel-labs/agent-skills",
+		"--agent", "codex",
+		"--agent", "claude-code",
+		"--skill", "web-design-guidelines",
+		"--global",
+	}
+	if !reflect.DeepEqual(step.Args, wantArgs) {
+		t.Fatalf("skills step args = %#v, want %#v", step.Args, wantArgs)
+	}
+	if !reflect.DeepEqual(step.Targets, []string{"~/.codex/skills", "~/.claude/skills"}) {
+		t.Fatalf("skills step targets = %#v, want [~/.codex/skills ~/.claude/skills]", step.Targets)
+	}
+}
+
 func TestPlanEmptyWhenNoProvisionerSelected(t *testing.T) {
 	prov := manifest.Provisioner{
 		Tool: "gentle-ai", Tags: []string{"desktop"},

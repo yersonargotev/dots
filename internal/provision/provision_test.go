@@ -160,6 +160,29 @@ func TestRenderCommand(t *testing.T) {
 			wantExec: "codex",
 			wantArgs: []string{"mcp", "add", "chrome-devtools", "--", "npx", "chrome-devtools-mcp@latest"},
 		},
+		{
+			name: "skills add renders package with repeated agent and skill flags",
+			prov: manifest.Provisioner{
+				Tool: "skills",
+				Spec: manifest.ProvisionerSpec{
+					Package: " vercel-labs/agent-skills ",
+					Agents:  []string{"codex", "claude-code"},
+					Skills:  []string{"web-design-guidelines", "skill-creator"},
+					Global:  true,
+					Copy:    true,
+				},
+			},
+			wantExec: "npx",
+			wantArgs: []string{
+				"skills", "add", "vercel-labs/agent-skills",
+				"--agent", "codex",
+				"--agent", "claude-code",
+				"--skill", "web-design-guidelines",
+				"--skill", "skill-creator",
+				"--global",
+				"--copy",
+			},
+		},
 	}
 
 	for _, tt := range tests {
