@@ -501,11 +501,25 @@ func validateCodeGraphSpec(s ProvisionerSpec, i int) error {
 	if err := validateSkillsDataValues(s.Agents, fmt.Sprintf("provisioners[%d].spec.agents", i)); err != nil {
 		return err
 	}
+	for j, agent := range s.Agents {
+		if !allowedCodeGraphAgent(strings.TrimSpace(agent)) {
+			return fmt.Errorf("provisioners[%d].spec.agents[%d] must be one of antigravity, claude, codex, opencode for the codegraph tool", i, j)
+		}
+	}
 	scope := strings.TrimSpace(s.Scope)
 	if scope != "" && scope != "global" && scope != "local" {
 		return fmt.Errorf("provisioners[%d].spec.scope must be one of global, local for the codegraph tool", i)
 	}
 	return nil
+}
+
+func allowedCodeGraphAgent(agent string) bool {
+	switch agent {
+	case "antigravity", "claude", "codex", "opencode":
+		return true
+	default:
+		return false
+	}
 }
 
 // validateSkillsSpec enforces the skills.sh provisioner contract: it drives one

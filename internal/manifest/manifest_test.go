@@ -1547,6 +1547,17 @@ provisioners:
 			want: "provisioners[0].spec.yes must be true for the codegraph tool",
 		},
 		{
+			name: "codegraph spec rejects unsupported agent target",
+			provisioner: `  - tool: codegraph
+    tags: [core]
+    spec:
+      scope: global
+      agents: [claude-code]
+      yes: true
+`,
+			want: "provisioners[0].spec.agents[0] must be one of antigravity, claude, codex, opencode for the codegraph tool",
+		},
+		{
 			name: "skills spec without package",
 			provisioner: `  - tool: skills
     tags: [core]

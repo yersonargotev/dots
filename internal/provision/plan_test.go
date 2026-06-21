@@ -230,7 +230,7 @@ func TestPlanResolvesCodeGraphProvisioner(t *testing.T) {
 	if !reflect.DeepEqual(step.Args, wantArgs) {
 		t.Fatalf("codegraph args = %#v, want %#v", step.Args, wantArgs)
 	}
-	wantTargets := []string{"~/.codex", "~/.claude", "~/.claude.json", "~/.gemini", "~/.config/opencode"}
+	wantTargets := []string{"~/.codegraph", "~/.local/bin", "~/.codex", "~/.claude", "~/.claude.json", "~/.gemini", "~/.config/opencode"}
 	if !reflect.DeepEqual(step.Targets, wantTargets) {
 		t.Fatalf("codegraph targets = %#v, want %#v", step.Targets, wantTargets)
 	}

@@ -191,6 +191,8 @@ agents.
 Constraints:
 
 - `agents` is required and renders the comma-separated `--target` list.
+  Supported CodeGraph targets are `codex`, `claude`, `antigravity`, and
+  `opencode`.
 - `scope`, when set, must be `global` or `local` and renders `--location`.
 - `yes` is required and must be `true`; it renders CodeGraph's non-interactive
   `--yes` flag.

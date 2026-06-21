@@ -109,11 +109,12 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 // ~/.claude for claude-code, ~/.codex for codex, ~/.config/opencode for opencode,
 // and ~/.gemini for antigravity. claude writes marketplace and plugin state under
 // ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
-// servers in ~/.codex/config.toml, under ~/.codex. codegraph writes MCP config
-// and instructions for the selected agents. skills.sh installs global skills
-// under the user-level agent skill directories selected by its --agent flags.
-// For skills@1.5.12, codex and antigravity share ~/.agents/skills; claude-code
-// uses ~/.claude/skills.
+// servers in ~/.codex/config.toml, under ~/.codex. codegraph writes its own
+// installed versions and shim under ~/.codegraph and ~/.local/bin, plus MCP
+// config and instructions for the selected agents. skills.sh installs global
+// skills under the user-level agent skill directories selected by its --agent
+// flags. For skills@1.5.12, codex and antigravity share ~/.agents/skills;
+// claude-code uses ~/.claude/skills.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
 	case "gentle-ai":
@@ -145,12 +146,15 @@ func managedRoots(prov manifest.Provisioner) []string {
 }
 
 func codeGraphRoots(agents []string) []string {
+	roots := []string{"~/.codegraph", "~/.local/bin"}
+	seen := map[string]bool{
+		"~/.codegraph": true,
+		"~/.local/bin": true,
+	}
 	cleanAgents := cleanAgentList(agents)
 	if len(cleanAgents) == 0 {
-		return []string{"~/.codex", "~/.claude", "~/.claude.json", "~/.config/opencode", "~/.gemini"}
+		return append(roots, "~/.codex", "~/.claude", "~/.claude.json", "~/.config/opencode", "~/.gemini")
 	}
-	var roots []string
-	seen := map[string]bool{}
 	add := func(root string) {
 		if seen[root] {
 			return
