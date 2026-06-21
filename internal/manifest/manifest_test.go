@@ -450,6 +450,69 @@ func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) 
 	}
 }
 
+func TestRepositoryManifestWebProfileIncludesPlaywrightCLI(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	web := got.Profiles["web"]
+	if !hasDependency(web.Dependencies, "Playwright CLI") {
+		t.Fatalf("web profile dependencies = %#v, want Playwright CLI dependency", web.Dependencies)
+	}
+
+	var dep manifest.Dependency
+	for _, candidate := range web.Dependencies {
+		if candidate.Name == "Playwright CLI" {
+			dep = candidate
+			break
+		}
+	}
+	if dep.Command != "playwright-cli" || dep.Brew != "playwright-cli" {
+		t.Fatalf("Playwright CLI dependency = %#v, want command/brew playwright-cli", dep)
+	}
+}
+
+func TestRepositoryManifestIncludesPlaywrightCLISkillProvisioner(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var skills *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool == "skills" && prov.Spec.Package == "microsoft/playwright-cli" {
+			skills = prov
+		}
+	}
+
+	if skills == nil {
+		t.Fatal("repository manifest missing skills provisioner for microsoft/playwright-cli")
+	}
+	if !hasString(skills.Tags, "web") {
+		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
+	}
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	}
+	if !sameStrings(skills.Spec.Skills, []string{"playwright-cli"}) {
+		t.Errorf("skills provisioner skills = %#v, want [playwright-cli]", skills.Spec.Skills)
+	}
+	if !skills.Spec.Global || !skills.Spec.Copy {
+		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
+	}
+	if !hasDependency(skills.Dependencies, "npx") {
+		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
+	}
+}
+
 func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
