@@ -55,9 +55,10 @@ type Provisioner struct {
 // tool; the tool owns how they render into agent config. The scalar/list flags
 // map 1:1 to gentle-ai's install/uninstall flags. The Claude fields (Marketplace, Plugin,
 // From) describe a single idempotent `claude` invocation, the codex MCP fields
-// (MCP, Command, Env) a single `codex mcp add` invocation, and Package drives
-// one `npx --yes skills@1.5.12 add` invocation. The dialects are mutually exclusive: a spec
-// speaks exactly one of them.
+// (MCP, Command, Env) a single `codex mcp add` invocation, Package drives
+// one `npx --yes skills@1.5.12 add` invocation, and the codegraph dialect reuses
+// Agents, Scope, and Yes to render a fixed bootstrap-and-install script. The
+// dialects are mutually exclusive: a spec speaks exactly one of them.
 type ProvisionerSpec struct {
 	Action     string   `yaml:"action,omitempty"`
 	Scope      string   `yaml:"scope,omitempty"`
@@ -255,7 +256,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of claude, codex, gentle-ai, skills", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of claude, codegraph, codex, gentle-ai, skills", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -278,6 +279,10 @@ func (m Manifest) Validate() error {
 			}
 		case "codex":
 			if err := validateCodexSpec(prov.Spec, i); err != nil {
+				return err
+			}
+		case "codegraph":
+			if err := validateCodeGraphSpec(prov.Spec, i); err != nil {
 				return err
 			}
 		case "skills":
@@ -461,6 +466,62 @@ func validateCodexSpec(s ProvisionerSpec, i int) error {
 	return nil
 }
 
+// validateCodeGraphSpec enforces the CodeGraph installer contract: it drives one
+// non-interactive install through a fixed shell script so dots can bootstrap the
+// codegraph binary when it is absent, then wire the selected agents to
+// `codegraph serve --mcp`.
+func validateCodeGraphSpec(s ProvisionerSpec, i int) error {
+	if s.usesClaudeFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the codegraph tool", i)
+	}
+	if s.usesMCPFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the codegraph tool", i)
+	}
+	if s.usesSkillsFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the codegraph tool", i)
+	}
+	if strings.TrimSpace(s.Action) != "" ||
+		strings.TrimSpace(s.Channel) != "" ||
+		strings.TrimSpace(s.Persona) != "" ||
+		strings.TrimSpace(s.Preset) != "" ||
+		strings.TrimSpace(s.SDDMode) != "" ||
+		hasNonEmptyString(s.Components) ||
+		hasNonEmptyString(s.Skills) {
+		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai fields (action, channel, persona, preset, sdd-mode, components, skills) for the codegraph tool", i)
+	}
+	if !hasNonEmptyString(s.Agents) {
+		return fmt.Errorf("provisioners[%d].spec.agents is required for the codegraph tool", i)
+	}
+	if !s.Yes {
+		return fmt.Errorf("provisioners[%d].spec.yes must be true for the codegraph tool", i)
+	}
+	if j, ok := indexOfEmptyString(s.Agents); ok {
+		return fmt.Errorf("provisioners[%d].spec.agents[%d] must not be empty", i, j)
+	}
+	if err := validateSkillsDataValues(s.Agents, fmt.Sprintf("provisioners[%d].spec.agents", i)); err != nil {
+		return err
+	}
+	for j, agent := range s.Agents {
+		if !allowedCodeGraphAgent(strings.TrimSpace(agent)) {
+			return fmt.Errorf("provisioners[%d].spec.agents[%d] must be one of antigravity, claude, codex, opencode for the codegraph tool", i, j)
+		}
+	}
+	scope := strings.TrimSpace(s.Scope)
+	if scope != "" && scope != "global" && scope != "local" {
+		return fmt.Errorf("provisioners[%d].spec.scope must be one of global, local for the codegraph tool", i)
+	}
+	return nil
+}
+
+func allowedCodeGraphAgent(agent string) bool {
+	switch agent {
+	case "antigravity", "claude", "codex", "opencode":
+		return true
+	default:
+		return false
+	}
+}
+
 // validateSkillsSpec enforces the skills.sh provisioner contract: it drives one
 // exact `npx --yes skills@1.5.12 add <package>` invocation with optional target agents and
 // selected skill names. It does not accept gentle-ai scalar/action fields,
@@ -625,11 +686,11 @@ func allowedOS(osName string) bool {
 }
 
 // allowedProvisionerTool enforces the provisioner allowlist. dots is never a
-// generic command runner: gentle-ai, claude, codex, and skills are the only
-// accepted provisioner tools, each driven through a fixed set of subcommands.
+// generic command runner: gentle-ai, claude, codex, codegraph, and skills are the
+// only accepted provisioner tools, each driven through a fixed set of subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "gentle-ai", "claude", "codex", "skills":
+	case "gentle-ai", "claude", "codex", "codegraph", "skills":
 		return true
 	default:
 		return false

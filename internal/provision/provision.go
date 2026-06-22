@@ -13,6 +13,12 @@ import (
 )
 
 const skillsCLIPackage = "skills@1.5.12"
+const codeGraphInstallScript = `set -eu
+if ! command -v codegraph >/dev/null 2>&1; then
+	curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+codegraph install --target "$1" --location "$2" --yes`
 
 // RenderCommand resolves a Provisioner into the exact executable and argv that
 // would run it. It is PURE: it performs no I/O and never invokes the tool, so it
@@ -22,6 +28,8 @@ func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 	switch p.Tool {
 	case "claude":
 		return p.Tool, renderClaudeArgs(p.Spec)
+	case "codegraph":
+		return "sh", renderCodeGraphArgs(p.Spec)
 	case "codex":
 		return p.Tool, renderCodexArgs(p.Spec)
 	case "skills":
@@ -29,6 +37,18 @@ func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 	default:
 		return p.Tool, renderGentleAIArgs(p.Spec)
 	}
+}
+
+// renderCodeGraphArgs renders one non-interactive CodeGraph installer run. The
+// fixed shell script follows CodeGraph's official bootstrap path when the binary
+// is absent, then runs the installed CLI to wire MCP config for selected agents.
+func renderCodeGraphArgs(spec manifest.ProvisionerSpec) []string {
+	target := joinNonEmpty(spec.Agents)
+	location := strings.TrimSpace(spec.Scope)
+	if location == "" {
+		location = "global"
+	}
+	return []string{"-c", codeGraphInstallScript, "codegraph-install", target, location}
 }
 
 // renderGentleAIArgs renders the selected gentle-ai action plus its flags in a

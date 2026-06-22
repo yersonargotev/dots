@@ -156,15 +156,39 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile, home stri
 	if err != nil {
 		return err
 	}
+	if agents := selectedCodeGraphAgents(selected); len(agents) > 0 {
+		return codexconfig.EnsureCodeGraphMode(home, agents...)
+	}
 	if !selectedProvisionersAffectCodex(selected) {
 		return nil
 	}
 	return codexconfig.EnsureCodeGraphMode(home)
 }
 
+func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
+	var agents []string
+	seen := map[string]bool{}
+	for _, prov := range selected {
+		if prov.Tool != "codegraph" {
+			continue
+		}
+		for _, agent := range prov.Spec.Agents {
+			if seen[agent] {
+				continue
+			}
+			seen[agent] = true
+			agents = append(agents, agent)
+		}
+	}
+	return agents
+}
+
 func selectedProvisionersAffectCodex(selected []manifest.Provisioner) bool {
 	for _, prov := range selected {
 		if prov.Tool == "codex" {
+			return true
+		}
+		if prov.Tool == "codegraph" && provisionerAgentsInclude(prov, "codex") {
 			return true
 		}
 		if prov.Tool == "gentle-ai" && provisionerAgentsInclude(prov, "codex") {

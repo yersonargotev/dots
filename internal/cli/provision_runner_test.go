@@ -188,6 +188,70 @@ printf '%s\n' "$*" > "$HOME/skills-args"
 	}
 }
 
+func TestRunProvisionersWritesCodeGraphInstructionsForSelectedAgents(t *testing.T) {
+	home := t.TempDir()
+	stubDir := t.TempDir()
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	script := `#!/bin/sh
+if [ "$1" != "install" ]; then
+  exit 9
+fi
+printf '%s\n' "$*" > "$HOME/codegraph-args"
+`
+	if err := os.WriteFile(filepath.Join(stubDir, "codegraph"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write codegraph stub: %v", err)
+	}
+
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {Tags: []string{"agents"}},
+		},
+		Provisioners: []manifest.Provisioner{
+			{
+				Tool: "codegraph", Tags: []string{"agents"},
+				Spec: manifest.ProvisionerSpec{
+					Scope:  "global",
+					Agents: []string{"codex", "claude", "antigravity", "opencode"},
+					Yes:    true,
+				},
+			},
+		},
+	}
+
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	if err := runProvisioners(cmd, m, "default", home); err != nil {
+		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	wantArgs := "install --target codex,claude,antigravity,opencode --location global --yes\n"
+	gotArgs, err := os.ReadFile(filepath.Join(home, "codegraph-args"))
+	if err != nil {
+		t.Fatalf("codegraph provisioner did not write args into sandbox home %q: %v", home, err)
+	}
+	if string(gotArgs) != wantArgs {
+		t.Fatalf("codegraph args = %q, want %q", gotArgs, wantArgs)
+	}
+	for _, path := range []string{
+		filepath.Join(home, ".codex", "AGENTS.md"),
+		filepath.Join(home, ".claude", "CLAUDE.md"),
+		filepath.Join(home, ".gemini", "GEMINI.md"),
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("missing CodeGraph instructions %s: %v", path, err)
+		}
+		if !strings.Contains(string(got), "Do NOT use CodeGraph as proof for runtime behavior.") {
+			t.Fatalf("%s missing runtime-verification guidance\ncontent:\n%s", path, got)
+		}
+	}
+}
+
 func TestSelectedProvisionersAffectCodex(t *testing.T) {
 	tests := []struct {
 		name     string
