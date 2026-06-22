@@ -1,9 +1,10 @@
-// Package codexconfig manages dots-owned overlays inside Codex configuration
-// files without taking ownership of the whole file.
+// Package codexconfig manages dots-owned CodeGraph overlays inside agent
+// instruction files without taking ownership of the whole file.
 package codexconfig
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -18,34 +19,66 @@ const (
 )
 
 const codeGraphInstructions = "CodeGraph Mode: enabled\n\n" +
-	"If `.codegraph/` exists in the project, use CodeGraph first for architecture, trace, impact, and symbol-discovery questions instead of re-deriving the same answer with grep/read loops.\n\n" +
-	"Use CodeGraph by intent:\n\n" +
-	"- `codegraph_context`: map a feature or area first.\n" +
-	"- `codegraph_trace`: trace how one symbol reaches another.\n" +
-	"- `codegraph_explore`: inspect related symbols in one bounded call.\n" +
+	"If `.codegraph/` exists in the project, use CodeGraph first for architecture questions, symbol discovery, call flow, impact analysis, and locating relevant files before edits.\n\n" +
+	"Prefer:\n\n" +
+	"- `codegraph_explore` for understanding an area or flow.\n" +
+	"- `codegraph_node` for one symbol or file.\n" +
 	"- `codegraph_search`: find a symbol by name.\n" +
-	"- `codegraph_callers` / `codegraph_callees`: walk call flow.\n" +
-	"- `codegraph_impact`: check affected code before edits.\n" +
-	"- `codegraph_node`: inspect one symbol.\n" +
-	"- `codegraph_files`: inspect indexed file structure.\n" +
-	"- `codegraph_status`: verify index health.\n\n" +
-	"Treat CodeGraph-returned source as already read. Use raw file reads only to verify details CodeGraph did not cover.\n\n" +
+	"- `codegraph_callers` for caller impact.\n\n" +
+	"Treat CodeGraph-returned source as already read.\n\n" +
+	"Do NOT use CodeGraph as proof for runtime behavior. Always verify CLI behavior, installers, filesystem writes, `$HOME` and config paths, network tools, GitHub, and CI with real commands or tests.\n\n" +
 	"If `.codegraph/` is missing, ask before running `codegraph init -i`."
 
 // EnsureCodeGraphMode inserts or updates the dots-owned CodeGraph instruction
-// block in <home>/.codex/AGENTS.md. It migrates the old manual gentle-ai block
+// block in the selected agents' instruction files. With no agents it preserves
+// the historical Codex-only behavior. It migrates the old manual gentle-ai block
 // to dots markers while preserving non-managed content.
-func EnsureCodeGraphMode(home string) error {
-	path := filepath.Join(home, ".codex", "AGENTS.md")
+func EnsureCodeGraphMode(home string, agents ...string) error {
+	for _, path := range codeGraphInstructionPaths(home, agents) {
+		if err := upsertCodeGraphMode(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func codeGraphInstructionPaths(home string, agents []string) []string {
+	if len(agents) == 0 {
+		return []string{filepath.Join(home, ".codex", "AGENTS.md")}
+	}
+
+	var paths []string
+	seen := map[string]bool{}
+	add := func(path string) {
+		if seen[path] {
+			return
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+	for _, agent := range agents {
+		switch agent {
+		case "codex":
+			add(filepath.Join(home, ".codex", "AGENTS.md"))
+		case "claude", "claude-code":
+			add(filepath.Join(home, ".claude", "CLAUDE.md"))
+		case "antigravity":
+			add(filepath.Join(home, ".gemini", "GEMINI.md"))
+		}
+	}
+	return paths
+}
+
+func upsertCodeGraphMode(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+		return fmt.Errorf("create agent instructions directory: %w", err)
 	}
 
 	mode := os.FileMode(0o600)
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return err
+			return fmt.Errorf("read agent instructions %s: %w", path, err)
 		}
 	} else if info, statErr := os.Stat(path); statErr == nil {
 		mode = info.Mode().Perm()
@@ -53,7 +86,10 @@ func EnsureCodeGraphMode(home string) error {
 
 	updated, err := textblock.Upsert(string(content), textblock.Markers{Start: codeGraphStart, End: codeGraphEnd}, codeGraphInstructions, textblock.Markers{Start: legacyCodeGraphStart, End: legacyCodeGraphEnd})
 	if err != nil {
-		return err
+		return fmt.Errorf("update agent instructions %s: %w", path, err)
 	}
-	return os.WriteFile(path, []byte(updated), mode)
+	if err := os.WriteFile(path, []byte(updated), mode); err != nil {
+		return fmt.Errorf("write agent instructions %s: %w", path, err)
+	}
+	return nil
 }

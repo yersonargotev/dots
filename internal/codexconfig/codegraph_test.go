@@ -15,7 +15,27 @@ func TestEnsureCodeGraphModeCreatesAgentsFileWhenMissing(t *testing.T) {
 	}
 
 	got := readCodexAgents(t, home)
-	assertCodeGraphBlock(t, got)
+	assertCodeGraphBlock(t, filepath.Join(home, ".codex", "AGENTS.md"), got)
+}
+
+func TestEnsureCodeGraphModeCreatesSelectedAgentInstructionFiles(t *testing.T) {
+	home := t.TempDir()
+
+	if err := EnsureCodeGraphMode(home, "codex", "claude", "antigravity", "opencode"); err != nil {
+		t.Fatalf("EnsureCodeGraphMode() error = %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(home, ".codex", "AGENTS.md"),
+		filepath.Join(home, ".claude", "CLAUDE.md"),
+		filepath.Join(home, ".gemini", "GEMINI.md"),
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read generated instructions %s: %v", path, err)
+		}
+		assertCodeGraphBlock(t, path, string(got))
+	}
 }
 
 func TestEnsureCodeGraphModePreservesExistingContent(t *testing.T) {
@@ -37,7 +57,7 @@ func TestEnsureCodeGraphModePreservesExistingContent(t *testing.T) {
 	if !strings.Contains(got, before) {
 		t.Fatalf("AGENTS.md did not preserve existing content %q\ncontent:\n%s", before, got)
 	}
-	assertCodeGraphBlock(t, got)
+	assertCodeGraphBlock(t, path, got)
 }
 
 func TestEnsureCodeGraphModeUpdatesExistingDotsBlockIdempotently(t *testing.T) {
@@ -58,7 +78,7 @@ func TestEnsureCodeGraphModeUpdatesExistingDotsBlockIdempotently(t *testing.T) {
 	}
 
 	got := readCodexAgents(t, home)
-	assertCodeGraphBlock(t, got)
+	assertCodeGraphBlock(t, filepath.Join(home, ".codex", "AGENTS.md"), got)
 	if strings.Contains(got, "stale instructions") {
 		t.Fatalf("AGENTS.md kept stale managed block content\ncontent:\n%s", got)
 	}
@@ -86,7 +106,7 @@ func TestEnsureCodeGraphModeMigratesLegacyGentleAIBlock(t *testing.T) {
 	}
 
 	got := readCodexAgents(t, home)
-	assertCodeGraphBlock(t, got)
+	assertCodeGraphBlock(t, filepath.Join(home, ".codex", "AGENTS.md"), got)
 	for _, legacy := range []string{legacyCodeGraphStart, legacyCodeGraphEnd, "manual codegraph instructions"} {
 		if strings.Contains(got, legacy) {
 			t.Fatalf("AGENTS.md kept legacy content %q\ncontent:\n%s", legacy, got)
@@ -106,19 +126,25 @@ func readCodexAgents(t *testing.T, home string) string {
 	return string(got)
 }
 
-func assertCodeGraphBlock(t *testing.T, content string) {
+func assertCodeGraphBlock(t *testing.T, path, content string) {
 	t.Helper()
 	for _, want := range []string{
 		codeGraphStart,
 		"CodeGraph Mode: enabled",
 		"If `.codegraph/` exists in the project, use CodeGraph first",
-		"`codegraph_context`: map a feature or area first.",
+		"`codegraph_explore` for understanding an area or flow.",
 		"Treat CodeGraph-returned source as already read.",
+		"Do NOT use CodeGraph as proof for runtime behavior.",
 		"If `.codegraph/` is missing, ask before running `codegraph init -i`.",
 		codeGraphEnd,
 	} {
 		if !strings.Contains(content, want) {
-			t.Fatalf("AGENTS.md missing %q\ncontent:\n%s", want, content)
+			t.Fatalf("%s missing %q\ncontent:\n%s", path, want, content)
+		}
+	}
+	for _, ghostTool := range []string{"codegraph_context", "codegraph_trace", "codegraph_files", "codegraph_status"} {
+		if strings.Contains(content, ghostTool) {
+			t.Fatalf("%s kept unsupported tool %q\ncontent:\n%s", path, ghostTool, content)
 		}
 	}
 }
