@@ -28,11 +28,13 @@ Unknown YAML fields are rejected during manifest loading.
 ## Profiles
 
 A Profile is selected by commands such as `dots plan`, `dots install`,
-`dots status`, and `dots deps check`.
+`dots status`, and `dots deps check`. Commands that expose `--tag` can add
+optional capability tags on top of the selected Profile without creating another
+Profile.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
-| `tags` | Yes | Non-empty strings. Entries and Provisioners are selected when at least one tag matches. |
+| `tags` | Yes | Non-empty strings. Entries and Provisioners are selected when at least one tag matches. Optional CLI `--tag` values join this set at runtime. |
 | `dependencies` | No | Profile-level Dependencies, using the same dependency fields as entries. |
 
 Current Profiles:
@@ -88,6 +90,7 @@ Current Managed Entries:
 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `core` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `core` | `darwin`, `linux` | None |
+| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/opencode/mcp.json` | `~/.config/opencode-dots.json` | `symlink` | `web` | `darwin`, `linux` | `opencode` |
 
 ## Dependencies
@@ -239,15 +242,16 @@ Current Provisioners:
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
-| `codegraph` | `agents` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. | `curl` |
+| `codegraph` | `codegraph` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. Select with `--tag codegraph`. | `curl` |
 
 ## Selection rules
 
-1. The chosen Profile provides tags.
-2. A Managed Entry or Provisioner is selected when any of its tags matches the Profile tags.
-3. If `os` is empty, the item matches all supported operating systems.
-4. If `os` is set, the item only matches the current OS (`darwin` or `linux`).
-5. Selected Managed Entries are installed before selected Provisioners run.
+1. The chosen Profile provides the base tags.
+2. Each repeated `--tag` adds an optional tag to that selection. Duplicate tags are ignored.
+3. A Managed Entry or Provisioner is selected when any of its tags matches the effective tag set.
+4. If `os` is empty, the item matches all supported operating systems.
+5. If `os` is set, the item only matches the current OS (`darwin` or `linux`).
+6. Selected Managed Entries are installed before selected Provisioners run.
 
 ## Related docs
 
