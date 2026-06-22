@@ -284,6 +284,31 @@ func TestPlanResolvesAntigravityGentleAIProvisioner(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesVSCodeCopilotGentleAIProvisioner(t *testing.T) {
+	prov := manifest.Provisioner{
+		Tool: "gentle-ai", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"vscode-copilot"}},
+	}
+	m := manifestWithProvisioners(prov)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
+	}
+
+	step := p.Steps[0]
+	if !reflect.DeepEqual(step.Args, []string{"install", "--scope", "global", "--agents", "vscode-copilot"}) {
+		t.Fatalf("vscode-copilot gentle-ai args = %#v", step.Args)
+	}
+	wantTargets := []string{"~/Library/Application Support/Code/User", "~/.config/Code/User", "~/.gentle-ai"}
+	if !reflect.DeepEqual(step.Targets, wantTargets) {
+		t.Fatalf("vscode-copilot targets = %#v, want %#v", step.Targets, wantTargets)
+	}
+}
+
 func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 	skills := manifest.Provisioner{
 		Tool: "skills", Tags: []string{"core"},

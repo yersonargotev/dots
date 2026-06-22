@@ -110,7 +110,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 // manages, used as the advisory blast radius in the plan. gentle-ai owns its own
 // state under ~/.gentle-ai plus the selected agent-specific configuration roots:
 // ~/.claude for claude-code, ~/.codex for codex, ~/.config/opencode for opencode,
-// ~/.gemini for antigravity, and VS Code user config for vscode-copilot. claude writes marketplace and plugin state under
+// ~/.gemini for antigravity, and both macOS/Linux VS Code user config roots for vscode-copilot. claude writes marketplace and plugin state under
 // ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
 // servers in ~/.codex/config.toml, under ~/.codex. codegraph writes its own
 // installed versions and shim under ~/.codegraph and ~/.local/bin, plus MCP
@@ -136,7 +136,7 @@ func managedRoots(prov manifest.Provisioner) []string {
 			roots = append(roots, "~/.gemini")
 		}
 		if includes(prov.Spec.Agents, "vscode-copilot") {
-			roots = append(roots, "~/Library/Application Support/Code/User")
+			roots = append(roots, "~/Library/Application Support/Code/User", "~/.config/Code/User")
 		}
 		return append(roots, "~/.gentle-ai")
 	case "claude":
