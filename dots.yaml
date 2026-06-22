@@ -302,6 +302,15 @@ entries:
     os:
       - darwin
       - linux
+  - source: configs/antigravity/settings.json
+    target: ~/.gemini/antigravity-cli/settings.json
+    strategy: copy
+    ownership: json-subset
+    tags:
+      - agents
+    os:
+      - darwin
+      - linux
   # OpenCode has no MCP install CLI and its global opencode.json is co-owned by
   # gentle-ai, so dots owns a separate fragment that OpenCode merges (not
   # replaces) via the OPENCODE_CONFIG env var set in zshenv. This keeps the
@@ -562,7 +571,7 @@ provisioners:
         command: codex
   - tool: codegraph
     tags:
-      - agents
+      - codegraph
     os:
       - darwin
       - linux

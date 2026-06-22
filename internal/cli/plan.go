@@ -12,6 +12,7 @@ func newPlanCommand() *cobra.Command {
 	var (
 		file       string
 		profile    string
+		extraTags  []string
 		sourceRoot string
 		home       string
 		stateRoot  string
@@ -45,6 +46,7 @@ func newPlanCommand() *cobra.Command {
 			// to the host so the dry-run reflects this machine.
 			p, err := plan.Build(*m, plan.Options{
 				Profile:    profile,
+				ExtraTags:  extraTags,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
@@ -63,6 +65,7 @@ func newPlanCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to plan")
 	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to plan")
+	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to plan against (default: the current user's home); use a sandbox path to preview without touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")

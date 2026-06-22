@@ -47,7 +47,7 @@ Non-interactive runs (`--yes`) default every conflict to `skip`, so an unattende
 | Flag | Purpose |
 |------|---------|
 | `--dry-run` | Fetch and report the available fast-forward and the Install Plan without fast-forwarding the working tree or installing files. |
-| `--file`, `--profile` | Select the manifest and profile to install after updating. |
+| `--file`, `--profile`, `--tag` | Select the manifest, base profile, and optional capability tags to install after updating. Repeat `--tag` to include multiple opt-in tags. |
 | `--source-root` | Installed Repository to update (default `~/.local/share/dots`). |
 | `--home` | Target home directory; use a sandbox path to avoid touching real config. |
 | `--state-root` | State directory for Installation Metadata and Backup Sets. |
@@ -69,7 +69,7 @@ Because no fast-forward is applied in a dry run, the rendered plan reflects the 
 
 ## Profiles and provisioners
 
-Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects no provisioners. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai setup/cleanup provisioners. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
+Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects no provisioners. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai setup/cleanup provisioners and agent settings baselines. CodeGraph is independent and selected with `--tag codegraph`. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
 
 The gentle-ai provisioner can model cleanup before install by using separate entries in manifest order. Missing `action` still defaults to `install`; `yes` is only valid for `uninstall` because it confirms a cleanup action:
 

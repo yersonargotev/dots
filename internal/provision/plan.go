@@ -10,8 +10,9 @@ import (
 
 // Options carries the resolved inputs needed to select and plan Provisioners.
 type Options struct {
-	Profile string
-	OS      string
+	Profile   string
+	ExtraTags []string
+	OS        string
 }
 
 // Step is a single planned Provisioner invocation: the exact resolved command
@@ -35,7 +36,7 @@ type Plan struct {
 // intersect the Profile's tags) and pass the OS filter, preserving manifest
 // order. It mirrors the Entry selection used by deps, plan, and status.
 func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
-	indices, err := selectedIndices(m, opts.Profile, opts.OS)
+	indices, err := selectedIndices(m, opts.Profile, opts.OS, opts.ExtraTags)
 	if err != nil {
 		return nil, err
 	}
@@ -54,15 +55,17 @@ func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
 // provisioner identity across profiles (which provisioner, not just how many)
 // without depending on struct equality, and keeps Select and SkippedProvisioners
 // filtering through one tag/OS rule.
-func selectedIndices(m manifest.Manifest, profileName, os string) (map[int]bool, error) {
+func selectedIndices(m manifest.Manifest, profileName, os string, extraTags []string) (map[int]bool, error) {
 	profile, ok := m.Profiles[profileName]
 	if !ok {
 		return nil, fmt.Errorf("profile %q not found", profileName)
 	}
 
+	tags := manifest.SelectionTags(profile, extraTags)
+
 	indices := make(map[int]bool)
 	for i, prov := range m.Provisioners {
-		if manifest.SharesTag(prov.Tags, profile.Tags) && manifest.MatchesOS(prov.OS, os) {
+		if manifest.SharesTag(prov.Tags, tags) && manifest.MatchesOS(prov.OS, os) {
 			indices[i] = true
 		}
 	}
@@ -77,7 +80,7 @@ func selectedIndices(m manifest.Manifest, profileName, os string) (map[int]bool,
 // scoping used by Select.
 func SkippedProvisioners(m manifest.Manifest, opts Options) (profilesel.Hint, bool, error) {
 	return profilesel.Skipped(m.Profiles, opts.Profile, opts.OS, func(name, os string) (map[int]bool, error) {
-		return selectedIndices(m, name, os)
+		return selectedIndices(m, name, os, nil)
 	})
 }
 

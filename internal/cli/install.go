@@ -23,6 +23,7 @@ func newInstallCommand() *cobra.Command {
 	var (
 		file       string
 		profile    string
+		extraTags  []string
 		sourceRoot string
 		home       string
 		stateRoot  string
@@ -55,6 +56,7 @@ func newInstallCommand() *cobra.Command {
 
 			p, err := plan.Build(*m, plan.Options{
 				Profile:    profile,
+				ExtraTags:  extraTags,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
@@ -64,7 +66,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
-			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
+			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS})
 			if err != nil {
 				return err
 			}
@@ -102,7 +104,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			if err := runProvisioners(cmd, *m, profile, paths.Home); err != nil {
+			if err := runProvisioners(cmd, *m, profile, extraTags, paths.Home); err != nil {
 				return err
 			}
 			if wantsJSON(cmd) {
@@ -114,6 +116,7 @@ func newInstallCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to install")
 	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to install")
+	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")
@@ -129,7 +132,7 @@ func newInstallCommand() *cobra.Command {
 // temporary home. Apply stops at the first failing provisioner and returns the
 // error, which the caller surfaces; the tool's own stdout/stderr are streamed
 // through so its progress is visible.
-func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile, home string) error {
+func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, extraTags []string, home string) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -145,14 +148,14 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile, home stri
 		stdout: stdout,
 		stderr: cmd.ErrOrStderr(),
 	}
-	report, err := provision.Apply(m, provision.Options{Profile: profile, OS: runtime.GOOS}, lookupCommand, fontInstalled(runtime.GOOS, home), runner)
+	report, err := provision.Apply(m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS}, lookupCommand, fontInstalled(runtime.GOOS, home), runner)
 	if !wantsJSON(cmd) {
 		renderProvisionReport(cmd.OutOrStdout(), report)
 	}
 	if err != nil {
 		return err
 	}
-	selected, err := provision.Select(m, provision.Options{Profile: profile, OS: runtime.GOOS})
+	selected, err := provision.Select(m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS})
 	if err != nil {
 		return err
 	}

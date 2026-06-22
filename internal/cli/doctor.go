@@ -14,6 +14,7 @@ func newDoctorCommand() *cobra.Command {
 	var (
 		file       string
 		profile    string
+		extraTags  []string
 		sourceRoot string
 		home       string
 		stateRoot  string
@@ -53,6 +54,7 @@ func newDoctorCommand() *cobra.Command {
 
 			report, err := doctor.Build(*m, meta, doctor.Options{
 				Profile:    profile,
+				ExtraTags:  extraTags,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
@@ -71,6 +73,7 @@ func newDoctorCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
 	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
+	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to inspect (default: the current user's home); use a sandbox path to inspect without touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")

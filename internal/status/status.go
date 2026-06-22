@@ -71,6 +71,7 @@ func (r Report) HasFindings() bool {
 // Options carries the resolved inputs needed to evaluate status.
 type Options struct {
 	Profile    string
+	ExtraTags  []string
 	OS         string
 	SourceRoot string
 	Home       string
@@ -84,9 +85,11 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 		return Report{}, fmt.Errorf("profile %q not found", opts.Profile)
 	}
 
+	tags := manifest.SelectionTags(profile, opts.ExtraTags)
+
 	report := Report{Profile: opts.Profile}
 	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, profile.Tags) {
+		if !manifest.SharesTag(entry.Tags, tags) {
 			continue
 		}
 

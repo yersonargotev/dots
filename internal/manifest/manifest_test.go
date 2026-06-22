@@ -882,8 +882,11 @@ func TestRepositoryManifestIncludesCodeGraphProvisioner(t *testing.T) {
 	if codegraph == nil {
 		t.Fatal("repository manifest missing codegraph provisioner")
 	}
-	if !hasString(codegraph.Tags, "agents") {
-		t.Errorf("codegraph provisioner %#v missing agents tag", codegraph.Spec)
+	if !hasString(codegraph.Tags, "codegraph") {
+		t.Errorf("codegraph provisioner %#v missing codegraph tag", codegraph.Spec)
+	}
+	if hasString(codegraph.Tags, "agents") {
+		t.Errorf("codegraph provisioner tags = %#v, want independent from agents tag", codegraph.Tags)
 	}
 	if !sameStrings(codegraph.OS, []string{"darwin", "linux"}) {
 		t.Errorf("codegraph provisioner OS = %#v, want [darwin linux]", codegraph.OS)

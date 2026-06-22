@@ -59,6 +59,7 @@ func (p Plan) HasFindings() bool {
 // Options carries the resolved inputs needed to compute a Plan.
 type Options struct {
 	Profile    string
+	ExtraTags  []string
 	OS         string
 	SourceRoot string
 	Home       string
@@ -75,9 +76,11 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		return Plan{}, fmt.Errorf("profile %q not found", opts.Profile)
 	}
 
+	tags := manifest.SelectionTags(profile, opts.ExtraTags)
+
 	plan := Plan{Profile: opts.Profile}
 	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, profile.Tags) {
+		if !manifest.SharesTag(entry.Tags, tags) {
 			continue
 		}
 		if !manifest.MatchesOS(entry.OS, opts.OS) {

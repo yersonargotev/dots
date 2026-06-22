@@ -23,6 +23,7 @@ import (
 // Options carries the resolved inputs needed to build read-only diagnostics.
 type Options struct {
 	Profile    string
+	ExtraTags  []string
 	OS         string
 	SourceRoot string
 	Home       string
@@ -89,7 +90,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 		Platform: Platform{Supported: supportedOS(opts.OS), OS: opts.OS},
 	}
 
-	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, OS: opts.OS}, look, fontLook, opts.ToolRunner)
+	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, ExtraTags: opts.ExtraTags, OS: opts.OS}, look, fontLook, opts.ToolRunner)
 	if err != nil {
 		return Report{}, err
 	}
@@ -97,6 +98,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 
 	statusReport, err := status.Build(m, meta, status.Options{
 		Profile:    opts.Profile,
+		ExtraTags:  opts.ExtraTags,
 		OS:         opts.OS,
 		SourceRoot: opts.SourceRoot,
 		Home:       opts.Home,
@@ -106,7 +108,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 	}
 	report.Configuration = statusReport
 
-	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, OS: opts.OS}, look, fontLook)
+	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, ExtraTags: opts.ExtraTags, OS: opts.OS}, look, fontLook)
 	if err != nil {
 		return Report{}, err
 	}
@@ -129,10 +131,12 @@ func ScanSecrets(m manifest.Manifest, opts Options) (SecretReport, error) {
 		return SecretReport{}, fmt.Errorf("profile %q not found", opts.Profile)
 	}
 
+	tags := manifest.SelectionTags(profile, opts.ExtraTags)
+
 	var report SecretReport
 	seen := map[string]bool{}
 	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, profile.Tags) || !manifest.MatchesOS(entry.OS, opts.OS) || seen[entry.Source] {
+		if !manifest.SharesTag(entry.Tags, tags) || !manifest.MatchesOS(entry.OS, opts.OS) || seen[entry.Source] {
 			continue
 		}
 		seen[entry.Source] = true

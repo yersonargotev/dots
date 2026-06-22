@@ -607,6 +607,26 @@ func containsControl(value string) bool {
 // to a profile when at least one of its tags matches one of the profile's tags.
 // Centralizing it here keeps plan, status, deps, doctor, and provision filtering
 // through one rule instead of each carrying its own copy.
+// SelectionTags returns the effective tag set for a profile plus any
+// explicit tags requested by the caller. The profile tags stay first so selected
+// entries and provisioners preserve the manifest's role-oriented baseline while
+// --tag can opt into one-off capabilities without creating feature profiles.
+func SelectionTags(profile Profile, extraTags []string) []string {
+	tags := append([]string(nil), profile.Tags...)
+	seen := make(map[string]bool, len(tags)+len(extraTags))
+	for _, tag := range tags {
+		seen[tag] = true
+	}
+	for _, tag := range extraTags {
+		if seen[tag] {
+			continue
+		}
+		seen[tag] = true
+		tags = append(tags, tag)
+	}
+	return tags
+}
+
 func SharesTag(itemTags, profileTags []string) bool {
 	for _, it := range itemTags {
 		for _, pt := range profileTags {
