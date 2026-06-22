@@ -584,6 +584,24 @@ provisioners:
     dependencies:
       - name: npx
         command: npx
+  - tool: skills
+    tags:
+      - agents
+    spec:
+      package: mattpocock/skills
+      agents:
+        - codex
+        - claude-code
+        - antigravity
+        - opencode
+        - github-copilot
+      skills:
+        - review
+      global: true
+      copy: true
+    dependencies:
+      - name: npx
+        command: npx
   - tool: claude
     tags:
       - web
