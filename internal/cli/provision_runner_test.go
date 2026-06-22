@@ -113,7 +113,7 @@ printf ok > "$HOME/first-attempt"
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
-	err := runProvisioners(cmd, m, "default", home)
+	err := runProvisioners(cmd, m, "default", nil, home)
 	if err == nil {
 		t.Fatal("runProvisioners() error = nil, want second provisioner failure")
 	}
@@ -171,7 +171,7 @@ printf '%s\n' "$*" > "$HOME/skills-args"
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
-	if err := runProvisioners(cmd, m, "default", home); err != nil {
+	if err := runProvisioners(cmd, m, "default", nil, home); err != nil {
 		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
 	}
 
@@ -210,7 +210,7 @@ printf '%s\n' "$*" > "$HOME/codegraph-args"
 		},
 		Provisioners: []manifest.Provisioner{
 			{
-				Tool: "codegraph", Tags: []string{"agents"},
+				Tool: "codegraph", Tags: []string{"codegraph"},
 				Spec: manifest.ProvisionerSpec{
 					Scope:  "global",
 					Agents: []string{"codex", "claude", "antigravity", "opencode"},
@@ -225,7 +225,7 @@ printf '%s\n' "$*" > "$HOME/codegraph-args"
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
-	if err := runProvisioners(cmd, m, "default", home); err != nil {
+	if err := runProvisioners(cmd, m, "default", []string{"codegraph"}, home); err != nil {
 		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
 	}
 

@@ -26,8 +26,9 @@ type CommandRunner func(command string, args ...string) (string, error)
 
 // Options carries the resolved inputs needed to select Dependencies.
 type Options struct {
-	Profile string
-	OS      string
+	Profile   string
+	ExtraTags []string
+	OS        string
 }
 
 // Result is the presence finding for a single declared Dependency.
@@ -178,8 +179,9 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 	}
 
 	addDependencies(profile.Dependencies)
+	tags := manifest.SelectionTags(profile, opts.ExtraTags)
 	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, profile.Tags) {
+		if !manifest.SharesTag(entry.Tags, tags) {
 			continue
 		}
 		if !manifest.MatchesOS(entry.OS, opts.OS) {
@@ -188,7 +190,7 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 		addDependencies(entry.Dependencies)
 	}
 	for _, prov := range m.Provisioners {
-		if !manifest.SharesTag(prov.Tags, profile.Tags) {
+		if !manifest.SharesTag(prov.Tags, tags) {
 			continue
 		}
 		if !manifest.MatchesOS(prov.OS, opts.OS) {

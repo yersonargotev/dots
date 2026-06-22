@@ -17,7 +17,10 @@ import (
 )
 
 func newDepsCommand() *cobra.Command {
-	var profile string
+	var (
+		profile   string
+		extraTags []string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "deps",
@@ -25,13 +28,14 @@ func newDepsCommand() *cobra.Command {
 		Long:  "deps reports which external Dependencies a profile needs, offers OS-aware installation guidance, and can execute missing install actions with explicit confirmation.",
 	}
 	cmd.PersistentFlags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
-	cmd.AddCommand(newDepsCheckCommand(&profile))
-	cmd.AddCommand(newDepsPlanCommand(&profile))
-	cmd.AddCommand(newDepsInstallCommand(&profile))
+	cmd.PersistentFlags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
+	cmd.AddCommand(newDepsCheckCommand(&profile, &extraTags))
+	cmd.AddCommand(newDepsPlanCommand(&profile, &extraTags))
+	cmd.AddCommand(newDepsInstallCommand(&profile, &extraTags))
 	return cmd
 }
 
-func newDepsCheckCommand(profile *string) *cobra.Command {
+func newDepsCheckCommand(profile *string, extraTags *[]string) *cobra.Command {
 	var (
 		file string
 		home string
@@ -51,8 +55,9 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 			}
 
 			report, err := deps.Check(*m, deps.Options{
-				Profile: *profile,
-				OS:      runtime.GOOS,
+				Profile:   *profile,
+				ExtraTags: *extraTags,
+				OS:        runtime.GOOS,
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome))
 			if err != nil {
 				return err
@@ -70,7 +75,7 @@ func newDepsCheckCommand(profile *string) *cobra.Command {
 	return cmd
 }
 
-func newDepsPlanCommand(profile *string) *cobra.Command {
+func newDepsPlanCommand(profile *string, extraTags *[]string) *cobra.Command {
 	var (
 		file string
 		tier string
@@ -97,8 +102,9 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 			}
 
 			report, err := deps.Plan(*m, deps.Options{
-				Profile: *profile,
-				OS:      runtime.GOOS,
+				Profile:   *profile,
+				ExtraTags: *extraTags,
+				OS:        runtime.GOOS,
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
 			if err != nil {
 				return err
@@ -117,7 +123,7 @@ func newDepsPlanCommand(profile *string) *cobra.Command {
 	return cmd
 }
 
-func newDepsInstallCommand(profile *string) *cobra.Command {
+func newDepsInstallCommand(profile *string, extraTags *[]string) *cobra.Command {
 	var (
 		file   string
 		tier   string
@@ -144,8 +150,9 @@ func newDepsInstallCommand(profile *string) *cobra.Command {
 			}
 
 			options := deps.Options{
-				Profile: *profile,
-				OS:      runtime.GOOS,
+				Profile:   *profile,
+				ExtraTags: *extraTags,
+				OS:        runtime.GOOS,
 			}
 
 			report, err := deps.InstallDryRun(*m, options, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)

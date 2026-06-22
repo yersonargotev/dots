@@ -188,12 +188,8 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	if strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code,opencode") {
 		t.Fatalf("provisioner argv = %q, want basic install without opencode", gotArgs)
 	}
-	gotCodeGraphArgs, err := os.ReadFile(filepath.Join(home, "codegraph-args"))
-	if err != nil {
-		t.Fatalf("codegraph provisioner did not run under the sandbox HOME %q: %v", home, err)
-	}
-	if !strings.Contains(string(gotCodeGraphArgs), "install --target codex,claude,antigravity,opencode --location global --yes") {
-		t.Fatalf("codegraph argv = %q, want CodeGraph installer for codex, claude, antigravity, and opencode", gotCodeGraphArgs)
+	if _, err := os.ReadFile(filepath.Join(home, "codegraph-args")); !os.IsNotExist(err) {
+		t.Fatalf("agents profile should not run CodeGraph without --tag codegraph: %v", err)
 	}
 	// And it must never have escaped into the inherited real HOME.
 	if _, err := os.Stat(filepath.Join(realHome, "gentle-ai-args")); err == nil {

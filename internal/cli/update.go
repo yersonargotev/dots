@@ -18,6 +18,7 @@ func newUpdateCommand() *cobra.Command {
 	var (
 		file       string
 		profile    string
+		extraTags  []string
 		sourceRoot string
 		home       string
 		stateRoot  string
@@ -92,6 +93,7 @@ func newUpdateCommand() *cobra.Command {
 
 			p, err := plan.Build(*m, plan.Options{
 				Profile:    profile,
+				ExtraTags:  extraTags,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
@@ -101,7 +103,7 @@ func newUpdateCommand() *cobra.Command {
 				return err
 			}
 
-			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, OS: runtime.GOOS})
+			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS})
 			if err != nil {
 				return err
 			}
@@ -138,7 +140,7 @@ func newUpdateCommand() *cobra.Command {
 			// Mirror install: managed agent configuration stays aligned with the
 			// Source of Truth only if the same provisioners install runs are
 			// re-applied after an update, not just the file plan.
-			if err := runProvisioners(cmd, *m, profile, paths.Home); err != nil {
+			if err := runProvisioners(cmd, *m, profile, extraTags, paths.Home); err != nil {
 				return err
 			}
 			if wantsJSON(cmd) {
@@ -150,6 +152,7 @@ func newUpdateCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to install after updating")
 	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to install after updating")
+	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root to update (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata and Backup Sets (default ~/.local/state/dots)")
