@@ -284,12 +284,37 @@ func TestPlanResolvesAntigravityGentleAIProvisioner(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesVSCodeCopilotGentleAIProvisioner(t *testing.T) {
+	prov := manifest.Provisioner{
+		Tool: "gentle-ai", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"vscode-copilot"}},
+	}
+	m := manifestWithProvisioners(prov)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
+	}
+
+	step := p.Steps[0]
+	if !reflect.DeepEqual(step.Args, []string{"install", "--scope", "global", "--agents", "vscode-copilot"}) {
+		t.Fatalf("vscode-copilot gentle-ai args = %#v", step.Args)
+	}
+	wantTargets := []string{"~/Library/Application Support/Code/User", "~/.config/Code/User", "~/.gentle-ai"}
+	if !reflect.DeepEqual(step.Targets, wantTargets) {
+		t.Fatalf("vscode-copilot targets = %#v, want %#v", step.Targets, wantTargets)
+	}
+}
+
 func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 	skills := manifest.Provisioner{
 		Tool: "skills", Tags: []string{"core"},
 		Spec: manifest.ProvisionerSpec{
 			Package: "vercel-labs/agent-skills",
-			Agents:  []string{"codex", "claude-code", "antigravity"},
+			Agents:  []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"},
 			Skills:  []string{"web-design-guidelines"},
 			Global:  true,
 		},
@@ -313,14 +338,17 @@ func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 		"--agent", "codex",
 		"--agent", "claude-code",
 		"--agent", "antigravity",
+		"--agent", "opencode",
+		"--agent", "github-copilot",
 		"--skill", "web-design-guidelines",
 		"--global",
 	}
 	if !reflect.DeepEqual(step.Args, wantArgs) {
 		t.Fatalf("skills step args = %#v, want %#v", step.Args, wantArgs)
 	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.agents/skills", "~/.claude/skills"}) {
-		t.Fatalf("skills step targets = %#v, want [~/.agents/skills ~/.claude/skills]", step.Targets)
+	wantTargets := []string{"~/.agents/skills", "~/.claude/skills"}
+	if !reflect.DeepEqual(step.Targets, wantTargets) {
+		t.Fatalf("skills step targets = %#v, want %#v", step.Targets, wantTargets)
 	}
 }
 

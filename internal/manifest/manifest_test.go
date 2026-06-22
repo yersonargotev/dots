@@ -550,8 +550,8 @@ func TestRepositoryManifestIncludesPlaywrightCLISkillProvisioner(t *testing.T) {
 	if !hasString(skills.Tags, "web") {
 		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
 	if !sameStrings(skills.Spec.Skills, []string{"playwright-cli"}) {
 		t.Errorf("skills provisioner skills = %#v, want [playwright-cli]", skills.Spec.Skills)
@@ -587,8 +587,8 @@ func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
 	if !hasString(skills.Tags, "web") {
 		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
 	wantSkills := []string{
 		"vercel-react-best-practices",
@@ -630,8 +630,8 @@ func TestRepositoryManifestIncludesAnthropicFrontendDesignSkillProvisioner(t *te
 	if !hasString(skills.Tags, "web") {
 		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
 	if !sameStrings(skills.Spec.Skills, []string{"frontend-design"}) {
 		t.Errorf("skills provisioner skills = %#v, want [frontend-design]", skills.Spec.Skills)
@@ -686,8 +686,8 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 			if !hasString(skills.Tags, "mobile") {
 				t.Errorf("skills provisioner %#v missing mobile tag", skills.Spec)
 			}
-			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-				t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+				t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 			}
 			if !sameStrings(skills.Spec.Skills, pkg.wantSkills) {
 				t.Errorf("skills provisioner skills = %#v, want %#v", skills.Spec.Skills, pkg.wantSkills)
@@ -725,8 +725,8 @@ func TestRepositoryManifestIncludesMattPocockEngineeringSkillsProvisioner(t *tes
 	if !hasString(skills.Tags, "agents") {
 		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
 	wantSkills := []string{"ask-matt", "codebase-design", "diagnosing-bugs", "domain-modeling", "grill-with-docs", "implement", "improve-codebase-architecture", "prototype", "resolving-merge-conflicts", "setup-matt-pocock-skills", "tdd", "to-issues", "to-prd", "triage"}
 	if !sameStrings(skills.Spec.Skills, wantSkills) {
@@ -749,7 +749,7 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	var cleanup, codexInstall, claudeInstall, antigravityInstall *manifest.Provisioner
+	var cleanup, codexInstall, claudeInstall, antigravityInstall, opencodeInstall, copilotInstall *manifest.Provisioner
 	for i := range got.Provisioners {
 		prov := &got.Provisioners[i]
 		if prov.Tool != "gentle-ai" {
@@ -764,6 +764,10 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 			claudeInstall = prov
 		case antigravityInstall == nil && sameStrings(prov.Spec.Agents, []string{"antigravity"}):
 			antigravityInstall = prov
+		case opencodeInstall == nil && sameStrings(prov.Spec.Agents, []string{"opencode"}):
+			opencodeInstall = prov
+		case copilotInstall == nil && sameStrings(prov.Spec.Agents, []string{"vscode-copilot"}):
+			copilotInstall = prov
 		}
 	}
 
@@ -779,7 +783,13 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	if antigravityInstall == nil {
 		t.Fatal("repository manifest missing gentle-ai antigravity basic install provisioner")
 	}
-	for _, prov := range []*manifest.Provisioner{cleanup, codexInstall, claudeInstall, antigravityInstall} {
+	if opencodeInstall == nil {
+		t.Fatal("repository manifest missing gentle-ai opencode basic install provisioner")
+	}
+	if copilotInstall == nil {
+		t.Fatal("repository manifest missing gentle-ai vscode-copilot basic install provisioner")
+	}
+	for _, prov := range []*manifest.Provisioner{cleanup, codexInstall, claudeInstall, antigravityInstall, opencodeInstall, copilotInstall} {
 		if !sameStrings(prov.Tags, []string{"agents"}) {
 			t.Fatalf("gentle-ai provisioner tags = %#v, want [agents] so desktop installs do not apply SDD/gentle-dev agent setup", prov.Tags)
 		}
@@ -787,8 +797,8 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	if cleanup.Spec.Yes != true {
 		t.Fatalf("gentle-ai cleanup yes = %v, want true", cleanup.Spec.Yes)
 	}
-	if !sameStrings(cleanup.Spec.Agents, []string{"codex", "claude-code", "opencode", "antigravity"}) {
-		t.Fatalf("gentle-ai cleanup agents = %#v, want [codex claude-code opencode antigravity]", cleanup.Spec.Agents)
+	if !sameStrings(cleanup.Spec.Agents, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
+		t.Fatalf("gentle-ai cleanup agents = %#v, want [codex claude-code opencode antigravity vscode-copilot]", cleanup.Spec.Agents)
 	}
 	if !sameStrings(cleanup.Spec.Components, []string{"sdd"}) {
 		t.Fatalf("gentle-ai cleanup components = %#v, want [sdd]", cleanup.Spec.Components)
@@ -814,11 +824,23 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	if hasString(antigravityInstall.Spec.Components, "sdd") || hasString(antigravityInstall.Spec.Components, "permissions") {
 		t.Fatalf("gentle-ai antigravity install components = %#v, must not include sdd or permissions", antigravityInstall.Spec.Components)
 	}
+	if !sameStrings(opencodeInstall.Spec.Components, []string{"engram", "context7", "persona"}) {
+		t.Fatalf("gentle-ai opencode install components = %#v, want [engram context7 persona]", opencodeInstall.Spec.Components)
+	}
+	if hasString(opencodeInstall.Spec.Components, "sdd") || hasString(opencodeInstall.Spec.Components, "permissions") {
+		t.Fatalf("gentle-ai opencode install components = %#v, must not include sdd or permissions", opencodeInstall.Spec.Components)
+	}
+	if !sameStrings(copilotInstall.Spec.Components, []string{"engram", "context7", "persona"}) {
+		t.Fatalf("gentle-ai vscode-copilot install components = %#v, want [engram context7 persona]", copilotInstall.Spec.Components)
+	}
+	if hasString(copilotInstall.Spec.Components, "sdd") || hasString(copilotInstall.Spec.Components, "permissions") {
+		t.Fatalf("gentle-ai vscode-copilot install components = %#v, must not include sdd or permissions", copilotInstall.Spec.Components)
+	}
 	for i := range got.Provisioners {
 		if &got.Provisioners[i] == cleanup {
 			break
 		}
-		if &got.Provisioners[i] == codexInstall || &got.Provisioners[i] == claudeInstall || &got.Provisioners[i] == antigravityInstall {
+		if &got.Provisioners[i] == codexInstall || &got.Provisioners[i] == claudeInstall || &got.Provisioners[i] == antigravityInstall || &got.Provisioners[i] == opencodeInstall || &got.Provisioners[i] == copilotInstall {
 			t.Fatal("gentle-ai install provisioner appears before cleanup")
 		}
 	}
