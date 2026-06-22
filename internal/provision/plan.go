@@ -116,7 +116,9 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 // installed versions and shim under ~/.codegraph and ~/.local/bin, plus MCP
 // config and instructions for the selected agents. skills.sh installs global
 // skills under the user-level agent skill directories selected by its --agent
-// flags. Keep these roots aligned with the pinned skills@1.5.12 agent registry.
+// flags. Keep these roots aligned with the pinned skills@1.5.12 agent registry:
+// claude-code writes to ~/.claude/skills; codex, antigravity, opencode, and
+// github-copilot write to ~/.agents/skills.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
 	case "gentle-ai":
@@ -203,16 +205,8 @@ func skillsRoots(agents []string) []string {
 
 func skillsRoot(agent string) string {
 	switch agent {
-	case "antigravity":
-		return "~/.gemini/antigravity/skills"
 	case "claude-code":
 		return "~/.claude/skills"
-	case "codex":
-		return "~/.codex/skills"
-	case "github-copilot":
-		return "~/.copilot/skills"
-	case "opencode":
-		return "~/.config/opencode/skills"
 	default:
 		return "~/.agents/skills"
 	}

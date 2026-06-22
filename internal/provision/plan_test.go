@@ -321,7 +321,7 @@ func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 	if !reflect.DeepEqual(step.Args, wantArgs) {
 		t.Fatalf("skills step args = %#v, want %#v", step.Args, wantArgs)
 	}
-	wantTargets := []string{"~/.codex/skills", "~/.claude/skills", "~/.gemini/antigravity/skills", "~/.config/opencode/skills", "~/.copilot/skills"}
+	wantTargets := []string{"~/.agents/skills", "~/.claude/skills"}
 	if !reflect.DeepEqual(step.Targets, wantTargets) {
 		t.Fatalf("skills step targets = %#v, want %#v", step.Targets, wantTargets)
 	}
