@@ -337,6 +337,7 @@ provisioners:
         - claude-code
         - opencode
         - antigravity
+        - vscode-copilot
       components:
         - sdd
       yes: true
@@ -397,6 +398,50 @@ provisioners:
       preset: custom
       agents:
         - antigravity
+      components:
+        - engram
+        - context7
+        - persona
+    dependencies:
+      - name: gentle-ai
+        command: gentle-ai
+        brew: gentleman-programming/tap/gentle-ai
+      - name: engram
+        command: engram
+        brew: gentleman-programming/tap/engram
+  - tool: gentle-ai
+    tags:
+      - agents
+    spec:
+      scope: global
+      channel: stable
+      persona: neutral
+      preset: custom
+      agents:
+        - opencode
+      components:
+        - engram
+        - context7
+        - persona
+    dependencies:
+      - name: gentle-ai
+        command: gentle-ai
+        brew: gentleman-programming/tap/gentle-ai
+      - name: engram
+        command: engram
+        brew: gentleman-programming/tap/engram
+  - tool: gentle-ai
+    tags:
+      - agents
+    os:
+      - darwin
+    spec:
+      scope: global
+      channel: stable
+      persona: neutral
+      preset: custom
+      agents:
+        - vscode-copilot
       components:
         - engram
         - context7

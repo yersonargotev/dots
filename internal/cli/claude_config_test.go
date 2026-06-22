@@ -167,8 +167,8 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provisioner did not run under the sandbox HOME %q: %v", home, err)
 	}
-	if !strings.Contains(string(gotArgs), "uninstall --agents codex,claude-code,opencode,antigravity --components sdd --yes") {
-		t.Fatalf("provisioner argv = %q, want it to cleanup legacy SDD for codex,claude-code,opencode,antigravity before install", gotArgs)
+	if !strings.Contains(string(gotArgs), "uninstall --agents codex,claude-code,opencode,antigravity,vscode-copilot --components sdd --yes") {
+		t.Fatalf("provisioner argv = %q, want it to cleanup legacy SDD for codex,claude-code,opencode,antigravity,vscode-copilot before install", gotArgs)
 	}
 	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex --components engram,context7,persona") {
 		t.Fatalf("provisioner argv = %q, want codex install without permissions", gotArgs)
@@ -179,14 +179,26 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents antigravity --components engram,context7,persona") {
 		t.Fatalf("provisioner argv = %q, want antigravity install without SDD or permissions", gotArgs)
 	}
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents opencode --components engram,context7,persona") {
+		t.Fatalf("provisioner argv = %q, want opencode install without SDD or permissions", gotArgs)
+	}
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents vscode-copilot --components engram,context7,persona") {
+		t.Fatalf("provisioner argv = %q, want vscode-copilot install without SDD or permissions", gotArgs)
+	}
 	if strings.Contains(string(gotArgs), "--agents codex --components engram,context7,persona,permissions") {
 		t.Fatalf("provisioner argv = %q, want codex install without permissions because it installs gentle-dev", gotArgs)
 	}
 	if strings.Contains(string(gotArgs), "--agents antigravity --components engram,context7,persona,permissions") || strings.Contains(string(gotArgs), "--agents antigravity --components engram,context7,persona,sdd") {
 		t.Fatalf("provisioner argv = %q, want antigravity install without SDD or permissions", gotArgs)
 	}
+	if strings.Contains(string(gotArgs), "--agents opencode --components engram,context7,persona,permissions") || strings.Contains(string(gotArgs), "--agents opencode --components engram,context7,persona,sdd") {
+		t.Fatalf("provisioner argv = %q, want opencode install without SDD or permissions", gotArgs)
+	}
+	if strings.Contains(string(gotArgs), "--agents vscode-copilot --components engram,context7,persona,permissions") || strings.Contains(string(gotArgs), "--agents vscode-copilot --components engram,context7,persona,sdd") {
+		t.Fatalf("provisioner argv = %q, want vscode-copilot install without SDD or permissions", gotArgs)
+	}
 	if strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code,opencode") {
-		t.Fatalf("provisioner argv = %q, want basic install without opencode", gotArgs)
+		t.Fatalf("provisioner argv = %q, want basic installs split per agent", gotArgs)
 	}
 	if _, err := os.ReadFile(filepath.Join(home, "codegraph-args")); !os.IsNotExist(err) {
 		t.Fatalf("agents profile should not run CodeGraph without --tag codegraph: %v", err)
@@ -209,6 +221,8 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 		"--agents codex --components engram,context7,persona",
 		"--agents claude-code --components engram,context7,persona,permissions",
 		"--agents antigravity --components engram,context7,persona",
+		"--agents opencode --components engram,context7,persona",
+		"--agents vscode-copilot --components engram,context7,persona",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("install output missing %q\noutput:\n%s", want, out)
