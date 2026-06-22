@@ -289,7 +289,7 @@ func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 		Tool: "skills", Tags: []string{"core"},
 		Spec: manifest.ProvisionerSpec{
 			Package: "vercel-labs/agent-skills",
-			Agents:  []string{"codex", "claude-code", "antigravity"},
+			Agents:  []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"},
 			Skills:  []string{"web-design-guidelines"},
 			Global:  true,
 		},
@@ -313,14 +313,17 @@ func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 		"--agent", "codex",
 		"--agent", "claude-code",
 		"--agent", "antigravity",
+		"--agent", "opencode",
+		"--agent", "github-copilot",
 		"--skill", "web-design-guidelines",
 		"--global",
 	}
 	if !reflect.DeepEqual(step.Args, wantArgs) {
 		t.Fatalf("skills step args = %#v, want %#v", step.Args, wantArgs)
 	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.agents/skills", "~/.claude/skills"}) {
-		t.Fatalf("skills step targets = %#v, want [~/.agents/skills ~/.claude/skills]", step.Targets)
+	wantTargets := []string{"~/.codex/skills", "~/.claude/skills", "~/.gemini/antigravity/skills", "~/.config/opencode/skills", "~/.copilot/skills"}
+	if !reflect.DeepEqual(step.Targets, wantTargets) {
+		t.Fatalf("skills step targets = %#v, want %#v", step.Targets, wantTargets)
 	}
 }
 

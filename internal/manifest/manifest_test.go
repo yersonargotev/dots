@@ -550,8 +550,8 @@ func TestRepositoryManifestIncludesPlaywrightCLISkillProvisioner(t *testing.T) {
 	if !hasString(skills.Tags, "web") {
 		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
 	if !sameStrings(skills.Spec.Skills, []string{"playwright-cli"}) {
 		t.Errorf("skills provisioner skills = %#v, want [playwright-cli]", skills.Spec.Skills)
@@ -587,8 +587,8 @@ func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
 	if !hasString(skills.Tags, "web") {
 		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
 	wantSkills := []string{
 		"vercel-react-best-practices",
@@ -630,8 +630,8 @@ func TestRepositoryManifestIncludesAnthropicFrontendDesignSkillProvisioner(t *te
 	if !hasString(skills.Tags, "web") {
 		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
 	if !sameStrings(skills.Spec.Skills, []string{"frontend-design"}) {
 		t.Errorf("skills provisioner skills = %#v, want [frontend-design]", skills.Spec.Skills)
@@ -686,8 +686,8 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 			if !hasString(skills.Tags, "mobile") {
 				t.Errorf("skills provisioner %#v missing mobile tag", skills.Spec)
 			}
-			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-				t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+				t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 			}
 			if !sameStrings(skills.Spec.Skills, pkg.wantSkills) {
 				t.Errorf("skills provisioner skills = %#v, want %#v", skills.Spec.Skills, pkg.wantSkills)
@@ -725,8 +725,8 @@ func TestRepositoryManifestIncludesMattPocockEngineeringSkillsProvisioner(t *tes
 	if !hasString(skills.Tags, "agents") {
 		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity]", skills.Spec.Agents)
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
 	wantSkills := []string{"ask-matt", "codebase-design", "diagnosing-bugs", "domain-modeling", "grill-with-docs", "implement", "improve-codebase-architecture", "prototype", "resolving-merge-conflicts", "setup-matt-pocock-skills", "tdd", "to-issues", "to-prd", "triage"}
 	if !sameStrings(skills.Spec.Skills, wantSkills) {
