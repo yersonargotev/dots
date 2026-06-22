@@ -433,8 +433,6 @@ provisioners:
   - tool: gentle-ai
     tags:
       - agents
-    os:
-      - darwin
     spec:
       scope: global
       channel: stable
