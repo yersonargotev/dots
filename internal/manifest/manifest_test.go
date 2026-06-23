@@ -752,19 +752,22 @@ func TestRepositoryManifestIncludesMattPocockReviewSkillProvisioner(t *testing.T
 	var skills *manifest.Provisioner
 	for i := range got.Provisioners {
 		prov := &got.Provisioners[i]
-		if prov.Tool == "skills" && prov.Spec.Package == "mattpocock/skills" && sameStrings(prov.Spec.Skills, []string{"review"}) {
+		if prov.Tool == "skills" && prov.Spec.Package == "mattpocock/skills" {
 			skills = prov
 		}
 	}
 
 	if skills == nil {
-		t.Fatal("repository manifest missing skills provisioner for mattpocock/skills review")
+		t.Fatal("repository manifest missing skills provisioner for mattpocock/skills review bundle")
 	}
 	if !hasString(skills.Tags, "agents") {
 		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
 	}
 	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
 		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
+	}
+	if !sameStrings(skills.Spec.Skills, []string{"review", "writing-great-skills"}) {
+		t.Errorf("skills provisioner skills = %#v, want [review writing-great-skills]", skills.Spec.Skills)
 	}
 	if !skills.Spec.Global || !skills.Spec.Copy {
 		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
