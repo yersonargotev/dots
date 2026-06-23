@@ -14,6 +14,18 @@ import (
 	"github.com/yersonargotev/dots/internal/provision"
 )
 
+type updateOptions struct {
+	file       string
+	profile    string
+	extraTags  []string
+	sourceRoot string
+	home       string
+	stateRoot  string
+	dryRun     bool
+	yes        bool
+	noTUI      bool
+}
+
 func newUpdateCommand() *cobra.Command {
 	var (
 		file       string
@@ -41,112 +53,8 @@ func newUpdateCommand() *cobra.Command {
 		// conditions, not command misuse, so do not dump the usage block.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			paths, err := resolvePaths(home, sourceRoot, stateRoot)
-			if err != nil {
-				return err
-			}
-
-			if !gitrepo.IsRepo(paths.SourceRoot) {
-				return fmt.Errorf("installed repository %s is not a git repository; clone the Source of Truth before updating", paths.SourceRoot)
-			}
-
-			out := cmd.OutOrStdout()
-			var update gitrepo.Update
-			if wantsJSON(cmd) {
-				if dryRun {
-					update, err = gitrepo.Preview(paths.SourceRoot)
-				} else {
-					if !yes {
-						return rejectInteractiveJSON(cmd)
-					}
-					update, err = gitrepo.FastForwardPreservingLocalChanges(paths.SourceRoot)
-				}
-				if errors.Is(err, gitrepo.ErrNotFastForward) {
-					return fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", paths.SourceRoot)
-				}
-				if err != nil {
-					return err
-				}
-			} else {
-				update, err = refreshRepository(out, paths.SourceRoot, dryRun)
-				if err != nil {
-					return err
-				}
-			}
-
-			// Load the manifest after the fast-forward so a manifest change pulled
-			// from upstream is honored by the recomputed plan. The default
-			// manifest belongs to the Installed Repository, not the caller's cwd;
-			// explicit --file values keep their normal caller-relative behavior.
-			manifestPath := file
-			if !cmd.Flags().Changed("file") {
-				manifestPath = filepath.Join(paths.SourceRoot, file)
-			}
-			m, err := manifest.LoadFile(manifestPath)
-			if err != nil {
-				return err
-			}
-			meta, err := loadInstallationMetadata(paths, stateRoot)
-			if err != nil {
-				return err
-			}
-
-			p, err := plan.Build(*m, plan.Options{
-				Profile:    profile,
-				ExtraTags:  extraTags,
-				OS:         runtime.GOOS,
-				SourceRoot: paths.SourceRoot,
-				Home:       paths.Home,
-				Metadata:   meta,
-			})
-			if err != nil {
-				return err
-			}
-
-			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS})
-			if err != nil {
-				return err
-			}
-			if wantsJSON(cmd) {
-				if dryRun {
-					return emitOK(cmd, updateReport{DryRun: true, Update: update, Plan: p, Provisioners: provPlan})
-				}
-			} else {
-				renderPlan(out, p)
-				if err := renderSkippedEntryHint(out, *m, profile, runtime.GOOS); err != nil {
-					return err
-				}
-				renderProvisionPlan(out, provPlan)
-				if err := renderSkippedProvisionerHint(out, *m, profile, runtime.GOOS); err != nil {
-					return err
-				}
-			}
-
-			if dryRun {
-				return nil
-			}
-
-			applied, err := resolveAndApply(cmd, p, paths, yes, noTUI)
-			if err != nil {
-				return err
-			}
-			if !applied {
-				if wantsJSON(cmd) {
-					return emitOK(cmd, updateReport{DryRun: false, Update: update, Plan: p, Provisioners: provPlan})
-				}
-				return nil
-			}
-
-			// Mirror install: managed agent configuration stays aligned with the
-			// Source of Truth only if the same provisioners install runs are
-			// re-applied after an update, not just the file plan.
-			if err := runProvisioners(cmd, *m, profile, extraTags, paths.Home); err != nil {
-				return err
-			}
-			if wantsJSON(cmd) {
-				return emitOK(cmd, updateReport{DryRun: false, Update: update, Plan: p, Provisioners: provPlan})
-			}
-			return nil
+			_, err := runUpdateWorkflow(cmd, updateOptions{file: file, profile: profile, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI}, true)
+			return err
 		},
 	}
 
@@ -210,4 +118,89 @@ func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
 		fmt.Fprintln(out, "\n(dry run: working tree and managed files not modified)")
 	}
 	fmt.Fprintln(out)
+}
+
+func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updateReport, error) {
+	paths, err := resolvePaths(opts.home, opts.sourceRoot, opts.stateRoot)
+	if err != nil {
+		return updateReport{}, err
+	}
+	if !gitrepo.IsRepo(paths.SourceRoot) {
+		return updateReport{}, fmt.Errorf("installed repository %s is not a git repository; clone the Source of Truth before updating", paths.SourceRoot)
+	}
+	out := cmd.OutOrStdout()
+	var update gitrepo.Update
+	if wantsJSON(cmd) {
+		if opts.dryRun {
+			update, err = gitrepo.Preview(paths.SourceRoot)
+		} else {
+			if !opts.yes {
+				return updateReport{}, rejectInteractiveJSON(cmd)
+			}
+			update, err = gitrepo.FastForwardPreservingLocalChanges(paths.SourceRoot)
+		}
+		if errors.Is(err, gitrepo.ErrNotFastForward) {
+			return updateReport{}, fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", paths.SourceRoot)
+		}
+		if err != nil {
+			return updateReport{}, err
+		}
+	} else {
+		update, err = refreshRepository(out, paths.SourceRoot, opts.dryRun)
+		if err != nil {
+			return updateReport{}, err
+		}
+	}
+
+	manifestPath := opts.file
+	if !cmd.Flags().Changed("file") {
+		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
+	}
+	m, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		return updateReport{}, err
+	}
+	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
+	if err != nil {
+		return updateReport{}, err
+	}
+	p, err := plan.Build(*m, plan.Options{Profile: opts.profile, ExtraTags: opts.extraTags, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, Home: paths.Home, Metadata: meta})
+	if err != nil {
+		return updateReport{}, err
+	}
+	provPlan, err := provision.Build(*m, provision.Options{Profile: opts.profile, ExtraTags: opts.extraTags, OS: runtime.GOOS})
+	if err != nil {
+		return updateReport{}, err
+	}
+	report := updateReport{DryRun: opts.dryRun, Update: update, Plan: p, Provisioners: provPlan}
+	if wantsJSON(cmd) {
+		if opts.dryRun && emit {
+			return report, emitOK(cmd, report)
+		}
+	} else {
+		renderPlan(out, p)
+		if err := renderSkippedEntryHint(out, *m, opts.profile, runtime.GOOS); err != nil {
+			return updateReport{}, err
+		}
+		renderProvisionPlan(out, provPlan)
+		if err := renderSkippedProvisionerHint(out, *m, opts.profile, runtime.GOOS); err != nil {
+			return updateReport{}, err
+		}
+	}
+	if opts.dryRun {
+		return report, nil
+	}
+	applied, err := resolveAndApply(cmd, p, paths, opts.yes, opts.noTUI)
+	if err != nil {
+		return updateReport{}, err
+	}
+	if applied {
+		if err := runProvisioners(cmd, *m, opts.profile, opts.extraTags, paths.Home); err != nil {
+			return updateReport{}, err
+		}
+	}
+	if wantsJSON(cmd) && emit {
+		return report, emitOK(cmd, report)
+	}
+	return report, nil
 }
