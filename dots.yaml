@@ -597,6 +597,7 @@ provisioners:
         - github-copilot
       skills:
         - review
+        - writing-great-skills
       global: true
       copy: true
     dependencies:
