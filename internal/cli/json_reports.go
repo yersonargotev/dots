@@ -8,6 +8,7 @@ import (
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/status"
 	"github.com/yersonargotev/dots/internal/uninstall"
+	"github.com/yersonargotev/dots/internal/upgrade"
 )
 
 type statusReport struct {
@@ -37,6 +38,14 @@ type installReport struct {
 
 type updateReport struct {
 	DryRun       bool           `json:"dry_run"`
+	Update       gitrepo.Update `json:"update"`
+	Plan         plan.Plan      `json:"plan"`
+	Provisioners provision.Plan `json:"provisioners"`
+}
+
+type upgradeReport struct {
+	DryRun       bool           `json:"dry_run"`
+	Binary       upgrade.Plan   `json:"binary"`
 	Update       gitrepo.Update `json:"update"`
 	Plan         plan.Plan      `json:"plan"`
 	Provisioners provision.Plan `json:"provisioners"`

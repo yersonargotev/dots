@@ -53,8 +53,9 @@ Migration trigger: the day a genuinely hard, broad capability is needed (serious
 
 | Deferred item | Earliest target | Why it is deferred |
 |---------------|-----------------|--------------------|
-| Advanced dependency orchestration | Later than v1 | Rollback, version constraints, repository/tap/index refresh, reinstall, and upgrade behavior introduce package-manager state decisions beyond the guarded v1 install flow. |
+| Advanced dependency orchestration | Later than v1 | Rollback, version constraints, reinstall, and broad system package upgrades introduce package-manager state decisions beyond the guarded v1 install flow. |
 | `dots update` | v1.1 — **shipped** | Updating the Installed Repository introduces Git state, local changes, versioning, and post-update conflict handling. Delivered in v1.1; see [`docs/update.md`](update.md). |
+| `dots upgrade` | v1.2 — **shipped** | Upgrading the dots-owned system updates the `dots` binary first, then reuses `dots update` for the Installed Repository, Managed Entries, and Provisioners. It does not run broad system package upgrades; see [`docs/upgrade.md`](upgrade.md). |
 | Non-portable/generated application configurations | Later than v1 | Generated editor state, machine-local state, secrets, runtime caches, and non-portable app configs introduce runtime-state and dependency complexity that distracts from installer correctness. Authored editor files with stable paths are allowed when they fit the manifest install model. |
 | Windows support | Later than v1 | v1 focuses on macOS and Linux Supported Platforms only. Windows needs separate path, shell, package, and platform behavior decisions. |
 | Official WSL support | Later than v1 | WSL has mixed Windows/Linux filesystem and dependency concerns that should not be treated as generic Linux during the first release. |
@@ -75,7 +76,7 @@ The repository-owned Source of Truth must not absorb accidental local state. Ado
 
 ### Dependency installation stays behind explicit consent
 
-A Dependency Plan helps the user understand missing tools before any package-manager command runs. `dots deps install` uses the same preview, asks for confirmation by default, and executes direct argv-shaped package-manager actions only for installable Dependencies. It does not bypass `sudo`, does not execute manual guidance, and does not claim rollback, version constraints, reinstall, or upgrade behavior.
+A Dependency Plan helps the user understand missing tools before any package-manager command runs. `dots deps install` uses the same preview, asks for confirmation by default, and executes direct argv-shaped package-manager actions only for installable Dependencies. It does not bypass `sudo`, does not execute manual guidance, and does not claim rollback, version constraints, reinstall, or broad system upgrade behavior. `dots upgrade` is scoped separately to dots-owned surfaces only.
 
 ### Distribution starts with verifiable artifacts
 
