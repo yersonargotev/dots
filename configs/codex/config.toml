@@ -1,2 +1,6 @@
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
 [tui]
-status_line = ["model-with-reasoning", "context-remaining", "git-branch"]
+status_line = ["model-with-reasoning", "context-remaining", "git-branch", "branch-changes", "five-hour-limit", "weekly-limit", "used-tokens"]
+status_line_use_colors = true
