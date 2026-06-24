@@ -334,8 +334,25 @@ entries:
     ownership: json-subset
     tags:
       - agents
+      - mobile
     os:
       - darwin
+      - linux
+  - source: configs/vscode/settings.json
+    target: "~/Library/Application Support/Code/User/settings.json"
+    strategy: copy
+    ownership: json-subset
+    tags:
+      - mobile
+    os:
+      - darwin
+  - source: configs/vscode/settings.json
+    target: ~/.config/Code/User/settings.json
+    strategy: copy
+    ownership: json-subset
+    tags:
+      - mobile
+    os:
       - linux
   # OpenCode has no MCP install CLI and its global opencode.json is co-owned by
   # gentle-ai, so dots owns a separate fragment that OpenCode merges (not
@@ -600,6 +617,39 @@ provisioners:
     dependencies:
       - name: npx
         command: npx
+  - tool: claude
+    tags:
+      - mobile
+    os:
+      - darwin
+      - linux
+    spec:
+      mcp: dart
+      command:
+        - dart
+        - mcp-server
+    dependencies:
+      - name: claude
+        command: claude
+      - name: dart
+        command: dart
+  - tool: codex
+    tags:
+      - mobile
+    os:
+      - darwin
+      - linux
+    spec:
+      mcp: dart
+      command:
+        - dart
+        - mcp-server
+        - --force-roots-fallback
+    dependencies:
+      - name: codex
+        command: codex
+      - name: dart
+        command: dart
   - tool: skills
     tags:
       - agents

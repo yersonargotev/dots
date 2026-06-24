@@ -45,7 +45,7 @@ Current Profiles:
 | `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
 | `agents` | `core`, `agents` | Core dotfiles plus gentle-ai agent setup/cleanup and shared engineering skills for supported agents. Add `--tag sdd` to opt into Gentle-AI SDD setup. | None |
 | `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | None |
-| `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills. | None |
+| `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | None |
 | `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
 
 ## Managed Entries
@@ -93,7 +93,9 @@ Current Managed Entries:
 | `configs/codex/config.toml` | `~/.codex/config.toml` | `copy` | `agents` | `darwin`, `linux` | None; owns TOML subset |
 | `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
-| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
+| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `agents`, `mobile` | `darwin`, `linux` | None; owns JSON subset including Dart/Flutter MCP server |
+| `configs/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` | `copy` | `mobile` | `darwin` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
+| `configs/vscode/settings.json` | `~/.config/Code/User/settings.json` | `copy` | `mobile` | `linux` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
 | `configs/opencode/mcp.json` | `~/.config/opencode-dots.json` | `symlink` | `web` | `darwin`, `linux` | `opencode` |
 
 ## Dependencies
@@ -169,8 +171,9 @@ Supported shapes:
 
 - `marketplace: <source>` renders a marketplace registration.
 - `plugin: <name>` plus `from: <marketplace>` renders a plugin install.
+- `mcp: <name>` plus `command: [...]` renders a stdio MCP server registration.
 
-Claude specs must not mix gentle-ai fields or Codex MCP fields.
+Claude specs must not mix gentle-ai fields, skills fields, or multiple Claude shapes. `env` remains Codex-only.
 
 ### `codex` spec
 
@@ -244,6 +247,8 @@ Current Provisioners:
 | `skills` | `mobile` | all | Install the upstream Dart skill package from `dart-lang/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `mobile` | all | Install the upstream Flutter skill package from `flutter/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `mobile` | all | Install `android-cli` from `android/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
+| `claude` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `claude mcp add --transport stdio dart -- dart mcp-server`. | `claude`, `dart` |
+| `codex` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `codex mcp add dart -- dart mcp-server --force-roots-fallback`. | `codex`, `dart` |
 | `skills` | `agents` | all | Install the reviewed Matt Pocock engineering skill set from `mattpocock/skills/skills/engineering` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `agents` | all | Install `review` and `writing-great-skills` from `mattpocock/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skills into agent skill roots. | `npx` |
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |

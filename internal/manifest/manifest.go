@@ -80,9 +80,11 @@ type ProvisionerSpec struct {
 	// From names the marketplace a Plugin is installed from. It is only valid
 	// alongside Plugin.
 	From string `yaml:"from,omitempty"`
-	// MCP names a Model Context Protocol server to register with the codex tool,
-	// rendering `codex mcp add <mcp> [--env K=V]... -- <command...>`. It requires
-	// Command and is mutually exclusive with the gentle-ai and claude fields.
+	// MCP names a Model Context Protocol server to register with an MCP-aware
+	// provisioner. For Codex it renders `codex mcp add <mcp> [--env K=V]... --
+	// <command...>`; for Claude it renders `claude mcp add --transport stdio
+	// <mcp> -- <command...>`. It requires Command and is mutually exclusive with
+	// unrelated tool dialects.
 	MCP string `yaml:"mcp,omitempty"`
 	// Command is the launch argv for the MCP server, rendered verbatim after the
 	// `--` separator. It is required alongside MCP and only valid with it.
@@ -413,28 +415,41 @@ func allowedGentleAIAction(action string) bool {
 }
 
 // validateClaudeSpec enforces the claude provisioner contract: it drives exactly
-// one idempotent invocation — either a marketplace registration or a plugin
-// install (which needs a From marketplace) — and never mixes in gentle-ai flags.
+// one idempotent invocation — a marketplace registration, a plugin install
+// (which needs a From marketplace), or a stdio MCP server registration — and
+// never mixes in gentle-ai flags.
 func validateClaudeSpec(s ProvisionerSpec, i int) error {
 	if s.usesGentleAIFlags() {
 		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai install flags for the claude tool", i)
-	}
-	if s.usesMCPFields() {
-		return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the claude tool", i)
 	}
 	if s.usesSkillsFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the claude tool", i)
 	}
 	hasMarketplace := strings.TrimSpace(s.Marketplace) != ""
 	hasPlugin := strings.TrimSpace(s.Plugin) != ""
-	if hasMarketplace == hasPlugin {
-		return fmt.Errorf("provisioners[%d].spec must set exactly one of marketplace or plugin for the claude tool", i)
+	hasMCP := strings.TrimSpace(s.MCP) != ""
+	shapes := 0
+	for _, set := range []bool{hasMarketplace, hasPlugin, hasMCP} {
+		if set {
+			shapes++
+		}
+	}
+	if shapes != 1 {
+		return fmt.Errorf("provisioners[%d].spec must set exactly one of marketplace, plugin, or mcp for the claude tool", i)
 	}
 	if hasPlugin && strings.TrimSpace(s.From) == "" {
 		return fmt.Errorf("provisioners[%d].spec.from is required when plugin is set", i)
 	}
-	if hasMarketplace && strings.TrimSpace(s.From) != "" {
+	if (hasMarketplace || hasMCP) && strings.TrimSpace(s.From) != "" {
 		return fmt.Errorf("provisioners[%d].spec.from is only valid alongside plugin", i)
+	}
+	if hasMCP {
+		if !hasNonEmptyString(s.Command) {
+			return fmt.Errorf("provisioners[%d].spec.command is required when mcp is set", i)
+		}
+		if len(s.Env) > 0 {
+			return fmt.Errorf("provisioners[%d].spec.env is only valid for the codex tool", i)
+		}
 	}
 	return nil
 }

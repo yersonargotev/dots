@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -75,6 +76,10 @@ func TestAntigravityAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 		ToolPermission          *string `json:"toolPermission"`
 		AllowNonWorkspaceAccess *bool   `json:"allowNonWorkspaceAccess"`
 		EnableTerminalSandbox   *bool   `json:"enableTerminalSandbox"`
+		MCPServers              map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
 	}
 	if err := json.Unmarshal(got, &parsed); err != nil {
 		t.Fatalf("seeded settings.json is not valid JSON: %v", err)
@@ -88,6 +93,13 @@ func TestAntigravityAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	}
 	if parsed.EnableTerminalSandbox == nil || *parsed.EnableTerminalSandbox != false {
 		t.Errorf("enableTerminalSandbox key incorrect or missing, got: %v", parsed.EnableTerminalSandbox)
+	}
+	dartMCP, ok := parsed.MCPServers["dart-mcp-server"]
+	if !ok {
+		t.Fatalf("mcpServers.dart-mcp-server missing from Antigravity settings")
+	}
+	if dartMCP.Command != "dart" || !reflect.DeepEqual(dartMCP.Args, []string{"mcp-server"}) {
+		t.Fatalf("mcpServers.dart-mcp-server = %#v, want command dart with args [mcp-server]", dartMCP)
 	}
 }
 
@@ -135,6 +147,13 @@ func TestAntigravitySettingsProvisionerAdditionsDoNotDrift(t *testing.T) {
 		"toolPermission": "always-proceed",
 		"allowNonWorkspaceAccess": true,
 		"enableTerminalSandbox": false,
+		"mcpServers": {
+			"dart-mcp-server": {
+				"command": "dart",
+				"args": ["mcp-server"],
+				"env": {}
+			}
+		},
 		"runtimeStateKey": "some-runtime-value",
 		"anotherExtraSettings": [1, 2, 3]
 	}`
@@ -169,6 +188,13 @@ func TestAntigravitySettingsProvisionerAdditionsDoNotDrift(t *testing.T) {
 		"toolPermission": "ask",
 		"allowNonWorkspaceAccess": true,
 		"enableTerminalSandbox": false,
+		"mcpServers": {
+			"dart-mcp-server": {
+				"command": "dart",
+				"args": ["mcp-server"],
+				"env": {}
+			}
+		},
 		"runtimeStateKey": "some-runtime-value"
 	}`
 	if err := os.WriteFile(settingsTarget, []byte(driftConfig), 0o600); err != nil {

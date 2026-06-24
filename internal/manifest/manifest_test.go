@@ -361,6 +361,57 @@ provisioners:
 	}
 }
 
+func TestLoadFileParsesClaudeMCPProvisioner(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: claude
+    tags: [mobile]
+    os: [darwin, linux]
+    spec:
+      mcp: dart
+      command: [dart, mcp-server]
+    dependencies:
+      - name: dart
+        command: dart
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if len(got.Provisioners) != 1 {
+		t.Fatalf("Provisioners len = %d, want 1", len(got.Provisioners))
+	}
+
+	claude := got.Provisioners[0]
+	if claude.Tool != "claude" {
+		t.Fatalf("Provisioner[0].Tool = %q, want claude", claude.Tool)
+	}
+	if claude.Spec.MCP != "dart" {
+		t.Fatalf("Provisioner[0].Spec.MCP = %q, want dart", claude.Spec.MCP)
+	}
+	if !sameStrings(claude.Spec.Command, []string{"dart", "mcp-server"}) {
+		t.Fatalf("Provisioner[0].Spec.Command = %#v, want [dart mcp-server]", claude.Spec.Command)
+	}
+	if !hasDependency(claude.Dependencies, "dart") {
+		t.Fatalf("Provisioner[0].Dependencies = %#v, want dart dependency", claude.Dependencies)
+	}
+}
+
 func TestLoadFileParsesCodeGraphProvisioner(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")
@@ -498,6 +549,90 @@ func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) 
 	}
 	if !hasDependency(codex.Dependencies, "codex") {
 		t.Errorf("codex provisioner missing codex dependency: %#v", codex.Dependencies)
+	}
+}
+
+func TestRepositoryManifestIncludesDartFlutterMCPProvisioners(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	want := map[string][]string{
+		"claude": {"dart", "mcp-server"},
+		"codex":  {"dart", "mcp-server", "--force-roots-fallback"},
+	}
+	for tool, wantCommand := range want {
+		var prov *manifest.Provisioner
+		for i := range got.Provisioners {
+			candidate := &got.Provisioners[i]
+			if candidate.Tool == tool && candidate.Spec.MCP == "dart" {
+				prov = candidate
+				break
+			}
+		}
+
+		if prov == nil {
+			t.Fatalf("repository manifest missing %s MCP provisioner for Dart and Flutter", tool)
+		}
+		if !hasString(prov.Tags, "mobile") {
+			t.Errorf("%s MCP provisioner %#v missing mobile tag", tool, prov.Spec)
+		}
+		if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
+			t.Errorf("%s MCP provisioner OS = %#v, want [darwin linux]", tool, prov.OS)
+		}
+		if !sameStrings(prov.Spec.Command, wantCommand) {
+			t.Errorf("%s MCP command = %#v, want %#v", tool, prov.Spec.Command, wantCommand)
+		}
+		if !hasDependency(prov.Dependencies, tool) || !hasDependency(prov.Dependencies, "dart") {
+			t.Errorf("%s MCP provisioner dependencies = %#v, want %s and dart", tool, prov.Dependencies, tool)
+		}
+	}
+}
+
+func TestRepositoryManifestIncludesMobileAgentMCPConfigEntries(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	wantEntries := []struct {
+		source string
+		target string
+	}{
+		{source: "configs/antigravity/settings.json", target: "~/.gemini/antigravity-cli/settings.json"},
+		{source: "configs/vscode/settings.json", target: "~/Library/Application Support/Code/User/settings.json"},
+		{source: "configs/vscode/settings.json", target: "~/.config/Code/User/settings.json"},
+	}
+	for _, want := range wantEntries {
+		source, target := want.source, want.target
+		var entry *manifest.Entry
+		for i := range got.Entries {
+			candidate := &got.Entries[i]
+			if candidate.Source == source && candidate.Target == target {
+				entry = candidate
+				break
+			}
+		}
+
+		if entry == nil {
+			t.Fatalf("repository manifest missing mobile MCP config entry %s -> %s", source, target)
+		}
+		if entry.Strategy != "copy" {
+			t.Errorf("%s strategy = %q, want copy", source, entry.Strategy)
+		}
+		if entry.Ownership != "json-subset" {
+			t.Errorf("%s ownership = %q, want json-subset", source, entry.Ownership)
+		}
+		if !hasString(entry.Tags, "mobile") {
+			t.Errorf("%s tags = %#v, want mobile", source, entry.Tags)
+		}
 	}
 }
 
@@ -1529,7 +1664,7 @@ provisioners:
     spec:
       from: chrome-devtools-plugins
 `,
-			want: "provisioners[0].spec must set exactly one of marketplace or plugin for the claude tool",
+			want: "provisioners[0].spec must set exactly one of marketplace, plugin, or mcp for the claude tool",
 		},
 		{
 			name: "claude spec sets both marketplace and plugin",
@@ -1539,7 +1674,7 @@ provisioners:
       marketplace: ChromeDevTools/chrome-devtools-mcp
       plugin: chrome-devtools-mcp
 `,
-			want: "provisioners[0].spec must set exactly one of marketplace or plugin for the claude tool",
+			want: "provisioners[0].spec must set exactly one of marketplace, plugin, or mcp for the claude tool",
 		},
 		{
 			name: "claude plugin without from",
@@ -1601,14 +1736,15 @@ provisioners:
 			want: "provisioners[0].spec must not set skills.sh fields (package, global, copy) for the gentle-ai tool",
 		},
 		{
-			name: "claude spec mixes codex mcp fields",
+			name: "claude spec mixes marketplace and mcp",
 			provisioner: `  - tool: claude
     tags: [core]
     spec:
       marketplace: ChromeDevTools/chrome-devtools-mcp
       mcp: chrome-devtools
+      command: [npx, chrome-devtools-mcp@latest]
 `,
-			want: "provisioners[0].spec must not set codex MCP fields (mcp, command, env) for the claude tool",
+			want: "provisioners[0].spec must set exactly one of marketplace, plugin, or mcp for the claude tool",
 		},
 		{
 			name: "codex spec without mcp name",

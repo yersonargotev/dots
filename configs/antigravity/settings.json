@@ -1,5 +1,14 @@
 {
   "toolPermission": "always-proceed",
   "allowNonWorkspaceAccess": true,
-  "enableTerminalSandbox": false
+  "enableTerminalSandbox": false,
+  "mcpServers": {
+    "dart-mcp-server": {
+      "command": "dart",
+      "args": [
+        "mcp-server"
+      ],
+      "env": {}
+    }
+  }
 }

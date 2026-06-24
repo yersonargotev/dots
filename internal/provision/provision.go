@@ -76,12 +76,16 @@ func renderGentleAIArgs(spec manifest.ProvisionerSpec) []string {
 }
 
 // renderClaudeArgs renders one idempotent `claude` invocation. A marketplace
-// spec registers a plugin marketplace from its source; otherwise a plugin spec
-// installs `<plugin>@<from>` into the user scope. Validation guarantees exactly
-// one shape is set before this is reached.
+// spec registers a plugin marketplace from its source, a plugin spec installs
+// `<plugin>@<from>` into the user scope, and an MCP spec registers a stdio MCP
+// server. Validation guarantees exactly one shape is set before this is reached.
 func renderClaudeArgs(spec manifest.ProvisionerSpec) []string {
 	if marketplace := strings.TrimSpace(spec.Marketplace); marketplace != "" {
 		return []string{"plugin", "marketplace", "add", marketplace}
+	}
+	if mcp := strings.TrimSpace(spec.MCP); mcp != "" {
+		args := []string{"mcp", "add", "--transport", "stdio", mcp, "--"}
+		return append(args, cleanList(spec.Command)...)
 	}
 	ref := strings.TrimSpace(spec.Plugin) + "@" + strings.TrimSpace(spec.From)
 	return []string{"plugin", "install", ref, "--scope", "user"}
