@@ -116,10 +116,10 @@ func TestInstallExecutesProvisionerAfterFilesWithHomeThreaded(t *testing.T) {
 	}
 }
 
-// TestInstallWritesCodexCodeGraphOverlayAfterProvisioners proves dots adds its
-// own Codex AGENTS.md instruction layer only after a successful provisioner run,
-// under the sandbox HOME threaded through --home.
-func TestInstallWritesCodexCodeGraphOverlayAfterProvisioners(t *testing.T) {
+// TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner proves a
+// non-CodeGraph provisioner does not create the dots-owned CodeGraph
+// instruction block.
+func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -144,32 +144,19 @@ func TestInstallWritesCodexCodeGraphOverlayAfterProvisioners(t *testing.T) {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
 
-	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
-	if err != nil {
-		t.Fatalf("read sandbox Codex AGENTS.md: %v", err)
-	}
-	content := string(got)
-	for _, want := range []string{
-		"<!-- dots:codegraph-mode -->",
-		"CodeGraph Mode: enabled",
-		"Use CodeGraph for architecture questions",
-		"Never use CodeGraph just because `.codegraph/` exists.",
-		"<!-- /dots:codegraph-mode -->",
-	} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("Codex AGENTS.md missing %q\ncontent:\n%s", want, content)
-		}
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install with gentle-ai provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
-// TestInstallDoesNotWriteCodexCodeGraphOverlayWithoutSelectedProvisioners proves
-// the post-provision Codex layer is scoped to selected Codex-related
-// provisioners. A successful install whose active profile selects no
-// provisioners must not create a sandbox Codex AGENTS.md.
-func TestInstallDoesNotWriteCodexCodeGraphOverlayWithoutSelectedProvisioners(t *testing.T) {
+// TestInstallDoesNotWriteCodexCodeGraphInstructionBlockWithoutSelectedProvisioners proves
+// the post-provision CodeGraph instruction block is scoped to the codegraph tag. A
+// successful install whose active profile selects no provisioners must not
+// create a sandbox Codex AGENTS.md.
+func TestInstallDoesNotWriteCodexCodeGraphInstructionBlockWithoutSelectedProvisioners(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -216,10 +203,10 @@ provisioners:
 	}
 }
 
-// TestInstallWritesCodexCodeGraphOverlayAfterCodexProvisioner proves a selected
-// Codex MCP provisioner also qualifies for the post-provision Codex layer, not
-// only the gentle-ai provisioner that installs Codex agents.
-func TestInstallWritesCodexCodeGraphOverlayAfterCodexProvisioner(t *testing.T) {
+// TestInstallDoesNotWriteCodeGraphInstructionBlockAfterCodexProvisioner proves a Codex
+// MCP provisioner alone does not create the dots-owned CodeGraph instruction
+// layer.
+func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterCodexProvisioner(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -260,18 +247,18 @@ provisioners:
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
 
-	if _, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); err != nil {
-		t.Fatalf("read sandbox Codex AGENTS.md after codex provisioner: %v\noutput:\n%s", err, out.String())
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install with codex provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
-// TestInstallWritesCodexCodeGraphOverlayAfterSkillsProvisioner proves a
-// skills-only provisioner targeting Codex also qualifies for the post-provision
-// Codex layer.
-func TestInstallWritesCodexCodeGraphOverlayAfterSkillsProvisioner(t *testing.T) {
+// TestInstallDoesNotWriteCodeGraphInstructionBlockAfterSkillsProvisioner proves a
+// skills-only provisioner targeting Codex does not create the dots-owned
+// CodeGraph instruction block.
+func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterSkillsProvisioner(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -312,8 +299,8 @@ provisioners:
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
 
-	if _, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); err != nil {
-		t.Fatalf("read sandbox Codex AGENTS.md after skills provisioner: %v\noutput:\n%s", err, out.String())
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install with skills provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)

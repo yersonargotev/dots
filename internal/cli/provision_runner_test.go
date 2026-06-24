@@ -183,8 +183,8 @@ printf '%s\n' "$*" > "$HOME/skills-args"
 	if string(got) != want {
 		t.Fatalf("skills args = %q, want %q", got, want)
 	}
-	if _, err := os.ReadFile(filepath.Join(home, ".codex", "AGENTS.md")); err != nil {
-		t.Fatalf("skills-only Codex provisioner did not write Codex overlay: %v", err)
+	if _, err := os.Stat(filepath.Join(home, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("skills-only Codex provisioner wrote CodeGraph instruction block without the codegraph tag: %v", err)
 	}
 }
 
@@ -249,58 +249,6 @@ printf '%s\n' "$*" > "$HOME/codegraph-args"
 		if !strings.Contains(string(got), "Do NOT use CodeGraph as proof for runtime behavior.") {
 			t.Fatalf("%s missing runtime-verification guidance\ncontent:\n%s", path, got)
 		}
-	}
-}
-
-func TestSelectedProvisionersAffectCodex(t *testing.T) {
-	tests := []struct {
-		name     string
-		selected []manifest.Provisioner
-		want     bool
-	}{
-		{
-			name: "skills provisioner targeting codex",
-			selected: []manifest.Provisioner{
-				{Tool: "skills", Spec: manifest.ProvisionerSpec{Agents: []string{"codex"}}},
-			},
-			want: true,
-		},
-		{
-			name: "skills provisioner targeting claude only",
-			selected: []manifest.Provisioner{
-				{Tool: "skills", Spec: manifest.ProvisionerSpec{Agents: []string{"claude"}}},
-			},
-			want: false,
-		},
-		{
-			name: "gentle-ai provisioner targeting codex",
-			selected: []manifest.Provisioner{
-				{Tool: "gentle-ai", Spec: manifest.ProvisionerSpec{Agents: []string{"codex"}}},
-			},
-			want: true,
-		},
-		{
-			name: "codex provisioner",
-			selected: []manifest.Provisioner{
-				{Tool: "codex"},
-			},
-			want: true,
-		},
-		{
-			name: "no codex-affecting provisioners",
-			selected: []manifest.Provisioner{
-				{Tool: "claude"},
-			},
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := selectedProvisionersAffectCodex(tt.selected); got != tt.want {
-				t.Fatalf("selectedProvisionersAffectCodex() = %v, want %v", got, tt.want)
-			}
-		})
 	}
 }
 

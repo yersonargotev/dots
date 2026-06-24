@@ -94,10 +94,10 @@ func TestUpdateExecutesProvisionersAfterApply(t *testing.T) {
 	}
 }
 
-// TestUpdateWritesCodexCodeGraphOverlayAfterProvisioners proves update reaches
-// the same post-provision Codex AGENTS.md overlay hook as install, under the
-// sandbox HOME.
-func TestUpdateWritesCodexCodeGraphOverlayAfterProvisioners(t *testing.T) {
+// TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner proves update
+// does not create the dots-owned CodeGraph instruction block unless the
+// CodeGraph provisioner is selected.
+func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *testing.T) {
 	requireGitCLI(t)
 	sandboxHome := t.TempDir()
 	stateRoot := t.TempDir()
@@ -117,31 +117,18 @@ func TestUpdateWritesCodexCodeGraphOverlayAfterProvisioners(t *testing.T) {
 	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot)
 
-	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
-	if err != nil {
-		t.Fatalf("read sandbox Codex AGENTS.md: %v\noutput:\n%s", err, out)
-	}
-	content := string(got)
-	for _, want := range []string{
-		"<!-- dots:codegraph-mode -->",
-		"CodeGraph Mode: enabled",
-		"Use CodeGraph for architecture questions",
-		"Never use CodeGraph just because `.codegraph/` exists.",
-		"<!-- /dots:codegraph-mode -->",
-	} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("Codex AGENTS.md missing %q\ncontent:\n%s", want, content)
-		}
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("update with gentle-ai provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out)
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
-// TestUpdateWritesCodexCodeGraphOverlayAfterSkillsProvisioner proves update
-// reaches the post-provision Codex overlay hook for a skills-only Codex
-// provisioner.
-func TestUpdateWritesCodexCodeGraphOverlayAfterSkillsProvisioner(t *testing.T) {
+// TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterSkillsProvisioner proves update
+// does not create the dots-owned CodeGraph instruction block for a skills-only
+// Codex provisioner.
+func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterSkillsProvisioner(t *testing.T) {
 	requireGitCLI(t)
 	sandboxHome := t.TempDir()
 	stateRoot := t.TempDir()
@@ -177,8 +164,8 @@ provisioners:
 	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot)
 
-	if _, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); err != nil {
-		t.Fatalf("read sandbox Codex AGENTS.md after skills provisioner: %v\noutput:\n%s", err, out)
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("update with skills provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out)
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
