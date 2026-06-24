@@ -94,10 +94,10 @@ func TestUpdateExecutesProvisionersAfterApply(t *testing.T) {
 	}
 }
 
-// TestUpdateDoesNotWriteCodeGraphOverlayAfterGentleAIProvisioner proves update
-// does not create the dots-owned CodeGraph instruction layer unless the
+// TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner proves update
+// does not create the dots-owned CodeGraph instruction block unless the
 // CodeGraph provisioner is selected.
-func TestUpdateDoesNotWriteCodeGraphOverlayAfterGentleAIProvisioner(t *testing.T) {
+func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *testing.T) {
 	requireGitCLI(t)
 	sandboxHome := t.TempDir()
 	stateRoot := t.TempDir()
@@ -118,17 +118,17 @@ func TestUpdateDoesNotWriteCodeGraphOverlayAfterGentleAIProvisioner(t *testing.T
 		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot)
 
 	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("update with gentle-ai provisioner wrote CodeGraph overlay without the codegraph tag; stat err = %v\noutput:\n%s", err, out)
+		t.Fatalf("update with gentle-ai provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out)
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
-// TestUpdateDoesNotWriteCodeGraphOverlayAfterSkillsProvisioner proves update
-// does not create the dots-owned CodeGraph instruction layer for a skills-only
+// TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterSkillsProvisioner proves update
+// does not create the dots-owned CodeGraph instruction block for a skills-only
 // Codex provisioner.
-func TestUpdateDoesNotWriteCodeGraphOverlayAfterSkillsProvisioner(t *testing.T) {
+func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterSkillsProvisioner(t *testing.T) {
 	requireGitCLI(t)
 	sandboxHome := t.TempDir()
 	stateRoot := t.TempDir()
@@ -165,7 +165,7 @@ provisioners:
 		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot)
 
 	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("update with skills provisioner wrote CodeGraph overlay without the codegraph tag; stat err = %v\noutput:\n%s", err, out)
+		t.Fatalf("update with skills provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out)
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)

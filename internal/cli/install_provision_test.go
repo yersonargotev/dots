@@ -116,10 +116,10 @@ func TestInstallExecutesProvisionerAfterFilesWithHomeThreaded(t *testing.T) {
 	}
 }
 
-// TestInstallDoesNotWriteCodeGraphOverlayAfterGentleAIProvisioner proves a
+// TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner proves a
 // non-CodeGraph provisioner does not create the dots-owned CodeGraph
-// instruction layer.
-func TestInstallDoesNotWriteCodeGraphOverlayAfterGentleAIProvisioner(t *testing.T) {
+// instruction block.
+func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -145,18 +145,18 @@ func TestInstallDoesNotWriteCodeGraphOverlayAfterGentleAIProvisioner(t *testing.
 	}
 
 	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("install with gentle-ai provisioner wrote CodeGraph overlay without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
+		t.Fatalf("install with gentle-ai provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
-// TestInstallDoesNotWriteCodexCodeGraphOverlayWithoutSelectedProvisioners proves
-// the post-provision CodeGraph layer is scoped to the codegraph tag. A
+// TestInstallDoesNotWriteCodexCodeGraphInstructionBlockWithoutSelectedProvisioners proves
+// the post-provision CodeGraph instruction block is scoped to the codegraph tag. A
 // successful install whose active profile selects no provisioners must not
 // create a sandbox Codex AGENTS.md.
-func TestInstallDoesNotWriteCodexCodeGraphOverlayWithoutSelectedProvisioners(t *testing.T) {
+func TestInstallDoesNotWriteCodexCodeGraphInstructionBlockWithoutSelectedProvisioners(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -203,10 +203,10 @@ provisioners:
 	}
 }
 
-// TestInstallDoesNotWriteCodeGraphOverlayAfterCodexProvisioner proves a Codex
+// TestInstallDoesNotWriteCodeGraphInstructionBlockAfterCodexProvisioner proves a Codex
 // MCP provisioner alone does not create the dots-owned CodeGraph instruction
 // layer.
-func TestInstallDoesNotWriteCodeGraphOverlayAfterCodexProvisioner(t *testing.T) {
+func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterCodexProvisioner(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -248,17 +248,17 @@ provisioners:
 	}
 
 	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("install with codex provisioner wrote CodeGraph overlay without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
+		t.Fatalf("install with codex provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
-// TestInstallDoesNotWriteCodeGraphOverlayAfterSkillsProvisioner proves a
+// TestInstallDoesNotWriteCodeGraphInstructionBlockAfterSkillsProvisioner proves a
 // skills-only provisioner targeting Codex does not create the dots-owned
-// CodeGraph instruction layer.
-func TestInstallDoesNotWriteCodeGraphOverlayAfterSkillsProvisioner(t *testing.T) {
+// CodeGraph instruction block.
+func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterSkillsProvisioner(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -300,7 +300,7 @@ provisioners:
 	}
 
 	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("install with skills provisioner wrote CodeGraph overlay without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
+		t.Fatalf("install with skills provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)

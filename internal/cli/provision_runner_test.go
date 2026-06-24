@@ -184,7 +184,7 @@ printf '%s\n' "$*" > "$HOME/skills-args"
 		t.Fatalf("skills args = %q, want %q", got, want)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("skills-only Codex provisioner wrote CodeGraph overlay without the codegraph tag: %v", err)
+		t.Fatalf("skills-only Codex provisioner wrote CodeGraph instruction block without the codegraph tag: %v", err)
 	}
 }
 
