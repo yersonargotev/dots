@@ -162,10 +162,7 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 	if agents := selectedCodeGraphAgents(selected); len(agents) > 0 {
 		return codexconfig.EnsureCodeGraphMode(home, agents...)
 	}
-	if !selectedProvisionersAffectCodex(selected) {
-		return nil
-	}
-	return codexconfig.EnsureCodeGraphMode(home)
+	return nil
 }
 
 func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
@@ -184,33 +181,6 @@ func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
 		}
 	}
 	return agents
-}
-
-func selectedProvisionersAffectCodex(selected []manifest.Provisioner) bool {
-	for _, prov := range selected {
-		if prov.Tool == "codex" {
-			return true
-		}
-		if prov.Tool == "codegraph" && provisionerAgentsInclude(prov, "codex") {
-			return true
-		}
-		if prov.Tool == "gentle-ai" && provisionerAgentsInclude(prov, "codex") {
-			return true
-		}
-		if prov.Tool == "skills" && provisionerAgentsInclude(prov, "codex") {
-			return true
-		}
-	}
-	return false
-}
-
-func provisionerAgentsInclude(prov manifest.Provisioner, want string) bool {
-	for _, agent := range prov.Spec.Agents {
-		if agent == want {
-			return true
-		}
-	}
-	return false
 }
 
 // resolveAndApply resolves the plan's conflicts (via the TUI, text prompts, or
