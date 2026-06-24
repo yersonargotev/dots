@@ -128,6 +128,18 @@ func TestRenderCommand(t *testing.T) {
 			wantArgs: []string{"plugin", "marketplace", "add", "ChromeDevTools/chrome-devtools-mcp"},
 		},
 		{
+			name: "claude mcp add renders stdio command",
+			prov: manifest.Provisioner{
+				Tool: "claude",
+				Spec: manifest.ProvisionerSpec{
+					MCP:     " dart ",
+					Command: []string{" dart ", "mcp-server", ""},
+				},
+			},
+			wantExec: "claude",
+			wantArgs: []string{"mcp", "add", "--transport", "stdio", "dart", "--", "dart", "mcp-server"},
+		},
+		{
 			name: "codex mcp add renders env flags in sorted order before the command",
 			prov: manifest.Provisioner{
 				Tool: "codex",

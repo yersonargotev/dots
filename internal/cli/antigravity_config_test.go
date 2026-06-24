@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -75,6 +76,10 @@ func TestAntigravityAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 		ToolPermission          *string `json:"toolPermission"`
 		AllowNonWorkspaceAccess *bool   `json:"allowNonWorkspaceAccess"`
 		EnableTerminalSandbox   *bool   `json:"enableTerminalSandbox"`
+		MCPServers              map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
 	}
 	if err := json.Unmarshal(got, &parsed); err != nil {
 		t.Fatalf("seeded settings.json is not valid JSON: %v", err)
@@ -88,6 +93,76 @@ func TestAntigravityAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	}
 	if parsed.EnableTerminalSandbox == nil || *parsed.EnableTerminalSandbox != false {
 		t.Errorf("enableTerminalSandbox key incorrect or missing, got: %v", parsed.EnableTerminalSandbox)
+	}
+	if _, ok := parsed.MCPServers["dart-mcp-server"]; ok {
+		t.Fatalf("agents profile must not include mobile Dart MCP in Antigravity settings")
+	}
+}
+
+// TestAntigravityMobileProfileSeedsOnlyDartMCPInSandbox proves the mobile profile
+// owns only the Dart/Flutter MCP fragment, not the broad agents baseline.
+func TestAntigravityMobileProfileSeedsOnlyDartMCPInSandbox(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	realHome := t.TempDir()
+	t.Setenv("HOME", realHome)
+
+	stubDir := t.TempDir()
+	for _, name := range []string{"npx", "claude", "codex", "dart"} {
+		writeExecStub(t, filepath.Join(stubDir, name), "#!/bin/sh\nexit 0\n")
+	}
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	install := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	install.SetOut(&installOut)
+	install.SetErr(&installOut)
+	install.SetArgs([]string{
+		"install",
+		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "mobile",
+		"--source-root", repoRoot,
+		"--home", home,
+		"--state-root", stateRoot,
+		"--yes",
+	})
+
+	if err := install.Execute(); err != nil {
+		t.Fatalf("dots install failed in sandbox: %v\noutput:\n%s", err, installOut.String())
+	}
+
+	settingsTarget := filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")
+	got, err := os.ReadFile(settingsTarget)
+	if err != nil {
+		t.Fatalf("read copied antigravity mobile target %q: %v", settingsTarget, err)
+	}
+
+	var parsed struct {
+		ToolPermission          *string `json:"toolPermission"`
+		AllowNonWorkspaceAccess *bool   `json:"allowNonWorkspaceAccess"`
+		EnableTerminalSandbox   *bool   `json:"enableTerminalSandbox"`
+		MCPServers              map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(got, &parsed); err != nil {
+		t.Fatalf("seeded mobile settings.json is not valid JSON: %v", err)
+	}
+
+	if parsed.ToolPermission != nil || parsed.AllowNonWorkspaceAccess != nil || parsed.EnableTerminalSandbox != nil {
+		t.Fatalf("mobile Antigravity settings must not manage broad baseline keys: %s", string(got))
+	}
+	dartMCP, ok := parsed.MCPServers["dart-mcp-server"]
+	if !ok {
+		t.Fatalf("mcpServers.dart-mcp-server missing from mobile Antigravity settings")
+	}
+	if dartMCP.Command != "dart" || !reflect.DeepEqual(dartMCP.Args, []string{"mcp-server"}) {
+		t.Fatalf("mcpServers.dart-mcp-server = %#v, want command dart with args [mcp-server]", dartMCP)
 	}
 }
 
