@@ -606,7 +606,7 @@ func TestRepositoryManifestIncludesMobileAgentMCPConfigEntries(t *testing.T) {
 		source string
 		target string
 	}{
-		{source: "configs/antigravity/settings.json", target: "~/.gemini/antigravity-cli/settings.json"},
+		{source: "configs/antigravity/mobile-mcp-settings.json", target: "~/.gemini/antigravity-cli/settings.json"},
 		{source: "configs/vscode/settings.json", target: "~/Library/Application Support/Code/User/settings.json"},
 		{source: "configs/vscode/settings.json", target: "~/.config/Code/User/settings.json"},
 	}
@@ -1716,14 +1716,14 @@ provisioners:
 			want: "provisioners[0].spec must not set claude fields (marketplace, plugin, from) for the gentle-ai tool",
 		},
 		{
-			name: "gentle-ai spec mixes codex mcp fields",
+			name: "gentle-ai spec mixes mcp fields",
 			provisioner: `  - tool: gentle-ai
     tags: [core]
     spec:
       scope: global
       mcp: chrome-devtools
 `,
-			want: "provisioners[0].spec must not set codex MCP fields (mcp, command, env) for the gentle-ai tool",
+			want: "provisioners[0].spec must not set MCP fields (mcp, command, env) for the gentle-ai tool",
 		},
 		{
 			name: "gentle-ai spec mixes skills fields",
@@ -1931,7 +1931,7 @@ provisioners:
       package: vercel-labs/agent-skills
       mcp: chrome-devtools
 `,
-			want: "provisioners[0].spec must not set codex MCP fields (mcp, command, env) for the skills tool",
+			want: "provisioners[0].spec must not set MCP fields (mcp, command, env) for the skills tool",
 		},
 		{
 			name: "missing spec",

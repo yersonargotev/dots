@@ -54,8 +54,8 @@ type Provisioner struct {
 // ProvisionerSpec carries the declarative values dots owns for an allowlisted
 // tool; the tool owns how they render into agent config. The scalar/list flags
 // map 1:1 to gentle-ai's install/uninstall flags. The Claude fields (Marketplace, Plugin,
-// From) describe a single idempotent `claude` invocation, the codex MCP fields
-// (MCP, Command, Env) a single `codex mcp add` invocation, Package drives
+// From) describe a single idempotent `claude` invocation, the MCP fields
+// (MCP, Command, Env) a single MCP-server add invocation, Package drives
 // one `npx --yes skills@1.5.12 add` invocation, and the codegraph dialect reuses
 // Agents, Scope, and Yes to render a fixed bootstrap-and-install script. The
 // dialects are mutually exclusive: a spec speaks exactly one of them.
@@ -296,7 +296,7 @@ func (m Manifest) Validate() error {
 				return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the gentle-ai tool", i)
 			}
 			if prov.Spec.usesMCPFields() {
-				return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the gentle-ai tool", i)
+				return fmt.Errorf("provisioners[%d].spec must not set MCP fields (mcp, command, env) for the gentle-ai tool", i)
 			}
 			if prov.Spec.usesSkillsFields() {
 				return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the gentle-ai tool", i)
@@ -370,8 +370,8 @@ func (s ProvisionerSpec) usesClaudeFields() bool {
 		strings.TrimSpace(s.From) != ""
 }
 
-// usesMCPFields reports whether the spec sets any codex MCP-server field. It
-// keeps the codex dialect disjoint from the gentle-ai and claude dialects.
+// usesMCPFields reports whether the spec sets any MCP-server field. It
+// keeps the MCP dialect disjoint from the gentle-ai and claude dialects.
 func (s ProvisionerSpec) usesMCPFields() bool {
 	return strings.TrimSpace(s.MCP) != "" ||
 		hasNonEmptyString(s.Command) ||
@@ -490,7 +490,7 @@ func validateCodeGraphSpec(s ProvisionerSpec, i int) error {
 		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the codegraph tool", i)
 	}
 	if s.usesMCPFields() {
-		return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the codegraph tool", i)
+		return fmt.Errorf("provisioners[%d].spec must not set MCP fields (mcp, command, env) for the codegraph tool", i)
 	}
 	if s.usesSkillsFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the codegraph tool", i)
@@ -540,13 +540,13 @@ func allowedCodeGraphAgent(agent string) bool {
 // validateSkillsSpec enforces the skills.sh provisioner contract: it drives one
 // exact `npx --yes skills@1.5.12 add <package>` invocation with optional target agents and
 // selected skill names. It does not accept gentle-ai scalar/action fields,
-// Claude plugin fields, or Codex MCP fields.
+// Claude plugin fields, or MCP fields.
 func validateSkillsSpec(s ProvisionerSpec, i int) error {
 	if s.usesClaudeFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the skills tool", i)
 	}
 	if s.usesMCPFields() {
-		return fmt.Errorf("provisioners[%d].spec must not set codex MCP fields (mcp, command, env) for the skills tool", i)
+		return fmt.Errorf("provisioners[%d].spec must not set MCP fields (mcp, command, env) for the skills tool", i)
 	}
 	if strings.TrimSpace(s.Action) != "" ||
 		strings.TrimSpace(s.Scope) != "" ||

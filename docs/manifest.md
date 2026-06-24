@@ -93,7 +93,8 @@ Current Managed Entries:
 | `configs/codex/config.toml` | `~/.codex/config.toml` | `copy` | `agents` | `darwin`, `linux` | None; owns TOML subset |
 | `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
-| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `agents`, `mobile` | `darwin`, `linux` | None; owns JSON subset including Dart/Flutter MCP server |
+| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns the broad Antigravity JSON baseline |
+| `configs/antigravity/mobile-mcp-settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `mobile` | `darwin`, `linux` | None; owns only the Dart/Flutter MCP JSON subset |
 | `configs/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` | `copy` | `mobile` | `darwin` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
 | `configs/vscode/settings.json` | `~/.config/Code/User/settings.json` | `copy` | `mobile` | `linux` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
 | `configs/opencode/mcp.json` | `~/.config/opencode-dots.json` | `symlink` | `web` | `darwin`, `linux` | `opencode` |
@@ -206,7 +207,7 @@ Constraints:
 - `yes` is required and must be `true`; it renders CodeGraph's non-interactive
   `--yes` flag.
 - CodeGraph specs must not mix gentle-ai action/channel/persona/preset/sdd,
-  Claude, Codex MCP, or skills.sh fields.
+  Claude plugin fields, MCP fields, or skills.sh fields.
 
 ### `skills` spec
 

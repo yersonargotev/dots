@@ -334,6 +334,14 @@ entries:
     ownership: json-subset
     tags:
       - agents
+    os:
+      - darwin
+      - linux
+  - source: configs/antigravity/mobile-mcp-settings.json
+    target: ~/.gemini/antigravity-cli/settings.json
+    strategy: copy
+    ownership: json-subset
+    tags:
       - mobile
     os:
       - darwin
