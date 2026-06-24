@@ -47,3 +47,34 @@ func TestTOMLFileContainsRejectsChangedDotsOwnedValue(t *testing.T) {
 		t.Fatal("TOMLFileContains() = true, want false")
 	}
 }
+
+func TestTOMLFileContainsIgnoresUnsupportedUnownedTargetTOML(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.toml")
+	target := filepath.Join(dir, "target.toml")
+
+	if err := os.WriteFile(source, []byte("[tui]\nstatus_line = [\"model\", \"git-branch\"]\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`[[mcp_servers]]
+name = "chrome-devtools"
+command = "npx"
+args = [
+  "-y",
+  "chrome-devtools-mcp@latest",
+]
+
+[tui]
+status_line = ["model", "git-branch"]
+`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	got, err := TOMLFileContains(target, source)
+	if err != nil {
+		t.Fatalf("TOMLFileContains() error = %v", err)
+	}
+	if !got {
+		t.Fatal("TOMLFileContains() = false, want true")
+	}
+}

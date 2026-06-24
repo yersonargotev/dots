@@ -38,9 +38,9 @@ func JSONFileContains(target, source string) (bool, error) {
 }
 
 // TOMLFileContains reports whether target contains every scalar/array setting
-// present in source. It intentionally supports the simple TOML shape dots owns
-// for agent settings: table headers plus single-line scalar and string-array
-// assignments. Unknown or unsupported target syntax is treated as not aligned.
+// present in source. The source is parsed strictly because it is the dots-owned
+// fragment. The target is parsed only for source-owned paths, so unrelated TOML
+// added by Codex or provisioners cannot make the dots-owned subset drift.
 func TOMLFileContains(target, source string) (bool, error) {
 	sourceData, err := os.ReadFile(source)
 	if err != nil {
@@ -54,11 +54,11 @@ func TOMLFileContains(target, source string) (bool, error) {
 		return false, fmt.Errorf("read %s: %w", target, err)
 	}
 
-	sourceValues, err := parseSimpleTOML(sourceData)
+	sourceValues, err := parseSimpleTOML(sourceData, nil)
 	if err != nil {
 		return false, fmt.Errorf("parse source TOML %s: %w", source, err)
 	}
-	targetValues, err := parseSimpleTOML(targetData)
+	targetValues, err := parseSimpleTOML(targetData, sourceValuePaths(sourceValues))
 	if err != nil {
 		return false, nil
 	}
@@ -107,7 +107,15 @@ func jsonContains(target, source any) bool {
 	}
 }
 
-func parseSimpleTOML(data []byte) (map[string]string, error) {
+func sourceValuePaths(values map[string]string) map[string]struct{} {
+	paths := make(map[string]struct{}, len(values))
+	for path := range values {
+		paths[path] = struct{}{}
+	}
+	return paths
+}
+
+func parseSimpleTOML(data []byte, wanted map[string]struct{}) (map[string]string, error) {
 	values := map[string]string{}
 	section := ""
 	for lineNo, rawLine := range strings.Split(string(data), "\n") {
@@ -116,7 +124,17 @@ func parseSimpleTOML(data []byte) (map[string]string, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "[[") {
-			return nil, fmt.Errorf("line %d: arrays of tables are unsupported", lineNo+1)
+			if wanted == nil {
+				return nil, fmt.Errorf("line %d: arrays of tables are unsupported", lineNo+1)
+			}
+			if !strings.HasSuffix(line, "]]") {
+				return nil, fmt.Errorf("line %d: malformed array-of-table header", lineNo+1)
+			}
+			section = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "[["), "]]"))
+			if section == "" {
+				return nil, fmt.Errorf("line %d: empty array-of-table header", lineNo+1)
+			}
+			continue
 		}
 		if strings.HasPrefix(line, "[") {
 			if !strings.HasSuffix(line, "]") {
@@ -130,6 +148,9 @@ func parseSimpleTOML(data []byte) (map[string]string, error) {
 		}
 		key, value, ok := strings.Cut(line, "=")
 		if !ok {
+			if wanted != nil {
+				continue
+			}
 			return nil, fmt.Errorf("line %d: expected key/value assignment", lineNo+1)
 		}
 		key = strings.TrimSpace(key)
@@ -139,6 +160,11 @@ func parseSimpleTOML(data []byte) (map[string]string, error) {
 		path := key
 		if section != "" {
 			path = section + "." + key
+		}
+		if wanted != nil {
+			if _, ok := wanted[path]; !ok {
+				continue
+			}
 		}
 		canonical, err := canonicalTOMLValue(strings.TrimSpace(value))
 		if err != nil {
