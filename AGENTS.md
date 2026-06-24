@@ -9,6 +9,25 @@ the domain glossary before writing PRDs, issues, plans, or architecture reviews,
 and use its terms consistently (`Source of Truth`, `Install Manifest`,
 `Managed Entry`, `Install Plan`, `Conflict`, `Backup Set`, `Drift`).
 
+
+## Token discipline
+
+Use the smallest evidence that proves the point. This repo has many generated,
+vendored, and agent-support files, so broad reads waste context quickly.
+
+- Prefer `rg`, `sed -n`, `git diff --stat`, and targeted file reads over `cat`
+  or broad recursive output.
+- Do not print full diffs by default. Start with `git diff --stat`, then inspect
+  only the files or hunks that matter.
+- Load long skill/docs references only when the workflow is stale, ambiguous,
+  failing, or the current task needs that section.
+- Use CodeGraph for source-code architecture, symbols, call flow, and impact
+  analysis. For manifest, docs, config, and script changes, prefer `rg`, `sed`,
+  targeted reads, and tests. Never use CodeGraph just because `.codegraph/`
+  exists.
+- Validate in two phases: focused package/file checks while iterating, then the
+  full CI-equivalent suite before opening or marking a PR ready.
+
 ## Build, test, and verify
 
 Match CI before pushing (`.github/workflows/ci.yml`):

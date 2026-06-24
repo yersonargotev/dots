@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dots PR Fast Path"
+  short_description: "Ship small dots changes through issue, commit, PR, and CI with compact output."
+  default_prompt: "Use this skill for small or already-implemented yersonargotev/dots changes that need issue-first PR workflow without loading the full ceremony."

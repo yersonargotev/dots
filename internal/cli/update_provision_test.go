@@ -125,7 +125,8 @@ func TestUpdateWritesCodexCodeGraphOverlayAfterProvisioners(t *testing.T) {
 	for _, want := range []string{
 		"<!-- dots:codegraph-mode -->",
 		"CodeGraph Mode: enabled",
-		"If `.codegraph/` exists in the project, use CodeGraph first",
+		"Use CodeGraph for architecture questions",
+		"Never use CodeGraph just because `.codegraph/` exists.",
 		"<!-- /dots:codegraph-mode -->",
 	} {
 		if !strings.Contains(content, want) {
