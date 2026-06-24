@@ -23,6 +23,12 @@ Read these when stale or before opening a PR:
 - `.atl/` is gitignored, so registry/cache changes may need explicit `git add -f` or index updates.
 - Every PR must link an issue with `Closes #N`, use exactly one `type:*` label, fill the PR template, use conventional commits, and include no AI attribution.
 
+## Fast path
+
+Use `dots-pr-fast-path` for small, already-implemented changes. Return to this
+full workflow when the change is broad, risky, lacks a clear issue, touches
+release/output-contract behavior, or the fast path finds stale workflow evidence.
+
 ## Workflow
 
 1. Verify repo, branch, issue, and working tree without reverting others' edits.

@@ -131,8 +131,9 @@ func assertCodeGraphBlock(t *testing.T, path, content string) {
 	for _, want := range []string{
 		codeGraphStart,
 		"CodeGraph Mode: enabled",
-		"If `.codegraph/` exists in the project, use CodeGraph first",
-		"`codegraph_explore` for understanding an area or flow.",
+		"Use CodeGraph for architecture questions",
+		"Never use CodeGraph just because `.codegraph/` exists.",
+		"`codegraph_explore` for understanding a code area or flow.",
 		"Treat CodeGraph-returned source as already read.",
 		"Do NOT use CodeGraph as proof for runtime behavior.",
 		"If `.codegraph/` is missing, ask before running `codegraph init -i`.",
@@ -145,6 +146,14 @@ func assertCodeGraphBlock(t *testing.T, path, content string) {
 	for _, ghostTool := range []string{"codegraph_context", "codegraph_trace", "codegraph_files", "codegraph_status"} {
 		if strings.Contains(content, ghostTool) {
 			t.Fatalf("%s kept unsupported tool %q\ncontent:\n%s", path, ghostTool, content)
+		}
+	}
+	for _, oldInstruction := range []string{
+		"If `.codegraph/` exists in the project, use CodeGraph first",
+		"use CodeGraph first",
+	} {
+		if strings.Contains(content, oldInstruction) {
+			t.Fatalf("%s kept mandatory CodeGraph wording %q\ncontent:\n%s", path, oldInstruction, content)
 		}
 	}
 }

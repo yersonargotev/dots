@@ -19,9 +19,10 @@ const (
 )
 
 const codeGraphInstructions = "CodeGraph Mode: enabled\n\n" +
-	"If `.codegraph/` exists in the project, use CodeGraph first for architecture questions, symbol discovery, call flow, impact analysis, and locating relevant files before edits.\n\n" +
+	"Use CodeGraph for architecture questions, symbol discovery, call flow, impact analysis, and locating relevant source files before edits.\n\n" +
+	"For manifest, docs, config, and script changes, prefer `rg`, `sed`, targeted file reads, and tests. Never use CodeGraph just because `.codegraph/` exists.\n\n" +
 	"Prefer:\n\n" +
-	"- `codegraph_explore` for understanding an area or flow.\n" +
+	"- `codegraph_explore` for understanding a code area or flow.\n" +
 	"- `codegraph_node` for one symbol or file.\n" +
 	"- `codegraph_search`: find a symbol by name.\n" +
 	"- `codegraph_callers` for caller impact.\n\n" +

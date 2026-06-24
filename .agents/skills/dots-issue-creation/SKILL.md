@@ -22,6 +22,12 @@ Read these when context is stale or the workflow may have changed:
 - The generic `issue-creation` skill is only a rough reference here: this repo uses `needs-triage` and `ready-for-agent`, not `status:needs-review` / `status:approved`.
 - `gh issue create --template ... --body-file ...` does not work. Use a template-shaped body file plus explicit labels.
 
+## Fast path
+
+Use `dots-pr-fast-path` when a small change is already implemented and only
+needs the standard issue + commit + PR path. Use this full issue workflow for
+planning, multiple slices, unclear requirements, or duplicate-heavy triage.
+
 ## Workflow
 
 1. Verify repo and search duplicates.
