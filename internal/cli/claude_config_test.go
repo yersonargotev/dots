@@ -58,6 +58,9 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 
 	settingsTarget := filepath.Join(home, ".claude", "settings.json")
 	scriptTarget := filepath.Join(home, ".claude", "statusline-command.sh")
+	codexConfigTarget := filepath.Join(home, ".codex", "config.toml")
+	copilotSettingsTarget := filepath.Join(home, ".copilot", "settings.json")
+	copilotScriptTarget := filepath.Join(home, ".copilot", "statusline-command.sh")
 
 	// The settings baseline and statusLine script are copied (not symlinked) so
 	// gentle-ai can merge its own keys without writing back into the repo.
@@ -67,6 +70,9 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	}{
 		{target: settingsTarget, source: filepath.Join(repoRoot, "configs", "claude", "settings.json")},
 		{target: scriptTarget, source: filepath.Join(repoRoot, "configs", "claude", "statusline-command.sh")},
+		{target: codexConfigTarget, source: filepath.Join(repoRoot, "configs", "codex", "config.toml")},
+		{target: copilotSettingsTarget, source: filepath.Join(repoRoot, "configs", "copilot", "settings.json")},
+		{target: copilotScriptTarget, source: filepath.Join(repoRoot, "configs", "copilot", "statusline-command.sh")},
 	}
 	for _, m := range managed {
 		info, err := os.Lstat(m.target)
@@ -96,6 +102,13 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	}
 	if scriptInfo.Mode()&0o111 == 0 {
 		t.Fatalf("copied statusline script %q is not executable (mode %v)", scriptTarget, scriptInfo.Mode())
+	}
+	copilotScriptInfo, err := os.Stat(copilotScriptTarget)
+	if err != nil {
+		t.Fatalf("stat copied copilot statusline script: %v", err)
+	}
+	if copilotScriptInfo.Mode()&0o111 == 0 {
+		t.Fatalf("copied copilot statusline script %q is not executable (mode %v)", copilotScriptTarget, copilotScriptInfo.Mode())
 	}
 
 	settings, err := os.ReadFile(settingsTarget)
