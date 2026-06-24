@@ -148,4 +148,12 @@ func assertCodeGraphBlock(t *testing.T, path, content string) {
 			t.Fatalf("%s kept unsupported tool %q\ncontent:\n%s", path, ghostTool, content)
 		}
 	}
+	for _, oldInstruction := range []string{
+		"If `.codegraph/` exists in the project, use CodeGraph first",
+		"use CodeGraph first",
+	} {
+		if strings.Contains(content, oldInstruction) {
+			t.Fatalf("%s kept mandatory CodeGraph wording %q\ncontent:\n%s", path, oldInstruction, content)
+		}
+	}
 }
