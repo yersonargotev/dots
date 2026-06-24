@@ -786,7 +786,7 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	var cleanup, codexInstall, claudeInstall, antigravityInstall, opencodeInstall, copilotInstall *manifest.Provisioner
+	var cleanup, sddInstall, codexInstall, claudeInstall, antigravityInstall, opencodeInstall, copilotInstall *manifest.Provisioner
 	for i := range got.Provisioners {
 		prov := &got.Provisioners[i]
 		if prov.Tool != "gentle-ai" {
@@ -795,6 +795,8 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 		switch {
 		case cleanup == nil && prov.Spec.Action == "uninstall":
 			cleanup = prov
+		case sddInstall == nil && sameStrings(prov.Spec.Components, []string{"sdd"}):
+			sddInstall = prov
 		case codexInstall == nil && sameStrings(prov.Spec.Agents, []string{"codex"}):
 			codexInstall = prov
 		case claudeInstall == nil && sameStrings(prov.Spec.Agents, []string{"claude-code"}):
@@ -810,6 +812,9 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 
 	if cleanup == nil {
 		t.Fatal("repository manifest missing gentle-ai uninstall cleanup provisioner")
+	}
+	if sddInstall == nil {
+		t.Fatal("repository manifest missing opt-in gentle-ai SDD install provisioner")
 	}
 	if codexInstall == nil {
 		t.Fatal("repository manifest missing gentle-ai codex basic install provisioner")
@@ -839,6 +844,15 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	}
 	if !sameStrings(cleanup.Spec.Components, []string{"sdd"}) {
 		t.Fatalf("gentle-ai cleanup components = %#v, want [sdd]", cleanup.Spec.Components)
+	}
+	if !sameStrings(sddInstall.Tags, []string{"sdd"}) {
+		t.Fatalf("gentle-ai SDD install tags = %#v, want [sdd] so agents profile only installs SDD with --tag sdd", sddInstall.Tags)
+	}
+	if !sameStrings(sddInstall.Spec.Agents, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
+		t.Fatalf("gentle-ai SDD install agents = %#v, want [codex claude-code opencode antigravity vscode-copilot]", sddInstall.Spec.Agents)
+	}
+	if sddInstall.Spec.SDDMode != "multi" {
+		t.Fatalf("gentle-ai SDD install mode = %q, want multi", sddInstall.Spec.SDDMode)
 	}
 	if codexInstall.Spec.Preset != "custom" {
 		t.Fatalf("gentle-ai codex install preset = %q, want custom", codexInstall.Spec.Preset)
@@ -877,7 +891,7 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 		if &got.Provisioners[i] == cleanup {
 			break
 		}
-		if &got.Provisioners[i] == codexInstall || &got.Provisioners[i] == claudeInstall || &got.Provisioners[i] == antigravityInstall || &got.Provisioners[i] == opencodeInstall || &got.Provisioners[i] == copilotInstall {
+		if &got.Provisioners[i] == sddInstall || &got.Provisioners[i] == codexInstall || &got.Provisioners[i] == claudeInstall || &got.Provisioners[i] == antigravityInstall || &got.Provisioners[i] == opencodeInstall || &got.Provisioners[i] == copilotInstall {
 			t.Fatal("gentle-ai install provisioner appears before cleanup")
 		}
 	}
@@ -918,6 +932,36 @@ func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *te
 	}
 	if !foundGentleAI {
 		t.Fatal("agents profile did not select gentle-ai provisioners")
+	}
+	wantSDDArgs := []string{
+		"install",
+		"--scope", "global",
+		"--channel", "stable",
+		"--persona", "neutral",
+		"--preset", "custom",
+		"--sdd-mode", "multi",
+		"--agents", "codex,claude-code,opencode,antigravity,vscode-copilot",
+		"--components", "sdd",
+	}
+	for _, step := range agents.Steps {
+		if step.Tool == "gentle-ai" && sameStrings(step.Args, wantSDDArgs) {
+			t.Fatalf("agents profile selected SDD install args %#v; SDD must require --tag sdd", step.Args)
+		}
+	}
+
+	agentsWithSDD, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"sdd"}, OS: "darwin"})
+	if err != nil {
+		t.Fatalf("provision.Build(agents --tag sdd) error = %v", err)
+	}
+	foundSDDInstall := false
+	for _, step := range agentsWithSDD.Steps {
+		if step.Tool == "gentle-ai" && sameStrings(step.Args, wantSDDArgs) {
+			foundSDDInstall = true
+			break
+		}
+	}
+	if !foundSDDInstall {
+		t.Fatal("agents profile with --tag sdd did not select the Gentle-AI SDD install provisioner")
 	}
 }
 
