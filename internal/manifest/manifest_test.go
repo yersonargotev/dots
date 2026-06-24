@@ -1696,6 +1696,28 @@ provisioners:
 			want: "provisioners[0].spec.from is only valid alongside plugin",
 		},
 		{
+			name: "claude marketplace with command",
+			provisioner: `  - tool: claude
+    tags: [core]
+    spec:
+      marketplace: ChromeDevTools/chrome-devtools-mcp
+      command: [npx, chrome-devtools-mcp@latest]
+`,
+			want: "provisioners[0].spec.command is only valid when mcp is set",
+		},
+		{
+			name: "claude plugin with env",
+			provisioner: `  - tool: claude
+    tags: [core]
+    spec:
+      plugin: chrome-devtools-mcp
+      from: chrome-devtools-plugins
+      env:
+        CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1"
+`,
+			want: "provisioners[0].spec.env is only valid when mcp is set",
+		},
+		{
 			name: "claude spec mixes gentle-ai flags",
 			provisioner: `  - tool: claude
     tags: [core]

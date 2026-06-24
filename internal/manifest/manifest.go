@@ -443,13 +443,21 @@ func validateClaudeSpec(s ProvisionerSpec, i int) error {
 	if (hasMarketplace || hasMCP) && strings.TrimSpace(s.From) != "" {
 		return fmt.Errorf("provisioners[%d].spec.from is only valid alongside plugin", i)
 	}
+	hasCommand := hasNonEmptyString(s.Command)
 	if hasMCP {
-		if !hasNonEmptyString(s.Command) {
+		if !hasCommand {
 			return fmt.Errorf("provisioners[%d].spec.command is required when mcp is set", i)
 		}
 		if len(s.Env) > 0 {
 			return fmt.Errorf("provisioners[%d].spec.env is only valid for the codex tool", i)
 		}
+		return nil
+	}
+	if hasCommand {
+		return fmt.Errorf("provisioners[%d].spec.command is only valid when mcp is set", i)
+	}
+	if len(s.Env) > 0 {
+		return fmt.Errorf("provisioners[%d].spec.env is only valid when mcp is set", i)
 	}
 	return nil
 }
