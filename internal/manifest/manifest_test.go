@@ -1077,6 +1077,35 @@ func TestRepositoryManifestMarksClaudeSettingsAsJSONSubsetOwned(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestMarksCodexConfigAsTOMLSubsetOwned(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var settings *manifest.Entry
+	for i := range got.Entries {
+		entry := &got.Entries[i]
+		if entry.Source == "configs/codex/config.toml" && entry.Target == "~/.codex/config.toml" {
+			settings = entry
+			break
+		}
+	}
+
+	if settings == nil {
+		t.Fatal("repository manifest missing Codex config entry")
+	}
+	if settings.Strategy != "copy" {
+		t.Fatalf("Codex config strategy = %q, want copy", settings.Strategy)
+	}
+	if settings.Ownership != "toml-subset" {
+		t.Fatalf("Codex config ownership = %q, want toml-subset", settings.Ownership)
+	}
+}
+
 func TestDependencyProbeTrimsWhitespace(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1420,7 +1449,7 @@ entries:
     ownership: merge
     tags: [core]
 `,
-			want: "entries[0].ownership must be one of json-subset",
+			want: "entries[0].ownership must be one of json-subset, toml-subset",
 		},
 		{
 			name: "json subset ownership on non-copy strategy",

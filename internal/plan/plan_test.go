@@ -309,6 +309,73 @@ func TestBuildCopyJSONSubsetOwnership(t *testing.T) {
 	}
 }
 
+func TestBuildCopyTOMLSubsetOwnership(t *testing.T) {
+	tests := []struct {
+		name          string
+		sourceContent string
+		targetContent string
+		metadata      func(target string) state.Metadata
+		want          plan.Status
+	}{
+		{
+			name:          "untrusted pre-existing compatible TOML superset is conflict",
+			sourceContent: "[tui]\nstatus_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\"]\n",
+			targetContent: "model = \"gpt-5.5\"\n\n[tui]\nstatus_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\"]\ntheme = \"catppuccin\"\n",
+			want:          plan.StatusConflict,
+		},
+		{
+			name:          "trusted Codex TOML with runtime additions is unchanged",
+			sourceContent: "[tui]\nstatus_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\"]\n",
+			targetContent: "model = \"gpt-5.5\"\n\n[tui]\nstatus_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\"]\ntheme = \"catppuccin\"\n",
+			metadata: func(target string) state.Metadata {
+				return state.Metadata{Entries: []state.Record{{Target: target, Source: "configs/codex/config.toml", Strategy: "copy"}}}
+			},
+			want: plan.StatusUnchanged,
+		},
+		{
+			name:          "changed dots-owned TOML value is conflict even with metadata",
+			sourceContent: "[tui]\nstatus_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\"]\n",
+			targetContent: "[tui]\nstatus_line = [\"model-with-reasoning\", \"current-dir\"]\n",
+			metadata: func(target string) state.Metadata {
+				return state.Metadata{Entries: []state.Record{{Target: target, Source: "configs/codex/config.toml", Strategy: "copy"}}}
+			},
+			want: plan.StatusConflict,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sourceRoot := t.TempDir()
+			home := t.TempDir()
+			writeSource(t, sourceRoot, "configs/codex/config.toml", tt.sourceContent)
+			target := filepath.Join(home, ".codex", "config.toml")
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				t.Fatalf("mkdir target: %v", err)
+			}
+			if err := os.WriteFile(target, []byte(tt.targetContent), 0o600); err != nil {
+				t.Fatalf("write target: %v", err)
+			}
+
+			meta := state.Metadata{}
+			if tt.metadata != nil {
+				meta = tt.metadata(target)
+			}
+
+			action := buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+				Source:    "configs/codex/config.toml",
+				Target:    "~/.codex/config.toml",
+				Strategy:  "copy",
+				Ownership: "toml-subset",
+				Tags:      []string{"core"},
+			}, meta)
+
+			if action.Status != tt.want {
+				t.Fatalf("Status = %q, want %q", action.Status, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildDanglingSymlinkIsConflict(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

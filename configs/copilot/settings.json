@@ -1,0 +1,9 @@
+{
+  "footer": {
+    "showCustom": true
+  },
+  "statusLine": {
+    "command": "bash ~/.copilot/statusline-command.sh",
+    "type": "command"
+  }
+}

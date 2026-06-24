@@ -302,6 +302,32 @@ entries:
     os:
       - darwin
       - linux
+  - source: configs/codex/config.toml
+    target: ~/.codex/config.toml
+    strategy: copy
+    ownership: toml-subset
+    tags:
+      - agents
+    os:
+      - darwin
+      - linux
+  - source: configs/copilot/settings.json
+    target: ~/.copilot/settings.json
+    strategy: copy
+    ownership: json-subset
+    tags:
+      - agents
+    os:
+      - darwin
+      - linux
+  - source: configs/copilot/statusline-command.sh
+    target: ~/.copilot/statusline-command.sh
+    strategy: copy
+    tags:
+      - agents
+    os:
+      - darwin
+      - linux
   - source: configs/antigravity/settings.json
     target: ~/.gemini/antigravity-cli/settings.json
     strategy: copy

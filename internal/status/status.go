@@ -8,11 +8,10 @@ package status
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 
+	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
@@ -151,8 +150,8 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		return StateOK, nil
 	}
 
-	if entry.Ownership == "json-subset" && metadataMatchesEntry(meta, target, entry.Source, entry.Strategy) {
-		subset, err := jsonSubsetContent(target, sourceAbs)
+	if isSubsetOwned(entry.Ownership) && metadataMatchesEntry(meta, target, entry.Source, entry.Strategy) {
+		subset, err := subsetContent(entry.Ownership, target, sourceAbs)
 		if err != nil {
 			return "", err
 		}
@@ -222,62 +221,17 @@ func sameContent(a, b string) (bool, error) {
 	return bytes.Equal(da, db), nil
 }
 
-func jsonSubsetContent(target, sourceAbs string) (bool, error) {
-	sourceData, err := os.ReadFile(sourceAbs)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("read %s: %w", sourceAbs, err)
-	}
-	targetData, err := os.ReadFile(target)
-	if err != nil {
-		return false, fmt.Errorf("read %s: %w", target, err)
-	}
-
-	var sourceValue, targetValue any
-	if err := json.Unmarshal(sourceData, &sourceValue); err != nil {
-		return false, fmt.Errorf("parse source JSON %s: %w", sourceAbs, err)
-	}
-	if err := json.Unmarshal(targetData, &targetValue); err != nil {
-		return false, nil
-	}
-	return jsonContains(targetValue, sourceValue), nil
+func isSubsetOwned(ownership string) bool {
+	return ownership == "json-subset" || ownership == "toml-subset"
 }
 
-func jsonContains(target, source any) bool {
-	switch sourceTyped := source.(type) {
-	case map[string]any:
-		targetTyped, ok := target.(map[string]any)
-		if !ok {
-			return false
-		}
-		for key, sourceChild := range sourceTyped {
-			targetChild, ok := targetTyped[key]
-			if !ok || !jsonContains(targetChild, sourceChild) {
-				return false
-			}
-		}
-		return true
-	case []any:
-		targetTyped, ok := target.([]any)
-		if !ok {
-			return false
-		}
-		for _, sourceItem := range sourceTyped {
-			found := false
-			for _, targetItem := range targetTyped {
-				if jsonContains(targetItem, sourceItem) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return false
-			}
-		}
-		return true
+func subsetContent(ownership, target, sourceAbs string) (bool, error) {
+	switch ownership {
+	case "json-subset":
+		return configsubset.JSONFileContains(target, sourceAbs)
+	case "toml-subset":
+		return configsubset.TOMLFileContains(target, sourceAbs)
 	default:
-		return reflect.DeepEqual(target, source)
+		return false, nil
 	}
 }
