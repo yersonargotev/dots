@@ -347,6 +347,27 @@ provisioners:
         brew: gentleman-programming/tap/gentle-ai
   - tool: gentle-ai
     tags:
+      - sdd
+    spec:
+      scope: global
+      channel: stable
+      persona: neutral
+      preset: custom
+      sdd-mode: multi
+      agents:
+        - codex
+        - claude-code
+        - opencode
+        - antigravity
+        - vscode-copilot
+      components:
+        - sdd
+    dependencies:
+      - name: gentle-ai
+        command: gentle-ai
+        brew: gentleman-programming/tap/gentle-ai
+  - tool: gentle-ai
+    tags:
       - agents
     spec:
       scope: global
