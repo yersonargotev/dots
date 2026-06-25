@@ -101,6 +101,13 @@ func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
 	if upd.PreservedChanges != "" {
 		fmt.Fprintf(out, "Preserved local Installed Repository changes in %s.\n", upd.PreservedChanges)
 	}
+	if upd.AttachedBranch != "" {
+		if dryRun {
+			fmt.Fprintf(out, "Detached Installed Repository would attach to %s.\n", upd.AttachedBranch)
+		} else {
+			fmt.Fprintf(out, "Attached detached Installed Repository to %s.\n", upd.AttachedBranch)
+		}
+	}
 	if !upd.Changed() {
 		fmt.Fprintf(out, "Installed Repository already up to date at %s.\n\n", upd.OldRev)
 		return

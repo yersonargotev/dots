@@ -1,6 +1,7 @@
 package gitrepo_test
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"os/exec"
@@ -127,6 +128,128 @@ func TestPreviewReportsIncomingWithoutModifyingWorkingTree(t *testing.T) {
 	}
 }
 
+func TestPreviewSupportsDetachedInstalledRepositoryAtReleaseTag(t *testing.T) {
+	requireGit(t)
+	origin, clone := setupRemoteAndClone(t)
+	gitExec(t, origin, "tag", "v0.99.0")
+	gitExec(t, clone, "fetch", "--tags")
+	gitExec(t, clone, "switch", "--detach", "v0.99.0")
+
+	writeFile(t, filepath.Join(origin, "configs/git/gitconfig"), "[user]\n")
+	gitExec(t, origin, "add", "-A")
+	gitExec(t, origin, "commit", "-m", "add gitconfig")
+
+	upd, err := gitrepo.Preview(clone)
+	if err != nil {
+		t.Fatalf("Preview() error = %v", err)
+	}
+	if !upd.Changed() {
+		t.Fatalf("Preview() Changed() = false, want true from detached release tag")
+	}
+	if upd.AttachedBranch != "main" {
+		t.Fatalf("Preview() AttachedBranch = %q, want main", upd.AttachedBranch)
+	}
+	if got := gitOutput(t, clone, "rev-parse", "--abbrev-ref", "HEAD"); got != "HEAD" {
+		t.Fatalf("Preview() attached working tree branch %q, want still detached", got)
+	}
+}
+
+func TestFastForwardPreservingLocalChangesAttachesDetachedInstalledRepository(t *testing.T) {
+	requireGit(t)
+	origin, clone := setupRemoteAndClone(t)
+	gitExec(t, origin, "tag", "v0.99.0")
+	gitExec(t, clone, "fetch", "--tags")
+	gitExec(t, clone, "switch", "--detach", "v0.99.0")
+
+	writeFile(t, filepath.Join(clone, "configs/nvim/lazy-lock.json"), "local editor update\n")
+
+	writeFile(t, filepath.Join(origin, "configs/git/gitconfig"), "[user]\n")
+	gitExec(t, origin, "add", "-A")
+	gitExec(t, origin, "commit", "-m", "add gitconfig")
+
+	upd, err := gitrepo.FastForwardPreservingLocalChanges(clone)
+	if err != nil {
+		t.Fatalf("FastForwardPreservingLocalChanges() error = %v", err)
+	}
+	if !upd.Changed() {
+		t.Fatalf("FastForwardPreservingLocalChanges() Changed() = false, want true")
+	}
+	if upd.AttachedBranch != "main" {
+		t.Fatalf("FastForwardPreservingLocalChanges() AttachedBranch = %q, want main", upd.AttachedBranch)
+	}
+	if upd.PreservedChanges == "" {
+		t.Fatal("FastForwardPreservingLocalChanges() did not preserve dirty Installed Repository changes")
+	}
+	if got := gitOutput(t, clone, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Fatalf("HEAD branch = %q, want main", got)
+	}
+	if _, err := os.Stat(filepath.Join(clone, "configs/git/gitconfig")); err != nil {
+		t.Fatalf("fast-forward did not materialize upstream file: %v", err)
+	}
+	if status := gitOutput(t, clone, "status", "--porcelain"); status != "" {
+		t.Fatalf("working tree status = %q, want clean after preserving changes", status)
+	}
+}
+
+func TestFastForwardPreservingLocalChangesDoesNotResetDivergedLocalBranch(t *testing.T) {
+	requireGit(t)
+	origin, clone := setupRemoteAndClone(t)
+	gitExec(t, origin, "tag", "v0.99.0")
+	gitExec(t, clone, "fetch", "--tags")
+
+	writeFile(t, filepath.Join(clone, "configs/zsh/zshrc"), "local branch change\n")
+	gitExec(t, clone, "add", "-A")
+	gitExec(t, clone, "commit", "-m", "local branch change")
+	localMain := gitOutput(t, clone, "rev-parse", "--short", "main")
+
+	gitExec(t, clone, "switch", "--detach", "v0.99.0")
+	writeFile(t, filepath.Join(clone, "configs/nvim/lazy-lock.json"), "local editor update\n")
+
+	writeFile(t, filepath.Join(origin, "configs/zsh/zshrc"), "upstream branch change\n")
+	gitExec(t, origin, "add", "-A")
+	gitExec(t, origin, "commit", "-m", "upstream branch change")
+
+	_, err := gitrepo.FastForwardPreservingLocalChanges(clone)
+	if !errors.Is(err, gitrepo.ErrNotFastForward) {
+		t.Fatalf("FastForwardPreservingLocalChanges() error = %v, want ErrNotFastForward", err)
+	}
+	if got := gitOutput(t, clone, "rev-parse", "--short", "main"); got != localMain {
+		t.Fatalf("local main was reset: got %s, want %s", got, localMain)
+	}
+	if got := gitOutput(t, clone, "rev-parse", "--abbrev-ref", "HEAD"); got != "HEAD" {
+		t.Fatalf("HEAD branch = %q, want still detached after failed recovery", got)
+	}
+	if status := gitOutput(t, clone, "status", "--porcelain"); status == "" {
+		t.Fatal("local dirty editor change was stashed despite failed recovery")
+	}
+}
+
+func TestFastForwardSupportsShallowTagCloneWithoutRemoteBranches(t *testing.T) {
+	requireGit(t)
+	origin := setupOriginWithReleaseTag(t, "v0.99.0")
+	clone := filepath.Join(t.TempDir(), "clone")
+	gitExec(t, "", "clone", "--depth", "1", "--branch", "v0.99.0", "file://"+origin, clone)
+	configIdentity(t, clone)
+
+	writeFile(t, filepath.Join(origin, "configs/git/gitconfig"), "[user]\n")
+	gitExec(t, origin, "add", "-A")
+	gitExec(t, origin, "commit", "-m", "add gitconfig")
+
+	upd, err := gitrepo.FastForwardPreservingLocalChanges(clone)
+	if err != nil {
+		t.Fatalf("FastForwardPreservingLocalChanges() error = %v", err)
+	}
+	if !upd.Changed() {
+		t.Fatalf("FastForwardPreservingLocalChanges() Changed() = false, want true")
+	}
+	if got := gitOutput(t, clone, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Fatalf("HEAD branch = %q, want main", got)
+	}
+	if _, err := os.Stat(filepath.Join(clone, "configs/git/gitconfig")); err != nil {
+		t.Fatalf("fast-forward did not materialize upstream file: %v", err)
+	}
+}
+
 func TestFastForwardReturnsErrNotFastForwardOnDivergence(t *testing.T) {
 	requireGit(t)
 	origin, clone := setupRemoteAndClone(t)
@@ -146,6 +269,24 @@ func TestFastForwardReturnsErrNotFastForwardOnDivergence(t *testing.T) {
 	}
 }
 
+func gitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	cmd.Env = append(os.Environ(),
+		"GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_CONFIG_SYSTEM=/dev/null",
+		"GIT_TERMINAL_PROMPT=0",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(bytes.TrimSpace(out))
+}
+
 // --- helpers ---
 
 func requireGit(t *testing.T) {
@@ -161,17 +302,26 @@ func requireGit(t *testing.T) {
 // fast-forward path without any network access.
 func setupRemoteAndClone(t *testing.T) (origin, clone string) {
 	t.Helper()
-	origin = t.TempDir()
-	gitExec(t, origin, "init", "-b", "main")
-	configIdentity(t, origin)
-	writeFile(t, filepath.Join(origin, "configs/zsh/zshrc"), "export A=1\n")
-	gitExec(t, origin, "add", "-A")
-	gitExec(t, origin, "commit", "-m", "initial")
+	origin = setupOriginWithReleaseTag(t, "")
 
 	clone = t.TempDir()
 	gitExec(t, "", "clone", origin, clone)
 	configIdentity(t, clone)
 	return origin, clone
+}
+
+func setupOriginWithReleaseTag(t *testing.T, tag string) string {
+	t.Helper()
+	origin := t.TempDir()
+	gitExec(t, origin, "init", "-b", "main")
+	configIdentity(t, origin)
+	writeFile(t, filepath.Join(origin, "configs/zsh/zshrc"), "export A=1\n")
+	gitExec(t, origin, "add", "-A")
+	gitExec(t, origin, "commit", "-m", "initial")
+	if tag != "" {
+		gitExec(t, origin, "tag", tag)
+	}
+	return origin
 }
 
 func configIdentity(t *testing.T, dir string) {
