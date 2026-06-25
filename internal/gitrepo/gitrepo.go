@@ -26,6 +26,14 @@ type Update struct {
 	NewRev           string   `json:"new_rev"`
 	Incoming         []string `json:"incoming"`
 	PreservedChanges string   `json:"preserved_changes,omitempty"`
+	AttachedBranch   string   `json:"attached_branch,omitempty"`
+}
+
+type upstreamTarget struct {
+	Ref             string
+	Rev             string
+	AttachBranch    string
+	NeedsAttachment bool
 }
 
 // Changed reports whether the update moves (or would move) HEAD.
@@ -80,21 +88,21 @@ func Preview(dir string) (Update, error) {
 	if err := fetch(dir); err != nil {
 		return Update{}, err
 	}
-	upstream, err := upstreamRev(dir)
+	upstream, err := resolveUpstream(dir)
 	if err != nil {
 		return Update{}, err
 	}
-	if old == upstream {
-		return Update{OldRev: old, NewRev: old}, nil
+	if old == upstream.Rev {
+		return Update{OldRev: old, NewRev: old, AttachedBranch: upstream.AttachBranch}, nil
 	}
-	if !canFastForward(dir) {
+	if !canFastForwardTo(dir, upstream.Ref) {
 		return Update{}, ErrNotFastForward
 	}
-	incoming, err := incomingCommits(dir)
+	incoming, err := incomingCommitsFrom(dir, upstream.Ref)
 	if err != nil {
 		return Update{}, err
 	}
-	return Update{OldRev: old, NewRev: upstream, Incoming: incoming}, nil
+	return Update{OldRev: old, NewRev: upstream.Rev, Incoming: incoming, AttachedBranch: upstream.AttachBranch}, nil
 }
 
 // FastForward fetches and advances dir to its upstream via merge --ff-only. It
@@ -108,27 +116,35 @@ func FastForward(dir string) (Update, error) {
 	if err := fetch(dir); err != nil {
 		return Update{}, err
 	}
-	upstream, err := upstreamRev(dir)
+	upstream, err := resolveUpstream(dir)
 	if err != nil {
 		return Update{}, err
 	}
-	if old == upstream {
-		return Update{OldRev: old, NewRev: old}, nil
+	if old == upstream.Rev {
+		return Update{OldRev: old, NewRev: old, AttachedBranch: upstream.AttachBranch}, nil
+	}
+	if upstream.NeedsAttachment && !canAttachBranch(dir, upstream.AttachBranch, upstream.Ref) {
+		return Update{}, ErrNotFastForward
 	}
 	// Capture the incoming commits before merging so the report reflects exactly
 	// what the fast-forward applied.
-	incoming, err := incomingCommits(dir)
+	incoming, err := incomingCommitsFrom(dir, upstream.Ref)
 	if err != nil {
 		return Update{}, err
 	}
-	if _, err := run(dir, "merge", "--ff-only", "@{u}"); err != nil {
+	if upstream.NeedsAttachment {
+		if err := attachBranch(dir, upstream.AttachBranch); err != nil {
+			return Update{}, err
+		}
+	}
+	if _, err := run(dir, "merge", "--ff-only", upstream.Ref); err != nil {
 		return Update{}, ErrNotFastForward
 	}
 	newRev, err := head(dir)
 	if err != nil {
 		return Update{}, err
 	}
-	return Update{OldRev: old, NewRev: newRev, Incoming: incoming}, nil
+	return Update{OldRev: old, NewRev: newRev, Incoming: incoming, AttachedBranch: upstream.AttachBranch}, nil
 }
 
 // FastForwardPreservingLocalChanges verifies that dir can fast-forward before
@@ -143,35 +159,43 @@ func FastForwardPreservingLocalChanges(dir string) (Update, error) {
 	if err := fetch(dir); err != nil {
 		return Update{}, err
 	}
-	upstream, err := upstreamRev(dir)
+	upstream, err := resolveUpstream(dir)
 	if err != nil {
 		return Update{}, err
 	}
-	if old != upstream && !canFastForward(dir) {
+	if old != upstream.Rev && !canFastForwardTo(dir, upstream.Ref) {
 		return Update{}, ErrNotFastForward
 	}
 
 	var incoming []string
-	if old != upstream {
-		incoming, err = incomingCommits(dir)
+	if old != upstream.Rev {
+		incoming, err = incomingCommitsFrom(dir, upstream.Ref)
 		if err != nil {
 			return Update{}, err
 		}
+	}
+	if upstream.NeedsAttachment && !canAttachBranch(dir, upstream.AttachBranch, upstream.Ref) {
+		return Update{}, ErrNotFastForward
 	}
 
 	preserved, stashed, err := PreserveLocalChanges(dir)
 	if err != nil {
 		return Update{}, err
 	}
-	upd := Update{OldRev: old, NewRev: old, Incoming: incoming}
+	upd := Update{OldRev: old, NewRev: old, Incoming: incoming, AttachedBranch: upstream.AttachBranch}
 	if stashed {
 		upd.PreservedChanges = preserved
 	}
-	if old == upstream {
+	if upstream.NeedsAttachment {
+		if err := attachBranch(dir, upstream.AttachBranch); err != nil {
+			return Update{}, err
+		}
+	}
+	if old == upstream.Rev {
 		return upd, nil
 	}
 
-	if _, err := run(dir, "merge", "--ff-only", "@{u}"); err != nil {
+	if _, err := run(dir, "merge", "--ff-only", upstream.Ref); err != nil {
 		return Update{}, ErrNotFastForward
 	}
 	newRev, err := head(dir)
@@ -190,12 +214,93 @@ func head(dir string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-func upstreamRev(dir string) (string, error) {
-	out, err := run(dir, "rev-parse", "--short", "@{u}")
+func resolveUpstream(dir string) (upstreamTarget, error) {
+	ref, err := run(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+	if err == nil {
+		ref = strings.TrimSpace(ref)
+		rev, err := rev(dir, ref)
+		if err != nil {
+			return upstreamTarget{}, err
+		}
+		return upstreamTarget{Ref: ref, Rev: rev}, nil
+	}
+
+	branch, branchErr := run(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if branchErr != nil || strings.TrimSpace(branch) != "HEAD" {
+		return upstreamTarget{}, fmt.Errorf("resolve upstream for %s: %w", dir, err)
+	}
+
+	ref, attachBranch, fallbackErr := defaultRemoteBranch(dir)
+	if fallbackErr != nil {
+		if fetchErr := fetchOriginBranches(dir); fetchErr != nil {
+			return upstreamTarget{}, fmt.Errorf("resolve upstream for detached Installed Repository %s: %w", dir, fetchErr)
+		}
+		ref, attachBranch, fallbackErr = defaultRemoteBranch(dir)
+		if fallbackErr != nil {
+			return upstreamTarget{}, fmt.Errorf("resolve upstream for detached Installed Repository %s: %w", dir, fallbackErr)
+		}
+	}
+	rev, err := rev(dir, ref)
 	if err != nil {
-		return "", fmt.Errorf("resolve upstream for %s: %w", dir, err)
+		return upstreamTarget{}, err
+	}
+	return upstreamTarget{Ref: ref, Rev: rev, AttachBranch: attachBranch, NeedsAttachment: true}, nil
+}
+
+func rev(dir, ref string) (string, error) {
+	out, err := run(dir, "rev-parse", "--short", ref)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s for %s: %w", ref, dir, err)
 	}
 	return strings.TrimSpace(out), nil
+}
+
+func defaultRemoteBranch(dir string) (ref, branch string, err error) {
+	out, err := run(dir, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+	if err == nil {
+		ref = strings.TrimSpace(out)
+		return ref, strings.TrimPrefix(ref, "origin/"), nil
+	}
+	for _, candidate := range []string{"origin/main", "origin/master"} {
+		if _, err := rev(dir, candidate); err == nil {
+			return candidate, strings.TrimPrefix(candidate, "origin/"), nil
+		}
+	}
+	return "", "", errors.New("origin default branch is unavailable")
+}
+
+func attachBranch(dir, branch string) error {
+	if strings.TrimSpace(branch) == "" || branch == "HEAD" {
+		return errors.New("default branch is unavailable")
+	}
+	if branchExists(dir, branch) {
+		if _, err := run(dir, "switch", branch); err != nil {
+			return fmt.Errorf("attach Installed Repository to %s: %w", branch, err)
+		}
+		return nil
+	}
+	if _, err := run(dir, "switch", "--create", branch, "origin/"+branch); err != nil {
+		return fmt.Errorf("attach Installed Repository to %s: %w", branch, err)
+	}
+	if _, err := run(dir, "branch", "--set-upstream-to", "origin/"+branch, branch); err != nil {
+		return fmt.Errorf("track Installed Repository branch %s: %w", branch, err)
+	}
+	return nil
+}
+
+func branchExists(dir, branch string) bool {
+	_, err := run(dir, "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	return err == nil
+}
+
+func canAttachBranch(dir, branch, upstreamRef string) bool {
+	if strings.TrimSpace(branch) == "" || branch == "HEAD" {
+		return false
+	}
+	if !branchExists(dir, branch) {
+		return true
+	}
+	return canFastForwardRefTo(dir, branch, upstreamRef)
 }
 
 func fetch(dir string) error {
@@ -205,14 +310,28 @@ func fetch(dir string) error {
 	return nil
 }
 
-func canFastForward(dir string) bool {
-	// HEAD must be an ancestor of upstream for a fast-forward to be possible.
-	_, err := run(dir, "merge-base", "--is-ancestor", "HEAD", "@{u}")
+func fetchOriginBranches(dir string) error {
+	if _, err := run(dir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
+		return fmt.Errorf("configure origin branch fetch for %s: %w", dir, err)
+	}
+	if _, err := run(dir, "fetch", "--quiet", "origin", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
+		return fmt.Errorf("fetch origin branches for %s: %w", dir, err)
+	}
+	return nil
+}
+
+func canFastForwardTo(dir, ref string) bool {
+	// HEAD must be an ancestor of the update target for a fast-forward to be possible.
+	return canFastForwardRefTo(dir, "HEAD", ref)
+}
+
+func canFastForwardRefTo(dir, from, to string) bool {
+	_, err := run(dir, "merge-base", "--is-ancestor", from, to)
 	return err == nil
 }
 
-func incomingCommits(dir string) ([]string, error) {
-	out, err := run(dir, "log", "--pretty=%h %s", "HEAD..@{u}")
+func incomingCommitsFrom(dir, ref string) ([]string, error) {
+	out, err := run(dir, "log", "--pretty=%h %s", "HEAD.."+ref)
 	if err != nil {
 		return nil, fmt.Errorf("list incoming commits for %s: %w", dir, err)
 	}
