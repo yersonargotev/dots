@@ -1,0 +1,6 @@
+Dependency plan for profile "agents" (homebrew)
+
+  gentle-ai    brew install gentleman-programming/tap/gentle-ai
+  trust        brew trust --formula gentleman-programming/tap/gentle-ai
+
+Summary: 1 dependency to install

@@ -12,14 +12,15 @@ import (
 // Manual is set when the dependency has no executable package-manager action for
 // the active Tier.
 type InstallAction struct {
-	Dependency  string   `json:"dependency"`
-	Probe       string   `json:"probe,omitempty"`
-	FontMatch   string   `json:"font_match,omitempty"`
-	FontMatches []string `json:"font_matches,omitempty"`
-	Package     string   `json:"package,omitempty"`
-	Executable  string   `json:"executable,omitempty"`
-	Args        []string `json:"args,omitempty"`
-	Manual      string   `json:"manual,omitempty"`
+	Dependency   string   `json:"dependency"`
+	Probe        string   `json:"probe,omitempty"`
+	FontMatch    string   `json:"font_match,omitempty"`
+	FontMatches  []string `json:"font_matches,omitempty"`
+	Package      string   `json:"package,omitempty"`
+	Executable   string   `json:"executable,omitempty"`
+	Args         []string `json:"args,omitempty"`
+	Manual       string   `json:"manual,omitempty"`
+	TrustCommand string   `json:"trust_command,omitempty"`
 }
 
 // Guidance is the advisory installation hint for one missing Dependency. Command
@@ -27,10 +28,11 @@ type InstallAction struct {
 // for the active Tier; otherwise Manual carries a fallback note and Command is
 // empty. Action carries the structured model that Command renders from.
 type Guidance struct {
-	Name    string        `json:"name"`
-	Command string        `json:"command,omitempty"`
-	Manual  string        `json:"manual,omitempty"`
-	Action  InstallAction `json:"action"`
+	Name         string        `json:"name"`
+	Command      string        `json:"command,omitempty"`
+	Manual       string        `json:"manual,omitempty"`
+	TrustCommand string        `json:"trust_command,omitempty"`
+	Action       InstallAction `json:"action"`
 }
 
 // PlanReport is the Dependency Plan for a Profile: OS-aware guidance for the
@@ -82,27 +84,39 @@ func actionFor(dep manifest.Dependency, tier Tier) InstallAction {
 		return InstallAction{Dependency: dep.Name, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches, Manual: manualNote(dep, tier)}
 	}
 	return InstallAction{
-		Dependency:  dep.Name,
-		Probe:       dep.Probe(),
-		FontMatch:   fontMatch,
-		FontMatches: fontMatches,
-		Package:     pkg,
-		Executable:  executable,
-		Args:        append(args, pkg),
+		Dependency:   dep.Name,
+		Probe:        dep.Probe(),
+		FontMatch:    fontMatch,
+		FontMatches:  fontMatches,
+		Package:      pkg,
+		Executable:   executable,
+		Args:         append(args, pkg),
+		TrustCommand: homebrewTapTrustCommand(dep, tier),
 	}
 }
 
 // guidanceFor renders advisory compatibility fields from the structured action.
 func guidanceFor(action InstallAction) Guidance {
 	if action.Executable == "" {
-		return Guidance{Name: action.Dependency, Manual: action.Manual, Action: action}
+		return Guidance{Name: action.Dependency, Manual: action.Manual, TrustCommand: action.TrustCommand, Action: action}
 	}
-	return Guidance{Name: action.Dependency, Command: action.commandHint(), Action: action}
+	return Guidance{Name: action.Dependency, Command: action.commandHint(), TrustCommand: action.TrustCommand, Action: action}
 }
 
 func (a InstallAction) commandHint() string {
 	parts := append([]string{a.Executable}, a.Args...)
 	return strings.Join(parts, " ")
+}
+
+func homebrewTapTrustCommand(dep manifest.Dependency, tier Tier) string {
+	if tier != TierHomebrew || strings.TrimSpace(dep.BrewCask) != "" {
+		return ""
+	}
+	formula := strings.TrimSpace(dep.Brew)
+	if strings.Count(formula, "/") < 2 {
+		return ""
+	}
+	return "brew trust --formula " + formula
 }
 
 // tierPackage returns the package identifier and argv prefix for a Dependency

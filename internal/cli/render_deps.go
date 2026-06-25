@@ -49,6 +49,9 @@ func renderDepsPlan(w io.Writer, report deps.PlanReport) {
 			hint = item.Manual
 		}
 		fmt.Fprintf(w, "  %-12s %s\n", item.Name, hint)
+		if item.TrustCommand != "" {
+			fmt.Fprintf(w, "  %-12s %s\n", "trust", item.TrustCommand)
+		}
 	}
 
 	fmt.Fprintf(w, "\nSummary: %s\n", pluralizeDeps(len(report.Items)))
@@ -86,6 +89,9 @@ func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.In
 			hint = strings.Join(parts, " ")
 		}
 		fmt.Fprintf(w, "  %-13s %-24s %s\n", item.Status, item.Dependency, hint)
+		if item.TrustCommand != "" {
+			fmt.Fprintf(w, "  %-13s %-24s %s\n", "trust", item.Dependency, item.TrustCommand)
+		}
 	}
 
 	installable, manual := countInstallPreviewActions(report)
@@ -126,6 +132,9 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 			hint = strings.Join(parts, " ")
 		}
 		fmt.Fprintf(w, "  %-10s %-24s %s\n", item.Status, item.Dependency, hint)
+		if item.TrustCommand != "" {
+			fmt.Fprintf(w, "  %-10s %-24s %s\n", "trust", item.Dependency, item.TrustCommand)
+		}
 		switch item.Status {
 		case deps.InstallStatusInstalled:
 			installed++

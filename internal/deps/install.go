@@ -18,12 +18,13 @@ const (
 
 // InstallPreview is one dry-run installation preview item.
 type InstallPreview struct {
-	Dependency string               `json:"dependency"`
-	Status     InstallPreviewStatus `json:"status"`
-	Package    string               `json:"package,omitempty"`
-	Executable string               `json:"executable,omitempty"`
-	Args       []string             `json:"args,omitempty"`
-	Manual     string               `json:"manual,omitempty"`
+	Dependency   string               `json:"dependency"`
+	Status       InstallPreviewStatus `json:"status"`
+	Package      string               `json:"package,omitempty"`
+	Executable   string               `json:"executable,omitempty"`
+	Args         []string             `json:"args,omitempty"`
+	Manual       string               `json:"manual,omitempty"`
+	TrustCommand string               `json:"trust_command,omitempty"`
 }
 
 // InstallDryRunReport previews the install actions for a Profile without
@@ -51,12 +52,13 @@ const (
 
 // InstallItem is the result of one attempted dependency installation.
 type InstallItem struct {
-	Dependency string        `json:"dependency"`
-	Status     InstallStatus `json:"status"`
-	Package    string        `json:"package,omitempty"`
-	Executable string        `json:"executable,omitempty"`
-	Args       []string      `json:"args,omitempty"`
-	Manual     string        `json:"manual,omitempty"`
+	Dependency   string        `json:"dependency"`
+	Status       InstallStatus `json:"status"`
+	Package      string        `json:"package,omitempty"`
+	Executable   string        `json:"executable,omitempty"`
+	Args         []string      `json:"args,omitempty"`
+	Manual       string        `json:"manual,omitempty"`
+	TrustCommand string        `json:"trust_command,omitempty"`
 }
 
 // InstallReport records the stable dots summary for a real install run.
@@ -81,12 +83,13 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook Font
 			status = InstallPreviewManual
 		}
 		report.Items = append(report.Items, InstallPreview{
-			Dependency: action.Dependency,
-			Status:     status,
-			Package:    action.Package,
-			Executable: action.Executable,
-			Args:       action.Args,
-			Manual:     action.Manual,
+			Dependency:   action.Dependency,
+			Status:       status,
+			Package:      action.Package,
+			Executable:   action.Executable,
+			Args:         action.Args,
+			Manual:       action.Manual,
+			TrustCommand: action.TrustCommand,
 		})
 	}
 	return report, nil
@@ -106,40 +109,44 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 		if action.Executable == "" {
 			unresolved = true
 			report.Items = append(report.Items, InstallItem{
-				Dependency: action.Dependency,
-				Status:     InstallStatusManual,
-				Manual:     action.Manual,
+				Dependency:   action.Dependency,
+				Status:       InstallStatusManual,
+				Manual:       action.Manual,
+				TrustCommand: action.TrustCommand,
 			})
 			continue
 		}
 		args := installArgsWithConfirmation(action, tier)
 		if err := runner.Run(action.Executable, args); err != nil {
 			report.Items = append(report.Items, InstallItem{
-				Dependency: action.Dependency,
-				Status:     InstallStatusFailed,
-				Package:    action.Package,
-				Executable: action.Executable,
-				Args:       args,
+				Dependency:   action.Dependency,
+				Status:       InstallStatusFailed,
+				Package:      action.Package,
+				Executable:   action.Executable,
+				Args:         args,
+				TrustCommand: action.TrustCommand,
 			})
 			return report, fmt.Errorf("install %q: %w", action.Dependency, err)
 		}
 		if !actionPresent(action, look, fontLook) {
 			unresolved = true
 			report.Items = append(report.Items, InstallItem{
-				Dependency: action.Dependency,
-				Status:     InstallStatusUnresolved,
-				Package:    action.Package,
-				Executable: action.Executable,
-				Args:       args,
+				Dependency:   action.Dependency,
+				Status:       InstallStatusUnresolved,
+				Package:      action.Package,
+				Executable:   action.Executable,
+				Args:         args,
+				TrustCommand: action.TrustCommand,
 			})
 			return report, errors.New("unresolved dependencies remain after install")
 		}
 		report.Items = append(report.Items, InstallItem{
-			Dependency: action.Dependency,
-			Status:     InstallStatusInstalled,
-			Package:    action.Package,
-			Executable: action.Executable,
-			Args:       args,
+			Dependency:   action.Dependency,
+			Status:       InstallStatusInstalled,
+			Package:      action.Package,
+			Executable:   action.Executable,
+			Args:         args,
+			TrustCommand: action.TrustCommand,
 		})
 	}
 	if unresolved {

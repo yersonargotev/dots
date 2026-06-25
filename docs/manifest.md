@@ -140,6 +140,13 @@ Current dependency package coverage:
 | `curl` | `curl` | `curl` | `curl` | `curl` | `curl` |
 | `npx` | `npx` | Manual | Manual | Manual | Manual |
 
+Homebrew dependencies declared with a fully-qualified tap formula such as
+`gentleman-programming/tap/gentle-ai` may require explicit Homebrew Tap Trust on
+fresh macOS machines. `dots deps plan` and `dots deps install --dry-run` surface
+the formula-level trust command, for example
+`brew trust --formula gentleman-programming/tap/gentle-ai`, but `dots` does not
+run trust commands automatically.
+
 ## Provisioners
 
 Provisioners are a closed allowlist. They run after selected Managed Entries are

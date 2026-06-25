@@ -62,6 +62,17 @@ func TestRenderDepsPlanGolden(t *testing.T) {
 			golden: "deps_plan_mixed.golden",
 		},
 		{
+			name: "homebrew tap trust guidance",
+			report: deps.PlanReport{
+				Profile: "agents",
+				Tier:    deps.TierHomebrew,
+				Items: []deps.Guidance{
+					{Name: "gentle-ai", Command: "brew install gentleman-programming/tap/gentle-ai", TrustCommand: "brew trust --formula gentleman-programming/tap/gentle-ai"},
+				},
+			},
+			golden: "deps_plan_tap_trust.golden",
+		},
+		{
 			name:   "nothing to install",
 			report: deps.PlanReport{Profile: "default", Tier: deps.TierHomebrew},
 			golden: "deps_plan_empty.golden",
@@ -94,6 +105,17 @@ func TestRenderDepsInstallDryRunGolden(t *testing.T) {
 				},
 			},
 			golden: "deps_install_dry_run_mixed.golden",
+		},
+		{
+			name: "homebrew tap trust preview",
+			report: deps.InstallDryRunReport{
+				Profile: "agents",
+				Tier:    deps.TierHomebrew,
+				Items: []deps.InstallPreview{
+					{Dependency: "gentle-ai", Status: deps.InstallPreviewWouldInstall, Package: "gentleman-programming/tap/gentle-ai", Executable: "brew", Args: []string{"install", "gentleman-programming/tap/gentle-ai"}, TrustCommand: "brew trust --formula gentleman-programming/tap/gentle-ai"},
+				},
+			},
+			golden: "deps_install_dry_run_tap_trust.golden",
 		},
 		{
 			name:   "nothing to install",
