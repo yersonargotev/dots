@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/yersonargotev/dots/internal/backups"
+	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/plan"
@@ -10,6 +11,8 @@ import (
 	"github.com/yersonargotev/dots/internal/uninstall"
 	"github.com/yersonargotev/dots/internal/upgrade"
 )
+
+type initReport bootstrap.Result
 
 type statusReport struct {
 	Profile      string         `json:"profile"`

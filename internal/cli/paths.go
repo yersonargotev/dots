@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/yersonargotev/dots/internal/manifest"
 )
 
 type resolvedPaths struct {
@@ -56,4 +58,19 @@ func resolveManifestPath(cmd *cobra.Command, file, sourceRoot string) string {
 		return file
 	}
 	return filepath.Join(sourceRoot, file)
+}
+
+func loadManifestForCommand(cmd *cobra.Command, file, sourceRoot string) (*manifest.Manifest, error) {
+	m, err := manifest.LoadFile(resolveManifestPath(cmd, file, sourceRoot))
+	if err != nil {
+		return nil, manifestErrorWithInitHint(cmd, sourceRoot, err)
+	}
+	return m, nil
+}
+
+func manifestErrorWithInitHint(cmd *cobra.Command, sourceRoot string, err error) error {
+	if cmd.Flags().Changed("file") || !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return fmt.Errorf("%w\nInstalled Repository not found or missing dots.yaml at %s.\nRun `dots init`, then retry `dots %s`.", err, sourceRoot, commandName(cmd))
 }

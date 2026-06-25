@@ -207,7 +207,7 @@ func newDepsInstallCommand(profile *string, extraTags *[]string) *cobra.Command 
 }
 
 func loadDepsManifest(cmd *cobra.Command, file, home string) (*manifest.Manifest, error) {
-	return manifest.LoadFile(resolveManifestPath(cmd, file, defaultSourceRoot(home)))
+	return loadManifestForCommand(cmd, file, defaultSourceRoot(home))
 }
 
 func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier) error {
