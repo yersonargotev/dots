@@ -407,4 +407,23 @@ func TestPlanIncludesSelectedProvisionerDependencies(t *testing.T) {
 	if action.Package != "gentleman-programming/tap/gentle-ai" {
 		t.Fatalf("Actions[0].Package = %q, want tap package", action.Package)
 	}
+	if action.TrustCommand != "brew trust --formula gentleman-programming/tap/gentle-ai" {
+		t.Fatalf("Actions[0].TrustCommand = %q, want formula trust guidance", action.TrustCommand)
+	}
+	if report.Items[0].TrustCommand != action.TrustCommand {
+		t.Fatalf("Items[0].TrustCommand = %q, want %q", report.Items[0].TrustCommand, action.TrustCommand)
+	}
+}
+
+func TestPlanDoesNotAddTapTrustGuidanceForCoreHomebrewFormula(t *testing.T) {
+	report, err := deps.Plan(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), fontLookupSet(), deps.TierHomebrew)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	if report.Actions[0].TrustCommand != "" {
+		t.Fatalf("TrustCommand = %q, want empty for core formula", report.Actions[0].TrustCommand)
+	}
 }

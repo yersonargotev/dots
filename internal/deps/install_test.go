@@ -446,4 +446,7 @@ func TestInstallDryRunIncludesSelectedProvisionerDependencies(t *testing.T) {
 	if item.Package != "gentleman-programming/tap/gentle-ai" {
 		t.Fatalf("Items[0].Package = %q, want tap package", item.Package)
 	}
+	if item.TrustCommand != "brew trust --formula gentleman-programming/tap/gentle-ai" {
+		t.Fatalf("Items[0].TrustCommand = %q, want formula trust guidance", item.TrustCommand)
+	}
 }
