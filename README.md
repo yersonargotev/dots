@@ -54,9 +54,21 @@ Verify the binary is available:
 dots --version
 ```
 
+Homebrew installs only the released binary. Initialize the default Installed
+Repository before running read-only diagnostics or install previews:
+
+```bash
+dots init
+```
+
+For released binaries, `dots init` clones the matching release tag by default.
+Use `--repository-ref` only when you intentionally want a different Source of
+Truth ref.
+
 ## Quickstart
 
-Start with a dry run. The CLI should show the Install Plan without writing files:
+Start with a dry run. If you installed through Homebrew, run `dots init` first.
+The CLI should show the Install Plan without writing files:
 
 ```bash
 dots install --dry-run

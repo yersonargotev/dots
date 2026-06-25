@@ -11,12 +11,14 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/codexconfig"
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/tui"
+	"github.com/yersonargotev/dots/internal/version"
 )
 
 func newInstallCommand() *cobra.Command {
@@ -44,7 +46,16 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
-			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, paths.SourceRoot))
+			if !dryRun && !cmd.Flags().Changed("file") && !cmd.Flags().Changed("source-root") {
+				if _, err := bootstrap.Ensure(bootstrap.Options{
+					SourceRoot:    paths.SourceRoot,
+					RepositoryRef: defaultInitRepositoryRef("", version.Value),
+				}); err != nil {
+					return err
+				}
+			}
+
+			m, err := loadManifestForCommand(cmd, file, paths.SourceRoot)
 			if err != nil {
 				return err
 			}

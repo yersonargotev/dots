@@ -124,7 +124,7 @@ DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 | Artifacts | Raw `dots` binaries named `dots_<version>_<goos>_<goarch>`. |
 | Platforms | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, and `linux/arm64`. |
 | Checksums | One `checksums.txt` file covers every Release Artifact. |
-| Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and `checksums.txt`; the workflow locally prepares the tap commit, dry-run proves that prepared state can be pushed, then pushes it to `yersonargotev/homebrew-tap` with `HOMEBREW_TAP_TOKEN` after release assets upload. Users should prefer formula-level Tap Trust through `brew install yersonargotev/tap/dots`, `brew trust --formula yersonargotev/tap/dots`, or Brewfile `trusted: true`. |
+| Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and `checksums.txt`; the workflow locally prepares the tap commit, dry-run proves that prepared state can be pushed, then pushes it to `yersonargotev/homebrew-tap` with `HOMEBREW_TAP_TOKEN` after release assets upload. Users should prefer formula-level Tap Trust through `brew install yersonargotev/tap/dots`, `brew trust --formula yersonargotev/tap/dots`, or Brewfile `trusted: true`. Homebrew installs only the binary, so first-run package-manager installs must run `dots init` to clone the default Installed Repository before `dots status`, `dots doctor`, or `dots install --dry-run`. |
 
 ## First v0.x checklist
 
@@ -134,6 +134,7 @@ DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 - [ ] `checksums.txt` contains one SHA-256 entry for each artifact.
 - [ ] The Bootstrapper maps its detected `goos/goarch` to the matching artifact name.
 - [ ] `dots --version` and `dots version` both report the release tag.
+- [ ] A Homebrew-installed binary can run `dots init` and then read the default Installed Repository manifest.
 - [ ] `Formula/dots.rb` in `yersonargotev/homebrew-tap` points at the same tag and checksums.
 - [ ] A Tap Trust install path has been checked with `HOMEBREW_REQUIRE_TAP_TRUST=1` using the fully-qualified formula or formula-level trust.
 - [ ] `HOMEBREW_TAP_TOKEN` is configured before relying on automatic tap updates.

@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/doctor"
-	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -33,7 +32,7 @@ func newDoctorCommand() *cobra.Command {
 				return err
 			}
 
-			m, err := manifest.LoadFile(resolveManifestPath(cmd, file, paths.SourceRoot))
+			m, err := loadManifestForCommand(cmd, file, paths.SourceRoot)
 			if err != nil {
 				return err
 			}
