@@ -152,6 +152,11 @@ _Avoid_: machine config, host config, preset
 A label assigned to a Managed Entry so Profiles can include related configuration by intent, such as `core`, `dev`, `personal`, `work`, or `desktop`.
 _Avoid_: category, group, label
 
+**Core Development Baseline**:
+The `core` Tag's intended workstation role: a general development environment that should be useful on any supported machine. It includes shell and terminal foundations plus common developer runtimes and package tools, rather than only minimal dotfile plumbing. GUI applications, agent-specific tooling, web/mobile-specialized tooling, secrets, and machine-specific state remain outside core unless explicitly selected by another Profile or Tag.
+_Avoid_: minimal shell, everything profile, desktop baseline
+
+
 **OS Filter**:
 A manifest constraint that limits a Managed Entry to specific operating systems, such as `darwin` or `linux`. OS Filters complement Profiles but do not replace them.
 _Avoid_: platform condition, system rule, distro flag
