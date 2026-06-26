@@ -16,6 +16,8 @@ Secrets are excluded from the repository-owned Source of Truth. Shared configura
 
 The v1 CLI will declare and verify external dependencies, then produce an OS-aware Dependency Plan for missing tools, but it will not install packages automatically. Automatic package installation is explicitly reserved for v2 because it introduces package-manager selection, sudo behavior, distro differences, repositories/taps, version constraints, and higher operational risk.
 
+**Superseded in part by ADR 0010**: dependency execution is now allowed inside `dots install` behind provider selection, required/optional dependency semantics, pre-configuration gating, and an explicit `--skip-deps` escape hatch.
+
 v1 officially supports macOS arm64/amd64 and Linux arm64/amd64 for configuration installation. Dependency Plans will provide specific package-manager guidance for macOS/Homebrew, Debian/Ubuntu, Fedora, and Arch, with a generic fallback for other Linux distributions; Windows, WSL as an official target, NixOS-specific behavior, Alpine/musl specialization, and automatic package installation are out of scope for v1.
 
 The first-install flow will keep the bootstrapper minimal, install the `dots` binary under `~/.local/bin/dots`, then run `dots install`. The CLI will compute and show an Install Plan before applying changes, support `dots install --dry-run` from v1, and include the v1 commands `install`, `status`, `doctor`, `deps check`, `deps plan`, and `backups list`; `diff`, `backups restore`, and `deps install` are optional or future work.
