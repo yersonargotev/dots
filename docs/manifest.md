@@ -64,7 +64,10 @@ and `sh` are available, the Rust toolchain may use the constrained official
 rustup installer flow (`curl --proto '=https' --tlsv1.2 -sSf
 https://sh.rustup.rs | sh -s -- -y --no-modify-path`) before running
 `rustup default stable`. This is a built-in Rust action, not arbitrary shell
-from the manifest.
+from the manifest. When Rust bootstrap succeeds but `rustc` or `cargo` still are
+not available on `PATH`, the install result includes repair guidance for the
+rustup proxy/PATH surface instead of only reporting a generic unresolved
+Dependency.
 
 ## Managed Entries
 

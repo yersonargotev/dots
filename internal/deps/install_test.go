@@ -634,6 +634,45 @@ func TestInstallYesRunsOfficialRustupInstallerBeforeBootstrap(t *testing.T) {
 	}
 }
 
+func TestInstallYesExplainsRustupToolchainWhenProbesRemainMissing(t *testing.T) {
+	present := map[string]bool{"rustup": true}
+	runner := &recordingRunner{}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:      "Rust stable (rustup)",
+				Commands:  []string{"rustup", "rustc", "cargo"},
+				Brew:      "rustup",
+				Toolchain: manifest.DependencyToolchainRustStableRustup,
+			}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	report, err := deps.Install(m, deps.Options{Profile: "default", OS: "linux"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierGeneric, runner)
+	if err == nil {
+		t.Fatalf("Install() error = nil, want unresolved rust toolchain error")
+	}
+	wantCalls := []runnerCall{{executable: "rustup", args: []string{"default", "stable"}}}
+	if !reflect.DeepEqual(runner.calls, wantCalls) {
+		t.Fatalf("runner calls = %#v, want %#v", runner.calls, wantCalls)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusUnresolved {
+		t.Fatalf("report items = %#v, want one unresolved Rust item", report.Items)
+	}
+	manual := report.Items[0].Manual
+	for _, want := range []string{"rustc", "cargo", "~/.cargo/bin", "rustup which rustc", "rustup which cargo"} {
+		if !strings.Contains(manual, want) {
+			t.Fatalf("Rust remediation missing %q: %q", want, manual)
+		}
+	}
+}
+
 func TestInstallYesRunsToolchainBootstrapWhenManagerAlreadyPresent(t *testing.T) {
 	present := map[string]bool{"fnm": true}
 	runner := &recordingRunner{afterRun: func() { present["node"] = true }}

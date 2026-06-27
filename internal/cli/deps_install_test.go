@@ -303,6 +303,65 @@ entries:
 	}
 }
 
+func TestDepsInstallExplainsRustupToolchainWhenProbesRemainMissing(t *testing.T) {
+	binDir := t.TempDir()
+	runLog := binDir + "/rustup-args"
+	rustup := binDir + "/rustup"
+	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" > %q\nexit 0\n", runLog)
+	if err := os.WriteFile(rustup, []byte(script), 0o700); err != nil {
+		t.Fatalf("write fake rustup: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	manifestPath := writeDepsInstallManifest(t, `version: 1
+profiles:
+  default:
+    tags: [core]
+dependencies:
+  - tags: [core]
+    dependencies:
+      - name: Rust stable (rustup)
+        commands: [rustup, rustc, cargo]
+        toolchain: rust-stable-rustup
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "install", "--yes", "--file", manifestPath, "--tier", "generic"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("Execute() error = nil, want unresolved Rust dependency error\noutput:\n%s", out.String())
+	}
+	args, readErr := os.ReadFile(runLog)
+	if readErr != nil {
+		t.Fatalf("read rustup args: %v", readErr)
+	}
+	if string(args) != "default\nstable\n" {
+		t.Fatalf("rustup args = %q, want default/stable", string(args))
+	}
+	got := out.String()
+	for _, want := range []string{
+		"unresolved Rust stable (rustup)",
+		"repair",
+		"rustc, cargo are not available on PATH",
+		"~/.cargo/bin",
+		"rustup which rustc",
+		"rustup which cargo",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Rust unresolved output missing %q\noutput:\n%s", want, got)
+		}
+	}
+}
+
 func TestDepsInstallDryRunRendersPreview(t *testing.T) {
 	binDir := t.TempDir()
 	brew := binDir + "/brew"
