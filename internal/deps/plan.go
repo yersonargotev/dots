@@ -79,7 +79,7 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 		if dependencyPresent(dep, look, fontLook) {
 			continue
 		}
-		action := actionFor(dep, tier, look)
+		action := actionFor(dep, opts, tier, look)
 		report.Actions = append(report.Actions, action)
 		report.Items = append(report.Items, guidanceFor(action))
 	}
@@ -89,7 +89,7 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 // actionFor builds the structured install action for a single missing
 // Dependency under a Tier, falling through ordered provider candidates before
 // returning manual guidance.
-func actionFor(dep manifest.Dependency, tier Tier, look Lookup) InstallAction {
+func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) InstallAction {
 	fontMatches := dep.FontMatches()
 	fontMatch := ""
 	if len(fontMatches) > 0 {
@@ -97,7 +97,7 @@ func actionFor(dep manifest.Dependency, tier Tier, look Lookup) InstallAction {
 	}
 	action := InstallAction{Dependency: dep.Name, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches}
 
-	for _, candidate := range providerCandidates(dep, tier, look) {
+	for _, candidate := range providerCandidates(dep, opts, tier, look) {
 		action.Candidates = append(action.Candidates, candidate)
 		if !candidate.Available || candidate.Executable == "" {
 			continue
@@ -110,7 +110,7 @@ func actionFor(dep manifest.Dependency, tier Tier, look Lookup) InstallAction {
 		return action
 	}
 
-	action.Manual = manualNote(dep, tier, action.Candidates)
+	action.Manual = manualNote(dep, opts, tier, action.Candidates)
 	return action
 }
 
@@ -138,7 +138,11 @@ func homebrewTapTrustCommand(dep manifest.Dependency, tier Tier) string {
 	return "brew trust --formula " + formula
 }
 
-func providerCandidates(dep manifest.Dependency, tier Tier, look Lookup) []ProviderCandidate {
+func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look Lookup) []ProviderCandidate {
+	if opts.OS == "linux" && dep.IsFont() {
+		return nil
+	}
+
 	candidateTiers := []Tier{tier}
 	if tier != TierHomebrew {
 		candidateTiers = append(candidateTiers, TierHomebrew)
@@ -199,8 +203,8 @@ func tierPackage(dep manifest.Dependency, tier Tier) (pkg, executable string, ar
 	}
 }
 
-func manualNote(dep manifest.Dependency, tier Tier, candidates []ProviderCandidate) string {
-	if dep.IsFont() && tier != TierHomebrew {
+func manualNote(dep manifest.Dependency, opts Options, tier Tier, candidates []ProviderCandidate) string {
+	if dep.IsFont() && opts.OS == "linux" {
 		name := strings.TrimSpace(dep.Name)
 		matchHint := fontMatchHint(dep.FontMatches())
 		if cask := strings.TrimSpace(dep.BrewCask); cask != "" {

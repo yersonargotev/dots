@@ -111,7 +111,7 @@ func TestPlanProducesHomebrewCaskActionsForMappedPackages(t *testing.T) {
 	}
 }
 
-func TestPlanUsesLinuxHomebrewForCaskFontsWhenBrewIsAvailable(t *testing.T) {
+func TestPlanKeepsLinuxFontDependenciesManualEvenWhenBrewIsAvailable(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
@@ -125,20 +125,24 @@ func TestPlanUsesLinuxHomebrewForCaskFontsWhenBrewIsAvailable(t *testing.T) {
 		},
 	}
 
-	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierDebian)
-	if err != nil {
-		t.Fatalf("Plan() error = %v", err)
-	}
+	for _, tier := range []deps.Tier{deps.TierDebian, deps.TierHomebrew} {
+		t.Run(string(tier), func(t *testing.T) {
+			report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), tier)
+			if err != nil {
+				t.Fatalf("Plan() error = %v", err)
+			}
 
-	if len(report.Actions) != 1 {
-		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
-	}
-	action := report.Actions[0]
-	if action.Provider != deps.TierHomebrew || action.Executable != "brew" || action.Package != "font-cascadia-code-nf" {
-		t.Fatalf("linux cask action = %#v, want Homebrew cask fallback", action)
-	}
-	if !reflect.DeepEqual(action.Args, []string{"install", "--cask", "font-cascadia-code-nf"}) {
-		t.Fatalf("Args = %#v, want brew cask install", action.Args)
+			if len(report.Actions) != 1 {
+				t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+			}
+			action := report.Actions[0]
+			if action.Provider != "" || action.Executable != "" || action.Package != "" || len(action.Args) != 0 {
+				t.Fatalf("linux font action = %#v, want manual guidance only", action)
+			}
+			if action.Manual == "" {
+				t.Fatalf("Manual empty, want Linux font guidance")
+			}
+		})
 	}
 }
 
