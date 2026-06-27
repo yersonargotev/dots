@@ -12,6 +12,7 @@ configuration surface and the configuration currently declared by this repositor
 ```yaml
 version: 1
 profiles: {}
+dependencies: []
 entries: []
 provisioners: []
 ```
@@ -20,6 +21,7 @@ provisioners: []
 |-------|----------|---------|
 | `version` | Yes | Manifest schema version. Only `1` is supported. |
 | `profiles` | Yes | Named installation selections. A Profile selects entries and provisioners by matching tags. |
+| `dependencies` | No | Tag-scoped Dependency Sets for shared toolchain baselines selected before Managed Entry and Provisioner Dependencies. |
 | `entries` | Yes | Managed Entries that install repository-owned files or directories into `$HOME`. |
 | `provisioners` | No | Allowlisted external tool invocations run after file entries are installed. |
 
@@ -41,12 +43,23 @@ Current Profiles:
 
 | Profile | Tags | Intent | Profile Dependencies |
 |---------|------|--------|----------------------|
-| `default` | `core` | Core dotfiles without provisioners. | None |
+| `default` | `core` | Core dotfiles without provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
-| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai agent setup/cleanup and shared engineering skills for supported agents. Add `--tag sdd` to opt into Gentle-AI SDD setup. | None |
-| `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | None |
-| `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | None |
-| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
+| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai agent setup/cleanup and shared engineering skills for supported agents. Add `--tag sdd` to opt into Gentle-AI SDD setup. | Core Development Baseline via the `core` tag-scoped Dependency Set |
+| `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Playwright CLI` via Homebrew formula `playwright-cli` |
+| `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | Core Development Baseline via the `core` tag-scoped Dependency Set |
+| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
+
+## Tag-scoped Dependency Sets
+
+Top-level `dependencies` declare shared toolchain baselines selected by tag,
+before Managed Entry and Provisioner Dependencies. The current `core` set is the
+Core Development Baseline from ADR 0010: shell/terminal foundations remain on
+their Managed Entries, while common runtimes and package tools are owned by
+Homebrew-provider declarations for `fnm`, `rustup`, `go`, `uv`, `pnpm`, and
+`bun`. Node and Rust use constrained built-in toolchain bootstrap commands after
+manager installation: `fnm install --lts` for Node LTS and `rustup default
+stable` for Rust stable.
 
 ## Managed Entries
 
@@ -101,14 +114,25 @@ Current Managed Entries:
 
 ## Dependencies
 
-Dependencies can be declared on Profiles, Managed Entries, and Provisioners.
-They are detection and installation guidance, not arbitrary shell hooks.
+Dependencies can be declared in tag-scoped Dependency Sets, Profiles, Managed
+Entries, and Provisioners. They are detection and installation guidance, not
+arbitrary shell hooks.
+
+Tag-scoped Dependency Sets use:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `tags` | Yes | Non-empty strings. The set is selected when at least one tag matches the Profile or an explicit `--tag`. |
+| `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
+| `dependencies` | Yes | One or more Dependency declarations. |
 
 | Field | Required | Meaning |
 |-------|----------|---------|
 | `name` | Yes | Human-readable dependency name. Also used as the executable probe when `command` is omitted. |
 | `requirement` | No | `required` or `optional`. Omitted means `required`. Required Dependencies gate integrated install; optional Dependencies are reported but do not block Managed Configuration. |
-| `command` | No | Executable name to probe on `PATH`. |
+| `command` | No | Single executable name to probe on `PATH`. |
+| `commands` | No | Multiple executable names that must all be present. Use this for manager-owned toolchains where both the manager and runtime commands matter. |
+| `toolchain` | No | Built-in runtime bootstrap flow. Supported values: `node-lts-fnm`, `rust-stable-rustup`. These values map to fixed argv commands, not arbitrary shell hooks. |
 | `brew` | No | Homebrew formula token. Mutually exclusive with `brew_cask`. |
 | `brew_cask` | No | Homebrew cask token. Renders as `brew install --cask <token>`. |
 | `apt` | No | Debian/Ubuntu package name. |
@@ -127,6 +151,12 @@ Current dependency package coverage:
 | `starship` | `starship` | `starship` | `starship` | `starship` | `starship` |
 | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` |
 | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` |
+| `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
+| `Rust stable (rustup)` | `rustup`, `rustc`, `cargo`; bootstrap `rustup default stable` | `rustup` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
+| `go` | `go` | `go` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
+| `uv` | `uv` | `uv` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
+| `pnpm` | `pnpm` | `pnpm` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
+| `bun` | `bun` | `bun` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
 | `ghostty` | `ghostty` | `ghostty` | Manual | Manual | Manual |
 | `Warp` | `warp-terminal` | Manual | Manual | Manual | Manual |
 | `atuin` | `atuin` | `atuin` | Manual | Manual | Manual |

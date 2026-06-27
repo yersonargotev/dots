@@ -20,6 +20,7 @@ var (
 type Manifest struct {
 	Version      int                `yaml:"version"`
 	Profiles     map[string]Profile `yaml:"profiles"`
+	Dependencies []DependencySet    `yaml:"dependencies,omitempty"`
 	Entries      []Entry            `yaml:"entries"`
 	Provisioners []Provisioner      `yaml:"provisioners,omitempty"`
 }
@@ -37,6 +38,15 @@ type Entry struct {
 	Tags         []string     `yaml:"tags"`
 	OS           []string     `yaml:"os,omitempty"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
+}
+
+// DependencySet declares Dependencies selected directly by tags rather than by
+// a specific Profile, Managed Entry, or Provisioner. It is for shared toolchain
+// baselines such as the core development runtime set.
+type DependencySet struct {
+	Tags         []string     `yaml:"tags"`
+	OS           []string     `yaml:"os,omitempty"`
+	Dependencies []Dependency `yaml:"dependencies"`
 }
 
 // Provisioner declares an allowlisted external agent-configuration tool that
@@ -129,11 +139,22 @@ type Dependency struct {
 	// FontFallbackMatches declares compatible installed-font filename globs that
 	// satisfy the same dependency when the primary font file pattern is absent.
 	FontFallbackMatches []string `yaml:"font_fallback_matches,omitempty"`
+	// Commands declares every executable probe that must be present for this
+	// Dependency to be satisfied. It is used for manager-owned toolchains where
+	// both the manager and the runtime commands matter. When empty, Command or
+	// Name remains the single probe for backwards compatibility.
+	Commands []string `yaml:"commands,omitempty"`
+	// Toolchain selects one of dots' built-in, constrained runtime bootstrap flows.
+	// It is not arbitrary shell: each value maps to fixed argv-shaped commands.
+	Toolchain string `yaml:"toolchain,omitempty"`
 }
 
 const (
 	DependencyRequirementRequired = "required"
 	DependencyRequirementOptional = "optional"
+
+	DependencyToolchainNodeLTSFNM       = "node-lts-fnm"
+	DependencyToolchainRustStableRustup = "rust-stable-rustup"
 )
 
 // RequirementValue returns the dependency's stable required/optional
@@ -177,8 +198,28 @@ func (d Dependency) FontMatches() []string {
 	return matches
 }
 
-// Probe is the command name used to detect a Dependency's presence in PATH. It
-// defaults to Name when an entry does not declare an explicit command.
+// Probes are the command names used to detect a Dependency's presence in PATH.
+// They default to Command or Name when a dependency does not declare multiple
+// executable requirements.
+func (d Dependency) Probes() []string {
+	if len(d.Commands) > 0 {
+		probes := make([]string, 0, len(d.Commands))
+		seen := map[string]bool{}
+		for _, command := range d.Commands {
+			command = strings.TrimSpace(command)
+			if command == "" || seen[command] {
+				continue
+			}
+			seen[command] = true
+			probes = append(probes, command)
+		}
+		return probes
+	}
+	return []string{d.Probe()}
+}
+
+// Probe is the primary command name used to detect a Dependency's presence in
+// PATH. It defaults to Name when an entry does not declare an explicit command.
 func (d Dependency) Probe() string {
 	if command := strings.TrimSpace(d.Command); command != "" {
 		return command
@@ -235,6 +276,28 @@ func (m Manifest) Validate() error {
 		}
 		for j, dep := range profile.Dependencies {
 			if err := validateDependency(dep, fmt.Sprintf("profiles[%q].dependencies[%d]", name, j)); err != nil {
+				return err
+			}
+		}
+	}
+
+	for i, set := range m.Dependencies {
+		if len(set.Tags) == 0 {
+			return fmt.Errorf("dependencies[%d].tags is required", i)
+		}
+		if j, ok := indexOfEmptyTag(set.Tags); ok {
+			return fmt.Errorf("dependencies[%d].tags[%d] must not be empty", i, j)
+		}
+		for j, osName := range set.OS {
+			if !allowedOS(osName) {
+				return fmt.Errorf("dependencies[%d].os[%d] must be one of darwin, linux", i, j)
+			}
+		}
+		if len(set.Dependencies) == 0 {
+			return fmt.Errorf("dependencies[%d].dependencies is required", i)
+		}
+		for j, dep := range set.Dependencies {
+			if err := validateDependency(dep, fmt.Sprintf("dependencies[%d].dependencies[%d]", i, j)); err != nil {
 				return err
 			}
 		}
@@ -365,6 +428,14 @@ func validateDependency(dep Dependency, path string) error {
 	}
 	if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
 		return fmt.Errorf("%s.command must not be empty", path)
+	}
+	for i, command := range dep.Commands {
+		if strings.TrimSpace(command) == "" {
+			return fmt.Errorf("%s.commands[%d] must not be empty", path, i)
+		}
+	}
+	if dep.Toolchain != "" && dep.Toolchain != DependencyToolchainNodeLTSFNM && dep.Toolchain != DependencyToolchainRustStableRustup {
+		return fmt.Errorf("%s.toolchain must be one of node-lts-fnm, rust-stable-rustup", path)
 	}
 	if dep.BrewCask != "" && strings.TrimSpace(dep.BrewCask) == "" {
 		return fmt.Errorf("%s.brew_cask must not be empty", path)

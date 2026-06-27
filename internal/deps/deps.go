@@ -92,7 +92,7 @@ func dependencyPresent(dep manifest.Dependency, look Lookup, fontLook FontLookup
 	if dep.IsFont() {
 		return fontPresent(dep.FontMatches(), fontLook)
 	}
-	return look(dep.Probe())
+	return commandsPresent(dep.Probes(), look)
 }
 
 func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Result {
@@ -103,8 +103,8 @@ func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Resu
 		matches := dep.FontMatches()
 		return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: fontProbeLabel(matches), Present: fontPresent(matches, fontLook)}
 	}
-	probe := dep.Probe()
-	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probe, Present: look(probe)}
+	probes := dep.Probes()
+	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: commandsPresent(probes, look)}
 }
 
 const maxProbeDetailLen = 240
@@ -138,6 +138,19 @@ func probeDetail(output string, err error) string {
 	return detail[:maxProbeDetailLen-len("...")] + "..."
 }
 
+func commandsPresent(commands []string, look Lookup) bool {
+	for _, command := range commands {
+		if !look(command) {
+			return false
+		}
+	}
+	return true
+}
+
+func probeLabel(probes []string) string {
+	return strings.Join(probes, ", ")
+}
+
 func fontPresent(matches []string, fontLook FontLookup) bool {
 	for _, match := range matches {
 		if fontLook(match) {
@@ -155,8 +168,9 @@ func fontProbeLabel(matches []string) string {
 }
 
 // selectDependencies gathers the Dependencies declared directly by the Profile,
-// then every Managed Entry and Provisioner that belongs to the Profile and
-// passes the OS filter, deduplicated by name in first-declared order.
+// tag-scoped Dependency Sets, then every Managed Entry and Provisioner that
+// belongs to the Profile and passes the OS filter, deduplicated by name in
+// first-declared order.
 
 func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependency, error) {
 	profile, ok := m.Profiles[opts.Profile]
@@ -189,6 +203,15 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 
 	addDependencies(profile.Dependencies)
 	tags := manifest.SelectionTags(profile, opts.ExtraTags)
+	for _, set := range m.Dependencies {
+		if !manifest.SharesTag(set.Tags, tags) {
+			continue
+		}
+		if !manifest.MatchesOS(set.OS, opts.OS) {
+			continue
+		}
+		addDependencies(set.Dependencies)
+	}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue

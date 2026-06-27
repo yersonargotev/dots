@@ -1268,6 +1268,14 @@ func TestDependencyProbeTrimsWhitespace(t *testing.T) {
 	}
 }
 
+func TestDependencyProbesUsesCommandsWhenDeclared(t *testing.T) {
+	dep := manifest.Dependency{Name: "Rust stable (rustup)", Commands: []string{" rustup ", "rustc", "cargo", "rustc"}}
+	want := []string{"rustup", "rustc", "cargo"}
+	if got := dep.Probes(); !sameStrings(got, want) {
+		t.Fatalf("Probes() = %#v, want %#v", got, want)
+	}
+}
+
 func TestDependencyIsFont(t *testing.T) {
 	tests := []struct {
 		name string
@@ -2923,5 +2931,63 @@ entries:
 	_, err := manifest.LoadFile(path)
 	if err != nil {
 		t.Fatalf("LoadFile() error = %v; manifest validation does not inspect source type", err)
+	}
+}
+
+func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var core *manifest.DependencySet
+	for i := range got.Dependencies {
+		candidate := &got.Dependencies[i]
+		if hasString(candidate.Tags, "core") {
+			core = candidate
+			break
+		}
+	}
+	if core == nil {
+		t.Fatal("repository manifest missing core dependency set")
+	}
+	if !sameStrings(core.OS, []string{"darwin", "linux"}) {
+		t.Fatalf("core dependency set OS = %#v, want [darwin linux]", core.OS)
+	}
+
+	want := map[string]struct {
+		command   string
+		commands  []string
+		brew      string
+		toolchain string
+	}{
+		"Node LTS (fnm)":       {commands: []string{"fnm", "node"}, brew: "fnm", toolchain: manifest.DependencyToolchainNodeLTSFNM},
+		"Rust stable (rustup)": {commands: []string{"rustup", "rustc", "cargo"}, brew: "rustup", toolchain: manifest.DependencyToolchainRustStableRustup},
+		"go":                   {command: "go", brew: "go"},
+		"uv":                   {command: "uv", brew: "uv"},
+		"pnpm":                 {command: "pnpm", brew: "pnpm"},
+		"bun":                  {command: "bun", brew: "bun"},
+	}
+	for name, wantDep := range want {
+		var dep *manifest.Dependency
+		for i := range core.Dependencies {
+			candidate := &core.Dependencies[i]
+			if candidate.Name == name {
+				dep = candidate
+				break
+			}
+		}
+		if dep == nil {
+			t.Fatalf("core dependency set missing %q: %#v", name, core.Dependencies)
+		}
+		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Toolchain != wantDep.toolchain || !sameStrings(dep.Commands, wantDep.commands) {
+			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, toolchain %q", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.toolchain)
+		}
+		if dep.Apt != "" || dep.Dnf != "" || dep.Pacman != "" {
+			t.Fatalf("%s dependency = %#v, want Homebrew-owned runtime with no distro package mapping", name, *dep)
+		}
 	}
 }
