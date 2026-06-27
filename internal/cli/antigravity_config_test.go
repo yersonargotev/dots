@@ -30,6 +30,7 @@ func TestAntigravityAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nexit 0\n")
+	writeManifestDependencyStubs(t, stubDir)
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	install := cli.NewRootCommand()
@@ -115,6 +116,7 @@ func TestAntigravityMobileProfileSeedsOnlyDartMCPInSandbox(t *testing.T) {
 	for _, name := range []string{"npx", "claude", "codex", "dart"} {
 		writeExecStub(t, filepath.Join(stubDir, name), "#!/bin/sh\nexit 0\n")
 	}
+	writeManifestDependencyStubs(t, stubDir)
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	install := cli.NewRootCommand()
@@ -183,6 +185,7 @@ func TestAntigravitySettingsProvisionerAdditionsDoNotDrift(t *testing.T) {
 	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nexit 0\n")
+	writeManifestDependencyStubs(t, stubDir)
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	// 1. Run the initial install

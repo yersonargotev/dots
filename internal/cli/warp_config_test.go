@@ -21,6 +21,7 @@ func TestWarpDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	stateRoot := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	stubGentleAIProvisionerTools(t)
+	seedDesktopNerdFont(t, home)
 
 	install := cli.NewRootCommand()
 	var installOut bytes.Buffer

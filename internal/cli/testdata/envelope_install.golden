@@ -1,0 +1,73 @@
+{
+  "schema_version": "3",
+  "command": "install",
+  "status": "ok",
+  "data": {
+    "dry_run": false,
+    "dependencies": {
+      "preview": {
+        "profile": "default",
+        "tier": "homebrew",
+        "items": [
+          {
+            "dependency": "starship",
+            "status": "would-install",
+            "provider": "homebrew",
+            "package": "starship",
+            "executable": "brew",
+            "args": [
+              "install",
+              "starship"
+            ]
+          }
+        ]
+      },
+      "result": {
+        "profile": "default",
+        "tier": "homebrew",
+        "items": [
+          {
+            "dependency": "starship",
+            "status": "installed",
+            "provider": "homebrew",
+            "package": "starship",
+            "executable": "brew",
+            "args": [
+              "install",
+              "starship"
+            ]
+          }
+        ]
+      }
+    },
+    "plan": {
+      "profile": "default",
+      "actions": [
+        {
+          "source": "configs/zsh/zshrc",
+          "target": "/home/user/.zshrc",
+          "strategy": "symlink",
+          "status": "create"
+        }
+      ]
+    },
+    "provisioners": {
+      "profile": "default",
+      "steps": [
+        {
+          "tool": "skills",
+          "executable": "npx",
+          "args": [
+            "--yes",
+            "skills@1.5.12",
+            "add",
+            "vercel-labs/agent-skills"
+          ],
+          "targets": [
+            "~/.agents/skills"
+          ]
+        }
+      ]
+    }
+  }
+}

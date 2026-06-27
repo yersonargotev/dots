@@ -37,7 +37,7 @@ state.
 
 ```json
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -49,14 +49,16 @@ state.
 | `schema_version` | Envelope version, bumped independently of the CLI binary.           |
 | `command`        | The command that ran (`status`, `plan`, `doctor`, `deps check`).    |
 | `status`         | Outcome discriminator: `ok` \| `findings` \| `error`.               |
-| `data`           | The command's domain report (present on `ok` / `findings`).         |
+| `data`           | The command's domain report (present on `ok` / `findings`; selected action-command errors may include a partial report). |
 | `error`          | Structured error string (present only on `status: "error"`).        |
 
-On failure the envelope is still valid JSON:
+On failure the envelope is still valid JSON. Most errors contain only `error`;
+commands that can preserve a useful partial report may also include `data`.
+Schema version `3` introduced this partial-error report allowance:
 
 ```json
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
@@ -110,6 +112,16 @@ prose the text surface prints:
   plus portable provider `candidates`; they do not expose whether host-local
   commands such as `brew`, `apt-get`, or `sudo` were present on the machine that
   produced the report.
+- `install --dry-run --output json` includes dependency preflight under
+  `data.dependencies.preview` before the file `data.plan`. A confirmed
+  `install --yes --output json` includes dependency execution results under
+  `data.dependencies.result` alongside the same install plan and provisioner
+  plan, so agents can inspect what was provisioned before Managed
+  Configuration was applied. If the dependency gate fails, the error envelope
+  still includes this partial install report so agents can inspect the failed
+  Dependency result and prove Managed Configuration was not applied.
+  `data.dependencies` is optional and omitted when dependency provisioning is
+  intentionally bypassed with `install --skip-deps`.
 
 The domain reports' `json:` field names are part of the public contract.
 Renaming, removing, or changing the meaning of an existing field is a
