@@ -702,13 +702,16 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"gentle-ai", "engram"} {
+	for _, name := range []string{"starship", "zellij", "gentle-ai", "engram"} {
 		if len(dependencies[name]) == 0 {
 			t.Fatalf("repository manifest missing %s dependency", name)
 		}
 		for _, dep := range dependencies[name] {
 			if !dep.LinuxHomebrew {
 				t.Fatalf("%s dependency = %#v, want reviewed Linuxbrew opt-in", name, dep)
+			}
+			if (name == "starship" || name == "zellij") && dep.Apt != "" {
+				t.Fatalf("%s dependency = %#v, want no Ubuntu apt package declaration", name, dep)
 			}
 		}
 	}

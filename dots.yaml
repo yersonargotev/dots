@@ -143,7 +143,7 @@ entries:
     dependencies:
       - name: starship
         brew: starship
-        apt: starship
+        linux_homebrew: true
         dnf: starship
         pacman: starship
   - source: configs/tmux/tmux.conf
@@ -171,7 +171,7 @@ entries:
     dependencies:
       - name: zellij
         brew: zellij
-        apt: zellij
+        linux_homebrew: true
         dnf: zellij
         pacman: zellij
   - source: configs/zellij/layouts/default.kdl
@@ -185,7 +185,7 @@ entries:
     dependencies:
       - name: zellij
         brew: zellij
-        apt: zellij
+        linux_homebrew: true
         dnf: zellij
         pacman: zellij
   - source: configs/ghostty/config.ghostty
