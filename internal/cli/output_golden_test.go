@@ -40,10 +40,11 @@ func TestEnvelopeGolden(t *testing.T) {
 						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", State: status.StateOK},
 						{Source: "configs/git/config", Target: "/home/user/.gitconfig", Strategy: "copy", State: status.StateMissing},
 					},
-					Provisioners: provision.Plan{
+					Provisioners: provision.StatusReport{
 						Profile: "default",
-						Steps: []provision.Step{
-							{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global", "--agents", "claude-code"}, Targets: []string{"~/.claude", "~/.gentle-ai"}, GlobalTools: []string{"claude (~/.local/bin via npm prefix)"}},
+						Summary: provision.StatusSummary{State: provision.SummaryStatePending, Pending: 1},
+						Items: []provision.StatusItem{
+							{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global", "--agents", "claude-code"}, Targets: []string{"~/.claude", "~/.gentle-ai"}, Status: provision.StatusStatePending},
 						},
 					},
 				},

@@ -16,8 +16,9 @@ import (
 
 // Metadata is the machine-readable record of installed managed targets.
 type Metadata struct {
-	Version int      `json:"version"`
-	Entries []Record `json:"entries"`
+	Version      int                 `json:"version"`
+	Entries      []Record            `json:"entries"`
+	Provisioners []ProvisionerRecord `json:"provisioners,omitempty"`
 }
 
 // Record describes a single managed target the CLI installed. Copy-like
@@ -29,6 +30,18 @@ type Record struct {
 	Strategy    string `json:"strategy"`
 	Hash        string `json:"hash"`
 	InstalledAt string `json:"installedAt"`
+}
+
+// ProvisionerRecord describes the last known result for one selected
+// Provisioner command in a profile.
+type ProvisionerRecord struct {
+	Profile    string   `json:"profile"`
+	Tool       string   `json:"tool"`
+	Executable string   `json:"executable"`
+	Args       []string `json:"args"`
+	Status     string   `json:"status"`
+	Missing    []string `json:"missing,omitempty"`
+	LastRunAt  string   `json:"lastRunAt"`
 }
 
 // Path returns the location of installed.json under a state root.
@@ -80,6 +93,39 @@ func (m Metadata) FindByTarget(target string) (Record, bool) {
 		}
 	}
 	return Record{}, false
+}
+
+// FindProvisioner returns the last result for a selected Provisioner command.
+func (m Metadata) FindProvisioner(profile, tool, executable string, args []string) (ProvisionerRecord, bool) {
+	for _, r := range m.Provisioners {
+		if r.Profile == profile && r.Tool == tool && r.Executable == executable && stringSlicesEqual(r.Args, args) {
+			return r, true
+		}
+	}
+	return ProvisionerRecord{}, false
+}
+
+// UpsertProvisioner records the latest outcome for a selected Provisioner.
+func (m *Metadata) UpsertProvisioner(rec ProvisionerRecord) {
+	for i := range m.Provisioners {
+		if m.Provisioners[i].Profile == rec.Profile && m.Provisioners[i].Tool == rec.Tool && m.Provisioners[i].Executable == rec.Executable && stringSlicesEqual(m.Provisioners[i].Args, rec.Args) {
+			m.Provisioners[i] = rec
+			return
+		}
+	}
+	m.Provisioners = append(m.Provisioners, rec)
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // Remove returns a copy of the Metadata with every record whose Target appears

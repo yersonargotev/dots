@@ -202,7 +202,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		return updateReport{}, err
 	}
 	if applied {
-		if err := runProvisioners(cmd, *m, opts.profile, opts.extraTags, paths.Home); err != nil {
+		if _, err := runProvisioners(cmd, *m, opts.profile, opts.extraTags, paths.Home, paths.StateRoot); err != nil {
 			return updateReport{}, err
 		}
 	}

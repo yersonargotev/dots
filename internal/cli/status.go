@@ -70,15 +70,14 @@ func newStatusCommand() *cobra.Command {
 			fullReport := statusReport{
 				Profile:      report.Profile,
 				Entries:      report.Entries,
-				Provisioners: provPlan,
+				Provisioners: provision.BuildStatus(provPlan, meta),
 			}
 
-			// Declared provisioners make no alignment claim, so only the Dotfiles
-			// Status entries decide findings; both text and JSON still include the
-			// resolved provisioner commands as read-only context.
+			// Provisioner completion is now part of status because a profile can have
+			// aligned Managed Entries while provisioning is still pending or failed.
 			return renderOrEmit(cmd, fullReport, func() error {
 				renderStatus(cmd.OutOrStdout(), report)
-				renderStatusProvisioners(cmd.OutOrStdout(), provPlan)
+				renderStatusProvisioners(cmd.OutOrStdout(), provision.BuildStatus(provPlan, meta))
 				return nil
 			})
 		},

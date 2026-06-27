@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 const provisionerManifest = `version: 1
@@ -613,5 +614,60 @@ provisioners:
 	}
 	if !strings.Contains(out.String(), "Conflict resolution canceled; no changes applied.") {
 		t.Fatalf("cancel output missing abort message\noutput:\n%s", out.String())
+	}
+}
+
+func TestInstallPersistsFailedProvisionerForStatusResumeGuidance(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 7\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, sandboxHome, provisionerManifest)
+
+	installCmd := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	installCmd.SetOut(&installOut)
+	installCmd.SetErr(&installOut)
+	installCmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := installCmd.Execute(); err == nil {
+		t.Fatalf("install error = nil, want failing provisioner\noutput:\n%s", installOut.String())
+	}
+
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	rec, ok := meta.FindProvisioner("default", "gentle-ai", "gentle-ai", []string{"install", "--scope", "global", "--persona", "neutral", "--agents", "codex"})
+	if !ok {
+		t.Fatalf("failed provisioner was not persisted: %+v", meta.Provisioners)
+	}
+	if rec.Status != "failed" {
+		t.Fatalf("provisioner status = %q, want failed", rec.Status)
+	}
+
+	statusCmd := cli.NewRootCommand()
+	var statusOut bytes.Buffer
+	statusCmd.SetOut(&statusOut)
+	statusCmd.SetErr(&statusOut)
+	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+	requireFindings(t, statusCmd.Execute())
+	got := statusOut.String()
+	for _, want := range []string{
+		`Declared provisioners for profile "default" — failed`,
+		"failed               gentle-ai install --scope global --persona neutral --agents codex",
+		"resume: run dots install again after addressing failed or missing provisioners.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status output missing %q\noutput:\n%s", want, got)
+		}
 	}
 }

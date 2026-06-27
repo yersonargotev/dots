@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/bootstrap"
@@ -18,6 +19,7 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/tui"
 	"github.com/yersonargotev/dots/internal/version"
 )
@@ -158,7 +160,11 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			if err := runProvisioners(cmd, *m, profile, extraTags, paths.Home); err != nil {
+			provResult, err := runProvisioners(cmd, *m, profile, extraTags, paths.Home, paths.StateRoot)
+			if err != nil {
+				if wantsJSON(cmd) {
+					return installProvisionerError{err: err, report: installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, ProvisionerResults: &provResult}}
+				}
 				return err
 			}
 			if wantsJSON(cmd) {
@@ -200,6 +206,17 @@ func (e installDependencyGateError) Error() string { return e.err.Error() }
 func (e installDependencyGateError) Unwrap() error { return e.err }
 
 func (e installDependencyGateError) JSONErrorData() any { return e.report }
+
+type installProvisionerError struct {
+	err    error
+	report installReport
+}
+
+func (e installProvisionerError) Error() string { return e.err.Error() }
+
+func (e installProvisionerError) Unwrap() error { return e.err }
+
+func (e installProvisionerError) JSONErrorData() any { return e.report }
 
 // runInstallDependencies executes the dependency gate for dots install before any
 // Managed Configuration is applied. Interactive runs reuse the deps confirmation
@@ -250,7 +267,7 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 // temporary home. Apply stops at the first failing provisioner and returns the
 // error, which the caller surfaces; the tool's own stdout/stderr are streamed
 // through so its progress is visible.
-func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, extraTags []string, home string) error {
+func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, extraTags []string, home string, stateRoot string) (provision.Report, error) {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -270,17 +287,20 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 	if !wantsJSON(cmd) {
 		renderProvisionReport(cmd.OutOrStdout(), report)
 	}
+	if recordErr := recordProvisionerMetadata(stateRoot, report); recordErr != nil {
+		return report, recordErr
+	}
 	if err != nil {
-		return err
+		return report, err
 	}
 	selected, err := provision.Select(m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS})
 	if err != nil {
-		return err
+		return report, err
 	}
 	if agents := selectedCodeGraphAgents(selected); len(agents) > 0 {
-		return codexconfig.EnsureCodeGraphMode(home, agents...)
+		return report, codexconfig.EnsureCodeGraphMode(home, agents...)
 	}
-	return nil
+	return report, nil
 }
 
 func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
@@ -472,4 +492,31 @@ func writeFileForPromptDiff(w interface{ Write([]byte) (int, error) }, path, lab
 		data = append(data, '\n')
 	}
 	_, _ = w.Write(data)
+}
+
+func recordProvisionerMetadata(stateRoot string, report provision.Report) error {
+	if stateRoot == "" || len(report.Items) == 0 {
+		return nil
+	}
+	path := state.Path(stateRoot)
+	meta, err := state.Load(path)
+	if err != nil {
+		return err
+	}
+	if meta.Version == 0 {
+		meta.Version = 1
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, item := range report.Items {
+		meta.UpsertProvisioner(state.ProvisionerRecord{
+			Profile:    report.Profile,
+			Tool:       item.Tool,
+			Executable: item.Executable,
+			Args:       append([]string(nil), item.Args...),
+			Status:     string(item.Status),
+			Missing:    append([]string(nil), item.Missing...),
+			LastRunAt:  now,
+		})
+	}
+	return state.Save(path, meta)
 }
