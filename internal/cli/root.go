@@ -129,13 +129,13 @@ func preflightOutputMode(root *cobra.Command, args []string, stdout, stderr anyW
 	}
 
 	if cmdPath, unsupported := unsupportedJSONSurface(root, args); unsupported {
-		emitRawError(stdout, cmdPath, fmt.Errorf("--output json is not supported for help or shell completion output"))
+		emitRawError(stdout, cmdPath, fmt.Errorf("--output json is not supported for help or shell completion output"), nil)
 		return ExitError, true
 	}
 
 	cmd, _, err := root.Find(args)
 	if err == nil && !cmd.Runnable() {
-		emitRawError(stdout, commandName(cmd), fmt.Errorf("--output json requires a subcommand that emits a machine-readable result"))
+		emitRawError(stdout, commandName(cmd), fmt.Errorf("--output json requires a subcommand that emits a machine-readable result"), nil)
 		return ExitError, true
 	}
 	return ExitOK, false

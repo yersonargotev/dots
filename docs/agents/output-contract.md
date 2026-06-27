@@ -49,10 +49,10 @@ state.
 | `schema_version` | Envelope version, bumped independently of the CLI binary.           |
 | `command`        | The command that ran (`status`, `plan`, `doctor`, `deps check`).    |
 | `status`         | Outcome discriminator: `ok` \| `findings` \| `error`.               |
-| `data`           | The command's domain report (present on `ok` / `findings`).         |
+| `data`           | The command's domain report (present on `ok` / `findings`; selected action-command errors may include a partial report). |
 | `error`          | Structured error string (present only on `status: "error"`).        |
 
-On failure the envelope is still valid JSON:
+On failure the envelope is still valid JSON. Most errors contain only `error`; commands that can preserve a useful partial report may also include `data`:
 
 ```json
 {
@@ -115,7 +115,9 @@ prose the text surface prints:
   `install --yes --output json` includes dependency execution results under
   `data.dependencies.result` alongside the same install plan and provisioner
   plan, so agents can inspect what was provisioned before Managed
-  Configuration was applied.
+  Configuration was applied. If the dependency gate fails, the error envelope
+  still includes this partial install report so agents can inspect the failed
+  Dependency result and prove Managed Configuration was not applied.
 
 The domain reports' `json:` field names are part of the public contract.
 Renaming, removing, or changing the meaning of an existing field is a

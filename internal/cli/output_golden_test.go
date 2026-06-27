@@ -17,6 +17,12 @@ import (
 // machine-local / advisory fields (resolved_source, probe_detail, hint) stay out
 // of the contract.
 func TestEnvelopeGolden(t *testing.T) {
+	installPreview := deps.InstallDryRunReport{Profile: "default", Tier: deps.TierHomebrew, Items: []deps.InstallPreview{
+		{Dependency: "starship", Status: deps.InstallPreviewWouldInstall, Provider: deps.TierHomebrew, Package: "starship", Executable: "brew", Args: []string{"install", "starship"}},
+	}}
+	installResult := deps.InstallReport{Profile: "default", Tier: deps.TierHomebrew, Items: []deps.InstallItem{
+		{Dependency: "starship", Status: deps.InstallStatusInstalled, Provider: deps.TierHomebrew, Package: "starship", Executable: "brew", Args: []string{"install", "starship"}},
+	}}
 	tests := []struct {
 		name   string
 		env    envelope
@@ -102,6 +108,28 @@ func TestEnvelopeGolden(t *testing.T) {
 				},
 			},
 			golden: "envelope_deps_plan.golden",
+		},
+		{
+			name: "install",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "install",
+				Status:        statusOK,
+				Data: installReport{
+					DryRun: false,
+					Dependencies: installDependenciesReport{
+						Preview: &installPreview,
+						Result:  &installResult,
+					},
+					Plan: plan.Plan{Profile: "default", Actions: []plan.Action{
+						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
+					}},
+					Provisioners: provision.Plan{Profile: "default", Steps: []provision.Step{
+						{Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "vercel-labs/agent-skills"}, Targets: []string{"~/.agents/skills"}},
+					}},
+				},
+			},
+			golden: "envelope_install.golden",
 		},
 	}
 

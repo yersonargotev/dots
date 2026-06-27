@@ -30,6 +30,10 @@ type FindingsError struct{}
 
 func (*FindingsError) Error() string { return "findings" }
 
+type jsonErrorData interface {
+	JSONErrorData() any
+}
+
 // Run builds the root command, executes it with the given arguments, and
 // translates the outcome into a semantic process exit code (ExitOK,
 // ExitFindings, or ExitError). It is the single owner of error presentation:
@@ -62,7 +66,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if wantsJSON(executed) {
-		emitError(stdout, executed, err)
+		var withData jsonErrorData
+		if errors.As(err, &withData) {
+			emitErrorWithData(stdout, executed, err, withData.JSONErrorData())
+		} else {
+			emitError(stdout, executed, err)
+		}
 	} else {
 		fmt.Fprintln(stderr, "Error:", err)
 	}

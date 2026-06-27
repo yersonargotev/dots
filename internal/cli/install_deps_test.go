@@ -112,10 +112,47 @@ func TestInstallRunsDependenciesBeforeManagedConfiguration(t *testing.T) {
 		t.Fatalf("brew args = %q, want install/starship", string(args))
 	}
 	got := out.String()
-	depIdx := strings.Index(got, "Dependency install preview")
+	previewIdx := strings.Index(got, "Dependency install preview")
+	installIdx := strings.Index(got, "Dependency install for profile")
 	planIdx := strings.Index(got, "Plan for profile")
-	if depIdx < 0 || planIdx < 0 || depIdx > planIdx {
+	if previewIdx < 0 || installIdx < 0 || planIdx < 0 || previewIdx > installIdx || installIdx > planIdx {
 		t.Fatalf("dependency actions must render before file plan:\n%s", got)
+	}
+}
+
+func TestInstallSkipDepsPreservesConfigOnlyBehavior(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: definitely-missing-manual
+        command: definitely-missing-manual-probe
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--skip-deps", "--yes", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".zshrc")); err != nil {
+		t.Fatalf("skip-deps install did not write managed target: %v", err)
+	}
+	if strings.Contains(out.String(), "Dependency install preview") {
+		t.Fatalf("skip-deps should bypass dependency preview/provisioning:\n%s", out.String())
 	}
 }
 
@@ -159,5 +196,69 @@ func TestInstallDryRunJSONIncludesDependencyPreviewAndInstallPlan(t *testing.T) 
 	}
 	if len(env.Data.Plan.Actions) != 1 {
 		t.Fatalf("install plan missing from JSON envelope: %#v\n%s", env, out.String())
+	}
+}
+
+func TestInstallJSONDependencyFailureIncludesResultAndInstallPlan(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: definitely-missing-manual
+        command: definitely-missing-manual-probe
+`)
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"install", "--yes", "--output", "json", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot}, &out, &errOut)
+	if code != cli.ExitError {
+		t.Fatalf("exit code = %d, want %d\nstderr:\n%s\nstdout:\n%s", code, cli.ExitError, errOut.String(), out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("Machine Output Mode must keep stderr clean, got:\n%s", errOut.String())
+	}
+	if _, statErr := os.Lstat(filepath.Join(home, ".zshrc")); !os.IsNotExist(statErr) {
+		t.Fatalf("dependency failure must not write target; lstat err = %v", statErr)
+	}
+
+	var env struct {
+		Status string `json:"status"`
+		Error  string `json:"error"`
+		Data   struct {
+			Dependencies struct {
+				Result struct {
+					Items []struct {
+						Dependency string `json:"dependency"`
+						Status     string `json:"status"`
+					} `json:"items"`
+				} `json:"result"`
+			} `json:"dependencies"`
+			Plan struct {
+				Actions []struct {
+					Target string `json:"target"`
+				} `json:"actions"`
+			} `json:"plan"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal json: %v\n%s", err, out.String())
+	}
+	if env.Status != "error" || env.Error == "" {
+		t.Fatalf("error envelope missing status/error: %#v\n%s", env, out.String())
+	}
+	if len(env.Data.Dependencies.Result.Items) != 1 || env.Data.Dependencies.Result.Items[0].Status != "manual" {
+		t.Fatalf("dependency result missing from error envelope: %#v\n%s", env.Data.Dependencies.Result, out.String())
+	}
+	if len(env.Data.Plan.Actions) != 1 {
+		t.Fatalf("install plan missing from error envelope: %#v\n%s", env.Data.Plan, out.String())
 	}
 }

@@ -33,8 +33,9 @@ const (
 )
 
 // envelope is the single machine-readable shape every result-producing command
-// emits under --output json. Data carries the command's domain report; Error is
-// set only on the error envelope. The two are mutually exclusive.
+// emits under --output json. Data carries the command's domain report. Error is
+// set on error envelopes; selected action-command errors may also include Data
+// when the command has a useful partial report to preserve.
 type envelope struct {
 	SchemaVersion string `json:"schema_version"`
 	Command       string `json:"command"`
@@ -106,14 +107,19 @@ func emitReport(cmd *cobra.Command, report findingReport) error {
 // emitError writes the error envelope for Machine Output Mode to stdout, so an
 // agent always receives parseable output instead of a human "Error:" line.
 func emitError(w io.Writer, cmd *cobra.Command, cause error) {
-	emitRawError(w, commandName(cmd), cause)
+	emitRawError(w, commandName(cmd), cause, nil)
 }
 
-func emitRawError(w io.Writer, command string, cause error) {
+func emitErrorWithData(w io.Writer, cmd *cobra.Command, cause error, data any) {
+	emitRawError(w, commandName(cmd), cause, data)
+}
+
+func emitRawError(w io.Writer, command string, cause error, data any) {
 	_ = writeEnvelope(w, envelope{
 		SchemaVersion: schemaVersion,
 		Command:       command,
 		Status:        statusError,
+		Data:          data,
 		Error:         cause.Error(),
 	})
 }
