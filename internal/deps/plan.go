@@ -349,6 +349,14 @@ func tierPackage(dep manifest.Dependency, tier Tier) (pkg, executable string, ar
 }
 
 func manualNote(dep manifest.Dependency, opts Options, tier Tier, candidates []ProviderCandidate) string {
+	if tier == TierDebian {
+		if manual := strings.TrimSpace(dep.ManualDebian); manual != "" {
+			return manual
+		}
+	}
+	if manual := strings.TrimSpace(dep.Manual); manual != "" {
+		return manual
+	}
 	if dep.IsFont() && opts.OS == "linux" {
 		name := strings.TrimSpace(dep.Name)
 		matchHint := fontMatchHint(dep.FontMatches())

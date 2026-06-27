@@ -300,6 +300,8 @@ func TestPlanFallsBackToManualGuidance(t *testing.T) {
 					{Name: "neovim", Command: "nvim"},
 					// Has brew but no apt: manual on debian.
 					{Name: "ripgrep", Command: "rg", Brew: "ripgrep"},
+					// Has explicit manual remediation.
+					{Name: "ghostty", Command: "ghostty", ManualDebian: "Install Ghostty from https://ghostty.org/docs/install/binary, then rerun dots deps check."},
 				},
 			},
 		},
@@ -310,8 +312,8 @@ func TestPlanFallsBackToManualGuidance(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
-		if len(report.Items) != 2 {
-			t.Fatalf("Items len = %d, want 2", len(report.Items))
+		if len(report.Items) != 3 {
+			t.Fatalf("Items len = %d, want 3", len(report.Items))
 		}
 		for _, item := range report.Items {
 			if item.Command != "" {
@@ -337,6 +339,10 @@ func TestPlanFallsBackToManualGuidance(t *testing.T) {
 		}
 		if byName["neovim"].Command != "" || byName["neovim"].Manual == "" {
 			t.Fatalf("neovim guidance = %#v, want manual fallback", byName["neovim"])
+		}
+		wantManual := "Install Ghostty from https://ghostty.org/docs/install/binary, then rerun dots deps check."
+		if byName["ghostty"].Manual != wantManual {
+			t.Fatalf("ghostty Manual = %q, want %q", byName["ghostty"].Manual, wantManual)
 		}
 	})
 }
