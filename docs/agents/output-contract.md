@@ -37,7 +37,7 @@ state.
 
 ```json
 {
-  "schema_version": "3",
+  "schema_version": "4",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -58,7 +58,7 @@ Schema version `3` introduced this partial-error report allowance:
 
 ```json
 {
-  "schema_version": "3",
+  "schema_version": "4",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
