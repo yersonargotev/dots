@@ -234,6 +234,9 @@ func TestPlanResolvesCodeGraphProvisioner(t *testing.T) {
 	if !reflect.DeepEqual(step.Targets, wantTargets) {
 		t.Fatalf("codegraph targets = %#v, want %#v", step.Targets, wantTargets)
 	}
+	if !reflect.DeepEqual(step.GlobalTools, []string{"codegraph (~/.local/bin)"}) {
+		t.Fatalf("codegraph global tools = %#v, want local bin disclosure", step.GlobalTools)
+	}
 }
 
 func TestPlanResolvesClaudeCodeGentleAIProvisioner(t *testing.T) {
@@ -257,6 +260,28 @@ func TestPlanResolvesClaudeCodeGentleAIProvisioner(t *testing.T) {
 	}
 	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.gentle-ai"}) {
 		t.Fatalf("claude-code targets = %#v, want [~/.claude ~/.gentle-ai]", step.Targets)
+	}
+	if !reflect.DeepEqual(step.GlobalTools, []string{"claude (~/.local/bin via npm prefix)"}) {
+		t.Fatalf("claude-code global tools = %#v, want claude npm-prefix disclosure", step.GlobalTools)
+	}
+}
+
+func TestPlanDoesNotReportGlobalToolsForGentleAIUninstall(t *testing.T) {
+	prov := manifest.Provisioner{
+		Tool: "gentle-ai", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Action: "uninstall", Agents: []string{"claude-code"}, Yes: true},
+	}
+	m := manifestWithProvisioners(prov)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
+	}
+	if len(p.Steps[0].GlobalTools) != 0 {
+		t.Fatalf("uninstall global tools = %#v, want none", p.Steps[0].GlobalTools)
 	}
 }
 

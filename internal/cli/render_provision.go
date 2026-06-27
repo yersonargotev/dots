@@ -25,6 +25,9 @@ func renderProvisionPlan(w io.Writer, p provision.Plan) {
 		if len(step.Targets) > 0 {
 			fmt.Fprintf(w, "    affects: %s\n", strings.Join(step.Targets, ", "))
 		}
+		if len(step.GlobalTools) > 0 {
+			fmt.Fprintf(w, "    may install/update tools: %s\n", strings.Join(step.GlobalTools, ", "))
+		}
 	}
 	fmt.Fprintf(w, "\nSummary: %d provisioner(s)\n", len(p.Steps))
 }

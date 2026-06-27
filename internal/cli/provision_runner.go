@@ -34,21 +34,34 @@ func (r provisionExecRunner) Run(executable string, args []string) error {
 	if base == nil {
 		base = os.Environ()
 	}
-	cmd.Env = envWithHome(base, r.home)
+	cmd.Env = envForProvisioner(base, r.home)
 	return cmd.Run()
 }
 
-// envWithHome returns base with every HOME entry removed and a single HOME=home
-// appended. Dropping inherited HOME entries is required because a child's libc
-// getenv commonly returns the first match, so merely appending HOME would let an
-// inherited real HOME win over the sandbox value.
-func envWithHome(base []string, home string) []string {
-	out := make([]string, 0, len(base)+1)
+// envForProvisioner returns base with a sandboxed HOME, a user-local npm prefix,
+// and ~/.local/bin first on PATH. Dropping inherited HOME/NPM_CONFIG_PREFIX/PATH
+// entries avoids accidental writes to the operator's real home or sudo-backed npm
+// globals during non-interactive provisioner runs.
+func envForProvisioner(base []string, home string) []string {
+	localBin := home + "/.local/bin"
+	out := make([]string, 0, len(base)+3)
+	path := ""
 	for _, kv := range base {
-		if strings.HasPrefix(kv, "HOME=") {
+		switch {
+		case strings.HasPrefix(kv, "HOME="):
+			continue
+		case strings.HasPrefix(kv, "NPM_CONFIG_PREFIX="):
+			continue
+		case strings.HasPrefix(kv, "PATH="):
+			path = strings.TrimPrefix(kv, "PATH=")
 			continue
 		}
 		out = append(out, kv)
 	}
-	return append(out, "HOME="+home)
+	if path == "" {
+		path = localBin
+	} else {
+		path = localBin + string(os.PathListSeparator) + path
+	}
+	return append(out, "HOME="+home, "NPM_CONFIG_PREFIX="+home+"/.local", "PATH="+path)
 }

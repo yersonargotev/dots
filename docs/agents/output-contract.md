@@ -101,7 +101,9 @@ prose the text surface prints:
 
 - `status` includes selected Provisioner commands as read-only context under
   `data.provisioners`, but these do not affect the status finding decision.
-  Read dependency readiness for those commands from `doctor`.
+  Provisioner steps may include `global_tools` when the invocation can install
+  or update user-local tools such as `claude` under `~/.local/bin`. Read
+  dependency readiness for those commands from `doctor`.
 - `plan`'s `resolved_source` (a per-machine absolute path) and `deps`'s
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the

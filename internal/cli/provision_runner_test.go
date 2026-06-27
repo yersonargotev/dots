@@ -12,10 +12,10 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 )
 
-func TestEnvWithHomeOverridesExistingHome(t *testing.T) {
-	base := []string{"PATH=/usr/bin", "HOME=/real/home", "EDITOR=nvim"}
+func TestEnvForProvisionerOverridesHomeAndUsesLocalNPMPrefix(t *testing.T) {
+	base := []string{"PATH=/usr/bin", "HOME=/real/home", "NPM_CONFIG_PREFIX=/usr", "EDITOR=nvim"}
 
-	got := envWithHome(base, "/sandbox/home")
+	got := envForProvisioner(base, "/sandbox/home")
 
 	// There must be exactly one HOME entry and it must be the sandbox value, so a
 	// libc getenv (which commonly returns the first match) cannot resolve the
@@ -36,7 +36,15 @@ func TestEnvWithHomeOverridesExistingHome(t *testing.T) {
 	}
 
 	// Unrelated variables must be preserved.
-	if !containsEnv(got, "PATH=/usr/bin") || !containsEnv(got, "EDITOR=nvim") {
+	if !containsEnv(got, "NPM_CONFIG_PREFIX=/sandbox/home/.local") {
+		t.Fatalf("env missing sandboxed npm prefix: %#v", got)
+	}
+	if !containsEnv(got, "PATH=/sandbox/home/.local/bin:/usr/bin") {
+		t.Fatalf("env did not prepend sandbox local bin to PATH: %#v", got)
+	}
+
+	// Unrelated variables must be preserved.
+	if !containsEnv(got, "EDITOR=nvim") {
 		t.Fatalf("env lost unrelated variables: %#v", got)
 	}
 }
@@ -72,6 +80,88 @@ func TestProvisionExecRunnerThreadsHomeToSubprocess(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, "marker")); err == nil {
 		t.Fatalf("provisioner wrote into the inherited HOME %q instead of the sandbox", fakeRealHome)
+	}
+}
+
+func TestProvisionExecRunnerExposesLocalNPMPrefixAndBin(t *testing.T) {
+	sandboxHome := t.TempDir()
+	fakeRealHome := t.TempDir()
+
+	stub := filepath.Join(t.TempDir(), "gentle-ai")
+	script := `#!/bin/sh
+if [ "$NPM_CONFIG_PREFIX" != "$HOME/.local" ]; then
+  exit 8
+fi
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) exit 9 ;;
+esac
+printf 'ok' > "$HOME/npm-prefix-ok"
+`
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+
+	runner := provisionExecRunner{
+		ctx:     context.Background(),
+		home:    sandboxHome,
+		stdout:  io.Discard,
+		stderr:  io.Discard,
+		baseEnv: []string{"HOME=" + fakeRealHome, "NPM_CONFIG_PREFIX=/usr", "PATH=" + os.Getenv("PATH")},
+	}
+
+	if err := runner.Run(stub, nil); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sandboxHome, "npm-prefix-ok")); err != nil {
+		t.Fatalf("expected npm prefix marker in sandbox home %q: %v", sandboxHome, err)
+	}
+}
+
+func TestRunProvisionersGivesGentleAILocalNPMPrefix(t *testing.T) {
+	home := t.TempDir()
+	stubDir := t.TempDir()
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	script := `#!/bin/sh
+if [ "$NPM_CONFIG_PREFIX" != "$HOME/.local" ]; then
+  echo "would fall back to sudo npm install" >&2
+  exit 7
+fi
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) echo "local npm bin missing from PATH" >&2; exit 8 ;;
+esac
+printf 'npm-local' > "$HOME/gentle-ai-npm-mode"
+`
+	if err := os.WriteFile(filepath.Join(stubDir, "gentle-ai"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write gentle-ai stub: %v", err)
+	}
+
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"workstation": {Tags: []string{"agents"}},
+		},
+		Provisioners: []manifest.Provisioner{
+			{Tool: "gentle-ai", Tags: []string{"agents"}, Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"claude-code"}}},
+		},
+	}
+
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	if err := runProvisioners(cmd, m, "workstation", nil, home); err != nil {
+		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
+	}
+	got, err := os.ReadFile(filepath.Join(home, "gentle-ai-npm-mode"))
+	if err != nil {
+		t.Fatalf("gentle-ai stub did not confirm local npm mode: %v", err)
+	}
+	if string(got) != "npm-local" {
+		t.Fatalf("gentle-ai npm mode marker = %q, want npm-local", got)
 	}
 }
 

@@ -19,10 +19,11 @@ type Options struct {
 // plus the HOME-relative roots the tool will affect, shown so the user can judge
 // the blast radius before confirming.
 type Step struct {
-	Tool       string   `json:"tool"`
-	Executable string   `json:"executable"`
-	Args       []string `json:"args"`
-	Targets    []string `json:"targets"`
+	Tool        string   `json:"tool"`
+	Executable  string   `json:"executable"`
+	Args        []string `json:"args"`
+	Targets     []string `json:"targets"`
+	GlobalTools []string `json:"global_tools,omitempty"`
 }
 
 // Plan is the preview of Provisioner steps the installer would run for a
@@ -97,10 +98,11 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
 		plan.Steps = append(plan.Steps, Step{
-			Tool:       prov.Tool,
-			Executable: executable,
-			Args:       args,
-			Targets:    managedRoots(prov),
+			Tool:        prov.Tool,
+			Executable:  executable,
+			Args:        args,
+			Targets:     managedRoots(prov),
+			GlobalTools: globalTools(prov),
 		})
 	}
 	return plan, nil
@@ -150,6 +152,19 @@ func managedRoots(prov manifest.Provisioner) []string {
 	default:
 		return nil
 	}
+}
+
+func globalTools(prov manifest.Provisioner) []string {
+	switch prov.Tool {
+	case "gentle-ai":
+		action := strings.TrimSpace(prov.Spec.Action)
+		if (action == "" || action == "install") && includes(prov.Spec.Agents, "claude-code") {
+			return []string{"claude (~/.local/bin via npm prefix)"}
+		}
+	case "codegraph":
+		return []string{"codegraph (~/.local/bin)"}
+	}
+	return nil
 }
 
 func codeGraphRoots(agents []string) []string {
