@@ -596,6 +596,14 @@ func TestRepositoryManifestIncludesDartFlutterMCPProvisioners(t *testing.T) {
 		if !hasDependency(prov.Dependencies, tool) || !hasDependency(prov.Dependencies, "dart") {
 			t.Errorf("%s MCP provisioner dependencies = %#v, want %s and dart", tool, prov.Dependencies, tool)
 		}
+		for _, dep := range prov.Dependencies {
+			if dep.Name != "dart" {
+				continue
+			}
+			if !strings.Contains(dep.ManualDebian, "Flutter SDK") || !strings.Contains(dep.ManualDebian, "dart --version") {
+				t.Errorf("%s Dart dependency manual_debian = %q, want Ubuntu Flutter/Dart repair guidance", tool, dep.ManualDebian)
+			}
+		}
 	}
 }
 

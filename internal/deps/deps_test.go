@@ -336,6 +336,42 @@ func TestCheckWithToolProbesSanitizesAndTruncatesGitProbeDetail(t *testing.T) {
 	}
 }
 
+func TestCheckWithToolProbesDetectsBrokenClaudeCodeBinary(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"mobile": {Tags: []string{"mobile"}}},
+		Provisioners: []manifest.Provisioner{{
+			Tool: "claude", Tags: []string{"mobile"}, OS: []string{"linux"},
+			Dependencies: []manifest.Dependency{{Name: "claude", Command: "claude"}},
+		}},
+	}
+
+	report, err := deps.CheckWithToolProbes(m, deps.Options{Profile: "mobile", OS: "linux"}, lookupSet("claude"), fontLookupSet(),
+		func(command string, args ...string) (string, error) {
+			if command != "claude" {
+				t.Fatalf("probe command = %q, want claude", command)
+			}
+			if len(args) != 1 || args[0] != "--version" {
+				t.Fatalf("probe args = %#v, want [--version]", args)
+			}
+			return "No native build was found for platform linux-x64", errors.New("exit status 1")
+		})
+	if err != nil {
+		t.Fatalf("CheckWithToolProbes() error = %v", err)
+	}
+
+	result := report.Results[0]
+	if !result.Present {
+		t.Fatalf("claude should still be present when PATH lookup succeeds: %#v", result)
+	}
+	if !strings.Contains(result.Warning, "claude resolved on PATH but `claude --version` failed") {
+		t.Fatalf("Warning = %q, want broken Claude Code warning", result.Warning)
+	}
+	if !strings.Contains(result.Hint, "node install.cjs") {
+		t.Fatalf("Hint = %q, want native binary repair guidance", result.Hint)
+	}
+}
+
 func TestCheckDedupesAndSkipsEntriesFilteredOutByOS(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,
