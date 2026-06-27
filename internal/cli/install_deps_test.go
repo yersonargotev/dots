@@ -154,6 +154,9 @@ entries:
 	if strings.Contains(out.String(), "Dependency install preview") {
 		t.Fatalf("skip-deps should bypass dependency preview/provisioning:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "Dependency provisioning skipped (--skip-deps).") {
+		t.Fatalf("skip-deps should make the bypass visible:\n%s", out.String())
+	}
 }
 
 func TestInstallDryRunJSONIncludesDependencyPreviewAndInstallPlan(t *testing.T) {

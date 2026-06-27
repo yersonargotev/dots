@@ -99,7 +99,10 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
-			dependenciesReport := installDependenciesReport{Preview: depPreviewReport}
+			var dependenciesReport *installDependenciesReport
+			if depPreviewReport != nil {
+				dependenciesReport = &installDependenciesReport{Preview: depPreviewReport}
+			}
 			if wantsJSON(cmd) {
 				if dryRun {
 					return emitOK(cmd, installReport{DryRun: true, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
@@ -109,6 +112,9 @@ func newInstallCommand() *cobra.Command {
 				}
 			} else if depPreviewReport != nil {
 				renderDepsInstallPreview(cmd.OutOrStdout(), *depPreviewReport)
+				fmt.Fprintln(cmd.OutOrStdout())
+			} else if skipDeps {
+				fmt.Fprintln(cmd.OutOrStdout(), "Dependency provisioning skipped (--skip-deps).")
 				fmt.Fprintln(cmd.OutOrStdout())
 			}
 

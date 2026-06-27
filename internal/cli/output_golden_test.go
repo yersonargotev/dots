@@ -117,7 +117,7 @@ func TestEnvelopeGolden(t *testing.T) {
 				Status:        statusOK,
 				Data: installReport{
 					DryRun: false,
-					Dependencies: installDependenciesReport{
+					Dependencies: &installDependenciesReport{
 						Preview: &installPreview,
 						Result:  &installResult,
 					},
