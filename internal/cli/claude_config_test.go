@@ -258,6 +258,61 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	}
 }
 
+// TestClaudeAgentsPersonaTagRunsInSandbox proves that the explicit persona
+// opt-in path executes under the threaded sandbox HOME, not just in the
+// provisioner rendering layer.
+func TestClaudeAgentsPersonaTagRunsInSandbox(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	realHome := t.TempDir()
+	t.Setenv("HOME", realHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/gentle-ai-args\"\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/codegraph-args\"\n")
+	writeManifestDependencyStubs(t, stubDir)
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	install := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	install.SetOut(&installOut)
+	install.SetErr(&installOut)
+	install.SetArgs([]string{
+		"install",
+		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "agents",
+		"--tag", "persona",
+		"--source-root", repoRoot,
+		"--home", home,
+		"--state-root", stateRoot,
+		"--yes",
+	})
+
+	if err := install.Execute(); err != nil {
+		t.Fatalf("dots install --tag persona failed in sandbox: %v\noutput:\n%s", err, installOut.String())
+	}
+
+	gotArgs, err := os.ReadFile(filepath.Join(home, "gentle-ai-args"))
+	if err != nil {
+		t.Fatalf("persona provisioner did not run under the sandbox HOME %q: %v", home, err)
+	}
+	wantPersona := "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code,opencode,antigravity,vscode-copilot --components persona"
+	if !strings.Contains(string(gotArgs), wantPersona) {
+		t.Fatalf("provisioner argv = %q, want persona opt-in command %q", gotArgs, wantPersona)
+	}
+	if _, err := os.Stat(filepath.Join(realHome, "gentle-ai-args")); err == nil {
+		t.Fatalf("persona provisioner wrote into the inherited HOME %q instead of the sandbox", realHome)
+	}
+	if _, err := os.Stat(filepath.Join(realHome, ".claude", "settings.json")); err == nil {
+		t.Fatalf("persona-tag install wrote Claude settings into the inherited HOME %q", realHome)
+	}
+}
+
 func TestClaudeSettingsProvisionerAdditionsDoNotDriftAfterInstall(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
