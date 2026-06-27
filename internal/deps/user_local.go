@@ -87,6 +87,26 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		binaryPath:  func(archive, command string) string { return strings.TrimSuffix(archive, ".zip") + "/" + command },
 		links:       []string{"bun"},
 	},
+	"atuin": {
+		archiveName: func(version, goarch string) (string, bool) {
+			switch goarch {
+			case "amd64":
+				return "atuin-x86_64-unknown-linux-gnu.tar.gz", true
+			case "arm64":
+				return "atuin-aarch64-unknown-linux-gnu.tar.gz", true
+			default:
+				return "", false
+			}
+		},
+		url: func(version, archive string) string {
+			return fmt.Sprintf("https://github.com/atuinsh/atuin/releases/download/%s/%s", version, archive)
+		},
+		layout:      userLocalLayoutBundle,
+		command:     "atuin",
+		archiveType: "tar.gz",
+		binaryPath:  func(archive, command string) string { return strings.TrimSuffix(archive, ".tar.gz") + "/" + command },
+		links:       []string{"atuin"},
+	},
 	"starship": {
 		archiveName: func(version, goarch string) (string, bool) {
 			switch goarch {

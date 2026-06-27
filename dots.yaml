@@ -291,6 +291,12 @@ entries:
         command: atuin
         brew: atuin
         linux_homebrew: true
+        user_local:
+          recipe: atuin
+          version: v18.16.1
+          checksums:
+            linux_amd64: 5c41e20c0130ac84fa4bfa42c19bb55a07855838506063caad0d2922593b39be
+            linux_arm64: 9b2b7b41c3587533964ec5ab204b5116200bda39d534619387bcf4f197739b47
   - source: configs/atuin/themes/catppuccin-mocha.toml
     target: ~/.config/atuin/themes/catppuccin-mocha.toml
     strategy: symlink
@@ -304,6 +310,12 @@ entries:
         command: atuin
         brew: atuin
         linux_homebrew: true
+        user_local:
+          recipe: atuin
+          version: v18.16.1
+          checksums:
+            linux_amd64: 5c41e20c0130ac84fa4bfa42c19bb55a07855838506063caad0d2922593b39be
+            linux_arm64: 9b2b7b41c3587533964ec5ab204b5116200bda39d534619387bcf4f197739b47
   - source: configs/bat/config
     target: ~/.config/bat/config
     strategy: symlink

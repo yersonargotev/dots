@@ -745,7 +745,7 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"starship", "zellij", "gentle-ai", "engram"} {
+	for _, name := range []string{"starship", "zellij", "atuin", "gentle-ai", "engram"} {
 		if len(dependencies[name]) == 0 {
 			t.Fatalf("repository manifest missing %s dependency", name)
 		}
@@ -753,15 +753,15 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 			if !dep.LinuxHomebrew {
 				t.Fatalf("%s dependency = %#v, want reviewed Linuxbrew opt-in", name, dep)
 			}
-			if (name == "starship" || name == "zellij") && dep.Apt != "" {
+			if (name == "starship" || name == "zellij" || name == "atuin") && dep.Apt != "" {
 				t.Fatalf("%s dependency = %#v, want no Ubuntu apt package declaration", name, dep)
 			}
-			if name == "starship" {
-				if dep.UserLocal == nil || dep.UserLocal.Recipe != "starship" || dep.UserLocal.Version == "" {
-					t.Fatalf("starship dependency = %#v, want reviewed user-local policy", dep)
+			if name == "starship" || name == "atuin" {
+				if dep.UserLocal == nil || dep.UserLocal.Recipe != name || dep.UserLocal.Version == "" {
+					t.Fatalf("%s dependency = %#v, want reviewed user-local policy", name, dep)
 				}
 				if dep.UserLocal.Checksums["linux_amd64"] == "" || dep.UserLocal.Checksums["linux_arm64"] == "" {
-					t.Fatalf("starship user_local checksums = %#v, want linux amd64 and arm64", dep.UserLocal.Checksums)
+					t.Fatalf("%s user_local checksums = %#v, want linux amd64 and arm64", name, dep.UserLocal.Checksums)
 				}
 			}
 		}

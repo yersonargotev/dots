@@ -187,7 +187,7 @@ Current dependency package coverage:
 | `Playwright CLI` | `playwright-cli` | `playwright-cli` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `ghostty` | `ghostty` | `ghostty` | Manual | Manual | Manual |
 | `Warp` | `warp-terminal` | Manual | Manual | Manual | Manual |
-| `atuin` | `atuin` | `atuin` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `atuin` | `atuin` | `atuin` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `bat` | `bat` | `bat` | `bat` | `bat` | `bat` |
 | `neovim` | `nvim` | `neovim` | `neovim` | `neovim` | `neovim` |
 | `zed` | `zed` | `zed` | Manual | Manual | Manual |
