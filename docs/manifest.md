@@ -174,7 +174,7 @@ Current dependency package coverage:
 | `Desktop Nerd Font` | Font globs `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` | `brew install --cask font-cascadia-code-nf` | Manual | Manual | Manual |
 | `zsh` | `zsh` | `zsh` | `zsh` | `zsh` | `zsh` |
 | `git` | `git` | `git` | `git` | `git` | `git` |
-| `starship` | `starship` | `starship` | `starship` | `starship` | `starship` |
+| `starship` | `starship` | `starship` | User-local / Linuxbrew opt-in/manual | `starship` | `starship` |
 | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` |
 | `zellij` | `zellij` | `zellij` | User-local / Linuxbrew opt-in/manual | `zellij` | `zellij` |
 | `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) |
@@ -200,7 +200,7 @@ Current dependency package coverage:
 | `npx` | `npx` | Manual | Manual | Manual | Manual |
 
 Reviewed Linuxbrew opt-ins include CLI/runtime tools whose Homebrew formulas are
-expected to work on Linuxbrew: the core runtimes/package tools, GitHub CLI,
+expected to work on Linuxbrew: Starship, the core runtimes/package tools, GitHub CLI,
 Playwright CLI, atuin, gentle-ai, and engram. Brew-only GUI apps such as Ghostty
 and Zed remain manual on Linux.
 

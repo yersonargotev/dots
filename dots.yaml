@@ -172,6 +172,12 @@ entries:
         linux_homebrew: true
         dnf: starship
         pacman: starship
+        user_local:
+          recipe: starship
+          version: v1.25.1
+          checksums:
+            linux_amd64: 4488c11ca632327d1f1f16fb2f102c0646094c35479cd5435991385da43c61ac
+            linux_arm64: 01517aab398959ea9ea73bdb4f032ea4dbb51dff5c8e5eb05b4a1b9b7ab872b8
   - source: configs/tmux/tmux.conf
     target: ~/.tmux.conf
     strategy: symlink

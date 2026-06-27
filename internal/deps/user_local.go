@@ -87,6 +87,26 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		binaryPath:  func(archive, command string) string { return strings.TrimSuffix(archive, ".zip") + "/" + command },
 		links:       []string{"bun"},
 	},
+	"starship": {
+		archiveName: func(version, goarch string) (string, bool) {
+			switch goarch {
+			case "amd64":
+				return "starship-x86_64-unknown-linux-gnu.tar.gz", true
+			case "arm64":
+				return "starship-aarch64-unknown-linux-musl.tar.gz", true
+			default:
+				return "", false
+			}
+		},
+		url: func(version, archive string) string {
+			return fmt.Sprintf("https://github.com/starship/starship/releases/download/%s/%s", version, archive)
+		},
+		layout:      userLocalLayoutSingle,
+		command:     "starship",
+		archiveType: "tar.gz",
+		binaryPath:  func(_ string, command string) string { return command },
+		links:       []string{"starship"},
+	},
 	"zellij": {
 		archiveName: func(version, goarch string) (string, bool) {
 			switch goarch {
