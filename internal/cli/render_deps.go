@@ -186,6 +186,9 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 		if item.TrustCommand != "" {
 			fmt.Fprintf(w, "  %-10s %-24s %s\n", "trust", item.Dependency, item.TrustCommand)
 		}
+		if item.Status == deps.InstallStatusUnresolved && item.Manual != "" {
+			fmt.Fprintf(w, "  %-10s %-24s %s\n", "repair", item.Dependency, item.Manual)
+		}
 		switch item.Status {
 		case deps.InstallStatusInstalled:
 			installed++
