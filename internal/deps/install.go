@@ -20,11 +20,13 @@ const (
 type InstallPreview struct {
 	Dependency   string               `json:"dependency"`
 	Status       InstallPreviewStatus `json:"status"`
+	Provider     Tier                 `json:"provider,omitempty"`
 	Package      string               `json:"package,omitempty"`
 	Executable   string               `json:"executable,omitempty"`
 	Args         []string             `json:"args,omitempty"`
 	Manual       string               `json:"manual,omitempty"`
 	TrustCommand string               `json:"trust_command,omitempty"`
+	Candidates   []ProviderCandidate  `json:"candidates,omitempty"`
 }
 
 // InstallDryRunReport previews the install actions for a Profile without
@@ -52,13 +54,15 @@ const (
 
 // InstallItem is the result of one attempted dependency installation.
 type InstallItem struct {
-	Dependency   string        `json:"dependency"`
-	Status       InstallStatus `json:"status"`
-	Package      string        `json:"package,omitempty"`
-	Executable   string        `json:"executable,omitempty"`
-	Args         []string      `json:"args,omitempty"`
-	Manual       string        `json:"manual,omitempty"`
-	TrustCommand string        `json:"trust_command,omitempty"`
+	Dependency   string              `json:"dependency"`
+	Status       InstallStatus       `json:"status"`
+	Provider     Tier                `json:"provider,omitempty"`
+	Package      string              `json:"package,omitempty"`
+	Executable   string              `json:"executable,omitempty"`
+	Args         []string            `json:"args,omitempty"`
+	Manual       string              `json:"manual,omitempty"`
+	TrustCommand string              `json:"trust_command,omitempty"`
+	Candidates   []ProviderCandidate `json:"candidates,omitempty"`
 }
 
 // InstallReport records the stable dots summary for a real install run.
@@ -85,11 +89,13 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook Font
 		report.Items = append(report.Items, InstallPreview{
 			Dependency:   action.Dependency,
 			Status:       status,
+			Provider:     action.Provider,
 			Package:      action.Package,
 			Executable:   action.Executable,
 			Args:         action.Args,
 			Manual:       action.Manual,
 			TrustCommand: action.TrustCommand,
+			Candidates:   action.Candidates,
 		})
 	}
 	return report, nil
@@ -113,18 +119,21 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Status:       InstallStatusManual,
 				Manual:       action.Manual,
 				TrustCommand: action.TrustCommand,
+				Candidates:   action.Candidates,
 			})
 			continue
 		}
-		args := installArgsWithConfirmation(action, tier)
+		args := installArgsWithConfirmation(action)
 		if err := runner.Run(action.Executable, args); err != nil {
 			report.Items = append(report.Items, InstallItem{
 				Dependency:   action.Dependency,
 				Status:       InstallStatusFailed,
+				Provider:     action.Provider,
 				Package:      action.Package,
 				Executable:   action.Executable,
 				Args:         args,
 				TrustCommand: action.TrustCommand,
+				Candidates:   action.Candidates,
 			})
 			return report, fmt.Errorf("install %q: %w", action.Dependency, err)
 		}
@@ -133,20 +142,24 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			report.Items = append(report.Items, InstallItem{
 				Dependency:   action.Dependency,
 				Status:       InstallStatusUnresolved,
+				Provider:     action.Provider,
 				Package:      action.Package,
 				Executable:   action.Executable,
 				Args:         args,
 				TrustCommand: action.TrustCommand,
+				Candidates:   action.Candidates,
 			})
 			return report, errors.New("unresolved dependencies remain after install")
 		}
 		report.Items = append(report.Items, InstallItem{
 			Dependency:   action.Dependency,
 			Status:       InstallStatusInstalled,
+			Provider:     action.Provider,
 			Package:      action.Package,
 			Executable:   action.Executable,
 			Args:         args,
 			TrustCommand: action.TrustCommand,
+			Candidates:   action.Candidates,
 		})
 	}
 	if unresolved {
@@ -166,14 +179,14 @@ func actionPresent(action InstallAction, look Lookup, fontLook FontLookup) bool 
 	return look(action.Probe)
 }
 
-func installArgsWithConfirmation(action InstallAction, tier Tier) []string {
+func installArgsWithConfirmation(action InstallAction) []string {
 	args := append([]string(nil), action.Args...)
 	if len(args) == 0 {
 		return args
 	}
 	pkg := args[len(args)-1]
 	prefix := append([]string(nil), args[:len(args)-1]...)
-	switch tier {
+	switch action.Provider {
 	case TierDebian, TierFedora:
 		prefix = append(prefix, "-y")
 	case TierArch:

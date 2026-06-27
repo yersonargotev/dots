@@ -408,6 +408,12 @@ entries:
 		if strings.Contains(out.String(), "Dependency install preview") {
 			t.Fatalf("JSON mode leaked deps prose:\n%s", out.String())
 		}
+		data := string(env.Data)
+		for _, want := range []string{`"candidates"`, `"provider": "homebrew"`, `"available": false`, `"status": "manual"`} {
+			if !strings.Contains(data, want) {
+				t.Fatalf("deps install JSON missing provider-aware field %q\ndata:\n%s", want, data)
+			}
+		}
 	})
 
 	t.Run("backups restore dry run", func(t *testing.T) {

@@ -2,7 +2,6 @@ package deps_test
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/deps"
@@ -85,14 +84,14 @@ func TestPlanProducesHomebrewCaskActionsForMappedPackages(t *testing.T) {
 	var commandProbes []string
 	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
 		commandProbes = append(commandProbes, command)
-		return false
+		return command == "brew"
 	}, fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
 
-	if len(commandProbes) != 0 {
-		t.Fatalf("command probes = %#v, want none for font dependency", commandProbes)
+	if !reflect.DeepEqual(commandProbes, []string{"brew"}) {
+		t.Fatalf("command probes = %#v, want brew provider availability probe", commandProbes)
 	}
 	if len(report.Actions) != 1 {
 		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
@@ -112,7 +111,7 @@ func TestPlanProducesHomebrewCaskActionsForMappedPackages(t *testing.T) {
 	}
 }
 
-func TestPlanKeepsCaskOnlyFontsManualOutsideHomebrew(t *testing.T) {
+func TestPlanUsesLinuxHomebrewForCaskFontsWhenBrewIsAvailable(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
@@ -135,24 +134,11 @@ func TestPlanKeepsCaskOnlyFontsManualOutsideHomebrew(t *testing.T) {
 		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
 	}
 	action := report.Actions[0]
-	if action.Executable != "" || len(action.Args) != 0 || action.Package != "" {
-		t.Fatalf("linux cask-only font action = %#v, want manual advisory action", action)
+	if action.Provider != deps.TierHomebrew || action.Executable != "brew" || action.Package != "font-cascadia-code-nf" {
+		t.Fatalf("linux cask action = %#v, want Homebrew cask fallback", action)
 	}
-	if action.Manual == "" {
-		t.Fatalf("Manual empty, want advisory-only guidance")
-	}
-	wantSteps := []string{
-		`obtain the font files for "CascadiaCode Nerd Font"`,
-		`Homebrew cask token "font-cascadia-code-nf"`,
-		`copy .ttf/.otf files into ~/.local/share/fonts`,
-		`run fc-cache -f ~/.local/share/fonts`,
-		`rerun dots deps check`,
-		`font_match "CascadiaCodeNF*"`,
-	}
-	for _, want := range wantSteps {
-		if !strings.Contains(action.Manual, want) {
-			t.Fatalf("Manual = %q, want advisory step containing %q", action.Manual, want)
-		}
+	if !reflect.DeepEqual(action.Args, []string{"install", "--cask", "font-cascadia-code-nf"}) {
+		t.Fatalf("Args = %#v, want brew cask install", action.Args)
 	}
 }
 
@@ -236,7 +222,7 @@ func TestPlanFallsBackToManualGuidance(t *testing.T) {
 	}
 
 	t.Run("generic tier is always manual", func(t *testing.T) {
-		report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierGeneric)
+		report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, noProviderLookup(), fontLookupSet(), deps.TierGeneric)
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
@@ -254,7 +240,7 @@ func TestPlanFallsBackToManualGuidance(t *testing.T) {
 	})
 
 	t.Run("missing package field falls back to manual", func(t *testing.T) {
-		report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierDebian)
+		report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, noProviderLookup(), fontLookupSet(), deps.TierDebian)
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
@@ -296,7 +282,7 @@ func TestPlanProducesManualInstallActions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), tt.tier)
+			report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, noProviderLookup(), fontLookupSet(), tt.tier)
 			if err != nil {
 				t.Fatalf("Plan() error = %v", err)
 			}
@@ -319,6 +305,68 @@ func TestPlanProducesManualInstallActions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPlanFallsBackFromUnavailableDistroProviderToHomebrew(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "ripgrep", Command: "rg", Apt: "ripgrep", Brew: "ripgrep"}},
+		}},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, func(command string) bool {
+		return command == "brew"
+	}, fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	action := report.Actions[0]
+	if action.Provider != deps.TierHomebrew || action.Executable != "brew" || action.Package != "ripgrep" {
+		t.Fatalf("action = %#v, want Homebrew fallback after unavailable debian provider", action)
+	}
+	if len(action.Candidates) != 2 {
+		t.Fatalf("Candidates len = %d, want debian and homebrew", len(action.Candidates))
+	}
+	if action.Candidates[0].Provider != deps.TierDebian || action.Candidates[0].Available {
+		t.Fatalf("first candidate = %#v, want unavailable debian", action.Candidates[0])
+	}
+	if action.Candidates[1].Provider != deps.TierHomebrew || !action.Candidates[1].Available {
+		t.Fatalf("second candidate = %#v, want available homebrew", action.Candidates[1])
+	}
+}
+
+func TestPlanReportsManualWhenNoProviderCandidateIsExecutable(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "ripgrep", Command: "rg", Apt: "ripgrep", Brew: "ripgrep"}},
+		}},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, noProviderLookup(), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	action := report.Actions[0]
+	if action.Executable != "" || action.Package != "" || action.Manual == "" {
+		t.Fatalf("action = %#v, want manual action with no executable provider", action)
+	}
+	if len(action.Candidates) != 2 {
+		t.Fatalf("Candidates len = %d, want unavailable debian and homebrew", len(action.Candidates))
+	}
+	for _, candidate := range action.Candidates {
+		if candidate.Available {
+			t.Fatalf("candidate = %#v, want unavailable", candidate)
+		}
 	}
 }
 
