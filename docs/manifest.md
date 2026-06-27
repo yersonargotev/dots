@@ -169,6 +169,8 @@ User-Local Providers are not system packages. They are reviewed, allowlisted Go 
 
 `pnpm` is intentionally installed from the pinned standalone `@pnpm/linux-*` executable artifacts instead of through Corepack. Node remains part of the Core Development Baseline through `Node LTS (fnm)`, but the pnpm provider does not enable Corepack, create Corepack shims, run global `npm install -g`, or mutate shell configuration.
 
+`neovim` uses the upstream multi-file Linux tarball through its User-Local Provider. The bundle is extracted under `~/.local/opt/nvim/<version>` and `~/.local/bin/nvim` points at the bundled executable.
+
 Current dependency package coverage:
 
 | Dependency | Detection | macOS/Homebrew | Debian/Ubuntu | Fedora | Arch |
@@ -191,7 +193,7 @@ Current dependency package coverage:
 | `Warp` | `warp-terminal` | Manual | Manual | Manual | Manual |
 | `atuin` | `atuin` | `atuin` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `bat` | `bat` | `bat` | User-local / Linuxbrew opt-in/manual | `bat` | `bat` |
-| `neovim` | `nvim` | `neovim` | `neovim` | `neovim` | `neovim` |
+| `neovim` | `nvim` | `neovim` | User-local / Linuxbrew opt-in/manual | `neovim` | `neovim` |
 | `zed` | `zed` | `zed` | Manual | Manual | Manual |
 | `opencode` | `opencode` | Manual | Manual | Manual | Manual |
 | `gentle-ai` | `gentle-ai` | `gentleman-programming/tap/gentle-ai` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
