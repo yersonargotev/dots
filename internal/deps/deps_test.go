@@ -126,8 +126,8 @@ func TestCheckIncludesProfileDependenciesBeforeEntryDependencies(t *testing.T) {
 	}
 
 	want := []deps.Result{
-		{Name: "Desktop Nerd Font", Command: "CascadiaCodeNF*", Present: true},
-		{Name: "ghostty", Command: "ghostty", Present: true},
+		{Name: "Desktop Nerd Font", Requirement: manifest.DependencyRequirementRequired, Command: "CascadiaCodeNF*", Present: true},
+		{Name: "ghostty", Requirement: manifest.DependencyRequirementRequired, Command: "ghostty", Present: true},
 	}
 	if len(report.Results) != len(want) {
 		t.Fatalf("Results len = %d, want %d (%#v)", len(report.Results), len(want), report.Results)
@@ -165,11 +165,40 @@ func TestCheckReportsPresentAndMissingForProfile(t *testing.T) {
 	if len(report.Results) != 2 {
 		t.Fatalf("Results len = %d, want 2 (%#v)", len(report.Results), report.Results)
 	}
-	if report.Results[0] != (deps.Result{Name: "tmux", Command: "tmux", Present: true}) {
+	if report.Results[0] != (deps.Result{Name: "tmux", Requirement: manifest.DependencyRequirementRequired, Command: "tmux", Present: true}) {
 		t.Fatalf("Results[0] = %#v, want present tmux", report.Results[0])
 	}
-	if report.Results[1] != (deps.Result{Name: "starship", Command: "starship", Present: false}) {
+	if report.Results[1] != (deps.Result{Name: "starship", Requirement: manifest.DependencyRequirementRequired, Command: "starship", Present: false}) {
 		t.Fatalf("Results[1] = %#v, want missing starship", report.Results[1])
+	}
+}
+
+func TestCheckReportsOptionalRequirementAndRequiredDominatesDuplicates(t *testing.T) {
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {
+				Tags: []string{"core"},
+				Dependencies: []manifest.Dependency{
+					{Name: "starship", Requirement: manifest.DependencyRequirementOptional, Brew: "starship"},
+				},
+			},
+		},
+		Entries: []manifest.Entry{{
+			Source: "configs/zsh/zshrc", Target: "~/.zshrc", Strategy: "symlink", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "starship", Brew: "starship"}},
+		}},
+	}
+
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet(), fontLookupSet())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if len(report.Results) != 1 {
+		t.Fatalf("Results len = %d, want 1 (%#v)", len(report.Results), report.Results)
+	}
+	if report.Results[0].Requirement != manifest.DependencyRequirementRequired {
+		t.Fatalf("Requirement = %q, want required to dominate duplicate optional declaration", report.Results[0].Requirement)
 	}
 }
 
@@ -393,9 +422,9 @@ func TestCheckIncludesSelectedProvisionerDependencies(t *testing.T) {
 	}
 
 	want := []deps.Result{
-		{Name: "zsh", Command: "zsh", Present: true},
-		{Name: "gentle-ai", Command: "gentle-ai", Present: false},
-		{Name: "engram", Command: "engram", Present: true},
+		{Name: "zsh", Requirement: manifest.DependencyRequirementRequired, Command: "zsh", Present: true},
+		{Name: "gentle-ai", Requirement: manifest.DependencyRequirementRequired, Command: "gentle-ai", Present: false},
+		{Name: "engram", Requirement: manifest.DependencyRequirementRequired, Command: "engram", Present: true},
 	}
 	if len(report.Results) != len(want) {
 		t.Fatalf("Results len = %d, want %d (%#v)", len(report.Results), len(want), report.Results)

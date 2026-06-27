@@ -27,7 +27,7 @@ func renderDepsCheck(w io.Writer, report deps.CheckReport) {
 		} else {
 			missing++
 		}
-		fmt.Fprintf(w, "  %-8s %s\n", state, r.Name)
+		fmt.Fprintf(w, "  %-8s %s (%s)\n", state, r.Name, dependencyRequirementLabel(r.Requirement))
 	}
 
 	fmt.Fprintf(w, "\nSummary: %d present, %d missing\n", present, missing)
@@ -48,7 +48,7 @@ func renderDepsPlan(w io.Writer, report deps.PlanReport) {
 		if hint == "" {
 			hint = item.Manual
 		}
-		fmt.Fprintf(w, "  %-12s %s\n", item.Name, hint)
+		fmt.Fprintf(w, "  %-12s %s (%s)\n", item.Name, hint, dependencyRequirementLabel(item.Requirement))
 		if item.TrustCommand != "" {
 			fmt.Fprintf(w, "  %-12s %s\n", "trust", item.TrustCommand)
 		}
@@ -88,7 +88,7 @@ func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.In
 			parts := append([]string{item.Executable}, item.Args...)
 			hint = strings.Join(parts, " ")
 		}
-		fmt.Fprintf(w, "  %-13s %-24s %s\n", item.Status, item.Dependency, hint)
+		fmt.Fprintf(w, "  %-13s %-24s %s (%s)\n", item.Status, item.Dependency, hint, dependencyRequirementLabel(item.Requirement))
 		if item.TrustCommand != "" {
 			fmt.Fprintf(w, "  %-13s %-24s %s\n", "trust", item.Dependency, item.TrustCommand)
 		}
@@ -101,6 +101,46 @@ func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.In
 func hasInstallablePreviewAction(report deps.InstallDryRunReport) bool {
 	installable, _ := countInstallPreviewActions(report)
 	return installable > 0
+}
+
+func hasRequiredInstallablePreviewAction(report deps.InstallDryRunReport) bool {
+	for _, item := range report.Items {
+		if item.Executable != "" && dependencyRequirementLabel(item.Requirement) == "required" {
+			return true
+		}
+	}
+	return false
+}
+
+func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.InstallReport, error) {
+	report := deps.InstallReport{Profile: preview.Profile, Tier: preview.Tier}
+	requiredUnresolved := false
+	for _, item := range preview.Items {
+		status := deps.InstallStatusUnresolved
+		if item.Executable == "" {
+			status = deps.InstallStatusManual
+		}
+		requirement := dependencyRequirementLabel(item.Requirement)
+		if requirement == "required" {
+			requiredUnresolved = true
+		}
+		report.Items = append(report.Items, deps.InstallItem{
+			Dependency:   item.Dependency,
+			Requirement:  requirement,
+			Status:       status,
+			Provider:     item.Provider,
+			Package:      item.Package,
+			Executable:   item.Executable,
+			Args:         append([]string(nil), item.Args...),
+			Manual:       item.Manual,
+			TrustCommand: item.TrustCommand,
+			Candidates:   append([]deps.ProviderCandidate(nil), item.Candidates...),
+		})
+	}
+	if requiredUnresolved {
+		return report, fmt.Errorf("unresolved required dependencies remain after install")
+	}
+	return report, nil
 }
 
 func countInstallPreviewActions(report deps.InstallDryRunReport) (installable int, manual int) {
@@ -131,7 +171,7 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 			parts := append([]string{item.Executable}, item.Args...)
 			hint = strings.Join(parts, " ")
 		}
-		fmt.Fprintf(w, "  %-10s %-24s %s\n", item.Status, item.Dependency, hint)
+		fmt.Fprintf(w, "  %-10s %-24s %s (%s)\n", item.Status, item.Dependency, hint, dependencyRequirementLabel(item.Requirement))
 		if item.TrustCommand != "" {
 			fmt.Fprintf(w, "  %-10s %-24s %s\n", "trust", item.Dependency, item.TrustCommand)
 		}
@@ -148,4 +188,11 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 	}
 
 	fmt.Fprintf(w, "\nSummary: %d installed, %d manual, %d unresolved, %d failed\n", installed, manual, unresolved, failed)
+}
+
+func dependencyRequirementLabel(requirement string) string {
+	if strings.TrimSpace(requirement) == "" {
+		return "required"
+	}
+	return requirement
 }

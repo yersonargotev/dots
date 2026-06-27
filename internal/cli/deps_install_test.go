@@ -276,8 +276,8 @@ entries:
 	if err == nil {
 		t.Fatalf("Execute() error = nil, want unresolved manual dependency error\noutput:\n%s", out.String())
 	}
-	if !strings.Contains(err.Error(), "unresolved dependencies remain") {
-		t.Fatalf("Execute() error = %v, want unresolved dependencies remain", err)
+	if !strings.Contains(err.Error(), "unresolved required dependencies remain") {
+		t.Fatalf("Execute() error = %v, want unresolved required dependencies remain", err)
 	}
 
 	args, readErr := os.ReadFile(argsLog)

@@ -22,7 +22,7 @@ const (
 // binary. Renaming, removing, or repurposing a field in any command's JSON
 // `data` is a breaking change to the Agent Output Contract and must bump this
 // value.
-const schemaVersion = "3"
+const schemaVersion = "4"
 
 // Envelope statuses. They mirror the semantic exit codes: ok->0, findings->2,
 // error->1.

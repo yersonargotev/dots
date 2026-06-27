@@ -37,7 +37,7 @@ state.
 
 ```json
 {
-  "schema_version": "3",
+  "schema_version": "4",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -58,7 +58,7 @@ Schema version `3` introduced this partial-error report allowance:
 
 ```json
 {
-  "schema_version": "3",
+  "schema_version": "4",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
@@ -112,6 +112,10 @@ prose the text surface prints:
   plus portable provider `candidates`; they do not expose whether host-local
   commands such as `brew`, `apt-get`, or `sudo` were present on the machine that
   produced the report.
+- Dependency reports include `requirement` (`required` or `optional`) anywhere a
+  dependency item/action is exposed. Omitted manifest values are normalized to
+  `required`; optional unresolved Dependencies remain reportable but do not
+  block Managed Configuration during integrated install.
 - `install --dry-run --output json` includes dependency preflight under
   `data.dependencies.preview` before the file `data.plan`. A confirmed
   `install --yes --output json` includes dependency execution results under

@@ -117,6 +117,56 @@ func TestInstallYesDoesNotRunManualActionsAndReportsUnresolved(t *testing.T) {
 	}
 }
 
+func TestInstallYesDoesNotFailForUnresolvedOptionalDependencies(t *testing.T) {
+	runner := &recordingRunner{}
+
+	report, err := deps.Install(optionalManualManifest(), deps.Options{Profile: "default", OS: "linux"}, lookupSet(), fontLookupSet(), deps.TierGeneric, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v, want optional manual dependency to be non-blocking", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner calls len = %d, want 0 for manual action (%#v)", len(runner.calls), runner.calls)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusManual || report.Items[0].Requirement != manifest.DependencyRequirementOptional {
+		t.Fatalf("report items = %#v, want one optional manual item", report.Items)
+	}
+}
+
+func optionalManualManifest() manifest.Manifest {
+	m := manualOnlyManifest()
+	m.Entries[0].Dependencies[0].Requirement = manifest.DependencyRequirementOptional
+	return m
+}
+
+func TestInstallYesContinuesAfterOptionalDependencyFailures(t *testing.T) {
+	runnerErr := errors.New("optional package failed")
+	present := map[string]bool{"brew": true}
+	runner := &recordingRunner{err: runnerErr}
+
+	report, err := deps.Install(optionalInstallableManifest(), deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierHomebrew, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v, want optional install failure to be non-blocking", err)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusFailed || report.Items[0].Requirement != manifest.DependencyRequirementOptional {
+		t.Fatalf("report items = %#v, want one optional failed item", report.Items)
+	}
+}
+
+func optionalInstallableManifest() manifest.Manifest {
+	return manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{
+			{
+				Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"},
+				Dependencies: []manifest.Dependency{{Name: "starship", Requirement: manifest.DependencyRequirementOptional, Brew: "starship"}},
+			},
+		},
+	}
+}
+
 func TestInstallYesReprobesAfterSuccessAndErrorsWhenStillMissing(t *testing.T) {
 	var probes []string
 	runner := &recordingRunner{}

@@ -67,6 +67,36 @@ func TestPlanProducesStructuredInstallActionsForMappedPackages(t *testing.T) {
 	}
 }
 
+func TestPlanReportsDependencyRequirement(t *testing.T) {
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {
+				Tags: []string{"core"},
+				Dependencies: []manifest.Dependency{
+					{Name: "required-tool", Brew: "required-tool"},
+					{Name: "optional-tool", Requirement: manifest.DependencyRequirementOptional, Brew: "optional-tool"},
+				},
+			},
+		},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("brew"), fontLookupSet(), deps.TierHomebrew)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 2 {
+		t.Fatalf("Actions len = %d, want 2 (%#v)", len(report.Actions), report.Actions)
+	}
+	if report.Actions[0].Requirement != manifest.DependencyRequirementRequired || report.Items[0].Requirement != manifest.DependencyRequirementRequired {
+		t.Fatalf("required dependency requirement not defaulted: actions=%#v items=%#v", report.Actions, report.Items)
+	}
+	if report.Actions[1].Requirement != manifest.DependencyRequirementOptional || report.Items[1].Requirement != manifest.DependencyRequirementOptional {
+		t.Fatalf("optional dependency requirement missing: actions=%#v items=%#v", report.Actions, report.Items)
+	}
+}
+
 func TestPlanProducesHomebrewCaskActionsForMappedPackages(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,

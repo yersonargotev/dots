@@ -33,10 +33,11 @@ type Options struct {
 
 // Result is the presence finding for a single declared Dependency.
 type Result struct {
-	Name    string `json:"name"`
-	Command string `json:"command"`
-	Present bool   `json:"present"`
-	Warning string `json:"warning,omitempty"`
+	Name        string `json:"name"`
+	Requirement string `json:"requirement"`
+	Command     string `json:"command"`
+	Present     bool   `json:"present"`
+	Warning     string `json:"warning,omitempty"`
 	// ProbeDetail and Hint are advisory, human-prose strings with no stable
 	// format (truncated probe output, English remediation text). They stay out of
 	// the Agent Output Contract; the machine-meaningful signals are Present and
@@ -100,10 +101,10 @@ func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Resu
 		// by scanning the workstation font directories for any compatible file
 		// pattern, starting with the primary match.
 		matches := dep.FontMatches()
-		return Result{Name: dep.Name, Command: fontProbeLabel(matches), Present: fontPresent(matches, fontLook)}
+		return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: fontProbeLabel(matches), Present: fontPresent(matches, fontLook)}
 	}
 	probe := dep.Probe()
-	return Result{Name: dep.Name, Command: probe, Present: look(probe)}
+	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probe, Present: look(probe)}
 }
 
 const maxProbeDetailLen = 240
@@ -171,6 +172,14 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 			// dependency deduplicate and render consistently with Probe().
 			dep.Name = strings.TrimSpace(dep.Name)
 			if seen[dep.Name] {
+				if dep.IsRequired() {
+					for i := range selected {
+						if selected[i].Name == dep.Name && !selected[i].IsRequired() {
+							selected[i].Requirement = manifest.DependencyRequirementRequired
+							break
+						}
+					}
+				}
 				continue
 			}
 			seen[dep.Name] = true

@@ -1,6 +1,6 @@
 Dependency plan for profile "default" (debian)
 
-  starship     sudo apt-get install starship
-  neovim       no debian package declared for "neovim"; install it manually
+  starship     sudo apt-get install starship (required)
+  neovim       no debian package declared for "neovim"; install it manually (required)
 
 Summary: 2 dependencies to install

@@ -34,6 +34,7 @@ const (
 // Manual is set when no executable provider candidate is available.
 type InstallAction struct {
 	Dependency   string              `json:"dependency"`
+	Requirement  string              `json:"requirement"`
 	Status       InstallActionStatus `json:"status"`
 	Probe        string              `json:"probe,omitempty"`
 	FontMatch    string              `json:"font_match,omitempty"`
@@ -53,6 +54,7 @@ type InstallAction struct {
 // empty. Action carries the structured model that Command renders from.
 type Guidance struct {
 	Name         string        `json:"name"`
+	Requirement  string        `json:"requirement"`
 	Command      string        `json:"command,omitempty"`
 	Manual       string        `json:"manual,omitempty"`
 	TrustCommand string        `json:"trust_command,omitempty"`
@@ -104,7 +106,7 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 	if len(fontMatches) > 0 {
 		fontMatch = fontMatches[0]
 	}
-	action := InstallAction{Dependency: dep.Name, Status: InstallActionStatusManual, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches}
+	action := InstallAction{Dependency: dep.Name, Requirement: dep.RequirementValue(), Status: InstallActionStatusManual, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches}
 
 	for _, candidate := range providerCandidates(dep, opts, tier, look) {
 		action.Candidates = append(action.Candidates, candidate)
@@ -127,9 +129,9 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 // guidanceFor renders advisory compatibility fields from the structured action.
 func guidanceFor(action InstallAction) Guidance {
 	if action.Executable == "" {
-		return Guidance{Name: action.Dependency, Manual: action.Manual, TrustCommand: action.TrustCommand, Action: action}
+		return Guidance{Name: action.Dependency, Requirement: action.Requirement, Manual: action.Manual, TrustCommand: action.TrustCommand, Action: action}
 	}
-	return Guidance{Name: action.Dependency, Command: action.commandHint(), TrustCommand: action.TrustCommand, Action: action}
+	return Guidance{Name: action.Dependency, Requirement: action.Requirement, Command: action.commandHint(), TrustCommand: action.TrustCommand, Action: action}
 }
 
 func (a InstallAction) commandHint() string {
