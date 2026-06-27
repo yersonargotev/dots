@@ -45,7 +45,7 @@ Current Profiles:
 |---------|------|--------|----------------------|
 | `default` | `core` | Core dotfiles without provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
-| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai agent setup/cleanup and shared engineering skills for supported agents. Add `--tag sdd` to opt into Gentle-AI SDD setup. | Core Development Baseline via the `core` tag-scoped Dependency Set |
+| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai memory/context setup, cleanup, and shared engineering skills for supported agents. Add `--tag persona` for optional persona styling or `--tag sdd` for Gentle-AI SDD setup. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Playwright CLI` via Homebrew formula `playwright-cli` |
 | `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
@@ -275,11 +275,12 @@ Current Provisioners:
 |------|------|----|-----------------|--------------|
 | `gentle-ai` | `agents` | all | Uninstall `sdd` for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot` with `--yes`. | `gentle-ai` |
 | `gentle-ai` | `sdd` | all | Install global stable neutral custom SDD setup in multi-agent mode for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot`. Select with `--profile agents --tag sdd`. | `gentle-ai` |
-| `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `codex` with `engram`, `context7`, and `persona`. | `gentle-ai`, `engram` |
-| `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `claude-code` with `engram`, `context7`, `persona`, and `permissions`. | `gentle-ai`, `engram` |
-| `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `antigravity` with `engram`, `context7`, and `persona` only; no `sdd` or `permissions`. | `gentle-ai`, `engram` |
-| `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `opencode` with `engram`, `context7`, and `persona` only; no `sdd` or `permissions`. | `gentle-ai`, `engram` |
-| `gentle-ai` | `agents` | all | Install global stable neutral custom setup for `vscode-copilot` with `engram`, `context7`, and `persona` only; no `sdd` or `permissions`. | `gentle-ai`, `engram` |
+| `gentle-ai` | `agents` | all | Install global stable custom baseline for `codex` with `engram` and `context7`; persona prompt content is not installed by default. | `gentle-ai`, `engram` |
+| `gentle-ai` | `agents` | all | Install global stable custom baseline for `claude-code` with `engram`, `context7`, and `permissions`; persona prompt content is not installed by default. | `gentle-ai`, `engram` |
+| `gentle-ai` | `agents` | all | Install global stable custom baseline for `antigravity` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt content. | `gentle-ai`, `engram` |
+| `gentle-ai` | `agents` | all | Install global stable custom baseline for `opencode` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt content. | `gentle-ai`, `engram` |
+| `gentle-ai` | `agents` | all | Install global stable custom baseline for `vscode-copilot` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt content. | `gentle-ai`, `engram` |
+| `gentle-ai` | `persona` | all | Install optional neutral persona prompt content for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot`. Select with `--profile agents --tag persona`. | `gentle-ai` |
 | `skills` | `web` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
 | `skills` | `web` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `web` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |

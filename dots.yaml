@@ -455,14 +455,12 @@ provisioners:
     spec:
       scope: global
       channel: stable
-      persona: neutral
       preset: custom
       agents:
         - codex
       components:
         - engram
         - context7
-        - persona
     dependencies:
       - name: gentle-ai
         command: gentle-ai
@@ -476,14 +474,12 @@ provisioners:
     spec:
       scope: global
       channel: stable
-      persona: neutral
       preset: custom
       agents:
         - claude-code
       components:
         - engram
         - context7
-        - persona
         - permissions
     dependencies:
       - name: gentle-ai
@@ -498,14 +494,12 @@ provisioners:
     spec:
       scope: global
       channel: stable
-      persona: neutral
       preset: custom
       agents:
         - antigravity
       components:
         - engram
         - context7
-        - persona
     dependencies:
       - name: gentle-ai
         command: gentle-ai
@@ -519,14 +513,12 @@ provisioners:
     spec:
       scope: global
       channel: stable
-      persona: neutral
       preset: custom
       agents:
         - opencode
       components:
         - engram
         - context7
-        - persona
     dependencies:
       - name: gentle-ai
         command: gentle-ai
@@ -540,14 +532,12 @@ provisioners:
     spec:
       scope: global
       channel: stable
-      persona: neutral
       preset: custom
       agents:
         - vscode-copilot
       components:
         - engram
         - context7
-        - persona
     dependencies:
       - name: gentle-ai
         command: gentle-ai
@@ -555,6 +545,26 @@ provisioners:
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+  - tool: gentle-ai
+    tags:
+      - persona
+    spec:
+      scope: global
+      channel: stable
+      persona: neutral
+      preset: custom
+      agents:
+        - codex
+        - claude-code
+        - opencode
+        - antigravity
+        - vscode-copilot
+      components:
+        - persona
+    dependencies:
+      - name: gentle-ai
+        command: gentle-ai
+        brew: gentleman-programming/tap/gentle-ai
   - tool: skills
     tags:
       - web
