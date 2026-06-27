@@ -328,9 +328,15 @@ entries:
       - name: bat
         command: bat
         brew: bat
-        apt: bat
+        linux_homebrew: true
         dnf: bat
         pacman: bat
+        user_local:
+          recipe: bat
+          version: v0.26.1
+          checksums:
+            linux_amd64: 726f04c8f576a7fd18b7634f1bbf2f915c43494c1c0f013baa3287edb0d5a2a3
+            linux_arm64: 422eb73e11c854fddd99f5ca8461c2f1d6e6dce0a2a8c3d5daade5ffcb6564aa
   - source: configs/nvim
     target: ~/.config/nvim
     strategy: symlink

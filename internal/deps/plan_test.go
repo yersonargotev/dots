@@ -527,7 +527,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("GitHub CLI action = %#v, want installable Homebrew fallback", githubCLI)
 		}
 
-		for _, name := range []string{"starship", "zellij"} {
+		for _, name := range []string{"bat", "starship", "zellij"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -555,7 +555,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("GitHub CLI action = %#v, want manual guidance without Ubuntu apt installability", githubCLI)
 		}
 
-		for _, name := range []string{"starship", "zellij"} {
+		for _, name := range []string{"bat", "starship", "zellij"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -741,6 +741,54 @@ func userLocalProviderManifest() manifest.Manifest {
 				},
 			}},
 		}},
+	}
+}
+
+func TestPlanResolvesBatUserLocalArtifact(t *testing.T) {
+	m := userLocalProviderManifest()
+	m.Entries[0].Dependencies[0] = manifest.Dependency{
+		Name:          "bat",
+		Command:       "bat",
+		Brew:          "bat",
+		LinuxHomebrew: true,
+		Dnf:           "bat",
+		Pacman:        "bat",
+		UserLocal: &manifest.UserLocalProvider{
+			Recipe:  "bat",
+			Version: "v0.26.1",
+			Checksums: map[string]string{
+				"linux_amd64": "726f04c8f576a7fd18b7634f1bbf2f915c43494c1c0f013baa3287edb0d5a2a3",
+				"linux_arm64": "422eb73e11c854fddd99f5ca8461c2f1d6e6dce0a2a8c3d5daade5ffcb6564aa",
+			},
+		},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	action := report.Actions[0]
+	if action.Provider != deps.TierUserLocal || action.UserLocal == nil {
+		t.Fatalf("action = %#v, want bat user-local provider", action)
+	}
+	if action.UserLocal.Recipe != "bat" || action.UserLocal.Command != "bat" || action.UserLocal.Layout != "single-binary" || !strings.Contains(action.UserLocal.URL, "bat-v0.26.1-x86_64-unknown-linux-gnu.tar.gz") {
+		t.Fatalf("user-local artifact = %#v, want pinned bat linux amd64 artifact", action.UserLocal)
+	}
+
+	report, err = deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("sudo", "dnf", "brew"), fontLookupSet(), deps.TierFedora)
+	if err != nil {
+		t.Fatalf("Plan() with Fedora tier error = %v", err)
+	}
+	if got := report.Actions[0]; got.Provider != deps.TierFedora || got.UserLocal != nil {
+		t.Fatalf("Fedora action = %#v, want distro provider before user-local", got)
+	}
+
+	report, err = deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("bat", "brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() with present bat error = %v", err)
+	}
+	if len(report.Actions) != 0 {
+		t.Fatalf("Actions = %#v, want no install when bat is present", report.Actions)
 	}
 }
 
