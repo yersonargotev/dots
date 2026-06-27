@@ -119,6 +119,13 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 	probes := dep.Probes()
 	action := InstallAction{Dependency: dep.Name, Requirement: dep.RequirementValue(), Status: InstallActionStatusManual, Probe: dep.Probe(), Probes: probes, FontMatch: fontMatch, FontMatches: fontMatches, Toolchain: strings.TrimSpace(dep.Toolchain), Bootstrap: bootstrapCommands(dep)}
 
+	if officialRustupInstallerRunnable(action, opts, look) {
+		action.Status = InstallActionStatusInstallable
+		action.Executable = "sh"
+		action.Args = []string{"-c", officialRustupInstallerScript}
+		return action
+	}
+
 	for _, candidate := range providerCandidates(dep, opts, tier, look) {
 		action.Candidates = append(action.Candidates, candidate)
 		if !candidate.Available || candidate.Executable == "" {
@@ -150,6 +157,16 @@ func guidanceFor(action InstallAction) Guidance {
 	return Guidance{Name: action.Dependency, Requirement: action.Requirement, Command: action.commandHint(), TrustCommand: action.TrustCommand, Action: action}
 }
 
+const officialRustupInstallerScript = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path"
+
+func officialRustupInstallerRunnable(action InstallAction, opts Options, look Lookup) bool {
+	return opts.OS == "linux" &&
+		action.Toolchain == manifest.DependencyToolchainRustStableRustup &&
+		!look("rustup") &&
+		look("curl") &&
+		look("sh")
+}
+
 func bootstrapRunnable(commands []Command, look Lookup) bool {
 	if len(commands) == 0 {
 		return false
@@ -164,7 +181,25 @@ func bootstrapRunnable(commands []Command, look Lookup) bool {
 
 func (a InstallAction) commandHint() string {
 	parts := append([]string{a.Executable}, a.Args...)
+	for i, part := range parts {
+		parts[i] = shellQuoteIfNeeded(part)
+	}
 	return strings.Join(parts, " ")
+}
+
+func shellQuoteIfNeeded(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if strings.IndexFunc(s, func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			strings.ContainsRune("_@%+=:,./-", r))
+	}) == -1 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 func bootstrapCommands(dep manifest.Dependency) []Command {

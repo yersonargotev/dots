@@ -85,8 +85,7 @@ func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.In
 	for _, item := range report.Items {
 		hint := item.Manual
 		if item.Executable != "" {
-			parts := append([]string{item.Executable}, item.Args...)
-			hint = strings.Join(parts, " ")
+			hint = commandHint(item.Executable, item.Args)
 		} else if len(item.Bootstrap) > 0 {
 			hint = "see bootstrap command(s)"
 		}
@@ -174,8 +173,7 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 	for _, item := range report.Items {
 		hint := item.Manual
 		if item.Executable != "" {
-			parts := append([]string{item.Executable}, item.Args...)
-			hint = strings.Join(parts, " ")
+			hint = commandHint(item.Executable, item.Args)
 		} else if len(item.Bootstrap) > 0 {
 			hint = "see bootstrap command(s)"
 		}
@@ -206,7 +204,25 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 
 func commandHint(executable string, args []string) string {
 	parts := append([]string{executable}, args...)
+	for i, part := range parts {
+		parts[i] = shellQuoteIfNeeded(part)
+	}
 	return strings.Join(parts, " ")
+}
+
+func shellQuoteIfNeeded(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if strings.IndexFunc(s, func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			strings.ContainsRune("_@%+=:,./-", r))
+	}) == -1 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 func dependencyRequirementLabel(requirement string) string {

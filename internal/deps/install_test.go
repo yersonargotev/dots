@@ -549,6 +549,91 @@ func TestInstallYesRunsConstrainedToolchainBootstrapBeforeReprobe(t *testing.T) 
 	}
 }
 
+func TestInstallDryRunReportsOfficialRustupInstaller(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:      "Rust stable (rustup)",
+				Commands:  []string{"rustup", "rustc", "cargo"},
+				Brew:      "rustup",
+				Toolchain: manifest.DependencyToolchainRustStableRustup,
+			}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	report, err := deps.InstallDryRun(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet("curl", "sh"), fontLookupSet(), deps.TierGeneric)
+	if err != nil {
+		t.Fatalf("InstallDryRun() error = %v", err)
+	}
+	if len(report.Items) != 1 {
+		t.Fatalf("Items len = %d, want 1 (%#v)", len(report.Items), report.Items)
+	}
+	item := report.Items[0]
+	if item.Status != deps.InstallPreviewWouldInstall || item.Executable != "sh" || len(item.Args) != 2 || !strings.Contains(item.Args[1], "https://sh.rustup.rs") || len(item.Bootstrap) != 1 {
+		t.Fatalf("Rust dry-run item = %#v, want official installer plus bootstrap", item)
+	}
+
+	plan, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet("curl", "sh"), fontLookupSet(), deps.TierGeneric)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(plan.Items) != 1 || !strings.Contains(plan.Items[0].Command, "sh -c '") || !strings.Contains(plan.Items[0].Command, `'\''=https'\''`) {
+		t.Fatalf("Rust installer command hint = %#v, want shell-quoted script", plan.Items)
+	}
+}
+
+func TestInstallYesRunsOfficialRustupInstallerBeforeBootstrap(t *testing.T) {
+	present := map[string]bool{"curl": true, "sh": true}
+	runner := &recordingRunner{}
+	runner.afterRun = func() {
+		last := runner.calls[len(runner.calls)-1]
+		switch {
+		case last.executable == "sh" && len(last.args) == 2 && strings.Contains(last.args[1], "https://sh.rustup.rs"):
+			present["rustup"] = true
+		case last.executable == "rustup" && reflect.DeepEqual(last.args, []string{"default", "stable"}):
+			present["rustc"] = true
+			present["cargo"] = true
+		}
+	}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:      "Rust stable (rustup)",
+				Commands:  []string{"rustup", "rustc", "cargo"},
+				Brew:      "rustup",
+				Toolchain: manifest.DependencyToolchainRustStableRustup,
+			}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	report, err := deps.Install(m, deps.Options{Profile: "default", OS: "linux"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierGeneric, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if len(runner.calls) != 2 {
+		t.Fatalf("runner calls len = %d, want official installer then bootstrap (%#v)", len(runner.calls), runner.calls)
+	}
+	if runner.calls[0].executable != "sh" || !reflect.DeepEqual(runner.calls[0].args[:1], []string{"-c"}) || !strings.Contains(runner.calls[0].args[1], "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path") {
+		t.Fatalf("official installer call = %#v", runner.calls[0])
+	}
+	if runner.calls[1].executable != "rustup" || !reflect.DeepEqual(runner.calls[1].args, []string{"default", "stable"}) {
+		t.Fatalf("bootstrap call = %#v", runner.calls[1])
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusInstalled {
+		t.Fatalf("report items = %#v, want installed Rust item", report.Items)
+	}
+}
+
 func TestInstallYesExplainsRustupToolchainWhenProbesRemainMissing(t *testing.T) {
 	present := map[string]bool{"rustup": true}
 	runner := &recordingRunner{}
