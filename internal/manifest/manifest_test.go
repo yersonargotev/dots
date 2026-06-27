@@ -1268,6 +1268,14 @@ func TestDependencyProbeTrimsWhitespace(t *testing.T) {
 	}
 }
 
+func TestDependencyProbesUsesCommandsWhenDeclared(t *testing.T) {
+	dep := manifest.Dependency{Name: "Rust stable (rustup)", Commands: []string{" rustup ", "rustc", "cargo", "rustc"}}
+	want := []string{"rustup", "rustc", "cargo"}
+	if got := dep.Probes(); !sameStrings(got, want) {
+		t.Fatalf("Probes() = %#v, want %#v", got, want)
+	}
+}
+
 func TestDependencyIsFont(t *testing.T) {
 	tests := []struct {
 		name string
@@ -2951,11 +2959,13 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 	}
 
 	want := map[string]struct {
-		command string
-		brew    string
+		command   string
+		commands  []string
+		brew      string
+		toolchain string
 	}{
-		"fnm":                  {command: "fnm", brew: "fnm"},
-		"Rust stable (rustup)": {command: "rustup", brew: "rustup"},
+		"Node LTS (fnm)":       {commands: []string{"fnm", "node"}, brew: "fnm", toolchain: manifest.DependencyToolchainNodeLTSFNM},
+		"Rust stable (rustup)": {commands: []string{"rustup", "rustc", "cargo"}, brew: "rustup", toolchain: manifest.DependencyToolchainRustStableRustup},
 		"go":                   {command: "go", brew: "go"},
 		"uv":                   {command: "uv", brew: "uv"},
 		"pnpm":                 {command: "pnpm", brew: "pnpm"},
@@ -2973,8 +2983,8 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		if dep == nil {
 			t.Fatalf("core dependency set missing %q: %#v", name, core.Dependencies)
 		}
-		if dep.Command != wantDep.command || dep.Brew != wantDep.brew {
-			t.Fatalf("%s dependency = %#v, want command %q and brew %q", name, *dep, wantDep.command, wantDep.brew)
+		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Toolchain != wantDep.toolchain || !sameStrings(dep.Commands, wantDep.commands) {
+			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, toolchain %q", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.toolchain)
 		}
 		if dep.Apt != "" || dep.Dnf != "" || dep.Pacman != "" {
 			t.Fatalf("%s dependency = %#v, want Homebrew-owned runtime with no distro package mapping", name, *dep)

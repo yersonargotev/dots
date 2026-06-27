@@ -25,6 +25,7 @@ type InstallPreview struct {
 	Package      string               `json:"package,omitempty"`
 	Executable   string               `json:"executable,omitempty"`
 	Args         []string             `json:"args,omitempty"`
+	Bootstrap    []Command            `json:"bootstrap,omitempty"`
 	Manual       string               `json:"manual,omitempty"`
 	TrustCommand string               `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate  `json:"candidates,omitempty"`
@@ -62,6 +63,7 @@ type InstallItem struct {
 	Package      string              `json:"package,omitempty"`
 	Executable   string              `json:"executable,omitempty"`
 	Args         []string            `json:"args,omitempty"`
+	Bootstrap    []Command           `json:"bootstrap,omitempty"`
 	Manual       string              `json:"manual,omitempty"`
 	TrustCommand string              `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate `json:"candidates,omitempty"`
@@ -85,7 +87,7 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook Font
 	report := InstallDryRunReport{Profile: plan.Profile, Tier: plan.Tier}
 	for _, action := range plan.Actions {
 		status := InstallPreviewWouldInstall
-		if action.Executable == "" {
+		if !actionExecutable(action) {
 			status = InstallPreviewManual
 		}
 		report.Items = append(report.Items, InstallPreview{
@@ -96,6 +98,7 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook Font
 			Package:      action.Package,
 			Executable:   action.Executable,
 			Args:         action.Args,
+			Bootstrap:    append([]Command(nil), action.Bootstrap...),
 			Manual:       action.Manual,
 			TrustCommand: action.TrustCommand,
 			Candidates:   action.Candidates,
@@ -115,7 +118,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 	report := InstallReport{Profile: plan.Profile, Tier: plan.Tier}
 	requiredUnresolved := false
 	for _, action := range plan.Actions {
-		if action.Executable == "" {
+		if !actionExecutable(action) {
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
 			}
@@ -130,7 +133,27 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			continue
 		}
 		args := installArgsWithConfirmation(action)
-		if err := runner.Run(action.Executable, args); err != nil {
+		if action.Executable != "" {
+			if err := runner.Run(action.Executable, args); err != nil {
+				report.Items = append(report.Items, InstallItem{
+					Dependency:   action.Dependency,
+					Requirement:  action.Requirement,
+					Status:       InstallStatusFailed,
+					Provider:     action.Provider,
+					Package:      action.Package,
+					Executable:   action.Executable,
+					Args:         args,
+					Bootstrap:    append([]Command(nil), action.Bootstrap...),
+					TrustCommand: action.TrustCommand,
+					Candidates:   action.Candidates,
+				})
+				if action.Requirement == manifest.DependencyRequirementOptional {
+					continue
+				}
+				return report, fmt.Errorf("install %q: %w", action.Dependency, err)
+			}
+		}
+		if err := runBootstrap(action, runner); err != nil {
 			report.Items = append(report.Items, InstallItem{
 				Dependency:   action.Dependency,
 				Requirement:  action.Requirement,
@@ -139,13 +162,14 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Package:      action.Package,
 				Executable:   action.Executable,
 				Args:         args,
+				Bootstrap:    append([]Command(nil), action.Bootstrap...),
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
 			})
 			if action.Requirement == manifest.DependencyRequirementOptional {
 				continue
 			}
-			return report, fmt.Errorf("install %q: %w", action.Dependency, err)
+			return report, fmt.Errorf("bootstrap %q: %w", action.Dependency, err)
 		}
 		if !actionPresent(action, look, fontLook) {
 			if action.Requirement == manifest.DependencyRequirementRequired {
@@ -159,6 +183,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Package:      action.Package,
 				Executable:   action.Executable,
 				Args:         args,
+				Bootstrap:    append([]Command(nil), action.Bootstrap...),
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
 			})
@@ -175,6 +200,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			Package:      action.Package,
 			Executable:   action.Executable,
 			Args:         args,
+			Bootstrap:    append([]Command(nil), action.Bootstrap...),
 			TrustCommand: action.TrustCommand,
 			Candidates:   action.Candidates,
 		})
@@ -185,6 +211,19 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 	return report, nil
 }
 
+func actionExecutable(action InstallAction) bool {
+	return action.Executable != "" || len(action.Bootstrap) > 0
+}
+
+func runBootstrap(action InstallAction, runner Runner) error {
+	for _, command := range action.Bootstrap {
+		if err := runner.Run(command.Executable, append([]string(nil), command.Args...)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func actionPresent(action InstallAction, look Lookup, fontLook FontLookup) bool {
 	matches := action.FontMatches
 	if len(matches) == 0 && action.FontMatch != "" {
@@ -193,7 +232,11 @@ func actionPresent(action InstallAction, look Lookup, fontLook FontLookup) bool 
 	if len(matches) > 0 {
 		return fontPresent(matches, fontLook)
 	}
-	return look(action.Probe)
+	probes := action.Probes
+	if len(probes) == 0 && action.Probe != "" {
+		probes = []string{action.Probe}
+	}
+	return commandsPresent(probes, look)
 }
 
 func installArgsWithConfirmation(action InstallAction) []string {

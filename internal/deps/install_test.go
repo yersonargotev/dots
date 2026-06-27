@@ -500,3 +500,74 @@ func TestInstallDryRunIncludesSelectedProvisionerDependencies(t *testing.T) {
 		t.Fatalf("Items[0].TrustCommand = %q, want formula trust guidance", item.TrustCommand)
 	}
 }
+
+func TestInstallYesRunsConstrainedToolchainBootstrapBeforeReprobe(t *testing.T) {
+	present := map[string]bool{"brew": true}
+	runner := &recordingRunner{}
+	runner.afterRun = func() {
+		last := runner.calls[len(runner.calls)-1]
+		switch {
+		case last.executable == "brew" && reflect.DeepEqual(last.args, []string{"install", "fnm"}):
+			present["fnm"] = true
+		case last.executable == "fnm" && reflect.DeepEqual(last.args, []string{"install", "--lts"}):
+			present["node"] = true
+		}
+	}
+
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:      "Node LTS (fnm)",
+				Commands:  []string{"fnm", "node"},
+				Brew:      "fnm",
+				Toolchain: manifest.DependencyToolchainNodeLTSFNM,
+			}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	report, err := deps.Install(m, deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierHomebrew, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+
+	wantCalls := []runnerCall{
+		{executable: "brew", args: []string{"install", "fnm"}},
+		{executable: "fnm", args: []string{"install", "--lts"}},
+	}
+	if !reflect.DeepEqual(runner.calls, wantCalls) {
+		t.Fatalf("runner calls = %#v, want %#v", runner.calls, wantCalls)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusInstalled || !reflect.DeepEqual(report.Items[0].Bootstrap, []deps.Command{{Executable: "fnm", Args: []string{"install", "--lts"}}}) {
+		t.Fatalf("report items = %#v, want installed item with fnm bootstrap", report.Items)
+	}
+}
+
+func TestInstallYesRunsToolchainBootstrapWhenManagerAlreadyPresent(t *testing.T) {
+	present := map[string]bool{"fnm": true}
+	runner := &recordingRunner{afterRun: func() { present["node"] = true }}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags:         []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "Node LTS (fnm)", Commands: []string{"fnm", "node"}, Brew: "fnm", Toolchain: manifest.DependencyToolchainNodeLTSFNM}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	if _, err := deps.Install(m, deps.Options{Profile: "default", OS: "linux"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierGeneric, runner); err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	wantCalls := []runnerCall{{executable: "fnm", args: []string{"install", "--lts"}}}
+	if !reflect.DeepEqual(runner.calls, wantCalls) {
+		t.Fatalf("runner calls = %#v, want %#v", runner.calls, wantCalls)
+	}
+}

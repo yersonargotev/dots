@@ -21,6 +21,13 @@ type ProviderCandidate struct {
 	TrustCommand string   `json:"trust_command,omitempty"`
 }
 
+// Command is one deterministic argv-shaped command dots may execute as part of
+// a constrained dependency action.
+type Command struct {
+	Executable string   `json:"executable"`
+	Args       []string `json:"args,omitempty"`
+}
+
 // InstallActionStatus describes the stable outcome for a missing Dependency.
 type InstallActionStatus string
 
@@ -37,12 +44,15 @@ type InstallAction struct {
 	Requirement  string              `json:"requirement"`
 	Status       InstallActionStatus `json:"status"`
 	Probe        string              `json:"probe,omitempty"`
+	Probes       []string            `json:"probes,omitempty"`
 	FontMatch    string              `json:"font_match,omitempty"`
 	FontMatches  []string            `json:"font_matches,omitempty"`
+	Toolchain    string              `json:"toolchain,omitempty"`
 	Provider     Tier                `json:"provider,omitempty"`
 	Package      string              `json:"package,omitempty"`
 	Executable   string              `json:"executable,omitempty"`
 	Args         []string            `json:"args,omitempty"`
+	Bootstrap    []Command           `json:"bootstrap,omitempty"`
 	Manual       string              `json:"manual,omitempty"`
 	TrustCommand string              `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate `json:"candidates,omitempty"`
@@ -106,7 +116,8 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 	if len(fontMatches) > 0 {
 		fontMatch = fontMatches[0]
 	}
-	action := InstallAction{Dependency: dep.Name, Requirement: dep.RequirementValue(), Status: InstallActionStatusManual, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches}
+	probes := dep.Probes()
+	action := InstallAction{Dependency: dep.Name, Requirement: dep.RequirementValue(), Status: InstallActionStatusManual, Probe: dep.Probe(), Probes: probes, FontMatch: fontMatch, FontMatches: fontMatches, Toolchain: strings.TrimSpace(dep.Toolchain), Bootstrap: bootstrapCommands(dep)}
 
 	for _, candidate := range providerCandidates(dep, opts, tier, look) {
 		action.Candidates = append(action.Candidates, candidate)
@@ -122,6 +133,11 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 		return action
 	}
 
+	if bootstrapRunnable(action.Bootstrap, look) {
+		action.Status = InstallActionStatusInstallable
+		return action
+	}
+
 	action.Manual = manualNote(dep, opts, tier, action.Candidates)
 	return action
 }
@@ -134,9 +150,32 @@ func guidanceFor(action InstallAction) Guidance {
 	return Guidance{Name: action.Dependency, Requirement: action.Requirement, Command: action.commandHint(), TrustCommand: action.TrustCommand, Action: action}
 }
 
+func bootstrapRunnable(commands []Command, look Lookup) bool {
+	if len(commands) == 0 {
+		return false
+	}
+	for _, command := range commands {
+		if !look(command.Executable) {
+			return false
+		}
+	}
+	return true
+}
+
 func (a InstallAction) commandHint() string {
 	parts := append([]string{a.Executable}, a.Args...)
 	return strings.Join(parts, " ")
+}
+
+func bootstrapCommands(dep manifest.Dependency) []Command {
+	switch strings.TrimSpace(dep.Toolchain) {
+	case manifest.DependencyToolchainNodeLTSFNM:
+		return []Command{{Executable: "fnm", Args: []string{"install", "--lts"}}}
+	case manifest.DependencyToolchainRustStableRustup:
+		return []Command{{Executable: "rustup", Args: []string{"default", "stable"}}}
+	default:
+		return nil
+	}
 }
 
 func homebrewTapTrustCommand(dep manifest.Dependency, tier Tier) string {

@@ -92,7 +92,7 @@ func dependencyPresent(dep manifest.Dependency, look Lookup, fontLook FontLookup
 	if dep.IsFont() {
 		return fontPresent(dep.FontMatches(), fontLook)
 	}
-	return look(dep.Probe())
+	return commandsPresent(dep.Probes(), look)
 }
 
 func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Result {
@@ -103,8 +103,8 @@ func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Resu
 		matches := dep.FontMatches()
 		return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: fontProbeLabel(matches), Present: fontPresent(matches, fontLook)}
 	}
-	probe := dep.Probe()
-	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probe, Present: look(probe)}
+	probes := dep.Probes()
+	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: commandsPresent(probes, look)}
 }
 
 const maxProbeDetailLen = 240
@@ -136,6 +136,19 @@ func probeDetail(output string, err error) string {
 		return detail
 	}
 	return detail[:maxProbeDetailLen-len("...")] + "..."
+}
+
+func commandsPresent(commands []string, look Lookup) bool {
+	for _, command := range commands {
+		if !look(command) {
+			return false
+		}
+	}
+	return true
+}
+
+func probeLabel(probes []string) string {
+	return strings.Join(probes, ", ")
 }
 
 func fontPresent(matches []string, fontLook FontLookup) bool {

@@ -43,12 +43,19 @@ dependencies:
       - darwin
       - linux
     dependencies:
-      - name: fnm
-        command: fnm
+      - name: Node LTS (fnm)
+        commands:
+          - fnm
+          - node
         brew: fnm
+        toolchain: node-lts-fnm
       - name: Rust stable (rustup)
-        command: rustup
+        commands:
+          - rustup
+          - rustc
+          - cargo
         brew: rustup
+        toolchain: rust-stable-rustup
       - name: go
         command: go
         brew: go

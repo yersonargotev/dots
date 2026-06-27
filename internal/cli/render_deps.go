@@ -87,8 +87,13 @@ func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.In
 		if item.Executable != "" {
 			parts := append([]string{item.Executable}, item.Args...)
 			hint = strings.Join(parts, " ")
+		} else if len(item.Bootstrap) > 0 {
+			hint = "see bootstrap command(s)"
 		}
 		fmt.Fprintf(w, "  %-13s %-24s %s (%s)\n", item.Status, item.Dependency, hint, dependencyRequirementLabel(item.Requirement))
+		for _, command := range item.Bootstrap {
+			fmt.Fprintf(w, "  %-13s %-24s %s\n", "bootstrap", item.Dependency, commandHint(command.Executable, command.Args))
+		}
 		if item.TrustCommand != "" {
 			fmt.Fprintf(w, "  %-13s %-24s %s\n", "trust", item.Dependency, item.TrustCommand)
 		}
@@ -105,7 +110,7 @@ func hasInstallablePreviewAction(report deps.InstallDryRunReport) bool {
 
 func hasRequiredInstallablePreviewAction(report deps.InstallDryRunReport) bool {
 	for _, item := range report.Items {
-		if item.Executable != "" && dependencyRequirementLabel(item.Requirement) == "required" {
+		if (item.Executable != "" || len(item.Bootstrap) > 0) && dependencyRequirementLabel(item.Requirement) == "required" {
 			return true
 		}
 	}
@@ -117,7 +122,7 @@ func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.
 	requiredUnresolved := false
 	for _, item := range preview.Items {
 		status := deps.InstallStatusUnresolved
-		if item.Executable == "" {
+		if item.Executable == "" && len(item.Bootstrap) == 0 {
 			status = deps.InstallStatusManual
 		}
 		requirement := dependencyRequirementLabel(item.Requirement)
@@ -132,6 +137,7 @@ func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.
 			Package:      item.Package,
 			Executable:   item.Executable,
 			Args:         append([]string(nil), item.Args...),
+			Bootstrap:    append([]deps.Command(nil), item.Bootstrap...),
 			Manual:       item.Manual,
 			TrustCommand: item.TrustCommand,
 			Candidates:   append([]deps.ProviderCandidate(nil), item.Candidates...),
@@ -145,7 +151,7 @@ func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.
 
 func countInstallPreviewActions(report deps.InstallDryRunReport) (installable int, manual int) {
 	for _, item := range report.Items {
-		if item.Executable == "" {
+		if item.Executable == "" && len(item.Bootstrap) == 0 {
 			manual++
 			continue
 		}
@@ -170,8 +176,13 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 		if item.Executable != "" {
 			parts := append([]string{item.Executable}, item.Args...)
 			hint = strings.Join(parts, " ")
+		} else if len(item.Bootstrap) > 0 {
+			hint = "see bootstrap command(s)"
 		}
 		fmt.Fprintf(w, "  %-10s %-24s %s (%s)\n", item.Status, item.Dependency, hint, dependencyRequirementLabel(item.Requirement))
+		for _, command := range item.Bootstrap {
+			fmt.Fprintf(w, "  %-10s %-24s %s\n", "bootstrap", item.Dependency, commandHint(command.Executable, command.Args))
+		}
 		if item.TrustCommand != "" {
 			fmt.Fprintf(w, "  %-10s %-24s %s\n", "trust", item.Dependency, item.TrustCommand)
 		}
@@ -188,6 +199,11 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 	}
 
 	fmt.Fprintf(w, "\nSummary: %d installed, %d manual, %d unresolved, %d failed\n", installed, manual, unresolved, failed)
+}
+
+func commandHint(executable string, args []string) string {
+	parts := append([]string{executable}, args...)
+	return strings.Join(parts, " ")
 }
 
 func dependencyRequirementLabel(requirement string) string {

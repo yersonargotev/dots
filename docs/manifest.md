@@ -12,6 +12,7 @@ configuration surface and the configuration currently declared by this repositor
 ```yaml
 version: 1
 profiles: {}
+dependencies: []
 entries: []
 provisioners: []
 ```
@@ -20,6 +21,7 @@ provisioners: []
 |-------|----------|---------|
 | `version` | Yes | Manifest schema version. Only `1` is supported. |
 | `profiles` | Yes | Named installation selections. A Profile selects entries and provisioners by matching tags. |
+| `dependencies` | No | Tag-scoped Dependency Sets for shared toolchain baselines selected before Managed Entry and Provisioner Dependencies. |
 | `entries` | Yes | Managed Entries that install repository-owned files or directories into `$HOME`. |
 | `provisioners` | No | Allowlisted external tool invocations run after file entries are installed. |
 
@@ -55,7 +57,9 @@ before Managed Entry and Provisioner Dependencies. The current `core` set is the
 Core Development Baseline from ADR 0010: shell/terminal foundations remain on
 their Managed Entries, while common runtimes and package tools are owned by
 Homebrew-provider declarations for `fnm`, `rustup`, `go`, `uv`, `pnpm`, and
-`bun`.
+`bun`. Node and Rust use constrained built-in toolchain bootstrap commands after
+manager installation: `fnm install --lts` for Node LTS and `rustup default
+stable` for Rust stable.
 
 ## Managed Entries
 
@@ -126,7 +130,9 @@ Tag-scoped Dependency Sets use:
 |-------|----------|---------|
 | `name` | Yes | Human-readable dependency name. Also used as the executable probe when `command` is omitted. |
 | `requirement` | No | `required` or `optional`. Omitted means `required`. Required Dependencies gate integrated install; optional Dependencies are reported but do not block Managed Configuration. |
-| `command` | No | Executable name to probe on `PATH`. |
+| `command` | No | Single executable name to probe on `PATH`. |
+| `commands` | No | Multiple executable names that must all be present. Use this for manager-owned toolchains where both the manager and runtime commands matter. |
+| `toolchain` | No | Built-in runtime bootstrap flow. Supported values: `node-lts-fnm`, `rust-stable-rustup`. These values map to fixed argv commands, not arbitrary shell hooks. |
 | `brew` | No | Homebrew formula token. Mutually exclusive with `brew_cask`. |
 | `brew_cask` | No | Homebrew cask token. Renders as `brew install --cask <token>`. |
 | `apt` | No | Debian/Ubuntu package name. |
@@ -145,8 +151,8 @@ Current dependency package coverage:
 | `starship` | `starship` | `starship` | `starship` | `starship` | `starship` |
 | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` |
 | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` |
-| `fnm` | `fnm` | `fnm` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
-| `Rust stable (rustup)` | `rustup` | `rustup` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
+| `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
+| `Rust stable (rustup)` | `rustup`, `rustc`, `cargo`; bootstrap `rustup default stable` | `rustup` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
 | `go` | `go` | `go` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
 | `uv` | `uv` | `uv` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
 | `pnpm` | `pnpm` | `pnpm` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |

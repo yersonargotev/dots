@@ -544,3 +544,29 @@ func TestCheckIncludesTagScopedDependenciesBeforeEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckRequiresEveryCommandProbe(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags:         []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "Rust stable (rustup)", Commands: []string{"rustup", "rustc", "cargo"}, Brew: "rustup", Toolchain: manifest.DependencyToolchainRustStableRustup}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("rustup", "cargo"), fontLookupSet())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if len(report.Results) != 1 {
+		t.Fatalf("Results len = %d, want 1 (%#v)", len(report.Results), report.Results)
+	}
+	if report.Results[0].Present {
+		t.Fatalf("Result = %#v, want missing because rustc is absent", report.Results[0])
+	}
+	if report.Results[0].Command != "rustup, rustc, cargo" {
+		t.Fatalf("Command = %q, want joined probe label", report.Results[0].Command)
+	}
+}
