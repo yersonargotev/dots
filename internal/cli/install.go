@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/codexconfig"
+	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
@@ -65,6 +66,16 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
+			depOptions := deps.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS}
+			depTier, err := resolveTier("")
+			if err != nil {
+				return err
+			}
+			depPreview, err := deps.InstallDryRun(*m, depOptions, lookupCommand, fontInstalled(runtime.GOOS, paths.Home), depTier)
+			if err != nil {
+				return err
+			}
+
 			p, err := plan.Build(*m, plan.Options{
 				Profile:    profile,
 				ExtraTags:  extraTags,
@@ -84,12 +95,14 @@ func newInstallCommand() *cobra.Command {
 
 			if wantsJSON(cmd) {
 				if dryRun {
-					return emitOK(cmd, installReport{DryRun: true, Plan: p, Provisioners: provPlan})
+					return emitOK(cmd, installReport{DryRun: true, Dependencies: installDependenciesReport{Preview: &depPreview}, Plan: p, Provisioners: provPlan})
 				}
 				if !yes {
 					return rejectInteractiveJSON(cmd)
 				}
 			} else {
+				renderDepsInstallPreview(cmd.OutOrStdout(), depPreview)
+				fmt.Fprintln(cmd.OutOrStdout())
 				renderPlan(cmd.OutOrStdout(), p)
 				if err := renderSkippedEntryHint(cmd.OutOrStdout(), *m, profile, runtime.GOOS); err != nil {
 					return err
@@ -104,13 +117,21 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
+			depReport, depsApplied, err := runInstallDependencies(cmd, *m, depOptions, depTier, paths.Home, depPreview, yes)
+			if err != nil {
+				return err
+			}
+			if !depsApplied {
+				return nil
+			}
+
 			applied, err := resolveAndApply(cmd, p, paths, yes, noTUI)
 			if err != nil {
 				return err
 			}
 			if !applied {
 				if wantsJSON(cmd) {
-					return emitOK(cmd, installReport{DryRun: false, Plan: p, Provisioners: provPlan})
+					return emitOK(cmd, installReport{DryRun: false, Dependencies: installDependenciesReport{Result: &depReport}, Plan: p, Provisioners: provPlan})
 				}
 				return nil
 			}
@@ -119,7 +140,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, installReport{DryRun: false, Plan: p, Provisioners: provPlan})
+				return emitOK(cmd, installReport{DryRun: false, Dependencies: installDependenciesReport{Result: &depReport}, Plan: p, Provisioners: provPlan})
 			}
 			return nil
 		},
@@ -135,6 +156,41 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&yes, "yes", false, "apply safe install actions without prompting; conflicts default to skip")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
 	return cmd
+}
+
+// runInstallDependencies executes the dependency gate for dots install before any
+// Managed Configuration is applied. Interactive runs reuse the deps confirmation
+// prompt for package-manager execution; manual or unresolved Dependencies abort
+// the install before filesystem targets are touched.
+func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier, home string, preview deps.InstallDryRunReport, yes bool) (deps.InstallReport, bool, error) {
+	if !yes && hasInstallablePreviewAction(preview) {
+		confirmed, err := confirmDepsInstall(cmd.InOrStdin(), cmd.OutOrStdout())
+		if err != nil {
+			return deps.InstallReport{}, false, err
+		}
+		if !confirmed {
+			fmt.Fprintln(cmd.OutOrStdout(), "Dependency installation cancelled.")
+			return deps.InstallReport{}, false, nil
+		}
+	}
+
+	stdout := cmd.OutOrStdout()
+	if wantsJSON(cmd) {
+		stdout = cmd.ErrOrStderr()
+	}
+	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, depsExecRunner{
+		ctx:    cmd.Context(),
+		stdin:  cmd.InOrStdin(),
+		stdout: stdout,
+		stderr: cmd.ErrOrStderr(),
+	})
+	if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
+		renderDepsInstall(cmd.OutOrStdout(), report)
+	}
+	if err != nil {
+		return report, true, err
+	}
+	return report, true, nil
 }
 
 // runProvisioners executes the selected provisioners after dependency installs

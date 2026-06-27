@@ -110,6 +110,12 @@ prose the text surface prints:
   plus portable provider `candidates`; they do not expose whether host-local
   commands such as `brew`, `apt-get`, or `sudo` were present on the machine that
   produced the report.
+- `install --dry-run --output json` includes dependency preflight under
+  `data.dependencies.preview` before the file `data.plan`. A confirmed
+  `install --yes --output json` includes dependency execution results under
+  `data.dependencies.result` alongside the same install plan and provisioner
+  plan, so agents can inspect what was provisioned before Managed
+  Configuration was applied.
 
 The domain reports' `json:` field names are part of the public contract.
 Renaming, removing, or changing the meaning of an existing field is a

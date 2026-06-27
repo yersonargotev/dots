@@ -34,9 +34,15 @@ type manifestValidateReport struct {
 }
 
 type installReport struct {
-	DryRun       bool           `json:"dry_run"`
-	Plan         plan.Plan      `json:"plan"`
-	Provisioners provision.Plan `json:"provisioners"`
+	DryRun       bool                      `json:"dry_run"`
+	Dependencies installDependenciesReport `json:"dependencies"`
+	Plan         plan.Plan                 `json:"plan"`
+	Provisioners provision.Plan            `json:"provisioners"`
+}
+
+type installDependenciesReport struct {
+	Preview *deps.InstallDryRunReport `json:"preview,omitempty"`
+	Result  *deps.InstallReport       `json:"result,omitempty"`
 }
 
 type updateReport struct {
