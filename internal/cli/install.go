@@ -206,14 +206,22 @@ func (e installDependencyGateError) JSONErrorData() any { return e.report }
 // prompt for package-manager execution; manual or unresolved Dependencies abort
 // the install before filesystem targets are touched.
 func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier, home string, preview deps.InstallDryRunReport, yes bool) (deps.InstallReport, bool, error) {
-	if !yes && hasInstallablePreviewAction(preview) {
-		confirmed, err := confirmDepsInstall(cmd.InOrStdin(), cmd.OutOrStdout())
-		if err != nil {
-			return deps.InstallReport{}, false, err
-		}
-		if !confirmed {
-			fmt.Fprintln(cmd.OutOrStdout(), "Dependency installation cancelled.")
-			return deps.InstallReport{}, false, nil
+	if !yes {
+		if hasRequiredInstallablePreviewAction(preview) {
+			confirmed, err := confirmDepsInstall(cmd.InOrStdin(), cmd.OutOrStdout())
+			if err != nil {
+				return deps.InstallReport{}, false, err
+			}
+			if !confirmed {
+				fmt.Fprintln(cmd.OutOrStdout(), "Dependency installation cancelled.")
+				return deps.InstallReport{}, false, nil
+			}
+		} else if hasInstallablePreviewAction(preview) {
+			report, err := unresolvedInstallReportFromPreview(preview)
+			if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
+				renderDepsInstall(cmd.OutOrStdout(), report)
+			}
+			return report, true, err
 		}
 	}
 

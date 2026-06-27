@@ -159,6 +159,63 @@ entries:
 	}
 }
 
+func TestInstallReportsOptionalInstallableDependencyWithoutPromptingOrBlocking(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	binDir := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	brew := filepath.Join(binDir, "brew")
+	argsLog := filepath.Join(binDir, "brew-args")
+	if err := os.WriteFile(brew, []byte("#!/bin/sh\nprintf '%s\n' \"$@\" > "+argsLog+"\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write fake brew: %v", err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: definitely-missing-optional
+        requirement: optional
+        command: definitely-missing-optional-probe
+        brew: optional-tool
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("n\n"))
+	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v, want optional dependency to be non-blocking\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".zshrc")); err != nil {
+		t.Fatalf("optional installable dependency must not block managed target write: %v", err)
+	}
+	if _, err := os.Stat(argsLog); !os.IsNotExist(err) {
+		t.Fatalf("optional dependency should not run package manager without --yes; stat err = %v", err)
+	}
+	got := out.String()
+	for _, unwanted := range []string{"Proceed with dependency installation?", "Dependency installation cancelled."} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("optional-only install should not contain %q:\n%s", unwanted, got)
+		}
+	}
+	for _, want := range []string{"would-install", "unresolved", "optional", "Plan for profile"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("optional-only install output missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestInstallReportsOptionalDependencyWithoutBlockingManagedConfiguration(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()

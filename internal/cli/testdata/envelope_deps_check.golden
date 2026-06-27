@@ -1,0 +1,22 @@
+{
+  "schema_version": "3",
+  "command": "deps check",
+  "status": "findings",
+  "data": {
+    "profile": "default",
+    "results": [
+      {
+        "name": "git",
+        "requirement": "required",
+        "command": "git",
+        "present": true
+      },
+      {
+        "name": "rg",
+        "requirement": "optional",
+        "command": "rg",
+        "present": false
+      }
+    ]
+  }
+}

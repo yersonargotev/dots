@@ -91,6 +91,19 @@ func TestEnvelopeGolden(t *testing.T) {
 			golden: "envelope_doctor.golden",
 		},
 		{
+			name: "deps_check",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "deps check",
+				Status:        statusFindings,
+				Data: deps.CheckReport{Profile: "default", Results: []deps.Result{
+					{Name: "git", Requirement: "required", Command: "git", Present: true, ProbeDetail: "MUST NOT APPEAR", Hint: "MUST NOT APPEAR"},
+					{Name: "rg", Requirement: "optional", Command: "rg", Present: false},
+				}},
+			},
+			golden: "envelope_deps_check.golden",
+		},
+		{
 			name: "deps_plan",
 			env: envelope{
 				SchemaVersion: schemaVersion,

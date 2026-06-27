@@ -103,6 +103,46 @@ func hasInstallablePreviewAction(report deps.InstallDryRunReport) bool {
 	return installable > 0
 }
 
+func hasRequiredInstallablePreviewAction(report deps.InstallDryRunReport) bool {
+	for _, item := range report.Items {
+		if item.Executable != "" && dependencyRequirementLabel(item.Requirement) == "required" {
+			return true
+		}
+	}
+	return false
+}
+
+func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.InstallReport, error) {
+	report := deps.InstallReport{Profile: preview.Profile, Tier: preview.Tier}
+	requiredUnresolved := false
+	for _, item := range preview.Items {
+		status := deps.InstallStatusUnresolved
+		if item.Executable == "" {
+			status = deps.InstallStatusManual
+		}
+		requirement := dependencyRequirementLabel(item.Requirement)
+		if requirement == "required" {
+			requiredUnresolved = true
+		}
+		report.Items = append(report.Items, deps.InstallItem{
+			Dependency:   item.Dependency,
+			Requirement:  requirement,
+			Status:       status,
+			Provider:     item.Provider,
+			Package:      item.Package,
+			Executable:   item.Executable,
+			Args:         append([]string(nil), item.Args...),
+			Manual:       item.Manual,
+			TrustCommand: item.TrustCommand,
+			Candidates:   append([]deps.ProviderCandidate(nil), item.Candidates...),
+		})
+	}
+	if requiredUnresolved {
+		return report, fmt.Errorf("unresolved required dependencies remain after install")
+	}
+	return report, nil
+}
+
 func countInstallPreviewActions(report deps.InstallDryRunReport) (installable int, manual int) {
 	for _, item := range report.Items {
 		if item.Executable == "" {
