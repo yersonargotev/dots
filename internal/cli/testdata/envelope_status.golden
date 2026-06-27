@@ -22,16 +22,21 @@
       "profile": "default",
       "steps": [
         {
-          "tool": "skills",
-          "executable": "npx",
+          "tool": "gentle-ai",
+          "executable": "gentle-ai",
           "args": [
-            "--yes",
-            "skills@1.5.12",
-            "add",
-            "vercel-labs/agent-skills"
+            "install",
+            "--scope",
+            "global",
+            "--agents",
+            "claude-code"
           ],
           "targets": [
-            "~/.agents/skills"
+            "~/.claude",
+            "~/.gentle-ai"
+          ],
+          "global_tools": [
+            "claude (~/.local/bin via npm prefix)"
           ]
         }
       ]

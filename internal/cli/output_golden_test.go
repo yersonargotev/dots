@@ -43,7 +43,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					Provisioners: provision.Plan{
 						Profile: "default",
 						Steps: []provision.Step{
-							{Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "vercel-labs/agent-skills"}, Targets: []string{"~/.agents/skills"}},
+							{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global", "--agents", "claude-code"}, Targets: []string{"~/.claude", "~/.gentle-ai"}, GlobalTools: []string{"claude (~/.local/bin via npm prefix)"}},
 						},
 					},
 				},
@@ -138,7 +138,7 @@ func TestEnvelopeGolden(t *testing.T) {
 						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
 					}},
 					Provisioners: provision.Plan{Profile: "default", Steps: []provision.Step{
-						{Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "vercel-labs/agent-skills"}, Targets: []string{"~/.agents/skills"}},
+						{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global", "--agents", "claude-code"}, Targets: []string{"~/.claude", "~/.gentle-ai"}, GlobalTools: []string{"claude (~/.local/bin via npm prefix)"}},
 					}},
 				},
 			},

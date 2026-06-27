@@ -206,7 +206,10 @@ run trust commands automatically.
 ## Provisioners
 
 Provisioners are a closed allowlist. They run after selected Managed Entries are
-installed and only after their declared Dependencies are present.
+installed and only after their declared Dependencies are present. During execution,
+`dots` threads the selected `--home`, sets `NPM_CONFIG_PREFIX` to `~/.local`, and
+puts `~/.local/bin` first on `PATH` so npm-backed provisioners can install and
+reuse user-local tools without requiring sudo in non-interactive runs.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
