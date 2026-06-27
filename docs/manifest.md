@@ -45,10 +45,10 @@ Current Profiles:
 |---------|------|--------|----------------------|
 | `default` | `core` | Core dotfiles without provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
-| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai memory/context setup, cleanup, and shared engineering skills for supported agents. Add `--tag persona` for optional persona styling Regenerated Content or `--tag sdd` for Gentle-AI SDD setup. | Core Development Baseline via the `core` tag-scoped Dependency Set |
+| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai memory/context setup, cleanup, and shared engineering skills for supported agents. Add `--tag persona` for optional persona styling Regenerated Content or `--tag sdd` for Gentle-AI SDD setup. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set |
 | `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Playwright CLI` via Homebrew formula `playwright-cli` |
 | `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | Core Development Baseline via the `core` tag-scoped Dependency Set |
-| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
+| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
 
 ## Tag-scoped Dependency Sets
 
@@ -57,11 +57,14 @@ before Managed Entry and Provisioner Dependencies. The current `core` set is the
 Core Development Baseline from ADR 0010: shell/terminal foundations remain on
 their Managed Entries, while common runtimes and package tools are owned by
 Homebrew-provider declarations for `fnm`, `rustup`, `go`, `uv`, `pnpm`, and
-`bun`. Linux Homebrew fallback is explicit with `linux_homebrew: true`; GUI apps and fonts stay manual unless they have validated Linux support. Node and Rust use constrained built-in toolchain bootstrap commands after
-manager installation: `fnm install --lts` for Node LTS and `rustup default
-stable` for Rust stable. Bootstrap declarations do not make an action executable
-by themselves: the manager executable must already be on `PATH` or a concrete
-installer/provider must run first.
+`bun`. The `agents` set adds `GitHub CLI` (`gh`) for issue and PR automation.
+Linux Homebrew fallback is explicit with `linux_homebrew: true`; GUI apps and
+fonts stay manual unless they have validated Linux support. Node and Rust use
+constrained built-in toolchain bootstrap commands after manager installation:
+`fnm install --lts` for Node LTS and `rustup default stable` for Rust stable.
+Bootstrap declarations do not make an action executable by themselves: the
+manager executable must already be on `PATH` or a concrete installer/provider
+must run first.
 
 On Linux, when `fnm` is absent, no executable package provider is available, and
 `curl`, `bash`, and `unzip` are present, Node may use the constrained official
@@ -176,6 +179,7 @@ Current dependency package coverage:
 | `uv` | `uv` | `uv` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `pnpm` | `pnpm` | `pnpm` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `bun` | `bun` | `bun` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `GitHub CLI` | `gh` | `gh` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `Playwright CLI` | `playwright-cli` | `playwright-cli` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `ghostty` | `ghostty` | `ghostty` | Manual | Manual | Manual |
 | `Warp` | `warp-terminal` | Manual | Manual | Manual | Manual |
@@ -192,9 +196,9 @@ Current dependency package coverage:
 | `npx` | `npx` | Manual | Manual | Manual | Manual |
 
 Reviewed Linuxbrew opt-ins include CLI/runtime tools whose Homebrew formulas are
-expected to work on Linuxbrew: the core runtimes/package tools, Playwright CLI,
-atuin, gentle-ai, and engram. Brew-only GUI apps such as Ghostty and Zed remain
-manual on Linux.
+expected to work on Linuxbrew: the core runtimes/package tools, GitHub CLI,
+Playwright CLI, atuin, gentle-ai, and engram. Brew-only GUI apps such as Ghostty
+and Zed remain manual on Linux.
 
 Homebrew dependencies declared with a fully-qualified tap formula such as
 `gentleman-programming/tap/gentle-ai` may require explicit Homebrew Tap Trust on

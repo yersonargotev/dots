@@ -668,6 +668,49 @@ func TestRepositoryManifestWebProfileIncludesPlaywrightCLI(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestAgentsProfileIncludesGitHubCLI(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var agents *manifest.DependencySet
+	for i := range got.Dependencies {
+		candidate := &got.Dependencies[i]
+		if hasString(candidate.Tags, "agents") {
+			agents = candidate
+			break
+		}
+	}
+	if agents == nil {
+		t.Fatal("repository manifest missing agents dependency set")
+	}
+	if !sameStrings(agents.OS, []string{"darwin", "linux"}) {
+		t.Fatalf("agents dependency set OS = %#v, want [darwin linux]", agents.OS)
+	}
+
+	var dep *manifest.Dependency
+	for i := range agents.Dependencies {
+		candidate := &agents.Dependencies[i]
+		if candidate.Name == "GitHub CLI" {
+			dep = candidate
+			break
+		}
+	}
+	if dep == nil {
+		t.Fatalf("agents dependency set missing GitHub CLI: %#v", agents.Dependencies)
+	}
+	if dep.Command != "gh" || dep.Brew != "gh" || !dep.LinuxHomebrew {
+		t.Fatalf("GitHub CLI dependency = %#v, want command/brew gh with linux_homebrew", *dep)
+	}
+	if dep.Apt != "" || dep.Dnf != "" || dep.Pacman != "" {
+		t.Fatalf("GitHub CLI dependency = %#v, want Homebrew/manual Linux handling until distro setup is modeled", *dep)
+	}
+}
+
 func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")

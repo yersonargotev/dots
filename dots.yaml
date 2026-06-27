@@ -79,6 +79,16 @@ dependencies:
         command: bun
         brew: bun
         linux_homebrew: true
+  - tags:
+      - agents
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: GitHub CLI
+        command: gh
+        brew: gh
+        linux_homebrew: true
 entries:
   - source: configs/zsh/zshrc
     target: ~/.zshrc
