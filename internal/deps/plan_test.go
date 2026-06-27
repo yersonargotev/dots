@@ -467,7 +467,18 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("Plan() error = %v", err)
 		}
 
-		for _, name := range []string{"starship", "GitHub CLI"} {
+		githubCLI, ok := findAction(report.Actions, "GitHub CLI")
+		if !ok {
+			t.Fatalf("missing action for GitHub CLI in %#v", report.Actions)
+		}
+		if githubCLI.Provider == deps.TierDebian || githubCLI.Executable == "sudo" {
+			t.Fatalf("GitHub CLI action = %#v, must not advertise unavailable Ubuntu apt package", githubCLI)
+		}
+		if githubCLI.Status != deps.InstallActionStatusInstallable || githubCLI.Provider != deps.TierHomebrew || githubCLI.Executable != "brew" {
+			t.Fatalf("GitHub CLI action = %#v, want installable Homebrew fallback", githubCLI)
+		}
+
+		for _, name := range []string{"starship", "zellij"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -475,16 +486,9 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			if action.Provider == deps.TierDebian || action.Executable == "sudo" {
 				t.Fatalf("%s action = %#v, must not advertise unavailable Ubuntu apt package", name, action)
 			}
-			if action.Status != deps.InstallActionStatusInstallable || action.Provider != deps.TierHomebrew || action.Executable != "brew" {
-				t.Fatalf("%s action = %#v, want installable Homebrew fallback", name, action)
+			if action.Provider != deps.TierUserLocal || action.UserLocal == nil {
+				t.Fatalf("%s action = %#v, want user-local before Linuxbrew", name, action)
 			}
-		}
-		zellij, ok := findAction(report.Actions, "zellij")
-		if !ok {
-			t.Fatalf("missing action for zellij in %#v", report.Actions)
-		}
-		if zellij.Provider != deps.TierUserLocal || zellij.UserLocal == nil {
-			t.Fatalf("zellij action = %#v, want user-local before Linuxbrew", zellij)
 		}
 	})
 
@@ -494,21 +498,22 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("Plan() error = %v", err)
 		}
 
-		for _, name := range []string{"starship", "GitHub CLI"} {
+		githubCLI, ok := findAction(report.Actions, "GitHub CLI")
+		if !ok {
+			t.Fatalf("missing action for GitHub CLI in %#v", report.Actions)
+		}
+		if githubCLI.Status != deps.InstallActionStatusManual || githubCLI.Provider == deps.TierDebian || githubCLI.Executable == "sudo" || githubCLI.Manual == "" {
+			t.Fatalf("GitHub CLI action = %#v, want manual guidance without Ubuntu apt installability", githubCLI)
+		}
+
+		for _, name := range []string{"starship", "zellij"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
 			}
-			if action.Status != deps.InstallActionStatusManual || action.Provider == deps.TierDebian || action.Executable == "sudo" || action.Manual == "" {
-				t.Fatalf("%s action = %#v, want manual guidance without Ubuntu apt installability", name, action)
+			if action.Provider != deps.TierUserLocal || action.UserLocal == nil {
+				t.Fatalf("%s action = %#v, want user-local without Linuxbrew", name, action)
 			}
-		}
-		zellij, ok := findAction(report.Actions, "zellij")
-		if !ok {
-			t.Fatalf("missing action for zellij in %#v", report.Actions)
-		}
-		if zellij.Provider != deps.TierUserLocal || zellij.UserLocal == nil {
-			t.Fatalf("zellij action = %#v, want user-local without Linuxbrew", zellij)
 		}
 	})
 }
@@ -687,6 +692,54 @@ func userLocalProviderManifest() manifest.Manifest {
 				},
 			}},
 		}},
+	}
+}
+
+func TestPlanResolvesStarshipUserLocalArtifact(t *testing.T) {
+	m := userLocalProviderManifest()
+	m.Entries[0].Dependencies[0] = manifest.Dependency{
+		Name:          "starship",
+		Command:       "starship",
+		Brew:          "starship",
+		LinuxHomebrew: true,
+		Dnf:           "starship",
+		Pacman:        "starship",
+		UserLocal: &manifest.UserLocalProvider{
+			Recipe:  "starship",
+			Version: "v1.25.1",
+			Checksums: map[string]string{
+				"linux_amd64": "4488c11ca632327d1f1f16fb2f102c0646094c35479cd5435991385da43c61ac",
+				"linux_arm64": "01517aab398959ea9ea73bdb4f032ea4dbb51dff5c8e5eb05b4a1b9b7ab872b8",
+			},
+		},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	action := report.Actions[0]
+	if action.Provider != deps.TierUserLocal || action.UserLocal == nil {
+		t.Fatalf("action = %#v, want starship user-local provider", action)
+	}
+	if action.UserLocal.Recipe != "starship" || action.UserLocal.Layout != "single-binary" || !strings.Contains(action.UserLocal.URL, "starship-x86_64-unknown-linux-gnu.tar.gz") {
+		t.Fatalf("user-local artifact = %#v, want pinned starship linux amd64 artifact", action.UserLocal)
+	}
+
+	report, err = deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("sudo", "dnf", "brew"), fontLookupSet(), deps.TierFedora)
+	if err != nil {
+		t.Fatalf("Plan() with Fedora tier error = %v", err)
+	}
+	if got := report.Actions[0]; got.Provider != deps.TierFedora || got.UserLocal != nil {
+		t.Fatalf("Fedora action = %#v, want distro provider before user-local", got)
+	}
+
+	report, err = deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("starship", "brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() with present starship error = %v", err)
+	}
+	if len(report.Actions) != 0 {
+		t.Fatalf("Actions = %#v, want no install when starship is present", report.Actions)
 	}
 }
 

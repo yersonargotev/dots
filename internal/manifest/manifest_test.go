@@ -756,6 +756,14 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 			if (name == "starship" || name == "zellij") && dep.Apt != "" {
 				t.Fatalf("%s dependency = %#v, want no Ubuntu apt package declaration", name, dep)
 			}
+			if name == "starship" {
+				if dep.UserLocal == nil || dep.UserLocal.Recipe != "starship" || dep.UserLocal.Version == "" {
+					t.Fatalf("starship dependency = %#v, want reviewed user-local policy", dep)
+				}
+				if dep.UserLocal.Checksums["linux_amd64"] == "" || dep.UserLocal.Checksums["linux_arm64"] == "" {
+					t.Fatalf("starship user_local checksums = %#v, want linux amd64 and arm64", dep.UserLocal.Checksums)
+				}
+			}
 		}
 	}
 }
