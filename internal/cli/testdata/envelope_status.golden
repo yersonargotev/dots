@@ -1,5 +1,5 @@
 {
-  "schema_version": "4",
+  "schema_version": "5",
   "command": "status",
   "status": "findings",
   "data": {
@@ -20,7 +20,13 @@
     ],
     "provisioners": {
       "profile": "default",
-      "steps": [
+      "summary": {
+        "state": "pending",
+        "completed": 0,
+        "pending": 1,
+        "failed": 0
+      },
+      "items": [
         {
           "tool": "gentle-ai",
           "executable": "gentle-ai",
@@ -35,9 +41,7 @@
             "~/.claude",
             "~/.gentle-ai"
           ],
-          "global_tools": [
-            "claude (~/.local/bin via npm prefix)"
-          ]
+          "status": "pending"
         }
       ]
     }

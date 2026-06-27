@@ -52,20 +52,24 @@ func renderStatus(w io.Writer, report status.Report) {
 	}
 }
 
-// renderStatusProvisioners lists the provisioners declared for the profile as
-// read-only, informational context. It deliberately makes no alignment claim:
-// whether a provisioner has actually been applied is verified by the tool
-// itself, not by dots. It renders nothing when no provisioner is declared.
-func renderStatusProvisioners(w io.Writer, p provision.Plan) {
-	if len(p.Steps) == 0 {
+// renderStatusProvisioners lists the selected Provisioners with their persisted
+// completion state. It renders nothing when no Provisioner is declared.
+func renderStatusProvisioners(w io.Writer, r provision.StatusReport) {
+	if len(r.Items) == 0 {
 		return
 	}
 
-	fmt.Fprintf(w, "\nDeclared provisioners for profile %q\n\n", p.Profile)
-	for _, step := range p.Steps {
-		fmt.Fprintf(w, "  %s %s\n", step.Executable, strings.Join(step.Args, " "))
-		if len(step.Targets) > 0 {
-			fmt.Fprintf(w, "    affects: %s\n", strings.Join(step.Targets, ", "))
+	fmt.Fprintf(w, "\nDeclared provisioners for profile %q — %s\n\n", r.Profile, r.Summary.State)
+	for _, item := range r.Items {
+		fmt.Fprintf(w, "  %-20s %s %s\n", item.Status, item.Executable, strings.Join(item.Args, " "))
+		if len(item.Targets) > 0 {
+			fmt.Fprintf(w, "    affects: %s\n", strings.Join(item.Targets, ", "))
 		}
+		if len(item.Missing) > 0 {
+			fmt.Fprintf(w, "    missing: %s\n", strings.Join(item.Missing, ", "))
+		}
+	}
+	if r.Summary.State == provision.SummaryStatePending || r.Summary.State == provision.SummaryStateFailed {
+		fmt.Fprintln(w, "    resume: run dots install again after addressing failed or missing provisioners.")
 	}
 }

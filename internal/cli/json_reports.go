@@ -15,13 +15,13 @@ import (
 type initReport bootstrap.Result
 
 type statusReport struct {
-	Profile      string         `json:"profile"`
-	Entries      []status.Entry `json:"entries"`
-	Provisioners provision.Plan `json:"provisioners"`
+	Profile      string                 `json:"profile"`
+	Entries      []status.Entry         `json:"entries"`
+	Provisioners provision.StatusReport `json:"provisioners"`
 }
 
 func (r statusReport) HasFindings() bool {
-	return status.Report{Profile: r.Profile, Entries: r.Entries}.HasFindings()
+	return status.Report{Profile: r.Profile, Entries: r.Entries}.HasFindings() || r.Provisioners.HasFindings()
 }
 
 type versionReport struct {
@@ -34,10 +34,11 @@ type manifestValidateReport struct {
 }
 
 type installReport struct {
-	DryRun       bool                       `json:"dry_run"`
-	Dependencies *installDependenciesReport `json:"dependencies,omitempty"`
-	Plan         plan.Plan                  `json:"plan"`
-	Provisioners provision.Plan             `json:"provisioners"`
+	DryRun             bool                       `json:"dry_run"`
+	Dependencies       *installDependenciesReport `json:"dependencies,omitempty"`
+	Plan               plan.Plan                  `json:"plan"`
+	Provisioners       provision.Plan             `json:"provisioners"`
+	ProvisionerResults *provision.Report          `json:"provisioner_results,omitempty"`
 }
 
 type installDependenciesReport struct {

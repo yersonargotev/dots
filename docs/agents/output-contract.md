@@ -37,7 +37,7 @@ state.
 
 ```json
 {
-  "schema_version": "4",
+  "schema_version": "5",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -58,7 +58,7 @@ Schema version `3` introduced this partial-error report allowance:
 
 ```json
 {
-  "schema_version": "4",
+  "schema_version": "5",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
@@ -99,11 +99,11 @@ esac
 The envelope carries the machine-meaningful report, not every piece of human
 prose the text surface prints:
 
-- `status` includes selected Provisioner commands as read-only context under
-  `data.provisioners`, but these do not affect the status finding decision.
-  Provisioner steps may include `global_tools` when the invocation can install
-  or update user-local tools such as `claude` under `~/.local/bin`. Read
-  dependency readiness for those commands from `doctor`.
+- `status` includes selected Provisioner completion state under
+  `data.provisioners.summary` and per-command state under
+  `data.provisioners.items`. Pending or failed Provisioners are findings so
+  agents can distinguish aligned Managed Entries from an incomplete full-profile
+  setup. Read dependency readiness for those commands from `doctor`.
 - `plan`'s `resolved_source` (a per-machine absolute path) and `deps`'s
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the
