@@ -123,7 +123,11 @@ type Dependency struct {
 	Name        string `yaml:"name"`
 	Requirement string `yaml:"requirement,omitempty"`
 	Command     string `yaml:"command,omitempty"`
-	Brew        string `yaml:"brew,omitempty"`
+	// Manual carries dependency-specific remediation for manual-only tools.
+	Manual string `yaml:"manual,omitempty"`
+	// ManualDebian carries Debian/Ubuntu-specific manual remediation.
+	ManualDebian string `yaml:"manual_debian,omitempty"`
+	Brew         string `yaml:"brew,omitempty"`
 	// LinuxHomebrew allows Linux distro tiers to fall back to Homebrew when the
 	// distro package is absent or unavailable. Keep this opt-in so GUI apps and
 	// tools without Linuxbrew support stay manual instead of rendering false
@@ -451,6 +455,12 @@ func validateDependency(dep Dependency, path string) error {
 	}
 	if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
 		return fmt.Errorf("%s.command must not be empty", path)
+	}
+	if dep.Manual != "" && strings.TrimSpace(dep.Manual) == "" {
+		return fmt.Errorf("%s.manual must not be empty", path)
+	}
+	if dep.ManualDebian != "" && strings.TrimSpace(dep.ManualDebian) == "" {
+		return fmt.Errorf("%s.manual_debian must not be empty", path)
 	}
 	for i, command := range dep.Commands {
 		if strings.TrimSpace(command) == "" {

@@ -249,6 +249,13 @@ entries:
     dependencies:
       - name: ghostty
         command: ghostty
+        manual_debian: >-
+          Install Ghostty from https://ghostty.org/docs/install/binary. On Ubuntu,
+          use the community .deb installer from ghostty-ubuntu with /bin/bash -c
+          "$(curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh)",
+          or run snap install ghostty --classic; this requires sudo/password
+          interactivity. After installation, verify ghostty --version and rerun
+          dots deps check.
         brew: ghostty
   - source: configs/warp/settings.toml
     target: ~/.warp/settings.toml

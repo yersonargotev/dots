@@ -749,6 +749,15 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 			}
 		}
 	}
+	ghosttyManualFound := false
+	for _, dep := range dependencies["ghostty"] {
+		if strings.Contains(dep.ManualDebian, "snap install ghostty --classic") && strings.Contains(dep.ManualDebian, "requires sudo") {
+			ghosttyManualFound = true
+		}
+	}
+	if !ghosttyManualFound {
+		t.Fatalf("ghostty dependency missing explicit Ubuntu manual guidance with snap sudo/interactivity note: %#v", dependencies["ghostty"])
+	}
 
 	for _, name := range []string{"bat", "starship", "zellij", "atuin", "pnpm", "gentle-ai", "engram"} {
 		if len(dependencies[name]) == 0 {
@@ -1682,6 +1691,40 @@ entries:
 			want: `entries[0].dependencies[0].command must not be empty`,
 		},
 		{
+			name: "dependency with whitespace-only manual guidance",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/ghostty/config.ghostty
+    target: ~/.config/ghostty/config.ghostty
+    strategy: symlink
+    tags: [desktop]
+    dependencies:
+      - name: ghostty
+        manual: "  "
+`,
+			want: `entries[0].dependencies[0].manual must not be empty`,
+		},
+		{
+			name: "dependency with whitespace-only Debian manual guidance",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/ghostty/config.ghostty
+    target: ~/.config/ghostty/config.ghostty
+    strategy: symlink
+    tags: [desktop]
+    dependencies:
+      - name: ghostty
+        manual_debian: "  "
+`,
+			want: `entries[0].dependencies[0].manual_debian must not be empty`,
+		},
+		{
 			name: "dependency with whitespace-only brew cask",
 			content: `version: 1
 profiles:
@@ -2276,6 +2319,30 @@ provisioners:
       - brew: gentleman-programming/tap/gentle-ai
 `,
 			want: "provisioners[0].dependencies[0].name is required",
+		},
+		{
+			name: "dependency with whitespace-only manual guidance",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+    dependencies:
+      - name: ghostty
+        manual: "  "
+`,
+			want: "provisioners[0].dependencies[0].manual must not be empty",
+		},
+		{
+			name: "dependency with whitespace-only Debian manual guidance",
+			provisioner: `  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+    dependencies:
+      - name: ghostty
+        manual_debian: "  "
+`,
+			want: "provisioners[0].dependencies[0].manual_debian must not be empty",
 		},
 		{
 			name: "dependency with whitespace-only brew cask",
