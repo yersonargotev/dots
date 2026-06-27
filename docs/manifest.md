@@ -59,15 +59,25 @@ their Managed Entries, while common runtimes and package tools are owned by
 Homebrew-provider declarations for `fnm`, `rustup`, `go`, `uv`, `pnpm`, and
 `bun`. Linux Homebrew fallback is explicit with `linux_homebrew: true`; GUI apps and fonts stay manual unless they have validated Linux support. Node and Rust use constrained built-in toolchain bootstrap commands after
 manager installation: `fnm install --lts` for Node LTS and `rustup default
-stable` for Rust stable. On Linux, when `rustup` is absent but `curl`
-and `sh` are available, the Rust toolchain may use the constrained official
-rustup installer flow (`curl --proto '=https' --tlsv1.2 -sSf
-https://sh.rustup.rs | sh -s -- -y --no-modify-path`) before running
-`rustup default stable`. This is a built-in Rust action, not arbitrary shell
-from the manifest. When Rust bootstrap succeeds but `rustc` or `cargo` still are
-not available on `PATH`, the install result includes repair guidance for the
-rustup proxy/PATH surface instead of only reporting a generic unresolved
-Dependency.
+stable` for Rust stable. Bootstrap declarations do not make an action executable
+by themselves: the manager executable must already be on `PATH` or a concrete
+installer/provider must run first.
+
+On Linux, when `fnm` is absent, no executable package provider is available, and
+`curl`, `bash`, and `unzip` are present, Node may use the constrained official
+fnm installer flow (`curl -fsSL https://fnm.vercel.app/install | bash -s --
+--skip-shell`) before running `fnm install --lts`. The `--skip-shell` flag is
+required because dots owns shell activation through the managed zsh integration,
+not the upstream installer.
+
+On Linux, when `rustup` is absent but `curl` and `sh` are available, the Rust
+toolchain may use the constrained official rustup installer flow (`curl --proto
+'=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path`)
+before running `rustup default stable`. These are built-in runtime actions, not
+arbitrary shell from the manifest. When Rust bootstrap succeeds but `rustc` or
+`cargo` still are not available on `PATH`, the install result includes repair
+guidance for the rustup proxy/PATH surface instead of only reporting a generic
+unresolved Dependency.
 
 ## Managed Entries
 
@@ -160,7 +170,7 @@ Current dependency package coverage:
 | `starship` | `starship` | `starship` | `starship` | `starship` | `starship` |
 | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` |
 | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` |
-| `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) |
 | `Rust stable (rustup)` | `rustup`, `rustc`, `cargo`; bootstrap `rustup default stable` | `rustup` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `go` | `go` | `go` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `uv` | `uv` | `uv` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |

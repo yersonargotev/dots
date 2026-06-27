@@ -562,6 +562,77 @@ entries:
 	}
 }
 
+func TestDepsInstallDryRunClassifiesMissingFNMToolchainLikePlan(t *testing.T) {
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir)
+	manifestPath := writeDepsInstallManifest(t, fnmBootstrapDepsManifest)
+
+	planCmd := cli.NewRootCommand()
+	var planOut bytes.Buffer
+	planCmd.SetOut(&planOut)
+	planCmd.SetErr(&planOut)
+	planCmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "generic"})
+	if err := planCmd.Execute(); err == nil {
+		t.Fatalf("deps plan error = nil, want findings exit")
+	}
+
+	installCmd := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	installCmd.SetOut(&installOut)
+	installCmd.SetErr(&installOut)
+	installCmd.SetArgs([]string{"deps", "install", "--dry-run", "--file", manifestPath, "--tier", "generic"})
+	if err := installCmd.Execute(); err != nil {
+		t.Fatalf("deps install --dry-run error = %v\noutput:\n%s", err, installOut.String())
+	}
+
+	if strings.Contains(planOut.String(), "would-install") || strings.Contains(planOut.String(), "fnm install --lts") {
+		t.Fatalf("deps plan should not classify missing fnm bootstrap as executable:\n%s", planOut.String())
+	}
+	got := installOut.String()
+	if !strings.Contains(got, "manual") || strings.Contains(got, "would-install Node LTS (fnm)") {
+		t.Fatalf("deps install --dry-run should match deps plan manual classification:\n%s", got)
+	}
+}
+
+func TestDepsInstallYesDoesNotRunFNMBootstrapWhenFNMIsMissing(t *testing.T) {
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir)
+	manifestPath := writeDepsInstallManifest(t, fnmBootstrapDepsManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "install", "--yes", "--file", manifestPath, "--tier", "generic"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v, want missing fnm to remain a non-executed manual action\noutput:\n%s", err, out.String())
+	}
+	got := out.String()
+	if !strings.Contains(got, "manual") || strings.Contains(got, `exec: "fnm"`) {
+		t.Fatalf("deps install --yes should not execute missing fnm bootstrap:\n%s", got)
+	}
+}
+
+const fnmBootstrapDepsManifest = `version: 1
+profiles:
+  default:
+    tags: [core]
+dependencies:
+  - tags: [core]
+    dependencies:
+      - name: Node LTS (fnm)
+        commands: [fnm, node]
+        brew: fnm
+        linux_homebrew: true
+        toolchain: node-lts-fnm
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`
+
 func writeDepsInstallManifest(t *testing.T, content string) string {
 	t.Helper()
 	path := t.TempDir() + "/dots.yaml"

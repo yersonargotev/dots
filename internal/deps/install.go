@@ -154,6 +154,28 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				return report, fmt.Errorf("install %q: %w", action.Dependency, err)
 			}
 		}
+		if len(action.Bootstrap) > 0 && !bootstrapRunnable(action.Bootstrap, look) {
+			if action.Requirement == manifest.DependencyRequirementRequired {
+				requiredUnresolved = true
+			}
+			report.Items = append(report.Items, InstallItem{
+				Dependency:   action.Dependency,
+				Requirement:  action.Requirement,
+				Status:       InstallStatusUnresolved,
+				Provider:     action.Provider,
+				Package:      action.Package,
+				Executable:   action.Executable,
+				Args:         args,
+				Bootstrap:    append([]Command(nil), action.Bootstrap...),
+				Manual:       unresolvedToolchainRemediation(action, look),
+				TrustCommand: action.TrustCommand,
+				Candidates:   action.Candidates,
+			})
+			if action.Requirement == manifest.DependencyRequirementRequired {
+				return report, errors.New("unresolved required dependencies remain after install")
+			}
+			continue
+		}
 		if err := runBootstrap(action, runner); err != nil {
 			report.Items = append(report.Items, InstallItem{
 				Dependency:   action.Dependency,
@@ -242,7 +264,7 @@ func missingCommandProbes(probes []string, look Lookup) []string {
 }
 
 func actionExecutable(action InstallAction) bool {
-	return action.Executable != "" || len(action.Bootstrap) > 0
+	return action.Status == InstallActionStatusInstallable
 }
 
 func runBootstrap(action InstallAction, runner Runner) error {

@@ -126,7 +126,16 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 		return action
 	}
 
-	for _, candidate := range providerCandidates(dep, opts, tier, look) {
+	candidates := providerCandidates(dep, opts, tier, look)
+	if officialFNMInstallerRunnable(action, opts, look, candidates) {
+		action.Status = InstallActionStatusInstallable
+		action.Executable = "bash"
+		action.Args = []string{"-c", officialFNMInstallerScript}
+		action.Candidates = append(action.Candidates, candidates...)
+		return action
+	}
+
+	for _, candidate := range candidates {
 		action.Candidates = append(action.Candidates, candidate)
 		if !candidate.Available || candidate.Executable == "" {
 			continue
@@ -158,6 +167,7 @@ func guidanceFor(action InstallAction) Guidance {
 }
 
 const officialRustupInstallerScript = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path"
+const officialFNMInstallerScript = "curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell"
 
 func officialRustupInstallerRunnable(action InstallAction, opts Options, look Lookup) bool {
 	return opts.OS == "linux" &&
@@ -165,6 +175,23 @@ func officialRustupInstallerRunnable(action InstallAction, opts Options, look Lo
 		!look("rustup") &&
 		look("curl") &&
 		look("sh")
+}
+
+func officialFNMInstallerRunnable(action InstallAction, opts Options, look Lookup, candidates []ProviderCandidate) bool {
+	if opts.OS != "linux" ||
+		action.Toolchain != manifest.DependencyToolchainNodeLTSFNM ||
+		look("fnm") ||
+		!look("curl") ||
+		!look("bash") ||
+		!look("unzip") {
+		return false
+	}
+	for _, candidate := range candidates {
+		if candidate.Available && candidate.Executable != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func bootstrapRunnable(commands []Command, look Lookup) bool {
