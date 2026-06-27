@@ -68,6 +68,55 @@ func TestPlanProducesStructuredInstallActionsForMappedPackages(t *testing.T) {
 	}
 }
 
+func TestPlanUsesAtuinUserLocalProviderOnLinuxWhenDistroProviderUnavailable(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/atuin/config.toml", Target: "~/.config/atuin/config.toml", Strategy: "symlink", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:          "atuin",
+				Command:       "atuin",
+				Brew:          "atuin",
+				LinuxHomebrew: true,
+				UserLocal: &manifest.UserLocalProvider{
+					Recipe:  "atuin",
+					Version: "v18.16.1",
+					Checksums: map[string]string{
+						"linux_amd64": "5c41e20c0130ac84fa4bfa42c19bb55a07855838506063caad0d2922593b39be",
+					},
+				},
+			}},
+		}},
+	}
+
+	installedReport, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("atuin"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() with installed atuin error = %v", err)
+	}
+	if len(installedReport.Actions) != 0 {
+		t.Fatalf("installed Actions len = %d, want 0 (%#v)", len(installedReport.Actions), installedReport.Actions)
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet(), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	action := report.Actions[0]
+	if action.Provider != deps.TierUserLocal || action.UserLocal == nil {
+		t.Fatalf("action = %#v, want Atuin user-local provider", action)
+	}
+	if action.UserLocal.Recipe != "atuin" || action.UserLocal.Command != "atuin" || action.UserLocal.Layout != "bundle" {
+		t.Fatalf("UserLocal = %#v, want atuin bundle recipe", action.UserLocal)
+	}
+	if action.UserLocal.URL != "https://github.com/atuinsh/atuin/releases/download/v18.16.1/atuin-x86_64-unknown-linux-gnu.tar.gz" {
+		t.Fatalf("UserLocal.URL = %q", action.UserLocal.URL)
+	}
+}
+
 func TestPlanReportsDependencyRequirement(t *testing.T) {
 	m := manifest.Manifest{
 		Version: 1,
