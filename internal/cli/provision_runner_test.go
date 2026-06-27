@@ -249,6 +249,12 @@ printf '%s\n' "$*" > "$HOME/codegraph-args"
 		if !strings.Contains(string(got), "Do NOT use CodeGraph as proof for runtime behavior.") {
 			t.Fatalf("%s missing runtime-verification guidance\ncontent:\n%s", path, got)
 		}
+		if strings.Contains(string(got), "codegraph_explore") {
+			t.Fatalf("%s duplicated generic CodeGraph tool guidance owned by the CodeGraph installer\ncontent:\n%s", path, got)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "opencode")); !os.IsNotExist(err) {
+		t.Fatalf("dots must not create an OpenCode policy overlay; CodeGraph installer owns OpenCode setup: %v", err)
 	}
 }
 

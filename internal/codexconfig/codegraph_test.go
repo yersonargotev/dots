@@ -36,6 +36,9 @@ func TestEnsureCodeGraphModeCreatesSelectedAgentInstructionFiles(t *testing.T) {
 		}
 		assertCodeGraphBlock(t, path, string(got))
 	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "opencode")); !os.IsNotExist(err) {
+		t.Fatalf("dots policy overlay must not create OpenCode instructions; CodeGraph installer owns OpenCode setup: %v", err)
+	}
 }
 
 func TestEnsureCodeGraphModePreservesExistingContent(t *testing.T) {
@@ -133,24 +136,23 @@ func assertCodeGraphBlock(t *testing.T, path, content string) {
 		"CodeGraph Mode: enabled",
 		"Use CodeGraph for architecture questions",
 		"Never use CodeGraph just because `.codegraph/` exists.",
-		"`codegraph_explore` for understanding a code area or flow.",
 		"Treat CodeGraph-returned source as already read.",
 		"Do NOT use CodeGraph as proof for runtime behavior.",
-		"If `.codegraph/` is missing, ask before running `codegraph init -i`.",
 		codeGraphEnd,
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("%s missing %q\ncontent:\n%s", path, want, content)
 		}
 	}
-	for _, ghostTool := range []string{"codegraph_context", "codegraph_trace", "codegraph_files", "codegraph_status"} {
+	for _, ghostTool := range []string{"codegraph_context", "codegraph_trace", "codegraph_files", "codegraph_status", "codegraph_explore", "codegraph_node", "codegraph_search", "codegraph_callers"} {
 		if strings.Contains(content, ghostTool) {
-			t.Fatalf("%s kept unsupported tool %q\ncontent:\n%s", path, ghostTool, content)
+			t.Fatalf("%s kept generic CodeGraph tool guidance %q\ncontent:\n%s", path, ghostTool, content)
 		}
 	}
 	for _, oldInstruction := range []string{
 		"If `.codegraph/` exists in the project, use CodeGraph first",
 		"use CodeGraph first",
+		"If `.codegraph/` is missing, ask before running `codegraph init -i`.",
 	} {
 		if strings.Contains(content, oldInstruction) {
 			t.Fatalf("%s kept mandatory CodeGraph wording %q\ncontent:\n%s", path, oldInstruction, content)

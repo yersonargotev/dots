@@ -234,7 +234,10 @@ Supported fields: `scope`, `agents`, and `yes`.
 `curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh`
 bootstrap, adds `$HOME/.local/bin` to the child process `PATH`, and then runs
 `codegraph install` to wire MCP config plus instructions for the selected
-agents.
+agents. CodeGraph's installer owns the generated MCP/instruction setup for
+those targets; dots only adds its scoped `<!-- dots:codegraph-mode -->` policy
+overlay for agent instruction files it manages, so generic CodeGraph usage text
+stays with CodeGraph.
 
 Constraints:
 

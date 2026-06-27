@@ -307,6 +307,84 @@ provisioners:
 	}
 }
 
+func TestInstallAgentsCodeGraphTagWritesScopedPolicyOverlayInSandbox(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	sandboxHome := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/codegraph-args\"\n")
+	writeExecStub(t, filepath.Join(stubDir, "curl"), "#!/bin/sh\nexit 0\n")
+	writeManifestDependencyStubs(t, stubDir)
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{
+		"install",
+		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "agents",
+		"--tag", "codegraph",
+		"--source-root", repoRoot,
+		"--home", sandboxHome,
+		"--state-root", stateRoot,
+		"--yes",
+	})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("dots install --tag codegraph failed in sandbox: %v\noutput:\n%s", err, out.String())
+	}
+
+	gotArgs, err := os.ReadFile(filepath.Join(sandboxHome, "codegraph-args"))
+	if err != nil {
+		t.Fatalf("CodeGraph provisioner did not run under sandbox HOME %q: %v", sandboxHome, err)
+	}
+	wantArgs := "install --target codex,claude,antigravity,opencode --location global --yes\n"
+	if string(gotArgs) != wantArgs {
+		t.Fatalf("codegraph args = %q, want %q", gotArgs, wantArgs)
+	}
+
+	for _, path := range []string{
+		filepath.Join(sandboxHome, ".codex", "AGENTS.md"),
+		filepath.Join(sandboxHome, ".claude", "CLAUDE.md"),
+		filepath.Join(sandboxHome, ".gemini", "GEMINI.md"),
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("missing dots CodeGraph policy overlay %s: %v", path, err)
+		}
+		content := string(got)
+		for _, want := range []string{
+			"<!-- dots:codegraph-mode -->",
+			"Use CodeGraph for architecture questions, symbol discovery, call flow, impact analysis, and locating relevant source files before edits.",
+			"Do NOT use CodeGraph as proof for runtime behavior.",
+			"<!-- /dots:codegraph-mode -->",
+		} {
+			if !strings.Contains(content, want) {
+				t.Fatalf("%s missing scoped CodeGraph policy %q\ncontent:\n%s", path, want, content)
+			}
+		}
+		if strings.Contains(content, "codegraph_explore") || strings.Contains(content, "codegraph init -i") {
+			t.Fatalf("%s duplicated generic CodeGraph installer guidance\ncontent:\n%s", path, content)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".config", "opencode")); !os.IsNotExist(err) {
+		t.Fatalf("dots must not create OpenCode policy overlay; CodeGraph installer owns OpenCode setup: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, "codegraph-args")); err == nil {
+		t.Fatalf("CodeGraph provisioner wrote into inherited HOME %q instead of sandbox", fakeRealHome)
+	}
+}
+
 // TestInstallExecutesClaudeProvisionerHomeThreaded proves a claude provisioner
 // renders and runs the exact `claude plugin ...` invocations, in manifest order,
 // under the sandbox HOME and never the inherited one.
