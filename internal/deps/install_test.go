@@ -502,6 +502,118 @@ func TestInstallDryRunIncludesSelectedProvisionerDependencies(t *testing.T) {
 	}
 }
 
+func TestInstallDryRunReportsMissingBootstrapManagerAsManual(t *testing.T) {
+	report, err := deps.InstallDryRun(nodeToolchainManifest(), deps.Options{Profile: "default", OS: "linux"}, noProviderLookup(), fontLookupSet(), deps.TierGeneric)
+	if err != nil {
+		t.Fatalf("InstallDryRun() error = %v", err)
+	}
+	if len(report.Items) != 1 {
+		t.Fatalf("Items len = %d, want 1 (%#v)", len(report.Items), report.Items)
+	}
+	item := report.Items[0]
+	if item.Status != deps.InstallPreviewManual || item.Executable != "" || len(item.Bootstrap) != 1 || item.Manual == "" {
+		t.Fatalf("Node dry-run item = %#v, want manual item that records non-runnable bootstrap", item)
+	}
+}
+
+func TestInstallYesDoesNotRunBootstrapWhenManagerIsMissing(t *testing.T) {
+	runner := &recordingRunner{}
+
+	report, err := deps.Install(nodeToolchainManifest(), deps.Options{Profile: "default", OS: "linux"}, noProviderLookup(), fontLookupSet(), deps.TierGeneric, runner)
+	if err == nil {
+		t.Fatalf("Install() error = nil, want unresolved required dependency")
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner calls = %#v, want no fnm bootstrap when fnm is missing", runner.calls)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusManual {
+		t.Fatalf("report items = %#v, want one manual Node item", report.Items)
+	}
+}
+
+func TestInstallDryRunReportsOfficialFNMInstallerOnLinuxWithoutProvider(t *testing.T) {
+	report, err := deps.InstallDryRun(nodeToolchainManifest(), deps.Options{Profile: "default", OS: "linux"}, noProviderLookup("curl", "bash", "unzip"), fontLookupSet(), deps.TierGeneric)
+	if err != nil {
+		t.Fatalf("InstallDryRun() error = %v", err)
+	}
+	if len(report.Items) != 1 {
+		t.Fatalf("Items len = %d, want 1 (%#v)", len(report.Items), report.Items)
+	}
+	item := report.Items[0]
+	if item.Status != deps.InstallPreviewWouldInstall || item.Executable != "bash" || len(item.Args) != 2 || !strings.Contains(item.Args[1], "https://fnm.vercel.app/install") || !strings.Contains(item.Args[1], "--skip-shell") || len(item.Bootstrap) != 1 {
+		t.Fatalf("Node dry-run item = %#v, want official fnm installer plus bootstrap", item)
+	}
+}
+
+func TestInstallYesRunsOfficialFNMInstallerBeforeBootstrap(t *testing.T) {
+	present := map[string]bool{"curl": true, "bash": true, "unzip": true}
+	runner := &recordingRunner{}
+	runner.afterRun = func() {
+		last := runner.calls[len(runner.calls)-1]
+		switch {
+		case last.executable == "bash" && len(last.args) == 2 && strings.Contains(last.args[1], "https://fnm.vercel.app/install"):
+			present["fnm"] = true
+		case last.executable == "fnm" && reflect.DeepEqual(last.args, []string{"install", "--lts"}):
+			present["node"] = true
+		}
+	}
+
+	report, err := deps.Install(nodeToolchainManifest(), deps.Options{Profile: "default", OS: "linux"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierGeneric, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if len(runner.calls) != 2 {
+		t.Fatalf("runner calls len = %d, want official installer then bootstrap (%#v)", len(runner.calls), runner.calls)
+	}
+	if runner.calls[0].executable != "bash" || !reflect.DeepEqual(runner.calls[0].args[:1], []string{"-c"}) || !strings.Contains(runner.calls[0].args[1], "curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell") {
+		t.Fatalf("official fnm installer call = %#v", runner.calls[0])
+	}
+	if runner.calls[1].executable != "fnm" || !reflect.DeepEqual(runner.calls[1].args, []string{"install", "--lts"}) {
+		t.Fatalf("bootstrap call = %#v", runner.calls[1])
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusInstalled {
+		t.Fatalf("report items = %#v, want installed Node item", report.Items)
+	}
+}
+
+func TestInstallYesDoesNotRunFNMBootstrapWhenOfficialInstallerDoesNotExposeFNM(t *testing.T) {
+	present := map[string]bool{"curl": true, "bash": true, "unzip": true}
+	runner := &recordingRunner{}
+
+	report, err := deps.Install(nodeToolchainManifest(), deps.Options{Profile: "default", OS: "linux"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierGeneric, runner)
+	if err == nil {
+		t.Fatalf("Install() error = nil, want unresolved required dependency")
+	}
+	if len(runner.calls) != 1 || runner.calls[0].executable != "bash" {
+		t.Fatalf("runner calls = %#v, want only official fnm installer", runner.calls)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusUnresolved {
+		t.Fatalf("report items = %#v, want unresolved Node item", report.Items)
+	}
+}
+
+func nodeToolchainManifest() manifest.Manifest {
+	return manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:          "Node LTS (fnm)",
+				Commands:      []string{"fnm", "node"},
+				Brew:          "fnm",
+				LinuxHomebrew: true,
+				Toolchain:     manifest.DependencyToolchainNodeLTSFNM,
+			}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+}
+
 func TestInstallYesRunsConstrainedToolchainBootstrapBeforeReprobe(t *testing.T) {
 	present := map[string]bool{"brew": true}
 	runner := &recordingRunner{}

@@ -300,6 +300,48 @@ func TestInstallDryRunJSONIncludesDependencyPreviewAndInstallPlan(t *testing.T) 
 	}
 }
 
+func TestInstallDryRunClassifiesMissingFNMToolchainAsManual(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	binDir := t.TempDir()
+	t.Setenv("PATH", binDir)
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, home, fnmBootstrapCLIManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--dry-run", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	got := out.String()
+	if !strings.Contains(got, "manual") || strings.Contains(got, "would-install Node LTS (fnm)") {
+		t.Fatalf("install --dry-run should classify missing fnm bootstrap as manual:\n%s", got)
+	}
+}
+
+const fnmBootstrapCLIManifest = `version: 1
+profiles:
+  default:
+    tags: [core]
+dependencies:
+  - tags: [core]
+    dependencies:
+      - name: Node LTS (fnm)
+        commands: [fnm, node]
+        brew: fnm
+        linux_homebrew: true
+        toolchain: node-lts-fnm
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`
+
 func TestInstallJSONDependencyFailureIncludesResultAndInstallPlan(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
