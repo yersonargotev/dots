@@ -18,10 +18,10 @@ import (
 // of the contract.
 func TestEnvelopeGolden(t *testing.T) {
 	installPreview := deps.InstallDryRunReport{Profile: "default", Tier: deps.TierHomebrew, Items: []deps.InstallPreview{
-		{Dependency: "starship", Status: deps.InstallPreviewWouldInstall, Provider: deps.TierHomebrew, Package: "starship", Executable: "brew", Args: []string{"install", "starship"}},
+		{Dependency: "starship", Requirement: "required", Status: deps.InstallPreviewWouldInstall, Provider: deps.TierHomebrew, Package: "starship", Executable: "brew", Args: []string{"install", "starship"}},
 	}}
 	installResult := deps.InstallReport{Profile: "default", Tier: deps.TierHomebrew, Items: []deps.InstallItem{
-		{Dependency: "starship", Status: deps.InstallStatusInstalled, Provider: deps.TierHomebrew, Package: "starship", Executable: "brew", Args: []string{"install", "starship"}},
+		{Dependency: "starship", Requirement: "required", Status: deps.InstallStatusInstalled, Provider: deps.TierHomebrew, Package: "starship", Executable: "brew", Args: []string{"install", "starship"}},
 	}}
 	tests := []struct {
 		name   string
@@ -74,8 +74,8 @@ func TestEnvelopeGolden(t *testing.T) {
 					OS:       "darwin",
 					Platform: doctor.Platform{Supported: true, OS: "darwin"},
 					Dependencies: deps.CheckReport{Profile: "default", Results: []deps.Result{
-						{Name: "git", Command: "git", Present: true, Warning: "git on PATH but `git --version` failed", ProbeDetail: "MUST NOT APPEAR", Hint: "MUST NOT APPEAR"},
-						{Name: "rg", Command: "rg", Present: false},
+						{Name: "git", Requirement: "required", Command: "git", Present: true, Warning: "git on PATH but `git --version` failed", ProbeDetail: "MUST NOT APPEAR", Hint: "MUST NOT APPEAR"},
+						{Name: "rg", Requirement: "optional", Command: "rg", Present: false},
 					}},
 					Configuration: status.Report{Profile: "default", Entries: []status.Entry{
 						{Source: "configs/zsh/zshrc", Target: "/Users/me/.zshrc", Strategy: "symlink", State: status.StateOK},
@@ -100,10 +100,10 @@ func TestEnvelopeGolden(t *testing.T) {
 					Profile: "default",
 					Tier:    deps.Tier("debian"),
 					Actions: []deps.InstallAction{
-						{Dependency: "rg", Status: deps.InstallActionStatusInstallable, Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}, Candidates: []deps.ProviderCandidate{{Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "ripgrep"}}}},
+						{Dependency: "rg", Requirement: "optional", Status: deps.InstallActionStatusInstallable, Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}, Candidates: []deps.ProviderCandidate{{Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "ripgrep"}}}},
 					},
 					Items: []deps.Guidance{
-						{Name: "rg", Command: "apt-get install -y ripgrep", Action: deps.InstallAction{Dependency: "rg", Status: deps.InstallActionStatusInstallable, Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}, Candidates: []deps.ProviderCandidate{{Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "ripgrep"}}}}},
+						{Name: "rg", Requirement: "optional", Command: "apt-get install -y ripgrep", Action: deps.InstallAction{Dependency: "rg", Requirement: "optional", Status: deps.InstallActionStatusInstallable, Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}, Candidates: []deps.ProviderCandidate{{Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "ripgrep"}}}}},
 					},
 				},
 			},

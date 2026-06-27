@@ -19,6 +19,7 @@ const (
 // InstallPreview is one dry-run installation preview item.
 type InstallPreview struct {
 	Dependency   string               `json:"dependency"`
+	Requirement  string               `json:"requirement"`
 	Status       InstallPreviewStatus `json:"status"`
 	Provider     Tier                 `json:"provider,omitempty"`
 	Package      string               `json:"package,omitempty"`
@@ -55,6 +56,7 @@ const (
 // InstallItem is the result of one attempted dependency installation.
 type InstallItem struct {
 	Dependency   string              `json:"dependency"`
+	Requirement  string              `json:"requirement"`
 	Status       InstallStatus       `json:"status"`
 	Provider     Tier                `json:"provider,omitempty"`
 	Package      string              `json:"package,omitempty"`
@@ -88,6 +90,7 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook Font
 		}
 		report.Items = append(report.Items, InstallPreview{
 			Dependency:   action.Dependency,
+			Requirement:  action.Requirement,
 			Status:       status,
 			Provider:     action.Provider,
 			Package:      action.Package,
@@ -110,12 +113,15 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 	}
 
 	report := InstallReport{Profile: plan.Profile, Tier: plan.Tier}
-	unresolved := false
+	requiredUnresolved := false
 	for _, action := range plan.Actions {
 		if action.Executable == "" {
-			unresolved = true
+			if action.Requirement == manifest.DependencyRequirementRequired {
+				requiredUnresolved = true
+			}
 			report.Items = append(report.Items, InstallItem{
 				Dependency:   action.Dependency,
+				Requirement:  action.Requirement,
 				Status:       InstallStatusManual,
 				Manual:       action.Manual,
 				TrustCommand: action.TrustCommand,
@@ -127,6 +133,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 		if err := runner.Run(action.Executable, args); err != nil {
 			report.Items = append(report.Items, InstallItem{
 				Dependency:   action.Dependency,
+				Requirement:  action.Requirement,
 				Status:       InstallStatusFailed,
 				Provider:     action.Provider,
 				Package:      action.Package,
@@ -135,12 +142,18 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
 			})
+			if action.Requirement == manifest.DependencyRequirementOptional {
+				continue
+			}
 			return report, fmt.Errorf("install %q: %w", action.Dependency, err)
 		}
 		if !actionPresent(action, look, fontLook) {
-			unresolved = true
+			if action.Requirement == manifest.DependencyRequirementRequired {
+				requiredUnresolved = true
+			}
 			report.Items = append(report.Items, InstallItem{
 				Dependency:   action.Dependency,
+				Requirement:  action.Requirement,
 				Status:       InstallStatusUnresolved,
 				Provider:     action.Provider,
 				Package:      action.Package,
@@ -149,10 +162,14 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
 			})
-			return report, errors.New("unresolved dependencies remain after install")
+			if action.Requirement == manifest.DependencyRequirementRequired {
+				return report, errors.New("unresolved required dependencies remain after install")
+			}
+			continue
 		}
 		report.Items = append(report.Items, InstallItem{
 			Dependency:   action.Dependency,
+			Requirement:  action.Requirement,
 			Status:       InstallStatusInstalled,
 			Provider:     action.Provider,
 			Package:      action.Package,
@@ -162,8 +179,8 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			Candidates:   action.Candidates,
 		})
 	}
-	if unresolved {
-		return report, errors.New("unresolved dependencies remain after install")
+	if requiredUnresolved {
+		return report, errors.New("unresolved required dependencies remain after install")
 	}
 	return report, nil
 }

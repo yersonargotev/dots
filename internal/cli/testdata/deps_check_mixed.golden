@@ -1,7 +1,7 @@
 Dependencies for profile "default"
 
-  present  tmux
-  missing  ripgrep
-  missing  starship
+  present  tmux (required)
+  missing  ripgrep (required)
+  missing  starship (required)
 
 Summary: 1 present, 2 missing

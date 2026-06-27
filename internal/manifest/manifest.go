@@ -110,9 +110,10 @@ type ProvisionerSpec struct {
 // automatically in v1. The package fields (Brew/Apt/Dnf/Pacman) carry the
 // per-platform package identifier used to build advisory install guidance.
 type Dependency struct {
-	Name    string `yaml:"name"`
-	Command string `yaml:"command,omitempty"`
-	Brew    string `yaml:"brew,omitempty"`
+	Name        string `yaml:"name"`
+	Requirement string `yaml:"requirement,omitempty"`
+	Command     string `yaml:"command,omitempty"`
+	Brew        string `yaml:"brew,omitempty"`
 	// BrewCask declares a Homebrew cask package. It renders as
 	// `brew install --cask <token>` and is separate from Brew so casks are not
 	// hidden behind Homebrew's implicit formula/cask resolution.
@@ -128,6 +129,26 @@ type Dependency struct {
 	// FontFallbackMatches declares compatible installed-font filename globs that
 	// satisfy the same dependency when the primary font file pattern is absent.
 	FontFallbackMatches []string `yaml:"font_fallback_matches,omitempty"`
+}
+
+const (
+	DependencyRequirementRequired = "required"
+	DependencyRequirementOptional = "optional"
+)
+
+// RequirementValue returns the dependency's stable required/optional
+// classification. Empty is treated as required for backwards compatibility.
+func (d Dependency) RequirementValue() string {
+	requirement := strings.TrimSpace(d.Requirement)
+	if requirement == "" {
+		return DependencyRequirementRequired
+	}
+	return requirement
+}
+
+// IsRequired reports whether the dependency gates installation.
+func (d Dependency) IsRequired() bool {
+	return d.RequirementValue() == DependencyRequirementRequired
 }
 
 // IsFont reports whether the Dependency is detected as an installed font asset
@@ -337,6 +358,10 @@ func (m Manifest) Validate() error {
 func validateDependency(dep Dependency, path string) error {
 	if strings.TrimSpace(dep.Name) == "" {
 		return fmt.Errorf("%s.name is required", path)
+	}
+	requirement := strings.TrimSpace(dep.Requirement)
+	if requirement != "" && requirement != DependencyRequirementRequired && requirement != DependencyRequirementOptional {
+		return fmt.Errorf("%s.requirement must be one of required, optional", path)
 	}
 	if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
 		return fmt.Errorf("%s.command must not be empty", path)

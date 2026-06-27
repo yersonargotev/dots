@@ -96,6 +96,7 @@ entries:
         dnf: tmux
         pacman: tmux
       - name: ripgrep
+        requirement: optional
         command: rg
         brew: ripgrep
       - name: CascadiaCode Nerd Font
@@ -120,7 +121,7 @@ entries:
 	if deps[0].Name != "tmux" || deps[0].Brew != "tmux" || deps[0].Apt != "tmux" || deps[0].Dnf != "tmux" || deps[0].Pacman != "tmux" {
 		t.Fatalf("Dependencies[0] = %#v, want fully mapped tmux dependency", deps[0])
 	}
-	if deps[1].Name != "ripgrep" || deps[1].Command != "rg" || deps[1].Brew != "ripgrep" {
+	if deps[1].Name != "ripgrep" || deps[1].Requirement != "optional" || deps[1].Command != "rg" || deps[1].Brew != "ripgrep" {
 		t.Fatalf("Dependencies[1] = %#v, want ripgrep with rg command", deps[1])
 	}
 	if deps[2].Name != "CascadiaCode Nerd Font" || deps[2].BrewCask != "font-cascadia-code-nf" || deps[2].FontMatch != "CascadiaCodeNF*" || !sameStrings(deps[2].FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
@@ -137,6 +138,7 @@ profiles:
     tags: [core, desktop]
     dependencies:
       - name: Desktop Nerd Font
+        requirement: optional
         brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
         font_fallback_matches:
@@ -160,7 +162,7 @@ entries:
 	if len(deps) != 1 {
 		t.Fatalf("Profile dependencies len = %d, want 1 (%#v)", len(deps), deps)
 	}
-	if deps[0].Name != "Desktop Nerd Font" || deps[0].BrewCask != "font-cascadia-code-nf" || deps[0].FontMatch != "CascadiaCodeNF*" || !sameStrings(deps[0].FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
+	if deps[0].Name != "Desktop Nerd Font" || deps[0].Requirement != "optional" || deps[0].BrewCask != "font-cascadia-code-nf" || deps[0].FontMatch != "CascadiaCodeNF*" || !sameStrings(deps[0].FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
 		t.Fatalf("Profile dependency = %#v, want desktop font dependency with fallback match", deps[0])
 	}
 }
@@ -195,6 +197,7 @@ provisioners:
       - name: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
       - name: engram
+        requirement: optional
         brew: gentleman-programming/tap/engram
 `)
 	if err := os.WriteFile(path, content, 0o600); err != nil {
@@ -236,6 +239,9 @@ provisioners:
 	}
 	if prov.Dependencies[0].Name != "gentle-ai" || prov.Dependencies[0].Brew != "gentleman-programming/tap/gentle-ai" {
 		t.Fatalf("Provisioner.Dependencies[0] = %#v, want gentle-ai brew dependency", prov.Dependencies[0])
+	}
+	if prov.Dependencies[1].Name != "engram" || prov.Dependencies[1].Requirement != "optional" || prov.Dependencies[1].Brew != "gentleman-programming/tap/engram" {
+		t.Fatalf("Provisioner.Dependencies[1] = %#v, want optional engram brew dependency", prov.Dependencies[1])
 	}
 }
 
@@ -1486,6 +1492,23 @@ entries:
         brew: tmux
 `,
 			want: "entries[0].dependencies[0].name is required",
+		},
+		{
+			name: "dependency with invalid requirement",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/tmux/tmux.conf
+    target: ~/.tmux.conf
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: tmux
+        requirement: recommended
+`,
+			want: "entries[0].dependencies[0].requirement must be one of required, optional",
 		},
 		{
 			name: "dependency with whitespace-only command",

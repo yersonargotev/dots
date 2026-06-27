@@ -14,12 +14,14 @@
       "results": [
         {
           "name": "git",
+          "requirement": "required",
           "command": "git",
           "present": true,
           "warning": "git on PATH but `git --version` failed"
         },
         {
           "name": "rg",
+          "requirement": "optional",
           "command": "rg",
           "present": false
         }

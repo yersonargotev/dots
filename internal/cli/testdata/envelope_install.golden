@@ -11,6 +11,7 @@
         "items": [
           {
             "dependency": "starship",
+            "requirement": "required",
             "status": "would-install",
             "provider": "homebrew",
             "package": "starship",
@@ -28,6 +29,7 @@
         "items": [
           {
             "dependency": "starship",
+            "requirement": "required",
             "status": "installed",
             "provider": "homebrew",
             "package": "starship",

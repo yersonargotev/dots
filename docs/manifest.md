@@ -107,6 +107,7 @@ They are detection and installation guidance, not arbitrary shell hooks.
 | Field | Required | Meaning |
 |-------|----------|---------|
 | `name` | Yes | Human-readable dependency name. Also used as the executable probe when `command` is omitted. |
+| `requirement` | No | `required` or `optional`. Omitted means `required`. Required Dependencies gate integrated install; optional Dependencies are reported but do not block Managed Configuration. |
 | `command` | No | Executable name to probe on `PATH`. |
 | `brew` | No | Homebrew formula token. Mutually exclusive with `brew_cask`. |
 | `brew_cask` | No | Homebrew cask token. Renders as `brew install --cask <token>`. |

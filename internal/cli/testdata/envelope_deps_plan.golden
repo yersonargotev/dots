@@ -8,6 +8,7 @@
     "actions": [
       {
         "dependency": "rg",
+        "requirement": "optional",
         "status": "installable",
         "provider": "debian",
         "package": "ripgrep",
@@ -33,9 +34,11 @@
     "items": [
       {
         "name": "rg",
+        "requirement": "optional",
         "command": "apt-get install -y ripgrep",
         "action": {
           "dependency": "rg",
+          "requirement": "optional",
           "status": "installable",
           "provider": "debian",
           "package": "ripgrep",
