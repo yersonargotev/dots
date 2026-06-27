@@ -184,31 +184,42 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	if !strings.Contains(string(gotArgs), "uninstall --agents codex,claude-code,opencode,antigravity,vscode-copilot --components sdd --yes") {
 		t.Fatalf("provisioner argv = %q, want it to cleanup legacy SDD for codex,claude-code,opencode,antigravity,vscode-copilot before install", gotArgs)
 	}
-	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex --components engram,context7,persona") {
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --preset custom --agents codex --components engram,context7") {
 		t.Fatalf("provisioner argv = %q, want codex install without permissions", gotArgs)
 	}
-	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents claude-code --components engram,context7,persona,permissions") {
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --preset custom --agents claude-code --components engram,context7,permissions") {
 		t.Fatalf("provisioner argv = %q, want claude-code install with permissions", gotArgs)
 	}
-	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents antigravity --components engram,context7,persona") {
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --preset custom --agents antigravity --components engram,context7") {
 		t.Fatalf("provisioner argv = %q, want antigravity install without SDD or permissions", gotArgs)
 	}
-	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents opencode --components engram,context7,persona") {
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --preset custom --agents opencode --components engram,context7") {
 		t.Fatalf("provisioner argv = %q, want opencode install without SDD or permissions", gotArgs)
 	}
-	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents vscode-copilot --components engram,context7,persona") {
+	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --preset custom --agents vscode-copilot --components engram,context7") {
 		t.Fatalf("provisioner argv = %q, want vscode-copilot install without SDD or permissions", gotArgs)
 	}
-	if strings.Contains(string(gotArgs), "--agents codex --components engram,context7,persona,permissions") {
+	for _, forbidden := range []string{
+		"--agents codex --components engram,context7,persona",
+		"--agents claude-code --components engram,context7,persona",
+		"--agents antigravity --components engram,context7,persona",
+		"--agents opencode --components engram,context7,persona",
+		"--agents vscode-copilot --components engram,context7,persona",
+	} {
+		if strings.Contains(string(gotArgs), forbidden) {
+			t.Fatalf("provisioner argv = %q, default agents profile must not install persona component %q", gotArgs, forbidden)
+		}
+	}
+	if strings.Contains(string(gotArgs), "--agents codex --components engram,context7,permissions") {
 		t.Fatalf("provisioner argv = %q, want codex install without permissions because it installs gentle-dev", gotArgs)
 	}
-	if strings.Contains(string(gotArgs), "--agents antigravity --components engram,context7,persona,permissions") || strings.Contains(string(gotArgs), "--agents antigravity --components engram,context7,persona,sdd") {
+	if strings.Contains(string(gotArgs), "--agents antigravity --components engram,context7,permissions") || strings.Contains(string(gotArgs), "--agents antigravity --components engram,context7,sdd") {
 		t.Fatalf("provisioner argv = %q, want antigravity install without SDD or permissions", gotArgs)
 	}
-	if strings.Contains(string(gotArgs), "--agents opencode --components engram,context7,persona,permissions") || strings.Contains(string(gotArgs), "--agents opencode --components engram,context7,persona,sdd") {
+	if strings.Contains(string(gotArgs), "--agents opencode --components engram,context7,permissions") || strings.Contains(string(gotArgs), "--agents opencode --components engram,context7,sdd") {
 		t.Fatalf("provisioner argv = %q, want opencode install without SDD or permissions", gotArgs)
 	}
-	if strings.Contains(string(gotArgs), "--agents vscode-copilot --components engram,context7,persona,permissions") || strings.Contains(string(gotArgs), "--agents vscode-copilot --components engram,context7,persona,sdd") {
+	if strings.Contains(string(gotArgs), "--agents vscode-copilot --components engram,context7,permissions") || strings.Contains(string(gotArgs), "--agents vscode-copilot --components engram,context7,sdd") {
 		t.Fatalf("provisioner argv = %q, want vscode-copilot install without SDD or permissions", gotArgs)
 	}
 	if strings.Contains(string(gotArgs), "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code,opencode") {
@@ -232,15 +243,73 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	for _, want := range []string{
 		"configs/claude/settings.json",
 		"configs/claude/statusline-command.sh",
-		"--agents codex --components engram,context7,persona",
-		"--agents claude-code --components engram,context7,persona,permissions",
-		"--agents antigravity --components engram,context7,persona",
-		"--agents opencode --components engram,context7,persona",
-		"--agents vscode-copilot --components engram,context7,persona",
+		"--agents codex --components engram,context7",
+		"--agents claude-code --components engram,context7,permissions",
+		"--agents antigravity --components engram,context7",
+		"--agents opencode --components engram,context7",
+		"--agents vscode-copilot --components engram,context7",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("install output missing %q\noutput:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "--components engram,context7,persona") {
+		t.Fatalf("install output must not show persona in the default agents baseline\noutput:\n%s", out)
+	}
+}
+
+// TestClaudeAgentsPersonaTagRunsInSandbox proves that the explicit persona
+// opt-in path executes under the threaded sandbox HOME, not just in the
+// provisioner rendering layer.
+func TestClaudeAgentsPersonaTagRunsInSandbox(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	realHome := t.TempDir()
+	t.Setenv("HOME", realHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/gentle-ai-args\"\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/codegraph-args\"\n")
+	writeManifestDependencyStubs(t, stubDir)
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	install := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	install.SetOut(&installOut)
+	install.SetErr(&installOut)
+	install.SetArgs([]string{
+		"install",
+		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "agents",
+		"--tag", "persona",
+		"--source-root", repoRoot,
+		"--home", home,
+		"--state-root", stateRoot,
+		"--yes",
+	})
+
+	if err := install.Execute(); err != nil {
+		t.Fatalf("dots install --tag persona failed in sandbox: %v\noutput:\n%s", err, installOut.String())
+	}
+
+	gotArgs, err := os.ReadFile(filepath.Join(home, "gentle-ai-args"))
+	if err != nil {
+		t.Fatalf("persona provisioner did not run under the sandbox HOME %q: %v", home, err)
+	}
+	wantPersona := "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code,opencode,antigravity,vscode-copilot --components persona"
+	if !strings.Contains(string(gotArgs), wantPersona) {
+		t.Fatalf("provisioner argv = %q, want persona opt-in command %q", gotArgs, wantPersona)
+	}
+	if _, err := os.Stat(filepath.Join(realHome, "gentle-ai-args")); err == nil {
+		t.Fatalf("persona provisioner wrote into the inherited HOME %q instead of the sandbox", realHome)
+	}
+	if _, err := os.Stat(filepath.Join(realHome, ".claude", "settings.json")); err == nil {
+		t.Fatalf("persona-tag install wrote Claude settings into the inherited HOME %q", realHome)
 	}
 }
 
