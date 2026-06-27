@@ -59,7 +59,10 @@ their Managed Entries, while common runtimes and package tools are owned by
 Homebrew-provider declarations for `fnm`, `rustup`, `go`, `uv`, `pnpm`, and
 `bun`. Linux Homebrew fallback is explicit with `linux_homebrew: true`; GUI apps and fonts stay manual unless they have validated Linux support. Node and Rust use constrained built-in toolchain bootstrap commands after
 manager installation: `fnm install --lts` for Node LTS and `rustup default
-stable` for Rust stable.
+stable` for Rust stable. When Rust bootstrap succeeds but `rustc` or `cargo`
+still are not available on `PATH`, the install result includes repair guidance
+for the rustup proxy/PATH surface instead of only reporting a generic unresolved
+Dependency.
 
 ## Managed Entries
 

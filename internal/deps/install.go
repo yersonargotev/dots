@@ -3,6 +3,7 @@ package deps
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 )
@@ -172,6 +173,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			return report, fmt.Errorf("bootstrap %q: %w", action.Dependency, err)
 		}
 		if !actionPresent(action, look, fontLook) {
+			manual := unresolvedToolchainRemediation(action, look)
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
 			}
@@ -184,6 +186,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Executable:   action.Executable,
 				Args:         args,
 				Bootstrap:    append([]Command(nil), action.Bootstrap...),
+				Manual:       manual,
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
 			})
@@ -209,6 +212,33 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 		return report, errors.New("unresolved required dependencies remain after install")
 	}
 	return report, nil
+}
+
+func unresolvedToolchainRemediation(action InstallAction, look Lookup) string {
+	if action.Toolchain != manifest.DependencyToolchainRustStableRustup {
+		return ""
+	}
+	missing := missingCommandProbes(action.Probes, look)
+	if len(missing) == 0 {
+		return ""
+	}
+	verb := "are"
+	if len(missing) == 1 {
+		verb = "is"
+	}
+	return fmt.Sprintf("Rust stable is selected in rustup, but %s %s not available on PATH; ensure rustup exposes its proxies (usually by adding ~/.cargo/bin to PATH), then verify with `rustup which rustc` and `rustup which cargo`", strings.Join(missing, ", "), verb)
+}
+
+func missingCommandProbes(probes []string, look Lookup) []string {
+	missing := make([]string, 0, len(probes))
+	for _, probe := range probes {
+		probe = strings.TrimSpace(probe)
+		if probe == "" || look(probe) {
+			continue
+		}
+		missing = append(missing, probe)
+	}
+	return missing
 }
 
 func actionExecutable(action InstallAction) bool {
