@@ -127,7 +127,10 @@ prose the text surface prints:
   still includes this partial install report so agents can inspect the failed
   Dependency result and prove Managed Configuration was not applied.
   `data.dependencies` is optional and omitted when dependency provisioning is
-  intentionally bypassed with `install --skip-deps`.
+  intentionally bypassed with `install --skip-deps`. When
+  `install --yes --backup-and-replace --output json` replaces Conflicts,
+  `data.backup_sets` lists the Backup Sets created by that run, including each
+  set ID, target list, and state-root path.
 
 The domain reports' `json:` field names are part of the public contract.
 Renaming, removing, or changing the meaning of an existing field is a

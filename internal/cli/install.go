@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/codexconfig"
 	"github.com/yersonargotev/dots/internal/deps"
@@ -26,16 +27,17 @@ import (
 
 func newInstallCommand() *cobra.Command {
 	var (
-		file       string
-		profile    string
-		extraTags  []string
-		sourceRoot string
-		home       string
-		stateRoot  string
-		dryRun     bool
-		yes        bool
-		noTUI      bool
-		skipDeps   bool
+		file             string
+		profile          string
+		extraTags        []string
+		sourceRoot       string
+		home             string
+		stateRoot        string
+		dryRun           bool
+		yes              bool
+		noTUI            bool
+		skipDeps         bool
+		backupAndReplace bool
 	)
 
 	cmd := &cobra.Command{
@@ -48,6 +50,9 @@ func newInstallCommand() *cobra.Command {
 			paths, err := resolvePaths(home, sourceRoot, stateRoot)
 			if err != nil {
 				return err
+			}
+			if backupAndReplace && !dryRun && !yes {
+				return fmt.Errorf("--backup-and-replace requires --yes for non-interactive conflict replacement")
 			}
 
 			if !dryRun && !cmd.Flags().Changed("file") && !cmd.Flags().Changed("source-root") {
@@ -149,7 +154,15 @@ func newInstallCommand() *cobra.Command {
 				}
 			}
 
-			applied, err := resolveAndApply(cmd, p, paths, yes, noTUI)
+			beforeBackups, err := backups.Load(backups.Path(paths.StateRoot))
+			if err != nil {
+				return err
+			}
+			applied, err := resolveAndApply(cmd, p, paths, yes, noTUI, backupAndReplace)
+			if err != nil {
+				return err
+			}
+			createdBackups, err := createdBackupSetReports(paths.StateRoot, beforeBackups)
 			if err != nil {
 				return err
 			}
@@ -163,12 +176,12 @@ func newInstallCommand() *cobra.Command {
 			provResult, err := runProvisioners(cmd, *m, profile, extraTags, paths.Home, paths.StateRoot)
 			if err != nil {
 				if wantsJSON(cmd) {
-					return installProvisionerError{err: err, report: installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, ProvisionerResults: &provResult}}
+					return installProvisionerError{err: err, report: installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
 				}
 				return err
 			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+				return emitOK(cmd, installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups})
 			}
 			return nil
 		},
@@ -184,6 +197,7 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&yes, "yes", false, "apply safe install actions without prompting; conflicts default to skip")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
 	cmd.Flags().BoolVar(&skipDeps, "skip-deps", false, "skip dependency provisioning before applying managed configuration")
+	cmd.Flags().BoolVar(&backupAndReplace, "backup-and-replace", false, "with --yes, replace every conflict after creating Backup Sets")
 	return cmd
 }
 
@@ -325,14 +339,17 @@ func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
 // the conservative --yes default) and applies it with Backup Set protection. It
 // is shared by install and update so post-update installation reuses identical
 // Conflict Resolution and filesystem machinery instead of reimplementing it.
-func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI bool) (bool, error) {
+func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI, backupAndReplace bool) (bool, error) {
 	var (
 		decisions map[string]install.ConflictDecision
 		err       error
 	)
 	switch {
 	case yes:
-		// Non-interactive: conflicts deliberately default to skip.
+		if backupAndReplace {
+			decisions = replaceAllConflictDecisions(p)
+		}
+		// Non-interactive default: conflicts deliberately default to skip.
 	case noTUI:
 		decisions, err = promptConflictDecisions(cmd, p, paths.Home, paths.SourceRoot)
 		if err != nil {
@@ -350,6 +367,33 @@ func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, 
 	}
 
 	return true, install.Apply(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
+}
+
+func replaceAllConflictDecisions(p plan.Plan) map[string]install.ConflictDecision {
+	decisions := map[string]install.ConflictDecision{}
+	for _, action := range conflictActions(p) {
+		decisions[action.Target] = install.DecisionReplace
+	}
+	return decisions
+}
+
+func createdBackupSetReports(stateRoot string, before backups.Metadata) ([]installBackupSetReport, error) {
+	after, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, set := range before.Sets {
+		seen[set.ID] = true
+	}
+	var created []installBackupSetReport
+	for _, set := range after.Sets {
+		if seen[set.ID] {
+			continue
+		}
+		created = append(created, installBackupSetReport{BackupSet: set, Path: backups.SetDir(stateRoot, set.ID)})
+	}
+	return created, nil
 }
 
 // resolveConflictsTUI launches the Bubble Tea conflict resolver for the plan's

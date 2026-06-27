@@ -197,7 +197,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if opts.dryRun {
 		return report, nil
 	}
-	applied, err := resolveAndApply(cmd, p, paths, opts.yes, opts.noTUI)
+	applied, err := resolveAndApply(cmd, p, paths, opts.yes, opts.noTUI, false)
 	if err != nil {
 		return updateReport{}, err
 	}

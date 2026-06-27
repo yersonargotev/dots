@@ -129,6 +129,14 @@ dots --version
 dots install
 ```
 
+Non-interactive installs stay conservative: `dots install --yes` skips Conflicts. To explicitly adopt an existing machine by backing up and replacing every Conflict, use:
+
+```bash
+dots install --yes --backup-and-replace
+```
+
+That mode creates Backup Sets before replacement, reports them in JSON as `data.backup_sets`, and still runs selected Provisioners after Managed Configuration is applied.
+
 To reverse an install, `dots uninstall` removes only the symlinks and copied files `dots` recorded it owns, previewing first and skipping anything that drifted:
 
 ```bash

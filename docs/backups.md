@@ -4,7 +4,7 @@
 
 ## `dots backups list`
 
-`list` reports each recorded Backup Set: when it was created, why the backup was taken, and which targets it protected.
+`list` reports each recorded Backup Set: when it was created, why the backup was taken, and which targets it protected. `dots install --yes --backup-and-replace` records the same Backup Metadata as an interactive `replace`, so backups created by that non-interactive adoption flow appear here too.
 
 ```
 Backup Sets

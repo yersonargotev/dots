@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/cli"
 )
 
@@ -157,6 +158,200 @@ entries:
 	}
 	if !strings.Contains(out.String(), "Dependency provisioning skipped (--skip-deps).") {
 		t.Fatalf("skip-deps should make the bypass visible:\n%s", out.String())
+	}
+}
+
+func TestInstallYesSkipsConflictByDefault(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("local\n"), 0o600); err != nil {
+		t.Fatalf("write local target: %v", err)
+	}
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--skip-deps", "--yes", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	got, err := os.ReadFile(filepath.Join(home, ".gitconfig"))
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != "local\n" {
+		t.Fatalf("--yes without --backup-and-replace changed conflict target to %q", got)
+	}
+	meta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load backups: %v", err)
+	}
+	if len(meta.Sets) != 0 {
+		t.Fatalf("--yes default created %d Backup Sets, want 0", len(meta.Sets))
+	}
+}
+
+func TestInstallBackupAndReplaceCreatesBackupSetAndRunsProvisioner(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf 'ran' > \"$HOME/gentle-ai-ran\"\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("local\n"), 0o600); err != nil {
+		t.Fatalf("write local target: %v", err)
+	}
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+provisioners:
+  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+      persona: neutral
+      agents: [codex]
+    dependencies:
+      - name: gentle-ai
+      - name: engram
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--backup-and-replace", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	got, err := os.ReadFile(filepath.Join(home, ".gitconfig"))
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != "managed\n" {
+		t.Fatalf("target contents = %q, want managed source after backup-and-replace", got)
+	}
+	meta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load backups: %v", err)
+	}
+	if len(meta.Sets) != 1 {
+		t.Fatalf("Backup Sets = %d, want 1", len(meta.Sets))
+	}
+	preserved, err := os.ReadFile(backups.FilePath(stateRoot, meta.Sets[0].ID, 1, filepath.Join(home, ".gitconfig")))
+	if err != nil {
+		t.Fatalf("read preserved target: %v", err)
+	}
+	if string(preserved) != "local\n" {
+		t.Fatalf("preserved backup = %q, want local content", preserved)
+	}
+	if _, err := os.Stat(filepath.Join(home, "gentle-ai-ran")); err != nil {
+		t.Fatalf("provisioner did not run in sandbox HOME after backup-and-replace: %v", err)
+	}
+}
+
+func TestInstallBackupAndReplaceJSONReportsCreatedBackupSetLocation(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("local\n"), 0o600); err != nil {
+		t.Fatalf("write local target: %v", err)
+	}
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"install", "--skip-deps", "--yes", "--backup-and-replace", "--output", "json", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot}, &out, &errOut)
+	if code != cli.ExitOK {
+		t.Fatalf("exit code = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+
+	var envelope struct {
+		Data struct {
+			BackupSets []struct {
+				ID      string   `json:"id"`
+				Path    string   `json:"path"`
+				Targets []string `json:"targets"`
+			} `json:"backup_sets"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &envelope); err != nil {
+		t.Fatalf("unmarshal JSON output: %v\n%s", err, out.String())
+	}
+	if len(envelope.Data.BackupSets) != 1 {
+		t.Fatalf("backup_sets length = %d, want 1\n%s", len(envelope.Data.BackupSets), out.String())
+	}
+	set := envelope.Data.BackupSets[0]
+	if set.ID == "" {
+		t.Fatalf("backup set id is empty\n%s", out.String())
+	}
+	if set.Path != backups.SetDir(stateRoot, set.ID) {
+		t.Fatalf("backup set path = %q, want %q", set.Path, backups.SetDir(stateRoot, set.ID))
+	}
+	if len(set.Targets) != 1 || set.Targets[0] != filepath.Join(home, ".gitconfig") {
+		t.Fatalf("backup set targets = %#v, want gitconfig target", set.Targets)
+	}
+}
+
+func TestInstallBackupAndReplaceRequiresYes(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/git/gitconfig
+    target: ~/.gitconfig
+    strategy: copy
+    tags: [core]
+`)
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"install", "--skip-deps", "--backup-and-replace", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot}, &out, &errOut)
+	if code != cli.ExitError {
+		t.Fatalf("exit code = %d, want 1\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "--backup-and-replace requires --yes") {
+		t.Fatalf("stderr missing --yes requirement:\n%s", errOut.String())
 	}
 }
 
