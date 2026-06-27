@@ -198,6 +198,14 @@ if [ "$1" != "install" ]; then
   exit 9
 fi
 printf '%s\n' "$*" > "$HOME/codegraph-args"
+mkdir -p "$HOME/.codex" "$HOME/.claude" "$HOME/.gemini" "$HOME/.config/opencode"
+for file in "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md" "$HOME/.gemini/GEMINI.md" "$HOME/.config/opencode/codegraph.md"; do
+  cat > "$file" <<'EOF'
+<!-- CODEGRAPH_START -->
+Treat CodeGraph-returned source as already read.
+<!-- CODEGRAPH_END -->
+EOF
+done
 `
 	if err := os.WriteFile(filepath.Join(stubDir, "codegraph"), []byte(script), 0o755); err != nil {
 		t.Fatalf("write codegraph stub: %v", err)
@@ -249,6 +257,19 @@ printf '%s\n' "$*" > "$HOME/codegraph-args"
 		if !strings.Contains(string(got), "Do NOT use CodeGraph as proof for runtime behavior.") {
 			t.Fatalf("%s missing runtime-verification guidance\ncontent:\n%s", path, got)
 		}
+		if strings.Contains(string(got), "codegraph_explore") {
+			t.Fatalf("%s duplicated generic CodeGraph tool guidance owned by the CodeGraph installer\ncontent:\n%s", path, got)
+		}
+		if strings.Count(string(got), "Treat CodeGraph-returned source as already read.") != 1 {
+			t.Fatalf("%s should contain generic CodeGraph guidance only from installer-owned block\ncontent:\n%s", path, got)
+		}
+	}
+	opencodeContent, err := os.ReadFile(filepath.Join(home, ".config", "opencode", "codegraph.md"))
+	if err != nil {
+		t.Fatalf("CodeGraph installer stub did not cover OpenCode setup under sandbox HOME: %v", err)
+	}
+	if strings.Contains(string(opencodeContent), "<!-- dots:codegraph-mode -->") {
+		t.Fatalf("dots must not create an OpenCode policy overlay; CodeGraph installer owns OpenCode setup\ncontent:\n%s", opencodeContent)
 	}
 }
 
