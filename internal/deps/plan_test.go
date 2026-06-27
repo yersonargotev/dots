@@ -348,7 +348,7 @@ func TestPlanFallsBackFromUnavailableDistroProviderToHomebrew(t *testing.T) {
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
 		Entries: []manifest.Entry{{
 			Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"},
-			Dependencies: []manifest.Dependency{{Name: "ripgrep", Command: "rg", Apt: "ripgrep", Brew: "ripgrep"}},
+			Dependencies: []manifest.Dependency{{Name: "ripgrep", Command: "rg", Apt: "ripgrep", Brew: "ripgrep", LinuxHomebrew: true}},
 		}},
 	}
 
@@ -376,13 +376,65 @@ func TestPlanFallsBackFromUnavailableDistroProviderToHomebrew(t *testing.T) {
 	}
 }
 
+func TestPlanDoesNotFallbackToHomebrewOnLinuxWithoutOptIn(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/zed/settings.json", Target: "~/.config/zed/settings.json", Strategy: "symlink", Tags: []string{"desktop"},
+			Dependencies: []manifest.Dependency{{Name: "zed", Command: "zed", Brew: "zed"}},
+		}},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet("brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	action := report.Actions[0]
+	if action.Status != deps.InstallActionStatusManual || action.Provider != "" || action.Executable != "" || action.Package != "" || action.Manual == "" {
+		t.Fatalf("action = %#v, want manual action without Linux Homebrew opt-in", action)
+	}
+	if len(action.Candidates) != 0 {
+		t.Fatalf("Candidates = %#v, want no Linux Homebrew candidate without opt-in", action.Candidates)
+	}
+}
+
+func TestPlanDoesNotFallbackToHomebrewOutsideLinux(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "ripgrep", Command: "rg", Brew: "ripgrep", LinuxHomebrew: true}},
+		}},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "freebsd"}, lookupSet("brew"), fontLookupSet(), deps.TierGeneric)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	action := report.Actions[0]
+	if action.Status != deps.InstallActionStatusManual || action.Provider != "" || action.Executable != "" || action.Package != "" || action.Manual == "" {
+		t.Fatalf("action = %#v, want manual action outside Linux even with linux_homebrew opt-in", action)
+	}
+	if len(action.Candidates) != 0 {
+		t.Fatalf("Candidates = %#v, want no Homebrew candidate outside Linux", action.Candidates)
+	}
+}
+
 func TestPlanReportsManualWhenNoProviderCandidateIsExecutable(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
 		Entries: []manifest.Entry{{
 			Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"},
-			Dependencies: []manifest.Dependency{{Name: "ripgrep", Command: "rg", Apt: "ripgrep", Brew: "ripgrep"}},
+			Dependencies: []manifest.Dependency{{Name: "ripgrep", Command: "rg", Apt: "ripgrep", Brew: "ripgrep", LinuxHomebrew: true}},
 		}},
 	}
 

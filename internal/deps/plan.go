@@ -195,7 +195,7 @@ func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look L
 	}
 
 	candidateTiers := []Tier{tier}
-	if tier != TierHomebrew {
+	if opts.OS == "linux" && tier != TierHomebrew && dep.LinuxHomebrew {
 		candidateTiers = append(candidateTiers, TierHomebrew)
 	}
 

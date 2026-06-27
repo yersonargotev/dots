@@ -663,8 +663,54 @@ func TestRepositoryManifestWebProfileIncludesPlaywrightCLI(t *testing.T) {
 			break
 		}
 	}
-	if dep.Command != "playwright-cli" || dep.Brew != "playwright-cli" {
-		t.Fatalf("Playwright CLI dependency = %#v, want command/brew playwright-cli", dep)
+	if dep.Command != "playwright-cli" || dep.Brew != "playwright-cli" || !dep.LinuxHomebrew {
+		t.Fatalf("Playwright CLI dependency = %#v, want command/brew playwright-cli with linux_homebrew", dep)
+	}
+}
+
+func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	dependencies := make(map[string][]manifest.Dependency)
+	for _, profile := range got.Profiles {
+		for _, dep := range profile.Dependencies {
+			dependencies[dep.Name] = append(dependencies[dep.Name], dep)
+		}
+	}
+	for _, entry := range got.Entries {
+		for _, dep := range entry.Dependencies {
+			dependencies[dep.Name] = append(dependencies[dep.Name], dep)
+		}
+	}
+	for _, provisioner := range got.Provisioners {
+		for _, dep := range provisioner.Dependencies {
+			dependencies[dep.Name] = append(dependencies[dep.Name], dep)
+		}
+	}
+
+	for _, name := range []string{"ghostty", "zed"} {
+		for _, dep := range dependencies[name] {
+			if dep.LinuxHomebrew {
+				t.Fatalf("%s dependency = %#v, want manual Linux handling without linux_homebrew", name, dep)
+			}
+		}
+	}
+
+	for _, name := range []string{"gentle-ai", "engram"} {
+		if len(dependencies[name]) == 0 {
+			t.Fatalf("repository manifest missing %s dependency", name)
+		}
+		for _, dep := range dependencies[name] {
+			if !dep.LinuxHomebrew {
+				t.Fatalf("%s dependency = %#v, want reviewed Linuxbrew opt-in", name, dep)
+			}
+		}
 	}
 }
 
@@ -3004,13 +3050,14 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		commands  []string
 		brew      string
 		toolchain string
+		linuxBrew bool
 	}{
-		"Node LTS (fnm)":       {commands: []string{"fnm", "node"}, brew: "fnm", toolchain: manifest.DependencyToolchainNodeLTSFNM},
-		"Rust stable (rustup)": {commands: []string{"rustup", "rustc", "cargo"}, brew: "rustup", toolchain: manifest.DependencyToolchainRustStableRustup},
-		"go":                   {command: "go", brew: "go"},
-		"uv":                   {command: "uv", brew: "uv"},
-		"pnpm":                 {command: "pnpm", brew: "pnpm"},
-		"bun":                  {command: "bun", brew: "bun"},
+		"Node LTS (fnm)":       {commands: []string{"fnm", "node"}, brew: "fnm", toolchain: manifest.DependencyToolchainNodeLTSFNM, linuxBrew: true},
+		"Rust stable (rustup)": {commands: []string{"rustup", "rustc", "cargo"}, brew: "rustup", toolchain: manifest.DependencyToolchainRustStableRustup, linuxBrew: true},
+		"go":                   {command: "go", brew: "go", linuxBrew: true},
+		"uv":                   {command: "uv", brew: "uv", linuxBrew: true},
+		"pnpm":                 {command: "pnpm", brew: "pnpm", linuxBrew: true},
+		"bun":                  {command: "bun", brew: "bun", linuxBrew: true},
 	}
 	for name, wantDep := range want {
 		var dep *manifest.Dependency
@@ -3024,8 +3071,8 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		if dep == nil {
 			t.Fatalf("core dependency set missing %q: %#v", name, core.Dependencies)
 		}
-		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Toolchain != wantDep.toolchain || !sameStrings(dep.Commands, wantDep.commands) {
-			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, toolchain %q", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.toolchain)
+		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Toolchain != wantDep.toolchain || dep.LinuxHomebrew != wantDep.linuxBrew || !sameStrings(dep.Commands, wantDep.commands) {
+			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, toolchain %q, linux_homebrew %v", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.toolchain, wantDep.linuxBrew)
 		}
 		if dep.Apt != "" || dep.Dnf != "" || dep.Pacman != "" {
 			t.Fatalf("%s dependency = %#v, want Homebrew-owned runtime with no distro package mapping", name, *dep)

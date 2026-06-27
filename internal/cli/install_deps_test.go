@@ -37,6 +37,7 @@ entries:
       - name: starship
         command: definitely-missing-starship-probe
         brew: starship
+        linux_homebrew: true
 `
 
 func TestInstallAbortsBeforeFilesWhenRequiredDependencyIsManual(t *testing.T) {
@@ -185,6 +186,7 @@ entries:
         requirement: optional
         command: definitely-missing-optional-probe
         brew: optional-tool
+        linux_homebrew: true
 `)
 
 	cmd := cli.NewRootCommand()

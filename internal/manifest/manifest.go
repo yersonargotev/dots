@@ -124,6 +124,11 @@ type Dependency struct {
 	Requirement string `yaml:"requirement,omitempty"`
 	Command     string `yaml:"command,omitempty"`
 	Brew        string `yaml:"brew,omitempty"`
+	// LinuxHomebrew allows Linux distro tiers to fall back to Homebrew when the
+	// distro package is absent or unavailable. Keep this opt-in so GUI apps and
+	// tools without Linuxbrew support stay manual instead of rendering false
+	// installability on Ubuntu/Linux.
+	LinuxHomebrew bool `yaml:"linux_homebrew,omitempty"`
 	// BrewCask declares a Homebrew cask package. It renders as
 	// `brew install --cask <token>` and is separate from Brew so casks are not
 	// hidden behind Homebrew's implicit formula/cask resolution.
