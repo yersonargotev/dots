@@ -726,6 +726,11 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 			dependencies[dep.Name] = append(dependencies[dep.Name], dep)
 		}
 	}
+	for _, depSet := range got.Dependencies {
+		for _, dep := range depSet.Dependencies {
+			dependencies[dep.Name] = append(dependencies[dep.Name], dep)
+		}
+	}
 	for _, entry := range got.Entries {
 		for _, dep := range entry.Dependencies {
 			dependencies[dep.Name] = append(dependencies[dep.Name], dep)
@@ -745,7 +750,7 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"bat", "starship", "zellij", "atuin", "gentle-ai", "engram"} {
+	for _, name := range []string{"bat", "starship", "zellij", "atuin", "pnpm", "gentle-ai", "engram"} {
 		if len(dependencies[name]) == 0 {
 			t.Fatalf("repository manifest missing %s dependency", name)
 		}
@@ -753,10 +758,10 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 			if !dep.LinuxHomebrew {
 				t.Fatalf("%s dependency = %#v, want reviewed Linuxbrew opt-in", name, dep)
 			}
-			if (name == "bat" || name == "starship" || name == "zellij" || name == "atuin") && dep.Apt != "" {
+			if (name == "bat" || name == "starship" || name == "zellij" || name == "atuin" || name == "pnpm") && dep.Apt != "" {
 				t.Fatalf("%s dependency = %#v, want no Ubuntu apt package declaration", name, dep)
 			}
-			if name == "bat" || name == "starship" || name == "atuin" {
+			if name == "bat" || name == "starship" || name == "atuin" || name == "pnpm" {
 				if dep.UserLocal == nil || dep.UserLocal.Recipe != name || dep.UserLocal.Version == "" {
 					t.Fatalf("%s dependency = %#v, want reviewed user-local policy", name, dep)
 				}

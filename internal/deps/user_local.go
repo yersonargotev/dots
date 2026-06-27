@@ -67,6 +67,27 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		binaryPath:  func(archive, command string) string { return strings.TrimSuffix(archive, ".tar.gz") + "/" + command },
 		links:       []string{"uv", "uvx"},
 	},
+	"pnpm": {
+		archiveName: func(version, goarch string) (string, bool) {
+			switch goarch {
+			case "amd64":
+				return fmt.Sprintf("linux-x64-%s.tgz", version), true
+			case "arm64":
+				return fmt.Sprintf("linux-arm64-%s.tgz", version), true
+			default:
+				return "", false
+			}
+		},
+		url: func(version, archive string) string {
+			packageName := strings.TrimSuffix(archive, "-"+version+".tgz")
+			return fmt.Sprintf("https://registry.npmjs.org/@pnpm/%s/-/%s", packageName, archive)
+		},
+		layout:      userLocalLayoutSingle,
+		command:     "pnpm",
+		archiveType: "tar.gz",
+		binaryPath:  func(_ string, command string) string { return "package/" + command },
+		links:       []string{"pnpm"},
+	},
 	"bun": {
 		archiveName: func(version, goarch string) (string, bool) {
 			switch goarch {

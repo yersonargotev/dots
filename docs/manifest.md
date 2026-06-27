@@ -167,6 +167,8 @@ Tag-scoped Dependency Sets use:
 
 User-Local Providers are not system packages. They are reviewed, allowlisted Go recipes that write only to the selected home-owned environment and require explicit manifest policy. `dots` does not mutate shell startup files or `PATH`; after installation it re-runs normal Dependency probes, so `~/.local/bin` must already be visible in the current `PATH` for the Dependency to become present. Invalid `user_local` policy such as an unknown recipe, missing version, unsupported platform, or missing checksum is a manifest/planning error, not a silent fallback to Linuxbrew or manual guidance.
 
+`pnpm` is intentionally installed from the pinned standalone `@pnpm/linux-*` executable artifacts instead of through Corepack. Node remains part of the Core Development Baseline through `Node LTS (fnm)`, but the pnpm provider does not enable Corepack, create Corepack shims, run global `npm install -g`, or mutate shell configuration.
+
 Current dependency package coverage:
 
 | Dependency | Detection | macOS/Homebrew | Debian/Ubuntu | Fedora | Arch |
@@ -181,7 +183,7 @@ Current dependency package coverage:
 | `Rust stable (rustup)` | `rustup`, `rustc`, `cargo`; bootstrap `rustup default stable` | `rustup` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `go` | `go` | `go` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `uv` | `uv` | `uv` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
-| `pnpm` | `pnpm` | `pnpm` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `pnpm` | `pnpm` | `pnpm` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `bun` | `bun` | `bun` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `GitHub CLI` | `gh` | `gh` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `Playwright CLI` | `playwright-cli` | `playwright-cli` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
