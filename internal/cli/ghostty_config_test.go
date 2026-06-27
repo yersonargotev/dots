@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -94,13 +95,15 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	}
 	foundDesktopFontDependency := false
 	for _, dep := range desktopProfile.Dependencies {
-		if dep.BrewCask == "font-cascadia-code-nf" && dep.FontMatch == "CascadiaCodeNF*" {
+		if dep.BrewCask == "font-cascadia-code-nf" &&
+			dep.FontMatch == "CascadiaCodeNF*" &&
+			slices.Equal(dep.FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
 			foundDesktopFontDependency = true
 			break
 		}
 	}
 	if !foundDesktopFontDependency {
-		t.Fatalf("desktop profile dependencies = %#v, want font-cascadia-code-nf with CascadiaCodeNF*", desktopProfile.Dependencies)
+		t.Fatalf("desktop profile dependencies = %#v, want font-cascadia-code-nf with CascadiaCodeNF* and Caskaydia fallback", desktopProfile.Dependencies)
 	}
 
 	localExample := filepath.Join(repoRoot, "configs", "ghostty", "config.local.ghostty.example")

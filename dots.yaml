@@ -11,6 +11,8 @@ profiles:
       - name: Desktop Nerd Font
         brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
+        font_fallback_matches:
+          - "CaskaydiaCoveNerdFont*"
   agents:
     tags:
       - core
@@ -37,6 +39,8 @@ profiles:
       - name: Desktop Nerd Font
         brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
+        font_fallback_matches:
+          - "CaskaydiaCoveNerdFont*"
 dependencies:
   - tags:
       - core

@@ -44,11 +44,11 @@ Current Profiles:
 | Profile | Tags | Intent | Profile Dependencies |
 |---------|------|--------|----------------------|
 | `default` | `core` | Core dotfiles without provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
-| `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
+| `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
 | `agents` | `core`, `agents` | Core dotfiles plus gentle-ai memory/context setup, cleanup, and shared engineering skills for supported agents. Add `--tag persona` for optional persona styling Regenerated Content or `--tag sdd` for Gentle-AI SDD setup. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Playwright CLI` via Homebrew formula `playwright-cli` |
 | `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | Core Development Baseline via the `core` tag-scoped Dependency Set |
-| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` |
+| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
 
 ## Tag-scoped Dependency Sets
 
@@ -164,7 +164,7 @@ Current dependency package coverage:
 
 | Dependency | Detection | macOS/Homebrew | Debian/Ubuntu | Fedora | Arch |
 |------------|-----------|----------------|---------------|--------|------|
-| `Desktop Nerd Font` | Font glob `CascadiaCodeNF*` | `brew install --cask font-cascadia-code-nf` | Manual | Manual | Manual |
+| `Desktop Nerd Font` | Font globs `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` | `brew install --cask font-cascadia-code-nf` | Manual | Manual | Manual |
 | `zsh` | `zsh` | `zsh` | `zsh` | `zsh` | `zsh` |
 | `git` | `git` | `git` | `git` | `git` | `git` |
 | `starship` | `starship` | `starship` | `starship` | `starship` | `starship` |
