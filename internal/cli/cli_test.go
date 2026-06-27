@@ -1380,6 +1380,8 @@ func TestDepsPlanCommandRendersTierGuidanceForMissing(t *testing.T) {
 
 	// No tools on PATH: the dependency is missing and must appear in the plan.
 	binDir := t.TempDir()
+	writeFakeExecutable(t, binDir, "sudo")
+	writeFakeExecutable(t, binDir, "apt-get")
 	t.Setenv("PATH", binDir)
 
 	manifestPath := writeCLIManifest(t, home, `version: 1
@@ -1425,6 +1427,8 @@ func TestDepsPlanCommandAcceptsMixedCaseTier(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	binDir := t.TempDir()
+	writeFakeExecutable(t, binDir, "sudo")
+	writeFakeExecutable(t, binDir, "apt-get")
 	t.Setenv("PATH", binDir)
 
 	manifestPath := writeCLIManifest(t, home, `version: 1

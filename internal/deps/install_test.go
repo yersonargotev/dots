@@ -10,7 +10,7 @@ import (
 )
 
 func TestInstallYesExecutesInstallableActionsThroughRunner(t *testing.T) {
-	present := map[string]bool{"tmux": true}
+	present := map[string]bool{"tmux": true, "brew": true, "sudo": true, "apt-get": true, "dnf": true, "pacman": true}
 	look := func(command string) bool { return present[command] }
 	runner := &recordingRunner{
 		afterRun: func() {
@@ -52,7 +52,7 @@ func TestInstallYesUsesPackageManagerConfirmationArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			present := map[string]bool{"tmux": true}
+			present := map[string]bool{"tmux": true, "brew": true, "sudo": true, "apt-get": true, "dnf": true, "pacman": true}
 			runner := &recordingRunner{afterRun: func() { present["starship"] = true }}
 
 			if _, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
@@ -75,7 +75,7 @@ func TestInstallYesUsesPackageManagerConfirmationArgs(t *testing.T) {
 }
 
 func TestInstallYesExecutesMissingInstallableActionsInPlanOrder(t *testing.T) {
-	present := map[string]bool{"tmux": true, "nvim": true}
+	present := map[string]bool{"tmux": true, "nvim": true, "brew": true, "sudo": true, "apt-get": true, "dnf": true, "pacman": true}
 	runner := &recordingRunner{}
 	runner.afterRun = func() {
 		last := runnerLastPackage(t, runner)
@@ -122,7 +122,7 @@ func TestInstallYesReprobesAfterSuccessAndErrorsWhenStillMissing(t *testing.T) {
 	runner := &recordingRunner{}
 	look := func(command string) bool {
 		probes = append(probes, command)
-		return command == "tmux"
+		return command == "tmux" || command == "brew"
 	}
 
 	report, err := deps.Install(planManifest(), deps.Options{Profile: "default", OS: "darwin"}, look, fontLookupSet(), deps.TierHomebrew, runner)
@@ -135,7 +135,7 @@ func TestInstallYesReprobesAfterSuccessAndErrorsWhenStillMissing(t *testing.T) {
 	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusUnresolved {
 		t.Fatalf("report items = %#v, want one unresolved item", report.Items)
 	}
-	if !reflect.DeepEqual(probes, []string{"starship", "tmux", "starship"}) {
+	if !reflect.DeepEqual(probes, []string{"starship", "brew", "tmux", "starship"}) {
 		t.Fatalf("probes = %#v, want initial plan probes then starship re-probe", probes)
 	}
 }
@@ -172,7 +172,7 @@ func TestInstallYesSkipsAlreadyPresentDependenciesBeforeExecution(t *testing.T) 
 }
 
 func TestInstallYesAllowsProgressWithManualAndInstallableDependencies(t *testing.T) {
-	present := map[string]bool{}
+	present := map[string]bool{"brew": true}
 	runner := &recordingRunner{afterRun: func() { present["starship"] = true }}
 
 	report, err := deps.Install(mixedManualAndInstallableManifest(), deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {

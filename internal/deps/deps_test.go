@@ -10,6 +10,16 @@ import (
 )
 
 func lookupSet(present ...string) deps.Lookup {
+	defaultPresent := []string{"brew", "sudo", "apt-get", "dnf", "pacman"}
+	present = append(defaultPresent, present...)
+	set := make(map[string]bool, len(present))
+	for _, p := range present {
+		set[p] = true
+	}
+	return func(command string) bool { return set[command] }
+}
+
+func noProviderLookup(present ...string) deps.Lookup {
 	set := make(map[string]bool, len(present))
 	for _, p := range present {
 		set[p] = true

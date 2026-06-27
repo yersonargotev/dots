@@ -7,20 +7,44 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 )
 
-// InstallAction is the structured installation intent for one missing
-// Dependency. Executable and Args are safe argv-shaped data for future runners;
-// Manual is set when the dependency has no executable package-manager action for
-// the active Tier.
-type InstallAction struct {
-	Dependency   string   `json:"dependency"`
-	Probe        string   `json:"probe,omitempty"`
-	FontMatch    string   `json:"font_match,omitempty"`
-	FontMatches  []string `json:"font_matches,omitempty"`
+// ProviderCandidate is one ordered installation provider considered for a
+// missing Dependency. Availability is used internally to select an executable
+// provider, but is deliberately excluded from JSON so machine-local state does
+// not leak into the Agent Output Contract.
+type ProviderCandidate struct {
+	Provider     Tier     `json:"provider"`
 	Package      string   `json:"package,omitempty"`
 	Executable   string   `json:"executable,omitempty"`
 	Args         []string `json:"args,omitempty"`
+	Available    bool     `json:"-"`
 	Manual       string   `json:"manual,omitempty"`
 	TrustCommand string   `json:"trust_command,omitempty"`
+}
+
+// InstallActionStatus describes the stable outcome for a missing Dependency.
+type InstallActionStatus string
+
+const (
+	InstallActionStatusInstallable InstallActionStatus = "installable"
+	InstallActionStatusManual      InstallActionStatus = "manual"
+)
+
+// InstallAction is the structured installation intent for one missing
+// Dependency. Executable and Args are safe argv-shaped data for future runners;
+// Manual is set when no executable provider candidate is available.
+type InstallAction struct {
+	Dependency   string              `json:"dependency"`
+	Status       InstallActionStatus `json:"status"`
+	Probe        string              `json:"probe,omitempty"`
+	FontMatch    string              `json:"font_match,omitempty"`
+	FontMatches  []string            `json:"font_matches,omitempty"`
+	Provider     Tier                `json:"provider,omitempty"`
+	Package      string              `json:"package,omitempty"`
+	Executable   string              `json:"executable,omitempty"`
+	Args         []string            `json:"args,omitempty"`
+	Manual       string              `json:"manual,omitempty"`
+	TrustCommand string              `json:"trust_command,omitempty"`
+	Candidates   []ProviderCandidate `json:"candidates,omitempty"`
 }
 
 // Guidance is the advisory installation hint for one missing Dependency. Command
@@ -64,7 +88,7 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 		if dependencyPresent(dep, look, fontLook) {
 			continue
 		}
-		action := actionFor(dep, tier)
+		action := actionFor(dep, opts, tier, look)
 		report.Actions = append(report.Actions, action)
 		report.Items = append(report.Items, guidanceFor(action))
 	}
@@ -72,27 +96,32 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 }
 
 // actionFor builds the structured install action for a single missing
-// Dependency under a Tier.
-func actionFor(dep manifest.Dependency, tier Tier) InstallAction {
-	pkg, executable, args := tierPackage(dep, tier)
+// Dependency under a Tier, falling through ordered provider candidates before
+// returning manual guidance.
+func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) InstallAction {
 	fontMatches := dep.FontMatches()
 	fontMatch := ""
 	if len(fontMatches) > 0 {
 		fontMatch = fontMatches[0]
 	}
-	if pkg == "" {
-		return InstallAction{Dependency: dep.Name, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches, Manual: manualNote(dep, tier)}
+	action := InstallAction{Dependency: dep.Name, Status: InstallActionStatusManual, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches}
+
+	for _, candidate := range providerCandidates(dep, opts, tier, look) {
+		action.Candidates = append(action.Candidates, candidate)
+		if !candidate.Available || candidate.Executable == "" {
+			continue
+		}
+		action.Status = InstallActionStatusInstallable
+		action.Provider = candidate.Provider
+		action.Package = candidate.Package
+		action.Executable = candidate.Executable
+		action.Args = append([]string(nil), candidate.Args...)
+		action.TrustCommand = candidate.TrustCommand
+		return action
 	}
-	return InstallAction{
-		Dependency:   dep.Name,
-		Probe:        dep.Probe(),
-		FontMatch:    fontMatch,
-		FontMatches:  fontMatches,
-		Package:      pkg,
-		Executable:   executable,
-		Args:         append(args, pkg),
-		TrustCommand: homebrewTapTrustCommand(dep, tier),
-	}
+
+	action.Manual = manualNote(dep, opts, tier, action.Candidates)
+	return action
 }
 
 // guidanceFor renders advisory compatibility fields from the structured action.
@@ -119,9 +148,53 @@ func homebrewTapTrustCommand(dep manifest.Dependency, tier Tier) string {
 	return "brew trust --formula " + formula
 }
 
+func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look Lookup) []ProviderCandidate {
+	if opts.OS == "linux" && dep.IsFont() {
+		return nil
+	}
+
+	candidateTiers := []Tier{tier}
+	if tier != TierHomebrew {
+		candidateTiers = append(candidateTiers, TierHomebrew)
+	}
+
+	candidates := make([]ProviderCandidate, 0, len(candidateTiers))
+	for _, candidateTier := range candidateTiers {
+		pkg, executable, args := tierPackage(dep, candidateTier)
+		if pkg == "" || executable == "" {
+			continue
+		}
+		fullArgs := append(args, pkg)
+		candidates = append(candidates, ProviderCandidate{
+			Provider:     candidateTier,
+			Package:      pkg,
+			Executable:   executable,
+			Args:         fullArgs,
+			Available:    providerAvailable(candidateTier, look),
+			TrustCommand: homebrewTapTrustCommand(dep, candidateTier),
+		})
+	}
+	return candidates
+}
+
+func providerAvailable(tier Tier, look Lookup) bool {
+	switch tier {
+	case TierHomebrew:
+		return look("brew")
+	case TierDebian:
+		return look("apt-get") && look("sudo")
+	case TierFedora:
+		return look("dnf") && look("sudo")
+	case TierArch:
+		return look("pacman") && look("sudo")
+	default:
+		return false
+	}
+}
+
 // tierPackage returns the package identifier and argv prefix for a Dependency
 // under a Tier. A blank package means there is no mapping and the caller must
-// fall back to manual guidance.
+// fall back to another provider or manual guidance.
 func tierPackage(dep manifest.Dependency, tier Tier) (pkg, executable string, args []string) {
 	switch tier {
 	case TierHomebrew:
@@ -140,14 +213,17 @@ func tierPackage(dep manifest.Dependency, tier Tier) (pkg, executable string, ar
 	}
 }
 
-func manualNote(dep manifest.Dependency, tier Tier) string {
-	if dep.IsFont() && tier != TierHomebrew {
+func manualNote(dep manifest.Dependency, opts Options, tier Tier, candidates []ProviderCandidate) string {
+	if dep.IsFont() && opts.OS == "linux" {
 		name := strings.TrimSpace(dep.Name)
 		matchHint := fontMatchHint(dep.FontMatches())
 		if cask := strings.TrimSpace(dep.BrewCask); cask != "" {
 			return fmt.Sprintf("obtain the font files for %q manually on Linux using Homebrew cask token %q as the package/source clue; copy .ttf/.otf files into ~/.local/share/fonts; run fc-cache -f ~/.local/share/fonts; rerun dots deps check; dots will detect files matching %s", name, cask, matchHint)
 		}
 		return fmt.Sprintf("obtain the font files for %q manually on Linux; copy .ttf/.otf files into ~/.local/share/fonts; run fc-cache -f ~/.local/share/fonts; rerun dots deps check; dots will detect files matching %s", name, matchHint)
+	}
+	if len(candidates) > 0 {
+		return fmt.Sprintf("no executable dependency provider available for %q; install it manually", dep.Name)
 	}
 	if tier == TierGeneric {
 		return fmt.Sprintf("install %q with your distribution's package manager", dep.Name)
