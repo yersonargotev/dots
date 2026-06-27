@@ -84,9 +84,9 @@ func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.In
 
 	for _, item := range report.Items {
 		hint := item.Manual
-		if item.Executable != "" {
+		if item.Status == deps.InstallPreviewWouldInstall && item.Executable != "" {
 			hint = commandHint(item.Executable, item.Args)
-		} else if len(item.Bootstrap) > 0 {
+		} else if item.Status == deps.InstallPreviewWouldInstall && len(item.Bootstrap) > 0 {
 			hint = "see bootstrap command(s)"
 		}
 		fmt.Fprintf(w, "  %-13s %-24s %s (%s)\n", item.Status, item.Dependency, hint, dependencyRequirementLabel(item.Requirement))
@@ -109,7 +109,7 @@ func hasInstallablePreviewAction(report deps.InstallDryRunReport) bool {
 
 func hasRequiredInstallablePreviewAction(report deps.InstallDryRunReport) bool {
 	for _, item := range report.Items {
-		if (item.Executable != "" || len(item.Bootstrap) > 0) && dependencyRequirementLabel(item.Requirement) == "required" {
+		if item.Status == deps.InstallPreviewWouldInstall && dependencyRequirementLabel(item.Requirement) == "required" {
 			return true
 		}
 	}
@@ -121,7 +121,7 @@ func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.
 	requiredUnresolved := false
 	for _, item := range preview.Items {
 		status := deps.InstallStatusUnresolved
-		if item.Executable == "" && len(item.Bootstrap) == 0 {
+		if item.Status == deps.InstallPreviewManual {
 			status = deps.InstallStatusManual
 		}
 		requirement := dependencyRequirementLabel(item.Requirement)
@@ -150,11 +150,12 @@ func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.
 
 func countInstallPreviewActions(report deps.InstallDryRunReport) (installable int, manual int) {
 	for _, item := range report.Items {
-		if item.Executable == "" && len(item.Bootstrap) == 0 {
+		switch item.Status {
+		case deps.InstallPreviewWouldInstall:
+			installable++
+		case deps.InstallPreviewManual:
 			manual++
-			continue
 		}
-		installable++
 	}
 	return installable, manual
 }

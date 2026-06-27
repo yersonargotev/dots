@@ -545,6 +545,35 @@ func TestInstallDryRunReportsOfficialFNMInstallerOnLinuxWithoutProvider(t *testi
 	}
 }
 
+func TestInstallDryRunKeepsFNMManualWhenInstallerPrerequisiteIsMissing(t *testing.T) {
+	report, err := deps.InstallDryRun(nodeToolchainManifest(), deps.Options{Profile: "default", OS: "linux"}, noProviderLookup("curl", "bash"), fontLookupSet(), deps.TierGeneric)
+	if err != nil {
+		t.Fatalf("InstallDryRun() error = %v", err)
+	}
+	if len(report.Items) != 1 {
+		t.Fatalf("Items len = %d, want 1 (%#v)", len(report.Items), report.Items)
+	}
+	item := report.Items[0]
+	if item.Status != deps.InstallPreviewManual || item.Executable != "" || len(item.Args) != 0 || item.Manual == "" {
+		t.Fatalf("Node dry-run item = %#v, want manual when unzip prerequisite is missing", item)
+	}
+}
+
+func TestInstallYesDoesNotRunFNMInstallerOrBootstrapWhenPrerequisiteIsMissing(t *testing.T) {
+	runner := &recordingRunner{}
+
+	report, err := deps.Install(nodeToolchainManifest(), deps.Options{Profile: "default", OS: "linux"}, noProviderLookup("curl", "bash"), fontLookupSet(), deps.TierGeneric, runner)
+	if err == nil {
+		t.Fatalf("Install() error = nil, want unresolved required dependency")
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner calls = %#v, want no installer or bootstrap when unzip prerequisite is missing", runner.calls)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusManual {
+		t.Fatalf("report items = %#v, want one manual Node item", report.Items)
+	}
+}
+
 func TestInstallYesRunsOfficialFNMInstallerBeforeBootstrap(t *testing.T) {
 	present := map[string]bool{"curl": true, "bash": true, "unzip": true}
 	runner := &recordingRunner{}

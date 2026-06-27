@@ -605,8 +605,8 @@ func TestDepsInstallYesDoesNotRunFNMBootstrapWhenFNMIsMissing(t *testing.T) {
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"deps", "install", "--yes", "--file", manifestPath, "--tier", "generic"})
 
-	if err := cmd.Execute(); err == nil {
-		t.Fatalf("Execute() error = nil, want unresolved required dependency\noutput:\n%s", out.String())
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v, want missing fnm to remain a non-executed manual action\noutput:\n%s", err, out.String())
 	}
 	got := out.String()
 	if !strings.Contains(got, "manual") || strings.Contains(got, `exec: "fnm"`) {
