@@ -73,6 +73,11 @@ Provisioners are scoped by profile tags, exactly like file entries. The `default
 
 The gentle-ai provisioner can model cleanup before install by using separate entries in manifest order. Missing `action` still defaults to `install`; `yes` is only valid for `uninstall` because it confirms a cleanup action. Install/update plan output also calls out provisioners that may install or update user-local global tools, such as Claude Code through the npm prefix under `~/.local`:
 
+The `gentle-ai` and `engram` executables themselves are still Dependencies, not
+Provisioner side effects. On Linux their reviewed User-Local Providers install
+pinned release tarballs only when the executable probe is missing; the later
+Provisioner step only runs after those probes pass.
+
 ```yaml
 provisioners:
   - tool: gentle-ai
