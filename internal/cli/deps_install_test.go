@@ -304,6 +304,13 @@ entries:
 }
 
 func TestDepsInstallDryRunRendersPreview(t *testing.T) {
+	binDir := t.TempDir()
+	brew := binDir + "/brew"
+	if err := os.WriteFile(brew, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write fake brew: %v", err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
 	manifestPath := writeDepsInstallManifest(t, `version: 1
 profiles:
   default:
