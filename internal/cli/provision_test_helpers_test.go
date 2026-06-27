@@ -10,6 +10,7 @@ func stubGentleAIProvisionerTools(t *testing.T) {
 	t.Helper()
 
 	stubDir := t.TempDir()
+	writeManifestDependencyStubs(t, stubDir)
 	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	// claude backs the chrome-devtools marketplace/plugin provisioners and codex
@@ -20,4 +21,28 @@ func stubGentleAIProvisionerTools(t *testing.T) {
 	writeExecStub(t, filepath.Join(stubDir, "codex"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func writeManifestDependencyStubs(t *testing.T, dir string) {
+	t.Helper()
+	for _, name := range []string{
+		"atuin",
+		"bat",
+		"dart",
+		"flutter",
+		"ghostty",
+		"git",
+		"nvim",
+		"npx",
+		"opencode",
+		"playwright-cli",
+		"starship",
+		"tmux",
+		"warp-terminal",
+		"zed",
+		"zellij",
+		"zsh",
+	} {
+		writeExecStub(t, filepath.Join(dir, name), "#!/bin/sh\nexit 0\n")
+	}
 }
