@@ -181,7 +181,25 @@ func bootstrapRunnable(commands []Command, look Lookup) bool {
 
 func (a InstallAction) commandHint() string {
 	parts := append([]string{a.Executable}, a.Args...)
+	for i, part := range parts {
+		parts[i] = shellQuoteIfNeeded(part)
+	}
 	return strings.Join(parts, " ")
+}
+
+func shellQuoteIfNeeded(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if strings.IndexFunc(s, func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			strings.ContainsRune("_@%+=:,./-", r))
+	}) == -1 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 func bootstrapCommands(dep manifest.Dependency) []Command {

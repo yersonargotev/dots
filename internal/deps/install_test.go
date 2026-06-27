@@ -576,6 +576,14 @@ func TestInstallDryRunReportsOfficialRustupInstaller(t *testing.T) {
 	if item.Status != deps.InstallPreviewWouldInstall || item.Executable != "sh" || len(item.Args) != 2 || !strings.Contains(item.Args[1], "https://sh.rustup.rs") || len(item.Bootstrap) != 1 {
 		t.Fatalf("Rust dry-run item = %#v, want official installer plus bootstrap", item)
 	}
+
+	plan, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux"}, lookupSet("curl", "sh"), fontLookupSet(), deps.TierGeneric)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(plan.Items) != 1 || !strings.Contains(plan.Items[0].Command, "sh -c '") || !strings.Contains(plan.Items[0].Command, `'\''=https'\''`) {
+		t.Fatalf("Rust installer command hint = %#v, want shell-quoted script", plan.Items)
+	}
 }
 
 func TestInstallYesRunsOfficialRustupInstallerBeforeBootstrap(t *testing.T) {
