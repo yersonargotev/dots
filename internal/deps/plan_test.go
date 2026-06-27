@@ -454,6 +454,59 @@ func TestPlanReportsManualWhenNoProviderCandidateIsExecutable(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testing.T) {
+	m, err := manifest.LoadFile("../../dots.yaml")
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	t.Run("uses Homebrew fallback when available", func(t *testing.T) {
+		report, err := deps.Plan(*m, deps.Options{Profile: "workstation", OS: "linux"}, noProviderLookup("sudo", "apt-get", "brew"), fontLookupSet(), deps.TierDebian)
+		if err != nil {
+			t.Fatalf("Plan() error = %v", err)
+		}
+
+		for _, name := range []string{"starship", "zellij"} {
+			action, ok := findAction(report.Actions, name)
+			if !ok {
+				t.Fatalf("missing action for %q in %#v", name, report.Actions)
+			}
+			if action.Provider == deps.TierDebian || action.Executable == "sudo" {
+				t.Fatalf("%s action = %#v, must not advertise unavailable Ubuntu apt package", name, action)
+			}
+			if action.Status != deps.InstallActionStatusInstallable || action.Provider != deps.TierHomebrew || action.Executable != "brew" {
+				t.Fatalf("%s action = %#v, want installable Homebrew fallback", name, action)
+			}
+		}
+	})
+
+	t.Run("stays manual when Homebrew is unavailable", func(t *testing.T) {
+		report, err := deps.Plan(*m, deps.Options{Profile: "workstation", OS: "linux"}, noProviderLookup("sudo", "apt-get"), fontLookupSet(), deps.TierDebian)
+		if err != nil {
+			t.Fatalf("Plan() error = %v", err)
+		}
+
+		for _, name := range []string{"starship", "zellij"} {
+			action, ok := findAction(report.Actions, name)
+			if !ok {
+				t.Fatalf("missing action for %q in %#v", name, report.Actions)
+			}
+			if action.Status != deps.InstallActionStatusManual || action.Provider == deps.TierDebian || action.Executable == "sudo" || action.Manual == "" {
+				t.Fatalf("%s action = %#v, want manual guidance without Ubuntu apt installability", name, action)
+			}
+		}
+	})
+}
+
+func findAction(actions []deps.InstallAction, name string) (deps.InstallAction, bool) {
+	for _, action := range actions {
+		if action.Dependency == name {
+			return action, true
+		}
+	}
+	return deps.InstallAction{}, false
+}
+
 func TestPlanActionsUseManifestOrderAndSkipPresentDependencies(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,
