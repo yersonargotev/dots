@@ -111,6 +111,9 @@ prose the text surface prints:
   commands such as `brew`, `apt-get`, or `sudo` were present on the machine that
   produced the report.
 
-The domain reports' `json:` field names are part of the public contract;
-renaming a field is a `schema_version` bump, locked by the JSON Golden Output
-Test (`TestEnvelopeGolden`).
+The domain reports' `json:` field names are part of the public contract.
+Renaming, removing, or changing the meaning of an existing field is a
+`schema_version` bump, locked by the JSON Golden Output Test
+(`TestEnvelopeGolden`). Adding a portable, optional field to an existing report is
+schema-compatible and keeps the current `schema_version`, but it must update the
+matching JSON golden so agent-visible shape changes stay reviewable.
