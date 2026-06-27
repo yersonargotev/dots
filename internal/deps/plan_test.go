@@ -466,7 +466,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("Plan() error = %v", err)
 		}
 
-		for _, name := range []string{"starship", "zellij"} {
+		for _, name := range []string{"starship", "zellij", "GitHub CLI"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -486,7 +486,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("Plan() error = %v", err)
 		}
 
-		for _, name := range []string{"starship", "zellij"} {
+		for _, name := range []string{"starship", "zellij", "GitHub CLI"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
