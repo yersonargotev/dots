@@ -94,10 +94,10 @@ func TestEnvelopeGolden(t *testing.T) {
 					Profile: "default",
 					Tier:    deps.Tier("debian"),
 					Actions: []deps.InstallAction{
-						{Dependency: "rg", Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}},
+						{Dependency: "rg", Status: deps.InstallActionStatusInstallable, Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}, Candidates: []deps.ProviderCandidate{{Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "ripgrep"}}}},
 					},
 					Items: []deps.Guidance{
-						{Name: "rg", Command: "apt-get install -y ripgrep", Action: deps.InstallAction{Dependency: "rg", Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}}},
+						{Name: "rg", Command: "apt-get install -y ripgrep", Action: deps.InstallAction{Dependency: "rg", Status: deps.InstallActionStatusInstallable, Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}, Candidates: []deps.ProviderCandidate{{Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "ripgrep"}}}}},
 					},
 				},
 			},

@@ -332,17 +332,17 @@ func TestPlanFallsBackFromUnavailableDistroProviderToHomebrew(t *testing.T) {
 		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
 	}
 	action := report.Actions[0]
-	if action.Provider != deps.TierHomebrew || action.Executable != "brew" || action.Package != "ripgrep" {
-		t.Fatalf("action = %#v, want Homebrew fallback after unavailable debian provider", action)
+	if action.Status != deps.InstallActionStatusInstallable || action.Provider != deps.TierHomebrew || action.Executable != "brew" || action.Package != "ripgrep" {
+		t.Fatalf("action = %#v, want installable Homebrew fallback after unavailable debian provider", action)
 	}
 	if len(action.Candidates) != 2 {
 		t.Fatalf("Candidates len = %d, want debian and homebrew", len(action.Candidates))
 	}
-	if action.Candidates[0].Provider != deps.TierDebian || action.Candidates[0].Available {
-		t.Fatalf("first candidate = %#v, want unavailable debian", action.Candidates[0])
+	if action.Candidates[0].Provider != deps.TierDebian {
+		t.Fatalf("first candidate = %#v, want debian", action.Candidates[0])
 	}
-	if action.Candidates[1].Provider != deps.TierHomebrew || !action.Candidates[1].Available {
-		t.Fatalf("second candidate = %#v, want available homebrew", action.Candidates[1])
+	if action.Candidates[1].Provider != deps.TierHomebrew {
+		t.Fatalf("second candidate = %#v, want homebrew", action.Candidates[1])
 	}
 }
 
@@ -361,16 +361,14 @@ func TestPlanReportsManualWhenNoProviderCandidateIsExecutable(t *testing.T) {
 		t.Fatalf("Plan() error = %v", err)
 	}
 	action := report.Actions[0]
-	if action.Executable != "" || action.Package != "" || action.Manual == "" {
+	if action.Status != deps.InstallActionStatusManual || action.Executable != "" || action.Package != "" || action.Manual == "" {
 		t.Fatalf("action = %#v, want manual action with no executable provider", action)
 	}
 	if len(action.Candidates) != 2 {
 		t.Fatalf("Candidates len = %d, want unavailable debian and homebrew", len(action.Candidates))
 	}
-	for _, candidate := range action.Candidates {
-		if candidate.Available {
-			t.Fatalf("candidate = %#v, want unavailable", candidate)
-		}
+	if action.Candidates[0].Provider != deps.TierDebian || action.Candidates[1].Provider != deps.TierHomebrew {
+		t.Fatalf("Candidates = %#v, want debian and homebrew", action.Candidates)
 	}
 }
 

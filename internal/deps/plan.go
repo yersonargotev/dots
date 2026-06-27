@@ -8,24 +8,33 @@ import (
 )
 
 // ProviderCandidate is one ordered installation provider considered for a
-// missing Dependency. Available is true only when the provider executable can be
-// resolved on the host; unavailable candidates are retained so JSON output shows
-// why fallback happened.
+// missing Dependency. Availability is used internally to select an executable
+// provider, but is deliberately excluded from JSON so machine-local state does
+// not leak into the Agent Output Contract.
 type ProviderCandidate struct {
 	Provider     Tier     `json:"provider"`
 	Package      string   `json:"package,omitempty"`
 	Executable   string   `json:"executable,omitempty"`
 	Args         []string `json:"args,omitempty"`
-	Available    bool     `json:"available"`
+	Available    bool     `json:"-"`
 	Manual       string   `json:"manual,omitempty"`
 	TrustCommand string   `json:"trust_command,omitempty"`
 }
+
+// InstallActionStatus describes the stable outcome for a missing Dependency.
+type InstallActionStatus string
+
+const (
+	InstallActionStatusInstallable InstallActionStatus = "installable"
+	InstallActionStatusManual      InstallActionStatus = "manual"
+)
 
 // InstallAction is the structured installation intent for one missing
 // Dependency. Executable and Args are safe argv-shaped data for future runners;
 // Manual is set when no executable provider candidate is available.
 type InstallAction struct {
 	Dependency   string              `json:"dependency"`
+	Status       InstallActionStatus `json:"status"`
 	Probe        string              `json:"probe,omitempty"`
 	FontMatch    string              `json:"font_match,omitempty"`
 	FontMatches  []string            `json:"font_matches,omitempty"`
@@ -95,13 +104,14 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 	if len(fontMatches) > 0 {
 		fontMatch = fontMatches[0]
 	}
-	action := InstallAction{Dependency: dep.Name, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches}
+	action := InstallAction{Dependency: dep.Name, Status: InstallActionStatusManual, Probe: dep.Probe(), FontMatch: fontMatch, FontMatches: fontMatches}
 
 	for _, candidate := range providerCandidates(dep, opts, tier, look) {
 		action.Candidates = append(action.Candidates, candidate)
 		if !candidate.Available || candidate.Executable == "" {
 			continue
 		}
+		action.Status = InstallActionStatusInstallable
 		action.Provider = candidate.Provider
 		action.Package = candidate.Package
 		action.Executable = candidate.Executable

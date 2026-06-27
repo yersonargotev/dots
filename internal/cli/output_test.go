@@ -409,10 +409,13 @@ entries:
 			t.Fatalf("JSON mode leaked deps prose:\n%s", out.String())
 		}
 		data := string(env.Data)
-		for _, want := range []string{`"candidates"`, `"provider": "homebrew"`, `"available": false`, `"status": "manual"`} {
+		for _, want := range []string{`"candidates"`, `"provider": "homebrew"`, `"status": "manual"`} {
 			if !strings.Contains(data, want) {
 				t.Fatalf("deps install JSON missing provider-aware field %q\ndata:\n%s", want, data)
 			}
+		}
+		if strings.Contains(data, `"available"`) {
+			t.Fatalf("deps install JSON leaked provider availability\ndata:\n%s", data)
 		}
 	})
 

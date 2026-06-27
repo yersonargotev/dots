@@ -104,6 +104,12 @@ prose the text surface prints:
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the
   `deps plan` install action).
+- Dependency provider availability is an internal planning check, not a JSON
+  contract field. `deps plan` and dependency install previews expose the stable
+  outcome (`status`, selected `provider`, executable action, `manual` guidance)
+  plus portable provider `candidates`; they do not expose whether host-local
+  commands such as `brew`, `apt-get`, or `sudo` were present on the machine that
+  produced the report.
 
 The domain reports' `json:` field names are part of the public contract;
 renaming a field is a `schema_version` bump, locked by the JSON Golden Output
