@@ -15,7 +15,8 @@ outside version control.
   infrastructure. Ghostty consumes this shared requirement for the managed
   `font-family` baseline (`Cascadia Code NF`). The primary macOS package is the
   Homebrew cask `font-cascadia-code-nf`, detected through `CascadiaCodeNF*` font
-  files.
+  files. Compatible current Nerd Fonts files such as
+  `CaskaydiaCoveNerdFont*` also satisfy the dependency.
 
 `dots install` does not install packages. `dots deps plan` and the explicit
 `dots deps install` workflow can report/use Homebrew guidance where available;

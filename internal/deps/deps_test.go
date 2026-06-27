@@ -101,6 +101,33 @@ func TestCheckDetectsFontDependencyByFallbackMatch(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestDesktopFontAcceptsCurrentCaskaydiaName(t *testing.T) {
+	m, err := manifest.LoadFile("../../dots.yaml")
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	for _, profile := range []string{"desktop", "workstation"} {
+		t.Run(profile, func(t *testing.T) {
+			report, err := deps.Check(*m, deps.Options{Profile: profile, OS: "linux"},
+				lookupSet(), fontLookupSet("CaskaydiaCoveNerdFont*"))
+			if err != nil {
+				t.Fatalf("Check() error = %v", err)
+			}
+
+			for _, result := range report.Results {
+				if result.Name == "Desktop Nerd Font" {
+					if !result.Present {
+						t.Fatalf("Desktop Nerd Font result = %#v, want present via Caskaydia fallback", result)
+					}
+					return
+				}
+			}
+			t.Fatalf("Desktop Nerd Font result missing from %#v", report.Results)
+		})
+	}
+}
+
 func TestCheckIncludesProfileDependenciesBeforeEntryDependencies(t *testing.T) {
 	m := manifest.Manifest{
 		Version: 1,
