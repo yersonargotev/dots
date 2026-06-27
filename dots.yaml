@@ -23,6 +23,7 @@ profiles:
       - name: Playwright CLI
         command: playwright-cli
         brew: playwright-cli
+        linux_homebrew: true
   mobile:
     tags:
       - core
@@ -48,6 +49,7 @@ dependencies:
           - fnm
           - node
         brew: fnm
+        linux_homebrew: true
         toolchain: node-lts-fnm
       - name: Rust stable (rustup)
         commands:
@@ -55,19 +57,24 @@ dependencies:
           - rustc
           - cargo
         brew: rustup
+        linux_homebrew: true
         toolchain: rust-stable-rustup
       - name: go
         command: go
         brew: go
+        linux_homebrew: true
       - name: uv
         command: uv
         brew: uv
+        linux_homebrew: true
       - name: pnpm
         command: pnpm
         brew: pnpm
+        linux_homebrew: true
       - name: bun
         command: bun
         brew: bun
+        linux_homebrew: true
 entries:
   - source: configs/zsh/zshrc
     target: ~/.zshrc
@@ -239,6 +246,7 @@ entries:
       - name: atuin
         command: atuin
         brew: atuin
+        linux_homebrew: true
   - source: configs/atuin/themes/catppuccin-mocha.toml
     target: ~/.config/atuin/themes/catppuccin-mocha.toml
     strategy: symlink
@@ -251,6 +259,7 @@ entries:
       - name: atuin
         command: atuin
         brew: atuin
+        linux_homebrew: true
   - source: configs/bat/config
     target: ~/.config/bat/config
     strategy: symlink
@@ -428,6 +437,7 @@ provisioners:
       - name: gentle-ai
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
+        linux_homebrew: true
   - tool: gentle-ai
     tags:
       - sdd
@@ -449,6 +459,7 @@ provisioners:
       - name: gentle-ai
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
+        linux_homebrew: true
   - tool: gentle-ai
     tags:
       - agents
@@ -465,9 +476,11 @@ provisioners:
       - name: gentle-ai
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
+        linux_homebrew: true
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+        linux_homebrew: true
   - tool: gentle-ai
     tags:
       - agents
@@ -485,9 +498,11 @@ provisioners:
       - name: gentle-ai
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
+        linux_homebrew: true
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+        linux_homebrew: true
   - tool: gentle-ai
     tags:
       - agents
@@ -504,9 +519,11 @@ provisioners:
       - name: gentle-ai
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
+        linux_homebrew: true
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+        linux_homebrew: true
   - tool: gentle-ai
     tags:
       - agents
@@ -523,9 +540,11 @@ provisioners:
       - name: gentle-ai
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
+        linux_homebrew: true
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+        linux_homebrew: true
   - tool: gentle-ai
     tags:
       - agents
@@ -542,9 +561,11 @@ provisioners:
       - name: gentle-ai
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
+        linux_homebrew: true
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
+        linux_homebrew: true
   - tool: gentle-ai
     tags:
       - persona
@@ -565,6 +586,7 @@ provisioners:
       - name: gentle-ai
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
+        linux_homebrew: true
   - tool: skills
     tags:
       - web

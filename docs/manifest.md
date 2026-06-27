@@ -57,7 +57,7 @@ before Managed Entry and Provisioner Dependencies. The current `core` set is the
 Core Development Baseline from ADR 0010: shell/terminal foundations remain on
 their Managed Entries, while common runtimes and package tools are owned by
 Homebrew-provider declarations for `fnm`, `rustup`, `go`, `uv`, `pnpm`, and
-`bun`. Node and Rust use constrained built-in toolchain bootstrap commands after
+`bun`. Linux Homebrew fallback is explicit with `linux_homebrew: true`; GUI apps and fonts stay manual unless they have validated Linux support. Node and Rust use constrained built-in toolchain bootstrap commands after
 manager installation: `fnm install --lts` for Node LTS and `rustup default
 stable` for Rust stable.
 
@@ -134,6 +134,7 @@ Tag-scoped Dependency Sets use:
 | `commands` | No | Multiple executable names that must all be present. Use this for manager-owned toolchains where both the manager and runtime commands matter. |
 | `toolchain` | No | Built-in runtime bootstrap flow. Supported values: `node-lts-fnm`, `rust-stable-rustup`. These values map to fixed argv commands, not arbitrary shell hooks. |
 | `brew` | No | Homebrew formula token. Mutually exclusive with `brew_cask`. |
+| `linux_homebrew` | No | Allows Linux distro tiers to fall back to the Homebrew formula when the distro provider is absent or unavailable. Keep this opt-in for reviewed CLI/runtime tools only. |
 | `brew_cask` | No | Homebrew cask token. Renders as `brew install --cask <token>`. |
 | `apt` | No | Debian/Ubuntu package name. |
 | `dnf` | No | Fedora package name. |
@@ -151,25 +152,31 @@ Current dependency package coverage:
 | `starship` | `starship` | `starship` | `starship` | `starship` | `starship` |
 | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` |
 | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` |
-| `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
-| `Rust stable (rustup)` | `rustup`, `rustc`, `cargo`; bootstrap `rustup default stable` | `rustup` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
-| `go` | `go` | `go` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
-| `uv` | `uv` | `uv` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
-| `pnpm` | `pnpm` | `pnpm` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
-| `bun` | `bun` | `bun` | Homebrew fallback/manual | Homebrew fallback/manual | Homebrew fallback/manual |
+| `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `Rust stable (rustup)` | `rustup`, `rustc`, `cargo`; bootstrap `rustup default stable` | `rustup` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `go` | `go` | `go` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `uv` | `uv` | `uv` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `pnpm` | `pnpm` | `pnpm` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `bun` | `bun` | `bun` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `Playwright CLI` | `playwright-cli` | `playwright-cli` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `ghostty` | `ghostty` | `ghostty` | Manual | Manual | Manual |
 | `Warp` | `warp-terminal` | Manual | Manual | Manual | Manual |
-| `atuin` | `atuin` | `atuin` | Manual | Manual | Manual |
+| `atuin` | `atuin` | `atuin` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `bat` | `bat` | `bat` | `bat` | `bat` | `bat` |
 | `neovim` | `nvim` | `neovim` | `neovim` | `neovim` | `neovim` |
 | `zed` | `zed` | `zed` | Manual | Manual | Manual |
 | `opencode` | `opencode` | Manual | Manual | Manual | Manual |
-| `gentle-ai` | `gentle-ai` | `gentleman-programming/tap/gentle-ai` | Manual | Manual | Manual |
-| `engram` | `engram` | `gentleman-programming/tap/engram` | Manual | Manual | Manual |
+| `gentle-ai` | `gentle-ai` | `gentleman-programming/tap/gentle-ai` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `engram` | `engram` | `gentleman-programming/tap/engram` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `claude` | `claude` | Manual | Manual | Manual | Manual |
 | `codex` | `codex` | Manual | Manual | Manual | Manual |
 | `curl` | `curl` | `curl` | `curl` | `curl` | `curl` |
 | `npx` | `npx` | Manual | Manual | Manual | Manual |
+
+Reviewed Linuxbrew opt-ins include CLI/runtime tools whose Homebrew formulas are
+expected to work on Linuxbrew: the core runtimes/package tools, Playwright CLI,
+atuin, gentle-ai, and engram. Brew-only GUI apps such as Ghostty and Zed remain
+manual on Linux.
 
 Homebrew dependencies declared with a fully-qualified tap formula such as
 `gentleman-programming/tap/gentle-ai` may require explicit Homebrew Tap Trust on
