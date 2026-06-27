@@ -878,6 +878,54 @@ func TestPlanResolvesStarshipUserLocalArtifact(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesNeovimUserLocalArtifact(t *testing.T) {
+	m := userLocalProviderManifest()
+	m.Entries[0].Dependencies[0] = manifest.Dependency{
+		Name:          "neovim",
+		Command:       "nvim",
+		Brew:          "neovim",
+		LinuxHomebrew: true,
+		Dnf:           "neovim",
+		Pacman:        "neovim",
+		UserLocal: &manifest.UserLocalProvider{
+			Recipe:  "nvim",
+			Version: "v0.12.3",
+			Checksums: map[string]string{
+				"linux_amd64": "c441b547142860bf01bcce39e36cbed185c41112813e15443b16e5237750724d",
+				"linux_arm64": "e055af73fa9c72b37456da8d204fa5c09850bc07e80e9176fe3b87d4afb7a3fc",
+			},
+		},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	action := report.Actions[0]
+	if action.Provider != deps.TierUserLocal || action.UserLocal == nil {
+		t.Fatalf("action = %#v, want neovim user-local provider", action)
+	}
+	if action.UserLocal.Recipe != "nvim" || action.UserLocal.Command != "nvim" || action.UserLocal.Layout != "bundle" || action.UserLocal.URL != "https://github.com/neovim/neovim/releases/download/v0.12.3/nvim-linux-x86_64.tar.gz" {
+		t.Fatalf("user-local artifact = %#v, want pinned Neovim linux amd64 bundle", action.UserLocal)
+	}
+
+	report, err = deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("sudo", "dnf", "brew"), fontLookupSet(), deps.TierFedora)
+	if err != nil {
+		t.Fatalf("Plan() with Fedora tier error = %v", err)
+	}
+	if got := report.Actions[0]; got.Provider != deps.TierFedora || got.UserLocal != nil {
+		t.Fatalf("Fedora action = %#v, want distro provider before user-local", got)
+	}
+
+	report, err = deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("nvim", "brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() with present nvim error = %v", err)
+	}
+	if len(report.Actions) != 0 {
+		t.Fatalf("Actions = %#v, want no install when nvim is present", report.Actions)
+	}
+}
+
 func TestPlanRejectsInvalidUserLocalOptIn(t *testing.T) {
 	tests := []struct {
 		name string

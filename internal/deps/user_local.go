@@ -88,6 +88,28 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		binaryPath:  func(_ string, command string) string { return "package/" + command },
 		links:       []string{"pnpm"},
 	},
+	"nvim": {
+		archiveName: func(version, goarch string) (string, bool) {
+			switch goarch {
+			case "amd64":
+				return "nvim-linux-x86_64.tar.gz", true
+			case "arm64":
+				return "nvim-linux-arm64.tar.gz", true
+			default:
+				return "", false
+			}
+		},
+		url: func(version, archive string) string {
+			return fmt.Sprintf("https://github.com/neovim/neovim/releases/download/%s/%s", version, archive)
+		},
+		layout:      userLocalLayoutBundle,
+		command:     "nvim",
+		archiveType: "tar.gz",
+		binaryPath: func(archive, command string) string {
+			return strings.TrimSuffix(archive, ".tar.gz") + "/bin/" + command
+		},
+		links: []string{"nvim"},
+	},
 	"bun": {
 		archiveName: func(version, goarch string) (string, bool) {
 			switch goarch {
@@ -259,7 +281,7 @@ func InstallUserLocal(home string, action InstallAction) error {
 		return fmt.Errorf("unknown user-local recipe %q", artifact.Recipe)
 	}
 
-	data, err := downloadAndVerify(artifact.URL, artifact.Checksum)
+	data, err := downloadUserLocalArtifact(artifact.URL, artifact.Checksum)
 	if err != nil {
 		return err
 	}
@@ -310,6 +332,8 @@ func InstallUserLocal(home string, action InstallAction) error {
 
 	return nil
 }
+
+var downloadUserLocalArtifact = downloadAndVerify
 
 func downloadAndVerify(url, checksum string) ([]byte, error) {
 	client := http.Client{Timeout: 5 * time.Minute}
