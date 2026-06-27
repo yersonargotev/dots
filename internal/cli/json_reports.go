@@ -38,12 +38,18 @@ type installReport struct {
 	Dependencies       *installDependenciesReport `json:"dependencies,omitempty"`
 	Plan               plan.Plan                  `json:"plan"`
 	Provisioners       provision.Plan             `json:"provisioners"`
+	BackupSets         []installBackupSetReport   `json:"backup_sets,omitempty"`
 	ProvisionerResults *provision.Report          `json:"provisioner_results,omitempty"`
 }
 
 type installDependenciesReport struct {
 	Preview *deps.InstallDryRunReport `json:"preview,omitempty"`
 	Result  *deps.InstallReport       `json:"result,omitempty"`
+}
+
+type installBackupSetReport struct {
+	backups.BackupSet
+	Path string `json:"path"`
 }
 
 type updateReport struct {

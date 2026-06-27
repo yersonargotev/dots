@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/doctor"
 	"github.com/yersonargotev/dots/internal/plan"
@@ -140,6 +141,10 @@ func TestEnvelopeGolden(t *testing.T) {
 					}},
 					Provisioners: provision.Plan{Profile: "default", Steps: []provision.Step{
 						{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global", "--agents", "claude-code"}, Targets: []string{"~/.claude", "~/.gentle-ai"}, GlobalTools: []string{"claude (~/.local/bin via npm prefix)"}},
+					}},
+					BackupSets: []installBackupSetReport{{
+						BackupSet: backups.BackupSet{ID: "backup-20260627T140000.000000000Z", CreatedAt: "2026-06-27T14:00:00Z", Reason: "pre-install conflict protection", Targets: []string{"/home/user/.gitconfig"}},
+						Path:      "/home/user/.local/state/dots/backups/backup-20260627T140000.000000000Z",
 					}},
 				},
 			},
