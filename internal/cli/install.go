@@ -74,7 +74,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
-			depOptions := deps.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS}
+			depOptions := deps.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS, Arch: runtime.GOARCH, Home: paths.Home, StateRoot: paths.StateRoot}
 			depTier, err := resolveTier("")
 			if err != nil {
 				return err
@@ -261,10 +261,12 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 		stdout = cmd.ErrOrStderr()
 	}
 	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, depsExecRunner{
-		ctx:    cmd.Context(),
-		stdin:  cmd.InOrStdin(),
-		stdout: stdout,
-		stderr: cmd.ErrOrStderr(),
+		ctx:       cmd.Context(),
+		stdin:     cmd.InOrStdin(),
+		stdout:    stdout,
+		stderr:    cmd.ErrOrStderr(),
+		home:      home,
+		stateRoot: options.StateRoot,
 	})
 	if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
 		renderDepsInstall(cmd.OutOrStdout(), report)

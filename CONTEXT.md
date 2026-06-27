@@ -96,6 +96,10 @@ _Avoid_: environment, system, machine type
 The level of OS-specific dependency guidance available for a Supported Platform. v1 provides specific guidance for macOS/Homebrew, Debian/Ubuntu, Fedora, and Arch, with a generic fallback for other Linux distributions.
 _Avoid_: distro support, package support level
 
+**User-Local Provider**:
+A reviewed Dependency provider that installs a tool into the user's home-owned environment, such as `~/.local/bin` or `~/.local/opt/<tool>`, without mutating system package managers or requiring `sudo`. It is a first-class provider category with allowlisted tool behavior, not arbitrary shell execution.
+_Avoid_: local script, custom install command, manual curl pipe
+
 **Install Plan**:
 The preview of filesystem changes, conflicts, dependency findings, and backup requirements that the Dotfiles CLI computes before applying installation. It is shown during normal installation and is the output of dry-run mode.
 _Avoid_: preview, dry run output, change list
@@ -111,6 +115,10 @@ _Avoid_: health, sync state, installed state
 **Installation Metadata**:
 The state file stored under `~/.local/state/dots/installed.json` that records what the Dotfiles CLI installed, including managed entries, strategies, hashes, and timestamps. It lets the CLI detect drift for copied and templated targets.
 _Avoid_: install log, state file, tracking file
+
+**Dependency Installation Metadata**:
+The state record of Dependencies the Dotfiles CLI installed through executable providers, including the dependency name, provider, installed path, artifact version or checksum when applicable, and timestamp. It is separate from Installation Metadata because dependency tools are external workstation capabilities, not Managed Entries.
+_Avoid_: package log, tool cache, install receipt
 
 **Drift**:
 A workstation state where a managed target no longer matches the repository-owned Source of Truth or the Installation Metadata recorded when it was installed. Drift is detected by `dots status` and is distinct from an initial Conflict.

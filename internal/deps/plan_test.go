@@ -2,6 +2,7 @@ package deps_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/deps"
@@ -466,7 +467,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("Plan() error = %v", err)
 		}
 
-		for _, name := range []string{"starship", "zellij", "GitHub CLI"} {
+		for _, name := range []string{"starship", "GitHub CLI"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -478,6 +479,13 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 				t.Fatalf("%s action = %#v, want installable Homebrew fallback", name, action)
 			}
 		}
+		zellij, ok := findAction(report.Actions, "zellij")
+		if !ok {
+			t.Fatalf("missing action for zellij in %#v", report.Actions)
+		}
+		if zellij.Provider != deps.TierUserLocal || zellij.UserLocal == nil {
+			t.Fatalf("zellij action = %#v, want user-local before Linuxbrew", zellij)
+		}
 	})
 
 	t.Run("stays manual when Homebrew is unavailable", func(t *testing.T) {
@@ -486,7 +494,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("Plan() error = %v", err)
 		}
 
-		for _, name := range []string{"starship", "zellij", "GitHub CLI"} {
+		for _, name := range []string{"starship", "GitHub CLI"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -494,6 +502,13 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			if action.Status != deps.InstallActionStatusManual || action.Provider == deps.TierDebian || action.Executable == "sudo" || action.Manual == "" {
 				t.Fatalf("%s action = %#v, want manual guidance without Ubuntu apt installability", name, action)
 			}
+		}
+		zellij, ok := findAction(report.Actions, "zellij")
+		if !ok {
+			t.Fatalf("missing action for zellij in %#v", report.Actions)
+		}
+		if zellij.Provider != deps.TierUserLocal || zellij.UserLocal == nil {
+			t.Fatalf("zellij action = %#v, want user-local without Linuxbrew", zellij)
 		}
 	})
 }
@@ -610,5 +625,103 @@ func TestPlanDoesNotAddTapTrustGuidanceForCoreHomebrewFormula(t *testing.T) {
 	}
 	if report.Actions[0].TrustCommand != "" {
 		t.Fatalf("TrustCommand = %q, want empty for core formula", report.Actions[0].TrustCommand)
+	}
+}
+
+func TestPlanUsesUserLocalProviderBetweenDistroAndLinuxbrew(t *testing.T) {
+	m := userLocalProviderManifest()
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
+	}
+	action := report.Actions[0]
+	if action.Status != deps.InstallActionStatusInstallable || action.Provider != deps.TierUserLocal || action.UserLocal == nil {
+		t.Fatalf("action = %#v, want installable user-local provider", action)
+	}
+	if action.UserLocal.Recipe != "uv" || action.UserLocal.Version != "0.11.25" || !strings.Contains(action.UserLocal.URL, "uv-x86_64-unknown-linux-gnu.tar.gz") {
+		t.Fatalf("user-local artifact = %#v, want pinned uv linux amd64 artifact", action.UserLocal)
+	}
+	if len(action.Candidates) != 1 || action.Candidates[0].Provider != deps.TierUserLocal {
+		t.Fatalf("Candidates = %#v, want selected user-local candidate", action.Candidates)
+	}
+}
+
+func TestPlanKeepsDistroProviderBeforeUserLocal(t *testing.T) {
+	m := userLocalProviderManifest()
+	m.Entries[0].Dependencies[0].Apt = "uv"
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("sudo", "apt-get", "brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	action := report.Actions[0]
+	if action.Provider != deps.TierDebian || action.Executable != "sudo" {
+		t.Fatalf("action = %#v, want distro provider before user-local", action)
+	}
+	if len(action.Candidates) != 1 || action.Candidates[0].Provider != deps.TierDebian {
+		t.Fatalf("Candidates = %#v, want selected distro candidate", action.Candidates)
+	}
+}
+
+func userLocalProviderManifest() manifest.Manifest {
+	return manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:          "uv",
+				Command:       "uv",
+				Brew:          "uv",
+				LinuxHomebrew: true,
+				UserLocal: &manifest.UserLocalProvider{
+					Recipe:  "uv",
+					Version: "0.11.25",
+					Checksums: map[string]string{
+						"linux_amd64": "1db18b5e76fa645a7f3865773139bdec8e2d46adbdbb35e7410b34fa8015ccd2",
+					},
+				},
+			}},
+		}},
+	}
+}
+
+func TestPlanRejectsInvalidUserLocalOptIn(t *testing.T) {
+	tests := []struct {
+		name string
+		dep  manifest.Dependency
+		want string
+	}{
+		{
+			name: "unknown recipe",
+			dep:  manifest.Dependency{Name: "bad", Command: "bad", UserLocal: &manifest.UserLocalProvider{Recipe: "bad", Version: "1.0.0", Checksum: "abc"}},
+			want: "unsupported user_local recipe",
+		},
+		{
+			name: "missing version",
+			dep:  manifest.Dependency{Name: "uv", Command: "uv", UserLocal: &manifest.UserLocalProvider{Recipe: "uv", Checksum: "abc"}},
+			want: "user_local.version is required",
+		},
+		{
+			name: "missing checksum",
+			dep:  manifest.Dependency{Name: "uv", Command: "uv", UserLocal: &manifest.UserLocalProvider{Recipe: "uv", Version: "0.11.25"}},
+			want: "user_local checksum is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := userLocalProviderManifest()
+			m.Entries[0].Dependencies[0] = tt.dep
+
+			_, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("brew"), fontLookupSet(), deps.TierDebian)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Plan() error = %v, want containing %q", err, tt.want)
+			}
+		})
 	}
 }

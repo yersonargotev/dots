@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -677,5 +678,51 @@ entries:
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("dry-run invoked fake package manager; marker stat err = %v", err)
+	}
+}
+
+func TestDepsInstallDryRunAcceptsSandboxHomeAndStateRoot(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	for _, dir := range []string{filepath.Join(home, "Library", "Fonts"), filepath.Join(home, ".local", "share", "fonts")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("create sandbox font dir: %v", err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, "Library", "Fonts", "SandboxFont-Regular.ttf"), []byte("font"), 0o600); err != nil {
+		t.Fatalf("write sandbox darwin font: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".local", "share", "fonts", "SandboxFont-Regular.ttf"), []byte("font"), 0o600); err != nil {
+		t.Fatalf("write sandbox linux font: %v", err)
+	}
+	manifestPath := writeDepsInstallManifest(t, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+    dependencies:
+      - name: Sandbox Font
+        brew_cask: font-sandbox
+        font_match: SandboxFont*
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "install", "--dry-run", "--file", manifestPath, "--tier", "homebrew", "--home", home, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(stateRoot, "dependencies.json")); !os.IsNotExist(err) {
+		t.Fatalf("dry-run with sandbox state wrote dependency metadata; stat err = %v", err)
+	}
+	if got := out.String(); !strings.Contains(got, "All declared dependencies are already installed.") {
+		t.Fatalf("deps install did not use sandbox --home for font detection:\n%s", got)
 	}
 }

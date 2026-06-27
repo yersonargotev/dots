@@ -125,10 +125,12 @@ func newDepsPlanCommand(profile *string, extraTags *[]string) *cobra.Command {
 
 func newDepsInstallCommand(profile *string, extraTags *[]string) *cobra.Command {
 	var (
-		file   string
-		tier   string
-		dryRun bool
-		yes    bool
+		file      string
+		tier      string
+		home      string
+		stateRoot string
+		dryRun    bool
+		yes       bool
 	)
 
 	cmd := &cobra.Command{
@@ -138,7 +140,11 @@ func newDepsInstallCommand(profile *string, extraTags *[]string) *cobra.Command 
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resolvedHome, _ := os.UserHomeDir()
+			resolvedHome := resolveDepsHome(home)
+			resolvedStateRoot := stateRoot
+			if resolvedStateRoot == "" {
+				resolvedStateRoot = defaultStateRoot(resolvedHome)
+			}
 			m, err := loadDepsManifest(cmd, file, resolvedHome)
 			if err != nil {
 				return err
@@ -153,6 +159,9 @@ func newDepsInstallCommand(profile *string, extraTags *[]string) *cobra.Command 
 				Profile:   *profile,
 				ExtraTags: *extraTags,
 				OS:        runtime.GOOS,
+				Arch:      runtime.GOARCH,
+				Home:      resolvedHome,
+				StateRoot: resolvedStateRoot,
 			}
 
 			report, err := deps.InstallDryRun(*m, options, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
@@ -201,6 +210,8 @@ func newDepsInstallCommand(profile *string, extraTags *[]string) *cobra.Command 
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
 	cmd.Flags().StringVar(&tier, "tier", "", "override the dependency install tier (homebrew, debian, fedora, arch, generic); default: auto-detect from the host")
+	cmd.Flags().StringVar(&home, "home", "", "home directory for user-local dependency providers and font detection (default: the current user's home); use a sandbox path for validation")
+	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Dependency Installation Metadata (default ~/.local/state/dots)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview dependency install actions without executing package managers")
 	cmd.Flags().BoolVar(&yes, "yes", false, "execute dependency install actions without interactive confirmation")
 	return cmd
@@ -211,16 +222,24 @@ func loadDepsManifest(cmd *cobra.Command, file, home string) (*manifest.Manifest
 }
 
 func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier) error {
-	home, _ := os.UserHomeDir()
+	home := options.Home
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	if options.StateRoot == "" {
+		options.StateRoot = defaultStateRoot(home)
+	}
 	stdout := cmd.OutOrStdout()
 	if wantsJSON(cmd) {
 		stdout = cmd.ErrOrStderr()
 	}
 	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, depsExecRunner{
-		ctx:    cmd.Context(),
-		stdin:  cmd.InOrStdin(),
-		stdout: stdout,
-		stderr: cmd.ErrOrStderr(),
+		ctx:       cmd.Context(),
+		stdin:     cmd.InOrStdin(),
+		stdout:    stdout,
+		stderr:    cmd.ErrOrStderr(),
+		home:      home,
+		stateRoot: options.StateRoot,
 	})
 	if err != nil {
 		if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
@@ -259,10 +278,12 @@ func confirmDepsInstall(r io.Reader, w io.Writer) (bool, error) {
 }
 
 type depsExecRunner struct {
-	ctx    context.Context
-	stdin  io.Reader
-	stdout io.Writer
-	stderr io.Writer
+	ctx       context.Context
+	stdin     io.Reader
+	stdout    io.Writer
+	stderr    io.Writer
+	home      string
+	stateRoot string
 }
 
 func (r depsExecRunner) Run(executable string, args []string) error {
@@ -271,6 +292,14 @@ func (r depsExecRunner) Run(executable string, args []string) error {
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
 	return cmd.Run()
+}
+
+func (r depsExecRunner) RunUserLocal(action deps.InstallAction) error {
+	return deps.InstallUserLocal(r.home, action)
+}
+
+func (r depsExecRunner) RecordUserLocal(action deps.InstallAction) error {
+	return deps.RecordDependencyInstallation(r.stateRoot, r.home, action)
 }
 
 // lookupCommand reports whether a command resolves on the current PATH. It is

@@ -71,6 +71,12 @@ dependencies:
         command: uv
         brew: uv
         linux_homebrew: true
+        user_local:
+          recipe: uv
+          version: 0.11.25
+          checksums:
+            linux_amd64: 1db18b5e76fa645a7f3865773139bdec8e2d46adbdbb35e7410b34fa8015ccd2
+            linux_arm64: e0e9d73f74e06a7dcd53910d5962146ab48f0af9c92cc8df33a37baa0121014d
       - name: pnpm
         command: pnpm
         brew: pnpm
@@ -79,6 +85,12 @@ dependencies:
         command: bun
         brew: bun
         linux_homebrew: true
+        user_local:
+          recipe: bun
+          version: bun-v1.3.14
+          checksums:
+            linux_amd64: 951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f
+            linux_arm64: a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b
   - tags:
       - agents
     os:
@@ -188,6 +200,12 @@ entries:
         linux_homebrew: true
         dnf: zellij
         pacman: zellij
+        user_local:
+          recipe: zellij
+          version: v0.44.3
+          checksums:
+            linux_amd64: 0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751
+            linux_arm64: 15e6534d42644d66973d136c590c49739dcfd6a1a2a0d3d917973f16c81b45fb
   - source: configs/zellij/layouts/default.kdl
     target: ~/.config/zellij/layouts/default.kdl
     strategy: symlink
@@ -202,6 +220,12 @@ entries:
         linux_homebrew: true
         dnf: zellij
         pacman: zellij
+        user_local:
+          recipe: zellij
+          version: v0.44.3
+          checksums:
+            linux_amd64: 0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751
+            linux_arm64: 15e6534d42644d66973d136c590c49739dcfd6a1a2a0d3d917973f16c81b45fb
   - source: configs/ghostty/config.ghostty
     target: ~/.config/ghostty/config.ghostty
     strategy: symlink

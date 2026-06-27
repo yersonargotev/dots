@@ -156,12 +156,16 @@ Tag-scoped Dependency Sets use:
 | `toolchain` | No | Built-in runtime bootstrap flow. Supported values: `node-lts-fnm`, `rust-stable-rustup`. These values map to fixed argv commands, not arbitrary shell hooks. |
 | `brew` | No | Homebrew formula token. Mutually exclusive with `brew_cask`. |
 | `linux_homebrew` | No | Allows Linux distro tiers to fall back to the Homebrew formula when the distro provider is absent or unavailable. Keep this opt-in for reviewed CLI/runtime tools only. |
+| `user_local` | No | Linux-only opt-in for a reviewed User-Local Provider recipe. Requires `recipe`, `version`, and `checksum` or per-platform `checksums`; installs into `~/.local/bin` or `~/.local/opt/<tool>` without using system package managers. |
 | `brew_cask` | No | Homebrew cask token. Renders as `brew install --cask <token>`. |
 | `apt` | No | Debian/Ubuntu package name. |
 | `dnf` | No | Fedora package name. |
 | `pacman` | No | Arch package name. |
 | `font_match` | No | Installed-font filename glob used for Font Dependencies. |
 | `font_fallback_matches` | No | Additional filename globs that can satisfy the same Font Dependency. |
+
+
+User-Local Providers are not system packages. They are reviewed, allowlisted Go recipes that write only to the selected home-owned environment and require explicit manifest policy. `dots` does not mutate shell startup files or `PATH`; after installation it re-runs normal Dependency probes, so `~/.local/bin` must already be visible in the current `PATH` for the Dependency to become present. Invalid `user_local` policy such as an unknown recipe, missing version, unsupported platform, or missing checksum is a manifest/planning error, not a silent fallback to Linuxbrew or manual guidance.
 
 Current dependency package coverage:
 
@@ -172,13 +176,13 @@ Current dependency package coverage:
 | `git` | `git` | `git` | `git` | `git` | `git` |
 | `starship` | `starship` | `starship` | `starship` | `starship` | `starship` |
 | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` |
-| `zellij` | `zellij` | `zellij` | `zellij` | `zellij` | `zellij` |
+| `zellij` | `zellij` | `zellij` | User-local / Linuxbrew opt-in/manual | `zellij` | `zellij` |
 | `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) |
 | `Rust stable (rustup)` | `rustup`, `rustc`, `cargo`; bootstrap `rustup default stable` | `rustup` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `go` | `go` | `go` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
-| `uv` | `uv` | `uv` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `uv` | `uv` | `uv` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `pnpm` | `pnpm` | `pnpm` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
-| `bun` | `bun` | `bun` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `bun` | `bun` | `bun` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `GitHub CLI` | `gh` | `gh` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `Playwright CLI` | `playwright-cli` | `playwright-cli` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `ghostty` | `ghostty` | `ghostty` | Manual | Manual | Manual |

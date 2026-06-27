@@ -12,13 +12,14 @@ import (
 // provider, but is deliberately excluded from JSON so machine-local state does
 // not leak into the Agent Output Contract.
 type ProviderCandidate struct {
-	Provider     Tier     `json:"provider"`
-	Package      string   `json:"package,omitempty"`
-	Executable   string   `json:"executable,omitempty"`
-	Args         []string `json:"args,omitempty"`
-	Available    bool     `json:"-"`
-	Manual       string   `json:"manual,omitempty"`
-	TrustCommand string   `json:"trust_command,omitempty"`
+	Provider     Tier               `json:"provider"`
+	Package      string             `json:"package,omitempty"`
+	Executable   string             `json:"executable,omitempty"`
+	Args         []string           `json:"args,omitempty"`
+	Available    bool               `json:"-"`
+	Manual       string             `json:"manual,omitempty"`
+	TrustCommand string             `json:"trust_command,omitempty"`
+	UserLocal    *UserLocalArtifact `json:"-"`
 }
 
 // Command is one deterministic argv-shaped command dots may execute as part of
@@ -56,6 +57,7 @@ type InstallAction struct {
 	Manual       string              `json:"manual,omitempty"`
 	TrustCommand string              `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate `json:"candidates,omitempty"`
+	UserLocal    *UserLocalArtifact  `json:"-"`
 }
 
 // Guidance is the advisory installation hint for one missing Dependency. Command
@@ -100,7 +102,10 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 		if dependencyPresent(dep, look, fontLook) {
 			continue
 		}
-		action := actionFor(dep, opts, tier, look)
+		action, err := actionFor(dep, opts, tier, look)
+		if err != nil {
+			return PlanReport{}, err
+		}
 		report.Actions = append(report.Actions, action)
 		report.Items = append(report.Items, guidanceFor(action))
 	}
@@ -110,7 +115,7 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 // actionFor builds the structured install action for a single missing
 // Dependency under a Tier, falling through ordered provider candidates before
 // returning manual guidance.
-func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) InstallAction {
+func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) (InstallAction, error) {
 	fontMatches := dep.FontMatches()
 	fontMatch := ""
 	if len(fontMatches) > 0 {
@@ -123,21 +128,24 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 		action.Status = InstallActionStatusInstallable
 		action.Executable = "sh"
 		action.Args = []string{"-c", officialRustupInstallerScript}
-		return action
+		return action, nil
 	}
 
-	candidates := providerCandidates(dep, opts, tier, look)
+	candidates, err := providerCandidates(dep, opts, tier, look)
+	if err != nil {
+		return InstallAction{}, err
+	}
 	if officialFNMInstallerRunnable(action, opts, look, candidates) {
 		action.Status = InstallActionStatusInstallable
 		action.Executable = "bash"
 		action.Args = []string{"-c", officialFNMInstallerScript}
 		action.Candidates = append(action.Candidates, candidates...)
-		return action
+		return action, nil
 	}
 
 	for _, candidate := range candidates {
 		action.Candidates = append(action.Candidates, candidate)
-		if !candidate.Available || candidate.Executable == "" {
+		if !candidate.Available || (candidate.Executable == "" && candidate.UserLocal == nil) {
 			continue
 		}
 		action.Status = InstallActionStatusInstallable
@@ -145,21 +153,25 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 		action.Package = candidate.Package
 		action.Executable = candidate.Executable
 		action.Args = append([]string(nil), candidate.Args...)
+		action.UserLocal = candidate.UserLocal
 		action.TrustCommand = candidate.TrustCommand
-		return action
+		return action, nil
 	}
 
 	if bootstrapRunnable(action.Bootstrap, look) {
 		action.Status = InstallActionStatusInstallable
-		return action
+		return action, nil
 	}
 
 	action.Manual = manualNote(dep, opts, tier, action.Candidates)
-	return action
+	return action, nil
 }
 
 // guidanceFor renders advisory compatibility fields from the structured action.
 func guidanceFor(action InstallAction) Guidance {
+	if action.UserLocal != nil {
+		return Guidance{Name: action.Dependency, Requirement: action.Requirement, Command: action.UserLocal.Hint(), TrustCommand: action.TrustCommand, Action: action}
+	}
 	if action.Executable == "" {
 		return Guidance{Name: action.Dependency, Requirement: action.Requirement, Manual: action.Manual, TrustCommand: action.TrustCommand, Action: action}
 	}
@@ -251,18 +263,36 @@ func homebrewTapTrustCommand(dep manifest.Dependency, tier Tier) string {
 	return "brew trust --formula " + formula
 }
 
-func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look Lookup) []ProviderCandidate {
+func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look Lookup) ([]ProviderCandidate, error) {
 	if opts.OS == "linux" && dep.IsFont() {
-		return nil
+		return nil, nil
 	}
 
 	candidateTiers := []Tier{tier}
-	if opts.OS == "linux" && tier != TierHomebrew && dep.LinuxHomebrew {
-		candidateTiers = append(candidateTiers, TierHomebrew)
+	if opts.OS == "linux" && tier != TierHomebrew {
+		if _, ok, err := userLocalArtifact(dep, opts); err != nil {
+			return nil, err
+		} else if ok {
+			candidateTiers = append(candidateTiers, TierUserLocal)
+		}
+		if dep.LinuxHomebrew {
+			candidateTiers = append(candidateTiers, TierHomebrew)
+		}
 	}
 
 	candidates := make([]ProviderCandidate, 0, len(candidateTiers))
 	for _, candidateTier := range candidateTiers {
+		if candidateTier == TierUserLocal {
+			artifact, ok, err := userLocalArtifact(dep, opts)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				continue
+			}
+			candidates = append(candidates, ProviderCandidate{Provider: TierUserLocal, Package: artifact.Recipe + "@" + artifact.Version, Available: true, UserLocal: &artifact})
+			continue
+		}
 		pkg, executable, args := tierPackage(dep, candidateTier)
 		if pkg == "" || executable == "" {
 			continue
@@ -277,7 +307,7 @@ func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look L
 			TrustCommand: homebrewTapTrustCommand(dep, candidateTier),
 		})
 	}
-	return candidates
+	return candidates, nil
 }
 
 func providerAvailable(tier Tier, look Lookup) bool {
@@ -290,6 +320,8 @@ func providerAvailable(tier Tier, look Lookup) bool {
 		return look("dnf") && look("sudo")
 	case TierArch:
 		return look("pacman") && look("sudo")
+	case TierUserLocal:
+		return true
 	default:
 		return false
 	}

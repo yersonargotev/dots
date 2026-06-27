@@ -30,6 +30,7 @@ type InstallPreview struct {
 	Manual       string               `json:"manual,omitempty"`
 	TrustCommand string               `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate  `json:"candidates,omitempty"`
+	UserLocal    *UserLocalArtifact   `json:"-"`
 }
 
 // InstallDryRunReport previews the install actions for a Profile without
@@ -68,6 +69,7 @@ type InstallItem struct {
 	Manual       string              `json:"manual,omitempty"`
 	TrustCommand string              `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate `json:"candidates,omitempty"`
+	UserLocal    *UserLocalArtifact  `json:"-"`
 }
 
 // InstallReport records the stable dots summary for a real install run.
@@ -103,6 +105,7 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook Font
 			Manual:       action.Manual,
 			TrustCommand: action.TrustCommand,
 			Candidates:   action.Candidates,
+			UserLocal:    action.UserLocal,
 		})
 	}
 	return report, nil
@@ -130,11 +133,24 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Manual:       action.Manual,
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
+				UserLocal:    action.UserLocal,
 			})
 			continue
 		}
 		args := installArgsWithConfirmation(action)
-		if action.Executable != "" {
+		if action.UserLocal != nil {
+			localRunner, ok := runner.(UserLocalRunner)
+			if !ok {
+				return report, fmt.Errorf("install %q: user-local runner unavailable", action.Dependency)
+			}
+			if err := localRunner.RunUserLocal(action); err != nil {
+				report.Items = append(report.Items, InstallItem{Dependency: action.Dependency, Requirement: action.Requirement, Status: InstallStatusFailed, Provider: action.Provider, Package: action.Package, UserLocal: action.UserLocal, Candidates: action.Candidates})
+				if action.Requirement == manifest.DependencyRequirementOptional {
+					continue
+				}
+				return report, fmt.Errorf("install %q: %w", action.Dependency, err)
+			}
+		} else if action.Executable != "" {
 			if err := runner.Run(action.Executable, args); err != nil {
 				report.Items = append(report.Items, InstallItem{
 					Dependency:   action.Dependency,
@@ -170,6 +186,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Manual:       unresolvedToolchainRemediation(action, look),
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
+				UserLocal:    action.UserLocal,
 			})
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				return report, errors.New("unresolved required dependencies remain after install")
@@ -188,6 +205,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Bootstrap:    append([]Command(nil), action.Bootstrap...),
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
+				UserLocal:    action.UserLocal,
 			})
 			if action.Requirement == manifest.DependencyRequirementOptional {
 				continue
@@ -211,11 +229,21 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Manual:       manual,
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
+				UserLocal:    action.UserLocal,
 			})
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				return report, errors.New("unresolved required dependencies remain after install")
 			}
 			continue
+		}
+		if action.UserLocal != nil {
+			localRunner, ok := runner.(UserLocalRunner)
+			if !ok {
+				return report, fmt.Errorf("install %q: user-local runner unavailable", action.Dependency)
+			}
+			if err := localRunner.RecordUserLocal(action); err != nil {
+				return report, fmt.Errorf("record dependency metadata for %q: %w", action.Dependency, err)
+			}
 		}
 		report.Items = append(report.Items, InstallItem{
 			Dependency:   action.Dependency,
@@ -228,6 +256,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			Bootstrap:    append([]Command(nil), action.Bootstrap...),
 			TrustCommand: action.TrustCommand,
 			Candidates:   action.Candidates,
+			UserLocal:    action.UserLocal,
 		})
 	}
 	if requiredUnresolved {
@@ -237,6 +266,13 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 }
 
 func unresolvedToolchainRemediation(action InstallAction, look Lookup) string {
+	if action.UserLocal != nil {
+		missing := missingCommandProbes(action.Probes, look)
+		if len(missing) == 0 {
+			return ""
+		}
+		return fmt.Sprintf("%s installed through the user-local provider, but %s is still not available on PATH; ensure ~/.local/bin is on PATH and rerun dots deps check", action.Dependency, strings.Join(missing, ", "))
+	}
 	if action.Toolchain != manifest.DependencyToolchainRustStableRustup {
 		return ""
 	}
@@ -261,6 +297,11 @@ func missingCommandProbes(probes []string, look Lookup) []string {
 		missing = append(missing, probe)
 	}
 	return missing
+}
+
+type UserLocalRunner interface {
+	RunUserLocal(action InstallAction) error
+	RecordUserLocal(action InstallAction) error
 }
 
 func actionExecutable(action InstallAction) bool {

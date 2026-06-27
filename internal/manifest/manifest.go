@@ -152,6 +152,20 @@ type Dependency struct {
 	// Toolchain selects one of dots' built-in, constrained runtime bootstrap flows.
 	// It is not arbitrary shell: each value maps to fixed argv-shaped commands.
 	Toolchain string `yaml:"toolchain,omitempty"`
+	// UserLocal explicitly opts this Dependency into one of dots' reviewed
+	// home-owned providers. Go owns the allowlisted recipe; the manifest owns the
+	// artifact version and checksum policy.
+	UserLocal *UserLocalProvider `yaml:"user_local,omitempty"`
+}
+
+// UserLocalProvider is the manifest-owned policy for a reviewed User-Local
+// Provider recipe. Checksums are keyed by dots platform (for example
+// linux_amd64 or linux_arm64) and contain the expected SHA-256 hex digest.
+type UserLocalProvider struct {
+	Recipe    string            `yaml:"recipe"`
+	Version   string            `yaml:"version"`
+	Checksum  string            `yaml:"checksum,omitempty"`
+	Checksums map[string]string `yaml:"checksums,omitempty"`
 }
 
 const (

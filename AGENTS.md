@@ -77,11 +77,8 @@ SANDBOX="$(mktemp -d)"
 dots doctor --home "$SANDBOX"   # inspect without touching real config
 ```
 
-`deps` is the exception: it manages system-global tools and package managers,
-not `$HOME` files, so it has no `--source-root`/`--state-root` to sandbox and
-those flags are not offered. The only honest sandbox knob is `--home` on
-`deps check` and `deps plan`, which roots **font detection** at the environment
-under test instead of the operator's real home:
+`deps check` and `deps plan` are read-only; use `--home` to root font detection
+at the environment under test instead of the operator's real home:
 
 ```bash
 SANDBOX="$(mktemp -d)"; mkdir -p "$SANDBOX/home"
@@ -89,9 +86,16 @@ dots deps check --file dots.yaml --home "$SANDBOX/home"
 dots deps plan  --file dots.yaml --home "$SANDBOX/home"
 ```
 
-`deps install` takes no `--home`: it would only relabel font detection while the
-real install still hits the system, so its guardrails stay `--dry-run` and
-confirmation instead.
+`deps install` may invoke system package managers and, for reviewed User-Local
+Providers, may also write under the selected home-owned environment. Never run it
+against the real home in validation. Use `--dry-run` for pure preview, or combine
+`--home <tmp>` and `--state-root <tmp>` when exercising user-local provider
+behavior in a sandbox:
+
+```bash
+SANDBOX="$(mktemp -d)"; mkdir -p "$SANDBOX/home" "$SANDBOX/state"
+dots deps install --file dots.yaml --home "$SANDBOX/home" --state-root "$SANDBOX/state" --dry-run
+```
 
 When touching install/deps/provisioners, audit tests that run real `dots.yaml`
 with `install --yes`: stub selected dependency probes and provisioner executables
