@@ -36,6 +36,31 @@ profiles:
       - name: Desktop Nerd Font
         brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
+dependencies:
+  - tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: fnm
+        command: fnm
+        brew: fnm
+      - name: Rust stable (rustup)
+        command: rustup
+        brew: rustup
+      - name: go
+        command: go
+        brew: go
+      - name: uv
+        command: uv
+        brew: uv
+      - name: pnpm
+        command: pnpm
+        brew: pnpm
+      - name: bun
+        command: bun
+        brew: bun
 entries:
   - source: configs/zsh/zshrc
     target: ~/.zshrc

@@ -20,6 +20,7 @@ var (
 type Manifest struct {
 	Version      int                `yaml:"version"`
 	Profiles     map[string]Profile `yaml:"profiles"`
+	Dependencies []DependencySet    `yaml:"dependencies,omitempty"`
 	Entries      []Entry            `yaml:"entries"`
 	Provisioners []Provisioner      `yaml:"provisioners,omitempty"`
 }
@@ -37,6 +38,15 @@ type Entry struct {
 	Tags         []string     `yaml:"tags"`
 	OS           []string     `yaml:"os,omitempty"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
+}
+
+// DependencySet declares Dependencies selected directly by tags rather than by
+// a specific Profile, Managed Entry, or Provisioner. It is for shared toolchain
+// baselines such as the core development runtime set.
+type DependencySet struct {
+	Tags         []string     `yaml:"tags"`
+	OS           []string     `yaml:"os,omitempty"`
+	Dependencies []Dependency `yaml:"dependencies"`
 }
 
 // Provisioner declares an allowlisted external agent-configuration tool that
@@ -235,6 +245,28 @@ func (m Manifest) Validate() error {
 		}
 		for j, dep := range profile.Dependencies {
 			if err := validateDependency(dep, fmt.Sprintf("profiles[%q].dependencies[%d]", name, j)); err != nil {
+				return err
+			}
+		}
+	}
+
+	for i, set := range m.Dependencies {
+		if len(set.Tags) == 0 {
+			return fmt.Errorf("dependencies[%d].tags is required", i)
+		}
+		if j, ok := indexOfEmptyTag(set.Tags); ok {
+			return fmt.Errorf("dependencies[%d].tags[%d] must not be empty", i, j)
+		}
+		for j, osName := range set.OS {
+			if !allowedOS(osName) {
+				return fmt.Errorf("dependencies[%d].os[%d] must be one of darwin, linux", i, j)
+			}
+		}
+		if len(set.Dependencies) == 0 {
+			return fmt.Errorf("dependencies[%d].dependencies is required", i)
+		}
+		for j, dep := range set.Dependencies {
+			if err := validateDependency(dep, fmt.Sprintf("dependencies[%d].dependencies[%d]", i, j)); err != nil {
 				return err
 			}
 		}

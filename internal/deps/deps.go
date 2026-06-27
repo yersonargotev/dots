@@ -155,8 +155,9 @@ func fontProbeLabel(matches []string) string {
 }
 
 // selectDependencies gathers the Dependencies declared directly by the Profile,
-// then every Managed Entry and Provisioner that belongs to the Profile and
-// passes the OS filter, deduplicated by name in first-declared order.
+// tag-scoped Dependency Sets, then every Managed Entry and Provisioner that
+// belongs to the Profile and passes the OS filter, deduplicated by name in
+// first-declared order.
 
 func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependency, error) {
 	profile, ok := m.Profiles[opts.Profile]
@@ -189,6 +190,15 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 
 	addDependencies(profile.Dependencies)
 	tags := manifest.SelectionTags(profile, opts.ExtraTags)
+	for _, set := range m.Dependencies {
+		if !manifest.SharesTag(set.Tags, tags) {
+			continue
+		}
+		if !manifest.MatchesOS(set.OS, opts.OS) {
+			continue
+		}
+		addDependencies(set.Dependencies)
+	}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue

@@ -498,3 +498,49 @@ func TestCheckDedupesProvisionerDependenciesWithEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckIncludesTagScopedDependenciesBeforeEntries(t *testing.T) {
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {Tags: []string{"core"}},
+		},
+		Dependencies: []manifest.DependencySet{
+			{
+				Tags: []string{"core"},
+				OS:   []string{"darwin"},
+				Dependencies: []manifest.Dependency{
+					{Name: "fnm", Brew: "fnm"},
+					{Name: "go", Brew: "go"},
+				},
+			},
+			{
+				Tags:         []string{"desktop"},
+				Dependencies: []manifest.Dependency{{Name: "ghostty", Brew: "ghostty"}},
+			},
+		},
+		Entries: []manifest.Entry{{
+			Source: "configs/nvim", Target: "~/.config/nvim", Strategy: "symlink", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "neovim", Command: "nvim", Brew: "neovim"}},
+		}},
+	}
+
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("fnm", "nvim"), fontLookupSet())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	got := make([]string, 0, len(report.Results))
+	for _, result := range report.Results {
+		got = append(got, result.Name)
+	}
+	want := []string{"fnm", "go", "neovim"}
+	if len(got) != len(want) {
+		t.Fatalf("dependency names = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("dependency names = %v, want %v", got, want)
+		}
+	}
+}
