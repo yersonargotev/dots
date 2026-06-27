@@ -347,7 +347,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of claude, codegraph, codex, gentle-ai, skills", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of claude, codegraph, codex, gentle-ai, skills, zimfw", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -378,6 +378,10 @@ func (m Manifest) Validate() error {
 			}
 		case "skills":
 			if err := validateSkillsSpec(prov.Spec, i); err != nil {
+				return err
+			}
+		case "zimfw":
+			if err := validateZimFWSpec(prov.Spec, i); err != nil {
 				return err
 			}
 		default:
@@ -691,6 +695,36 @@ func validateSkillsSpec(s ProvisionerSpec, i int) error {
 	return nil
 }
 
+// validateZimFWSpec enforces the Zim runtime bootstrap contract: dots owns a
+// single non-interactive install/init invocation for ~/.zim and accepts no
+// user-shaped command fields.
+func validateZimFWSpec(s ProvisionerSpec, i int) error {
+	if s.usesClaudeFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the zimfw tool", i)
+	}
+	if s.usesMCPFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set MCP fields (mcp, command, env) for the zimfw tool", i)
+	}
+	if s.usesSkillsFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the zimfw tool", i)
+	}
+	if strings.TrimSpace(s.Action) != "" ||
+		strings.TrimSpace(s.Scope) != "" ||
+		strings.TrimSpace(s.Channel) != "" ||
+		strings.TrimSpace(s.Persona) != "" ||
+		strings.TrimSpace(s.Preset) != "" ||
+		strings.TrimSpace(s.SDDMode) != "" ||
+		hasNonEmptyString(s.Agents) ||
+		hasNonEmptyString(s.Components) ||
+		hasNonEmptyString(s.Skills) {
+		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai fields (action, scope, channel, persona, preset, sdd-mode, agents, components, skills) for the zimfw tool", i)
+	}
+	if !s.Yes {
+		return fmt.Errorf("provisioners[%d].spec.yes must be true for the zimfw tool", i)
+	}
+	return nil
+}
+
 func validateSkillsPackageRef(value, path string) error {
 	value = strings.TrimSpace(value)
 	if strings.HasPrefix(value, "-") {
@@ -830,11 +864,12 @@ func allowedOS(osName string) bool {
 }
 
 // allowedProvisionerTool enforces the provisioner allowlist. dots is never a
-// generic command runner: gentle-ai, claude, codex, codegraph, and skills are the
-// only accepted provisioner tools, each driven through a fixed set of subcommands.
+// generic command runner: gentle-ai, claude, codex, codegraph, skills, and zimfw
+// are the only accepted provisioner tools, each driven through a fixed set of
+// subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "gentle-ai", "claude", "codex", "codegraph", "skills":
+	case "gentle-ai", "claude", "codex", "codegraph", "skills", "zimfw":
 		return true
 	default:
 		return false

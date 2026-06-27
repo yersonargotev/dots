@@ -118,9 +118,10 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 // installed versions and shim under ~/.codegraph and ~/.local/bin, plus MCP
 // config and instructions for the selected agents. skills.sh installs global
 // skills under the user-level agent skill directories selected by its --agent
-// flags. Keep these roots aligned with the pinned skills@1.5.12 agent registry:
-// claude-code writes to ~/.claude/skills; codex, antigravity, opencode, and
-// github-copilot write to ~/.agents/skills.
+// flags. zimfw provisions the generated runtime under ~/.zim while ~/.zimrc
+// remains a Managed Entry. Keep these roots aligned with the pinned skills@1.5.12
+// agent registry: claude-code writes to ~/.claude/skills; codex, antigravity,
+// opencode, and github-copilot write to ~/.agents/skills.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
 	case "gentle-ai":
@@ -149,6 +150,8 @@ func managedRoots(prov manifest.Provisioner) []string {
 		return codeGraphRoots(prov.Spec.Agents)
 	case "skills":
 		return skillsRoots(prov.Spec.Agents)
+	case "zimfw":
+		return []string{"~/.zim"}
 	default:
 		return nil
 	}

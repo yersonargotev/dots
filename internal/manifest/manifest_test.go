@@ -1776,7 +1776,7 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be one of claude, codegraph, codex, gentle-ai, skills",
+			want: "provisioners[0].tool must be one of claude, codegraph, codex, gentle-ai, skills, zimfw",
 		},
 		{
 			name: "claude spec sets neither marketplace nor plugin",
@@ -2004,6 +2004,25 @@ provisioners:
       global: true
 `,
 			want: "provisioners[0].spec.package must be an owner/repo package reference with optional path or @ref",
+		},
+		{
+			name: "zimfw spec requires yes",
+			provisioner: `  - tool: zimfw
+    tags: [core]
+    spec:
+      action: install
+`,
+			want: "provisioners[0].spec must not set gentle-ai fields (action, scope, channel, persona, preset, sdd-mode, agents, components, skills) for the zimfw tool",
+		},
+		{
+			name: "zimfw spec rejects mcp fields",
+			provisioner: `  - tool: zimfw
+    tags: [core]
+    spec:
+      yes: true
+      mcp: codegraph
+`,
+			want: "provisioners[0].spec must not set MCP fields (mcp, command, env) for the zimfw tool",
 		},
 		{
 			name: "skills spec requires global true when missing",

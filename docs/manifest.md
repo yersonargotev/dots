@@ -213,7 +213,7 @@ reuse user-local tools without requiring sudo in non-interactive runs.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
-| `tool` | Yes | `gentle-ai`, `claude`, `codex`, `codegraph`, or `skills`. |
+| `tool` | Yes | `gentle-ai`, `claude`, `codex`, `codegraph`, `skills`, or `zimfw`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `spec` | Yes | Tool-specific declaration. Each spec must speak exactly one tool dialect. |
@@ -300,10 +300,26 @@ Constraints:
 - Skills specs must not mix gentle-ai scalar/action fields, Claude fields, or
   Codex MCP fields.
 
+### `zimfw` spec
+
+Supported fields: `yes`.
+
+`zimfw` renders one fixed non-interactive `zsh -c` invocation. It ensures
+`~/.zim/zimfw.zsh` exists by downloading the latest ZimFW runtime when missing,
+then runs `zimfw init -q` against the dots-managed `~/.zimrc`. The generated
+runtime stays under `~/.zim/`; `~/.zimrc` remains the managed Source of Truth.
+
+Constraints:
+
+- `yes` is required and must be `true`.
+- ZimFW specs must not mix gentle-ai fields, Claude fields, MCP fields, or
+  skills.sh fields.
+
 Current Provisioners:
 
 | Tool | Tags | OS | Rendered intent | Dependencies |
 |------|------|----|-----------------|--------------|
+| `zimfw` | `core` | all | Install the ZimFW runtime under `~/.zim` when missing and run `zimfw init -q` using the dots-managed `~/.zimrc`. | `zsh`, `git`, `curl` |
 | `gentle-ai` | `agents` | all | Uninstall `sdd` for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot` with `--yes`. | `gentle-ai` |
 | `gentle-ai` | `sdd` | all | Install global stable neutral custom SDD setup in multi-agent mode for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot`. Select with `--profile agents --tag sdd`. | `gentle-ai` |
 | `gentle-ai` | `agents` | all | Install global stable custom baseline for `codex` with `engram` and `context7`; persona prompt Regenerated Content is not installed by default. | `gentle-ai`, `engram` |

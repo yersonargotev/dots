@@ -116,6 +116,82 @@ func TestInstallExecutesProvisionerAfterFilesWithHomeThreaded(t *testing.T) {
 	}
 }
 
+func TestInstallCoreZimFWProvisionerCreatesRuntimeInSandbox(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "zsh"), `#!/bin/sh
+printf '%s\n' "$*" > "$HOME/zimfw-args"
+test -e "$HOME/.zimrc" || exit 42
+mkdir -p "$HOME/.zim"
+printf 'zimfw\n' > "$HOME/.zim/zimfw.zsh"
+printf 'init\n' > "$HOME/.zim/init.zsh"
+`)
+	writeExecStub(t, filepath.Join(stubDir, "git"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "curl"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed zshrc\n")
+	writeCLISource(t, sourceRoot, "configs/zsh/zimrc", "managed zimrc\n")
+	manifestPath := writeCLIManifest(t, sandboxHome, `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+  - source: configs/zsh/zimrc
+    target: ~/.zimrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: zimfw
+    tags: [core]
+    spec:
+      yes: true
+    dependencies:
+      - name: zsh
+      - name: git
+      - name: curl
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	if _, err := os.Lstat(filepath.Join(sandboxHome, ".zshrc")); err != nil {
+		t.Fatalf("install did not create .zshrc: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(sandboxHome, ".zimrc")); err != nil {
+		t.Fatalf("install did not create .zimrc before provisioning: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sandboxHome, ".zim", "init.zsh")); err != nil {
+		t.Fatalf("zimfw provisioner did not create sandbox runtime: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".zim", "init.zsh")); err == nil {
+		t.Fatalf("zimfw provisioner wrote runtime into inherited HOME %q", fakeRealHome)
+	}
+	args, err := os.ReadFile(filepath.Join(sandboxHome, "zimfw-args"))
+	if err != nil {
+		t.Fatalf("read zimfw args: %v", err)
+	}
+	if !strings.Contains(string(args), "zimfw.zsh") || !strings.Contains(string(args), "init -q") {
+		t.Fatalf("zimfw args did not include fixed init script:\n%s", string(args))
+	}
+}
+
 // TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner proves a
 // non-CodeGraph provisioner does not create the dots-owned CodeGraph
 // instruction block.
