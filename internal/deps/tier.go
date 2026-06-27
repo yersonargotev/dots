@@ -17,6 +17,8 @@ const (
 	TierArch Tier = "arch"
 	// TierGeneric is the fallback for Linux distributions without a specific tier.
 	TierGeneric Tier = "generic"
+	// TierUserLocal is a reviewed home-owned provider selected explicitly by a Dependency.
+	TierUserLocal Tier = "user-local"
 )
 
 // OSRelease holds the identification fields read from /etc/os-release that

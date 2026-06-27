@@ -29,6 +29,9 @@ type Options struct {
 	Profile   string
 	ExtraTags []string
 	OS        string
+	Arch      string
+	Home      string
+	StateRoot string
 }
 
 // Result is the presence finding for a single declared Dependency.

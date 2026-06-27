@@ -84,7 +84,9 @@ func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.In
 
 	for _, item := range report.Items {
 		hint := item.Manual
-		if item.Status == deps.InstallPreviewWouldInstall && item.Executable != "" {
+		if item.Status == deps.InstallPreviewWouldInstall && item.UserLocal != nil {
+			hint = item.UserLocal.Hint()
+		} else if item.Status == deps.InstallPreviewWouldInstall && item.Executable != "" {
 			hint = commandHint(item.Executable, item.Args)
 		} else if item.Status == deps.InstallPreviewWouldInstall && len(item.Bootstrap) > 0 {
 			hint = "see bootstrap command(s)"
@@ -140,6 +142,7 @@ func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.
 			Manual:       item.Manual,
 			TrustCommand: item.TrustCommand,
 			Candidates:   append([]deps.ProviderCandidate(nil), item.Candidates...),
+			UserLocal:    item.UserLocal,
 		})
 	}
 	if requiredUnresolved {
@@ -173,7 +176,9 @@ func renderDepsInstall(w io.Writer, report deps.InstallReport) {
 	var installed, manual, unresolved, failed int
 	for _, item := range report.Items {
 		hint := item.Manual
-		if item.Executable != "" {
+		if item.UserLocal != nil {
+			hint = item.UserLocal.Hint()
+		} else if item.Executable != "" {
 			hint = commandHint(item.Executable, item.Args)
 		} else if len(item.Bootstrap) > 0 {
 			hint = "see bootstrap command(s)"

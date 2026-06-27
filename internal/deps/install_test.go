@@ -279,9 +279,12 @@ type runnerCall struct {
 }
 
 type recordingRunner struct {
-	calls    []runnerCall
-	afterRun func()
-	err      error
+	calls                []runnerCall
+	userLocalCalls       []deps.InstallAction
+	userLocalRecordCalls []deps.InstallAction
+	afterRun             func()
+	afterUserLocal       func(deps.InstallAction)
+	err                  error
 }
 
 func (r *recordingRunner) Run(executable string, args []string) error {
@@ -292,6 +295,22 @@ func (r *recordingRunner) Run(executable string, args []string) error {
 	if r.afterRun != nil {
 		r.afterRun()
 	}
+	return nil
+}
+
+func (r *recordingRunner) RunUserLocal(action deps.InstallAction) error {
+	r.userLocalCalls = append(r.userLocalCalls, action)
+	if r.err != nil {
+		return r.err
+	}
+	if r.afterUserLocal != nil {
+		r.afterUserLocal(action)
+	}
+	return nil
+}
+
+func (r *recordingRunner) RecordUserLocal(action deps.InstallAction) error {
+	r.userLocalRecordCalls = append(r.userLocalRecordCalls, action)
 	return nil
 }
 
@@ -835,5 +854,69 @@ func TestInstallYesRunsToolchainBootstrapWhenManagerAlreadyPresent(t *testing.T)
 	wantCalls := []runnerCall{{executable: "fnm", args: []string{"install", "--lts"}}}
 	if !reflect.DeepEqual(runner.calls, wantCalls) {
 		t.Fatalf("runner calls = %#v, want %#v", runner.calls, wantCalls)
+	}
+}
+
+func TestInstallYesRunsUserLocalProviderAndRequiresPathReprobe(t *testing.T) {
+	present := map[string]bool{}
+	runner := &recordingRunner{afterUserLocal: func(action deps.InstallAction) { present[action.UserLocal.Command] = true }}
+
+	report, err := deps.Install(userLocalInstallManifest(), deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierDebian, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if len(runner.userLocalCalls) != 1 {
+		t.Fatalf("user-local calls len = %d, want 1", len(runner.userLocalCalls))
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner command calls = %#v, want no package manager calls", runner.calls)
+	}
+	if len(runner.userLocalRecordCalls) != 1 {
+		t.Fatalf("user-local metadata calls len = %d, want 1 after successful re-probe", len(runner.userLocalRecordCalls))
+	}
+	item := report.Items[0]
+	if item.Status != deps.InstallStatusInstalled || item.Provider != deps.TierUserLocal || item.UserLocal == nil {
+		t.Fatalf("report item = %#v, want installed user-local item", item)
+	}
+}
+
+func TestInstallYesReportsUnresolvedWhenUserLocalBinIsNotOnPath(t *testing.T) {
+	runner := &recordingRunner{}
+
+	report, err := deps.Install(userLocalInstallManifest(), deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet(), fontLookupSet(), deps.TierDebian, runner)
+	if err == nil {
+		t.Fatalf("Install() error = nil, want unresolved required dependency")
+	}
+	if len(runner.userLocalCalls) != 1 {
+		t.Fatalf("user-local calls len = %d, want 1", len(runner.userLocalCalls))
+	}
+	if len(runner.userLocalRecordCalls) != 0 {
+		t.Fatalf("user-local metadata calls len = %d, want 0 before successful re-probe", len(runner.userLocalRecordCalls))
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusUnresolved {
+		t.Fatalf("report items = %#v, want unresolved user-local item", report.Items)
+	}
+}
+
+func userLocalInstallManifest() manifest.Manifest {
+	return manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:    "uv",
+				Command: "uv",
+				UserLocal: &manifest.UserLocalProvider{
+					Recipe:  "uv",
+					Version: "0.11.25",
+					Checksums: map[string]string{
+						"linux_amd64": "1db18b5e76fa645a7f3865773139bdec8e2d46adbdbb35e7410b34fa8015ccd2",
+					},
+				},
+			}},
+		}},
 	}
 }
