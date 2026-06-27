@@ -93,6 +93,11 @@ dots deps plan  --file dots.yaml --home "$SANDBOX/home"
 real install still hits the system, so its guardrails stay `--dry-run` and
 confirmation instead.
 
+When touching install/deps/provisioners, audit tests that run real `dots.yaml`
+with `install --yes`: stub selected dependency probes and provisioner executables
+(including `npx`) in sandbox `PATH` so CI never reaches package managers or the
+network.
+
 ## Contribution conventions
 
 - **Issue first.** Issues and PRDs live in GitHub Issues for `yersonargotev/dots`.
