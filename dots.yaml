@@ -536,6 +536,12 @@ provisioners:
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
         linux_homebrew: true
+        user_local:
+          recipe: gentle-ai
+          version: v1.43.2
+          checksums:
+            linux_amd64: 6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65
+            linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
   - tool: gentle-ai
     tags:
       - sdd
@@ -558,6 +564,12 @@ provisioners:
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
         linux_homebrew: true
+        user_local:
+          recipe: gentle-ai
+          version: v1.43.2
+          checksums:
+            linux_amd64: 6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65
+            linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
   - tool: gentle-ai
     tags:
       - agents
@@ -575,10 +587,22 @@ provisioners:
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
         linux_homebrew: true
+        user_local:
+          recipe: gentle-ai
+          version: v1.43.2
+          checksums:
+            linux_amd64: 6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65
+            linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
         linux_homebrew: true
+        user_local:
+          recipe: engram
+          version: v1.17.0
+          checksums:
+            linux_amd64: 16422ec4596ba4007030bd4b589e139d5a3409eb846f2ffb19a147c953f1e0fe
+            linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
       - agents
@@ -597,10 +621,22 @@ provisioners:
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
         linux_homebrew: true
+        user_local:
+          recipe: gentle-ai
+          version: v1.43.2
+          checksums:
+            linux_amd64: 6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65
+            linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
         linux_homebrew: true
+        user_local:
+          recipe: engram
+          version: v1.17.0
+          checksums:
+            linux_amd64: 16422ec4596ba4007030bd4b589e139d5a3409eb846f2ffb19a147c953f1e0fe
+            linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
       - agents
@@ -618,10 +654,22 @@ provisioners:
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
         linux_homebrew: true
+        user_local:
+          recipe: gentle-ai
+          version: v1.43.2
+          checksums:
+            linux_amd64: 6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65
+            linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
         linux_homebrew: true
+        user_local:
+          recipe: engram
+          version: v1.17.0
+          checksums:
+            linux_amd64: 16422ec4596ba4007030bd4b589e139d5a3409eb846f2ffb19a147c953f1e0fe
+            linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
       - agents
@@ -639,10 +687,22 @@ provisioners:
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
         linux_homebrew: true
+        user_local:
+          recipe: gentle-ai
+          version: v1.43.2
+          checksums:
+            linux_amd64: 6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65
+            linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
         linux_homebrew: true
+        user_local:
+          recipe: engram
+          version: v1.17.0
+          checksums:
+            linux_amd64: 16422ec4596ba4007030bd4b589e139d5a3409eb846f2ffb19a147c953f1e0fe
+            linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
       - agents
@@ -660,10 +720,22 @@ provisioners:
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
         linux_homebrew: true
+        user_local:
+          recipe: gentle-ai
+          version: v1.43.2
+          checksums:
+            linux_amd64: 6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65
+            linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
       - name: engram
         command: engram
         brew: gentleman-programming/tap/engram
         linux_homebrew: true
+        user_local:
+          recipe: engram
+          version: v1.17.0
+          checksums:
+            linux_amd64: 16422ec4596ba4007030bd4b589e139d5a3409eb846f2ffb19a147c953f1e0fe
+            linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
       - persona
@@ -685,6 +757,12 @@ provisioners:
         command: gentle-ai
         brew: gentleman-programming/tap/gentle-ai
         linux_homebrew: true
+        user_local:
+          recipe: gentle-ai
+          version: v1.43.2
+          checksums:
+            linux_amd64: 6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65
+            linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
   - tool: skills
     tags:
       - web

@@ -171,6 +171,8 @@ User-Local Providers are not system packages. They are reviewed, allowlisted Go 
 
 `neovim` uses the upstream multi-file Linux tarball through its User-Local Provider. The bundle is extracted under `~/.local/opt/nvim/<version>` and `~/.local/bin/nvim` points at the bundled executable.
 
+`gentle-ai` and `engram` use pinned upstream GitHub release tarballs through their User-Local Providers. They are Dependency providers only: they make the reviewed executables available for later probes, while Provisioners still own agent configuration changes. These providers do not run `npm install -g`, use `npx`, require `sudo`, or execute arbitrary package scripts.
+
 Current dependency package coverage:
 
 | Dependency | Detection | macOS/Homebrew | Debian/Ubuntu | Fedora | Arch |
@@ -196,8 +198,8 @@ Current dependency package coverage:
 | `neovim` | `nvim` | `neovim` | User-local / Linuxbrew opt-in/manual | `neovim` | `neovim` |
 | `zed` | `zed` | `zed` | Manual | Manual | Manual |
 | `opencode` | `opencode` | Manual | Manual | Manual | Manual |
-| `gentle-ai` | `gentle-ai` | `gentleman-programming/tap/gentle-ai` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
-| `engram` | `engram` | `gentleman-programming/tap/engram` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
+| `gentle-ai` | `gentle-ai` | `gentleman-programming/tap/gentle-ai` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
+| `engram` | `engram` | `gentleman-programming/tap/engram` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `claude` | `claude` | Manual | Manual | Manual | Manual |
 | `codex` | `codex` | Manual | Manual | Manual | Manual |
 | `curl` | `curl` | `curl` | `curl` | `curl` | `curl` |
@@ -205,8 +207,10 @@ Current dependency package coverage:
 
 Reviewed Linuxbrew opt-ins include CLI/runtime tools whose Homebrew formulas are
 expected to work on Linuxbrew: Starship, the core runtimes/package tools, GitHub CLI,
-Playwright CLI, atuin, gentle-ai, and engram. Brew-only GUI apps such as Ghostty
-and Zed remain manual on Linux.
+Playwright CLI, atuin, gentle-ai, and engram. On Linux, gentle-ai and engram also
+have reviewed User-Local Providers from pinned release tarballs, so Linuxbrew is
+only a fallback when that opt-in is absent or unavailable. Brew-only GUI apps such
+as Ghostty and Zed remain manual on Linux.
 
 Homebrew dependencies declared with a fully-qualified tap formula such as
 `gentleman-programming/tap/gentle-ai` may require explicit Homebrew Tap Trust on

@@ -110,6 +110,42 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		links: []string{"nvim"},
 	},
+	"gentle-ai": {
+		archiveName: func(version, goarch string) (string, bool) {
+			switch goarch {
+			case "amd64", "arm64":
+				return fmt.Sprintf("gentle-ai_%s_linux_%s.tar.gz", strings.TrimPrefix(version, "v"), goarch), true
+			default:
+				return "", false
+			}
+		},
+		url: func(version, archive string) string {
+			return fmt.Sprintf("https://github.com/Gentleman-Programming/gentle-ai/releases/download/%s/%s", version, archive)
+		},
+		layout:      userLocalLayoutSingle,
+		command:     "gentle-ai",
+		archiveType: "tar.gz",
+		binaryPath:  func(_ string, command string) string { return command },
+		links:       []string{"gentle-ai"},
+	},
+	"engram": {
+		archiveName: func(version, goarch string) (string, bool) {
+			switch goarch {
+			case "amd64", "arm64":
+				return fmt.Sprintf("engram_%s_linux_%s.tar.gz", strings.TrimPrefix(version, "v"), goarch), true
+			default:
+				return "", false
+			}
+		},
+		url: func(version, archive string) string {
+			return fmt.Sprintf("https://github.com/Gentleman-Programming/engram/releases/download/%s/%s", version, archive)
+		},
+		layout:      userLocalLayoutSingle,
+		command:     "engram",
+		archiveType: "tar.gz",
+		binaryPath:  func(_ string, command string) string { return command },
+		links:       []string{"engram"},
+	},
 	"bun": {
 		archiveName: func(version, goarch string) (string, bool) {
 			switch goarch {
