@@ -113,10 +113,19 @@ func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Resu
 const maxProbeDetailLen = 240
 
 func probeToolchain(result *Result, opts Options, run CommandRunner) {
-	if run == nil || !result.Present || result.Command != "git" {
+	if run == nil || !result.Present {
 		return
 	}
 
+	switch result.Command {
+	case "git":
+		probeGitToolchain(result, opts, run)
+	case "claude":
+		probeClaudeCode(result, run)
+	}
+}
+
+func probeGitToolchain(result *Result, opts Options, run CommandRunner) {
 	output, err := run("git", "--version")
 	if err == nil {
 		return
@@ -127,6 +136,17 @@ func probeToolchain(result *Result, opts Options, run CommandRunner) {
 	if opts.OS == "darwin" && strings.Contains(output, "xcrun: error: invalid active developer path") {
 		result.Hint = "Repair Xcode Command Line Tools with `xcode-select --install` or reinstall them, then rerun `dots doctor`."
 	}
+}
+
+func probeClaudeCode(result *Result, run CommandRunner) {
+	output, err := run("claude", "--version")
+	if err == nil {
+		return
+	}
+
+	result.Warning = "claude resolved on PATH but `claude --version` failed"
+	result.ProbeDetail = probeDetail(output, err)
+	result.Hint = "Repair Claude Code's native binary install from its package directory with `node install.cjs`, then verify with `claude --version` and rerun `dots doctor`."
 }
 
 func probeDetail(output string, err error) string {

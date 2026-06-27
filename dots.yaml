@@ -888,6 +888,11 @@ provisioners:
         command: claude
       - name: dart
         command: dart
+        manual_debian: >-
+          Install the Flutter SDK using Flutter's official Linux instructions,
+          add the SDK's bin directory (for example ~/develop/flutter/bin) to
+          PATH, verify with dart --version, then rerun dots deps check and dots
+          install --profile mobile.
   - tool: codex
     tags:
       - mobile
@@ -905,6 +910,11 @@ provisioners:
         command: codex
       - name: dart
         command: dart
+        manual_debian: >-
+          Install the Flutter SDK using Flutter's official Linux instructions,
+          add the SDK's bin directory (for example ~/develop/flutter/bin) to
+          PATH, verify with dart --version, then rerun dots deps check and dots
+          install --profile mobile.
   - tool: skills
     tags:
       - agents
