@@ -15,9 +15,8 @@ done
 unset _zrc
 
 # --- Zim Framework ---------------------------------------------------------
-# Installing or bootstrapping Zim is intentionally out of scope for this slice.
-# We only use Zim when it is already present; a missing runtime degrades to a
-# usable, module-less shell instead of breaking the session.
+# dots provisions the Zim runtime during install. The fallback keeps an existing
+# shell usable if the runtime is removed or provisioning was skipped.
 ZIM_HOME="${ZDOTDIR:-${HOME}}/.zim"
 if [[ -e "${ZIM_HOME}/init.zsh" ]]; then
   # Recompile init.zsh when ~/.zimrc is newer than the compiled init.
@@ -27,7 +26,7 @@ if [[ -e "${ZIM_HOME}/init.zsh" ]]; then
   source "${ZIM_HOME}/init.zsh"
 else
   print -u2 "dots: Zim not found at ${ZIM_HOME}; continuing without modules."
-  print -u2 "dots: install it, then restart your shell — see configs/zsh/README.md."
+  print -u2 "dots: rerun dots install for the core profile, then restart your shell."
 fi
 
 # Post-init modular config: PATH, tool integrations, aliases, AI hooks.

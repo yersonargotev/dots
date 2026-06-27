@@ -217,6 +217,18 @@ func TestRenderCommand(t *testing.T) {
 				"--copy",
 			},
 		},
+		{
+			name: "zimfw renders fixed non-interactive runtime bootstrap",
+			prov: manifest.Provisioner{
+				Tool: "zimfw",
+				Spec: manifest.ProvisionerSpec{Yes: true},
+			},
+			wantExec: "zsh",
+			wantArgs: []string{
+				"-c",
+				"set -e\nZDOTDIR=\"${ZDOTDIR:-${HOME}}\"\nZIM_HOME=\"${ZIM_HOME:-${ZDOTDIR}/.zim}\"\nZIM_CONFIG_FILE=\"${ZIM_CONFIG_FILE:-${ZDOTDIR}/.zimrc}\"\nexport ZDOTDIR ZIM_HOME ZIM_CONFIG_FILE\n\nmkdir -p \"${ZIM_HOME}\"\nif [[ ! -e \"${ZIM_HOME}/zimfw.zsh\" ]]; then\n\tcurl -fsSL -o \"${ZIM_HOME}/zimfw.zsh\" https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh\nfi\n\nsource \"${ZIM_HOME}/zimfw.zsh\" init -q",
+			},
+		},
 	}
 
 	for _, tt := range tests {

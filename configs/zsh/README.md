@@ -54,17 +54,14 @@ IDE shell integrations live.
 
 ## Zim runtime
 
-Installing Zim itself is out of scope for this slice. If Zim is not present,
-the shell prints a non-destructive notice and runs without modules. To install
-Zim:
+dots provisions the Zim runtime as part of the core install. `~/.zimrc` remains
+the Source of Truth for module selection, and the generated runtime lives under
+`~/.zim/`.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/zimfw/install/master/install.zsh | zsh
-```
-
-Then restart your shell. The following are intentionally **excluded** from the
-repository: `~/.zim/`, `.zcompdump*`, `.zsh_history`, `.zsh_sessions/`, and any
-generated or backup files.
+If `~/.zim/` is missing, rerun `dots install --profile default` or another
+profile that includes `core`, then restart your shell. The following are
+intentionally **excluded** from the repository: `~/.zim/`, `.zcompdump*`,
+`.zsh_history`, `.zsh_sessions/`, and any generated or backup files.
 
 ## Validation
 

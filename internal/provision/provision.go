@@ -19,6 +19,18 @@ if ! command -v codegraph >/dev/null 2>&1; then
 fi
 export PATH="$HOME/.local/bin:$PATH"
 codegraph install --target "$1" --location "$2" --yes`
+const zimfwInstallScript = `set -e
+ZDOTDIR="${ZDOTDIR:-${HOME}}"
+ZIM_HOME="${ZIM_HOME:-${ZDOTDIR}/.zim}"
+ZIM_CONFIG_FILE="${ZIM_CONFIG_FILE:-${ZDOTDIR}/.zimrc}"
+export ZDOTDIR ZIM_HOME ZIM_CONFIG_FILE
+
+mkdir -p "${ZIM_HOME}"
+if [[ ! -e "${ZIM_HOME}/zimfw.zsh" ]]; then
+	curl -fsSL -o "${ZIM_HOME}/zimfw.zsh" https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
+fi
+
+source "${ZIM_HOME}/zimfw.zsh" init -q`
 
 // RenderCommand resolves a Provisioner into the exact executable and argv that
 // would run it. It is PURE: it performs no I/O and never invokes the tool, so it
@@ -34,6 +46,8 @@ func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 		return p.Tool, renderCodexArgs(p.Spec)
 	case "skills":
 		return "npx", renderSkillsArgs(p.Spec)
+	case "zimfw":
+		return "zsh", []string{"-c", zimfwInstallScript}
 	default:
 		return p.Tool, renderGentleAIArgs(p.Spec)
 	}

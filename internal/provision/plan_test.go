@@ -239,6 +239,30 @@ func TestPlanResolvesCodeGraphProvisioner(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesZimFWProvisioner(t *testing.T) {
+	zimfw := manifest.Provisioner{
+		Tool: "zimfw", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Yes: true},
+	}
+	m := manifestWithProvisioners(zimfw)
+
+	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
+	}
+
+	step := p.Steps[0]
+	if step.Tool != "zimfw" || step.Executable != "zsh" {
+		t.Fatalf("zimfw step tool/executable = %q/%q, want zimfw/zsh", step.Tool, step.Executable)
+	}
+	if !reflect.DeepEqual(step.Targets, []string{"~/.zim"}) {
+		t.Fatalf("zimfw targets = %#v, want [~/.zim]", step.Targets)
+	}
+}
+
 func TestPlanResolvesClaudeCodeGentleAIProvisioner(t *testing.T) {
 	prov := manifest.Provisioner{
 		Tool: "gentle-ai", Tags: []string{"core"},

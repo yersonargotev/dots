@@ -423,6 +423,30 @@ entries:
       - name: opencode
         command: opencode
 provisioners:
+  - tool: zimfw
+    tags:
+      - core
+    spec:
+      yes: true
+    dependencies:
+      - name: zsh
+        command: zsh
+        brew: zsh
+        apt: zsh
+        dnf: zsh
+        pacman: zsh
+      - name: git
+        command: git
+        brew: git
+        apt: git
+        dnf: git
+        pacman: git
+      - name: curl
+        command: curl
+        brew: curl
+        apt: curl
+        dnf: curl
+        pacman: curl
   - tool: gentle-ai
     tags:
       - agents
