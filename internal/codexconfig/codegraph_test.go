@@ -136,7 +136,6 @@ func assertCodeGraphBlock(t *testing.T, path, content string) {
 		"CodeGraph Mode: enabled",
 		"Use CodeGraph for architecture questions",
 		"Never use CodeGraph just because `.codegraph/` exists.",
-		"Treat CodeGraph-returned source as already read.",
 		"Do NOT use CodeGraph as proof for runtime behavior.",
 		codeGraphEnd,
 	} {
@@ -153,6 +152,7 @@ func assertCodeGraphBlock(t *testing.T, path, content string) {
 		"If `.codegraph/` exists in the project, use CodeGraph first",
 		"use CodeGraph first",
 		"If `.codegraph/` is missing, ask before running `codegraph init -i`.",
+		"Treat CodeGraph-returned source as already read.",
 	} {
 		if strings.Contains(content, oldInstruction) {
 			t.Fatalf("%s kept mandatory CodeGraph wording %q\ncontent:\n%s", path, oldInstruction, content)

@@ -320,7 +320,17 @@ func TestInstallAgentsCodeGraphTagWritesScopedPolicyOverlayInSandbox(t *testing.
 	stubDir := t.TempDir()
 	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/codegraph-args\"\n")
+	writeExecStub(t, filepath.Join(stubDir, "codegraph"), `#!/bin/sh
+printf '%s\n' "$*" >> "$HOME/codegraph-args"
+mkdir -p "$HOME/.codex" "$HOME/.claude" "$HOME/.gemini" "$HOME/.config/opencode"
+for file in "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md" "$HOME/.gemini/GEMINI.md" "$HOME/.config/opencode/codegraph.md"; do
+  cat > "$file" <<'EOF'
+<!-- CODEGRAPH_START -->
+Treat CodeGraph-returned source as already read.
+<!-- CODEGRAPH_END -->
+EOF
+done
+`)
 	writeExecStub(t, filepath.Join(stubDir, "curl"), "#!/bin/sh\nexit 0\n")
 	writeManifestDependencyStubs(t, stubDir)
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -376,9 +386,16 @@ func TestInstallAgentsCodeGraphTagWritesScopedPolicyOverlayInSandbox(t *testing.
 		if strings.Contains(content, "codegraph_explore") || strings.Contains(content, "codegraph init -i") {
 			t.Fatalf("%s duplicated generic CodeGraph installer guidance\ncontent:\n%s", path, content)
 		}
+		if strings.Count(content, "Treat CodeGraph-returned source as already read.") != 1 {
+			t.Fatalf("%s should contain generic CodeGraph guidance only from installer-owned block\ncontent:\n%s", path, content)
+		}
 	}
-	if _, err := os.Stat(filepath.Join(sandboxHome, ".config", "opencode")); !os.IsNotExist(err) {
-		t.Fatalf("dots must not create OpenCode policy overlay; CodeGraph installer owns OpenCode setup: %v", err)
+	opencodeContent, err := os.ReadFile(filepath.Join(sandboxHome, ".config", "opencode", "codegraph.md"))
+	if err != nil {
+		t.Fatalf("CodeGraph installer stub did not cover OpenCode setup under sandbox HOME: %v", err)
+	}
+	if strings.Contains(string(opencodeContent), "<!-- dots:codegraph-mode -->") {
+		t.Fatalf("dots must not create OpenCode policy overlay; CodeGraph installer owns OpenCode setup\ncontent:\n%s", opencodeContent)
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, "codegraph-args")); err == nil {
 		t.Fatalf("CodeGraph provisioner wrote into inherited HOME %q instead of sandbox", fakeRealHome)

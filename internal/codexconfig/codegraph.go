@@ -21,7 +21,6 @@ const (
 const codeGraphInstructions = "CodeGraph Mode: enabled\n\n" +
 	"Use CodeGraph for architecture questions, symbol discovery, call flow, impact analysis, and locating relevant source files before edits.\n\n" +
 	"For manifest, docs, config, and script changes, prefer `rg`, `sed`, targeted file reads, and tests. Never use CodeGraph just because `.codegraph/` exists.\n\n" +
-	"Treat CodeGraph-returned source as already read.\n\n" +
 	"Do NOT use CodeGraph as proof for runtime behavior. Always verify CLI behavior, installers, filesystem writes, `$HOME` and config paths, network tools, GitHub, and CI with real commands or tests."
 
 // EnsureCodeGraphMode inserts or updates the dots-owned CodeGraph instruction
