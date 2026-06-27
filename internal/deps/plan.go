@@ -119,6 +119,13 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) In
 	probes := dep.Probes()
 	action := InstallAction{Dependency: dep.Name, Requirement: dep.RequirementValue(), Status: InstallActionStatusManual, Probe: dep.Probe(), Probes: probes, FontMatch: fontMatch, FontMatches: fontMatches, Toolchain: strings.TrimSpace(dep.Toolchain), Bootstrap: bootstrapCommands(dep)}
 
+	if officialRustupInstallerRunnable(action, opts, look) {
+		action.Status = InstallActionStatusInstallable
+		action.Executable = "sh"
+		action.Args = []string{"-c", officialRustupInstallerScript}
+		return action
+	}
+
 	for _, candidate := range providerCandidates(dep, opts, tier, look) {
 		action.Candidates = append(action.Candidates, candidate)
 		if !candidate.Available || candidate.Executable == "" {
@@ -148,6 +155,16 @@ func guidanceFor(action InstallAction) Guidance {
 		return Guidance{Name: action.Dependency, Requirement: action.Requirement, Manual: action.Manual, TrustCommand: action.TrustCommand, Action: action}
 	}
 	return Guidance{Name: action.Dependency, Requirement: action.Requirement, Command: action.commandHint(), TrustCommand: action.TrustCommand, Action: action}
+}
+
+const officialRustupInstallerScript = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path"
+
+func officialRustupInstallerRunnable(action InstallAction, opts Options, look Lookup) bool {
+	return opts.OS == "linux" &&
+		action.Toolchain == manifest.DependencyToolchainRustStableRustup &&
+		!look("rustup") &&
+		look("curl") &&
+		look("sh")
 }
 
 func bootstrapRunnable(commands []Command, look Lookup) bool {
