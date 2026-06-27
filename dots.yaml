@@ -81,6 +81,12 @@ dependencies:
         command: pnpm
         brew: pnpm
         linux_homebrew: true
+        user_local:
+          recipe: pnpm
+          version: 11.9.0
+          checksums:
+            linux_amd64: 69af6c012a5f12b4460f8e2280368cbe10551ab328516fc5b665f292b5991017
+            linux_arm64: ced48cd1bab413bdde54fee686eaa1c98bb50ee47a518c91d1decb5f2578737b
       - name: bun
         command: bun
         brew: bun

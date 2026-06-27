@@ -527,7 +527,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("GitHub CLI action = %#v, want installable Homebrew fallback", githubCLI)
 		}
 
-		for _, name := range []string{"bat", "starship", "zellij"} {
+		for _, name := range []string{"bat", "starship", "zellij", "pnpm"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -555,7 +555,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("GitHub CLI action = %#v, want manual guidance without Ubuntu apt installability", githubCLI)
 		}
 
-		for _, name := range []string{"bat", "starship", "zellij"} {
+		for _, name := range []string{"bat", "starship", "zellij", "pnpm"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -741,6 +741,44 @@ func userLocalProviderManifest() manifest.Manifest {
 				},
 			}},
 		}},
+	}
+}
+
+func TestPlanResolvesPNPMUserLocalArtifact(t *testing.T) {
+	m := userLocalProviderManifest()
+	m.Entries[0].Dependencies[0] = manifest.Dependency{
+		Name:          "pnpm",
+		Command:       "pnpm",
+		Brew:          "pnpm",
+		LinuxHomebrew: true,
+		UserLocal: &manifest.UserLocalProvider{
+			Recipe:  "pnpm",
+			Version: "11.9.0",
+			Checksums: map[string]string{
+				"linux_amd64": "69af6c012a5f12b4460f8e2280368cbe10551ab328516fc5b665f292b5991017",
+				"linux_arm64": "ced48cd1bab413bdde54fee686eaa1c98bb50ee47a518c91d1decb5f2578737b",
+			},
+		},
+	}
+
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() error = %v", err)
+	}
+	action := report.Actions[0]
+	if action.Provider != deps.TierUserLocal || action.UserLocal == nil {
+		t.Fatalf("action = %#v, want pnpm user-local provider", action)
+	}
+	if action.UserLocal.Recipe != "pnpm" || action.UserLocal.Command != "pnpm" || action.UserLocal.Layout != "single-binary" || action.UserLocal.URL != "https://registry.npmjs.org/@pnpm/linux-x64/-/linux-x64-11.9.0.tgz" {
+		t.Fatalf("user-local artifact = %#v, want pinned pnpm linux amd64 artifact", action.UserLocal)
+	}
+
+	report, err = deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("pnpm", "brew"), fontLookupSet(), deps.TierDebian)
+	if err != nil {
+		t.Fatalf("Plan() with present pnpm error = %v", err)
+	}
+	if len(report.Actions) != 0 {
+		t.Fatalf("Actions = %#v, want no install when pnpm is present", report.Actions)
 	}
 }
 
