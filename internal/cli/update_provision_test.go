@@ -127,6 +127,47 @@ func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *
 	if !strings.Contains(string(got), "<!-- dots:rules -->") {
 		t.Fatalf("update with gentle-ai provisioner did not write dots rules block\ncontent:\n%s\noutput:\n%s", got, out)
 	}
+	if strings.Contains(string(got), "dots:codex-spark-delegation") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.3-codex-spark") {
+		t.Fatalf("update without Codex Spark tag wrote delegation guidance\ncontent:\n%s\noutput:\n%s", got, out)
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	}
+}
+
+func TestUpdateCodexSparkDelegationTagInstallsGuidance(t *testing.T) {
+	requireGitCLI(t)
+	sandboxHome := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/git/gitconfig": "managed\n",
+		"dots.yaml":             updateProvisionerManifest,
+	})
+
+	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-spark-delegation")
+
+	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("update with Codex Spark tag did not write Codex AGENTS.md: %v\noutput:\n%s", err, out)
+	}
+	content := string(got)
+	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:codex-spark-delegation -->", "gpt-5.3-codex-spark"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("update with Codex Spark tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out)
+		}
+	}
+	if strings.Contains(content, "argote:subagent-delegation") {
+		t.Fatalf("update with Codex Spark tag used legacy markers\ncontent:\n%s", content)
+	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}

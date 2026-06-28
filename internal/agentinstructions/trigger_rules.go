@@ -11,14 +11,16 @@ import (
 )
 
 const (
-	gentleAITriggerRulesStart = "<!-- gentle-ai:trigger-rules -->"
-	gentleAITriggerRulesEnd   = "<!-- /gentle-ai:trigger-rules -->"
-	gentleAIPersonaStart      = "<!-- gentle-ai:persona -->"
-	gentleAIPersonaEnd        = "<!-- /gentle-ai:persona -->"
-	dotsRulesStart            = "<!-- dots:rules -->"
-	dotsRulesEnd              = "<!-- /dots:rules -->"
-	codexDelegationStart      = "<!-- argote:subagent-delegation -->"
-	codexDelegationEnd        = "<!-- /argote:subagent-delegation -->"
+	gentleAITriggerRulesStart  = "<!-- gentle-ai:trigger-rules -->"
+	gentleAITriggerRulesEnd    = "<!-- /gentle-ai:trigger-rules -->"
+	gentleAIPersonaStart       = "<!-- gentle-ai:persona -->"
+	gentleAIPersonaEnd         = "<!-- /gentle-ai:persona -->"
+	dotsRulesStart             = "<!-- dots:rules -->"
+	dotsRulesEnd               = "<!-- /dots:rules -->"
+	codexDelegationStart       = "<!-- dots:codex-spark-delegation -->"
+	codexDelegationEnd         = "<!-- /dots:codex-spark-delegation -->"
+	legacyCodexDelegationStart = "<!-- argote:subagent-delegation -->"
+	legacyCodexDelegationEnd   = "<!-- /argote:subagent-delegation -->"
 )
 
 const dotsRulesBlock = `## Dots Agent Rules
@@ -40,9 +42,8 @@ Use subagents only when the user explicitly asks for delegation, parallel agents
 | --- | --- |
 | Codebase exploration, impact scans, or test/log triage can run independently | Spawn explorer on gpt-5.3-codex-spark and ask for findings with file refs. |
 | Implementation can be split into disjoint files/modules | Spawn worker on gpt-5.3-codex-spark, assign ownership, and require a changed-file list. |
-| Review needs parallel lenses (bugs, tests, security, maintainability) | Spawn one focused Spark agent per lens; wait before final judgment. |
 
-Avoid delegation when the task is tiny, requires a single coherent edit, touches real user configuration, or would create overlapping write scopes. For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize only distilled outcomes.`
+Avoid delegation when the task is tiny, requires a single coherent edit, touches real user configuration, review, or would create overlapping write scopes. For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize only distilled outcomes.`
 
 type instructionTarget struct {
 	agent string
@@ -70,13 +71,22 @@ func ConvergeDotsAgentRules(home string, agents ...string) error {
 		if err := convergeDotsRules(target.path); err != nil {
 			return err
 		}
-		if target.agent == "codex" {
-			if err := convergeCodexDelegation(target.path); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
+}
+
+// ConvergeCodexSparkDelegation injects the opt-in Codex Spark delegation
+// guidance into Codex instructions only. Legacy argote-owned marker pairs are
+// migrated to the dots-owned marker pair during the upsert.
+func ConvergeCodexSparkDelegation(home string) error {
+	return convergeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md"))
+}
+
+// RemoveCodexSparkDelegation removes both current dots-owned and legacy
+// argote-owned Codex Spark delegation blocks without touching the rest of the
+// agent baseline.
+func RemoveCodexSparkDelegation(home string) error {
+	return removeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md"))
 }
 
 func instructionPaths(home string, agents []string) []string {
@@ -177,9 +187,39 @@ func convergeCodexDelegation(path string) error {
 	if err != nil {
 		return err
 	}
-	updated, err := textblock.Upsert(content, textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd}, codexDelegationBlock)
+	updated, err := textblock.Upsert(
+		content,
+		textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd},
+		codexDelegationBlock,
+		textblock.Markers{Start: legacyCodexDelegationStart, End: legacyCodexDelegationEnd},
+	)
 	if err != nil {
 		return fmt.Errorf("upsert Codex delegation guidance in %s: %w", path, err)
+	}
+	if updated == content {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir agent instructions %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(updated), mode); err != nil {
+		return fmt.Errorf("write agent instructions %s: %w", path, err)
+	}
+	return nil
+}
+
+func removeCodexDelegation(path string) error {
+	content, mode, err := readInstructionFile(path)
+	if err != nil {
+		return err
+	}
+	updated, err := textblock.Remove(
+		content,
+		textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd},
+		textblock.Markers{Start: legacyCodexDelegationStart, End: legacyCodexDelegationEnd},
+	)
+	if err != nil {
+		return fmt.Errorf("remove Codex delegation guidance from %s: %w", path, err)
 	}
 	if updated == content {
 		return nil
