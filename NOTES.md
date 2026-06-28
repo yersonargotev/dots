@@ -7,6 +7,8 @@
 
 ## Workflow conventions
 
+- Use `loop-me` when designing or revising reusable workflow specs in `workflows/*.md`.
+- Use `grilling` when the plan or decision needs one-question-at-a-time stress testing and codebase exploration cannot answer the question.
 - `grill-with-docs` is skipped only for mechanical or already-aligned work: small fixes, documentation adjustments with no new decision, explicit review follow-ups, or issues already marked `ready-for-agent`.
 - Changes touching domain language, CLI UX, security, installation behavior, release workflow, or architecture go through `grill-with-docs`.
 

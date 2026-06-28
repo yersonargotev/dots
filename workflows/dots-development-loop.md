@@ -10,10 +10,13 @@ The workflow starts when the user has an intention of change for the `dots` proj
 
 ## Current shape
 
-1. Align with `grill-with-docs` when the change needs shared understanding, domain sharpening, ADRs, or issue creation.
+1. Align before implementation using the narrowest matching skill.
+   - Use `loop-me` when designing or revising reusable workflow specs in `workflows/*.md`.
+   - Use `grilling` when the plan or decision needs one-question-at-a-time stress testing and codebase exploration cannot answer the question.
+   - Use `grill-with-docs` when the change needs shared understanding, domain sharpening, ADRs, issue creation, architecture notes, or workflow documentation.
    - Skip `grill-with-docs` only for mechanical or already-aligned work: small fixes, documentation adjustments that introduce no new decision, explicit review follow-ups, or existing issues already marked `ready-for-agent`.
    - Use `grill-with-docs` for any change touching domain language, CLI UX, security, installation behavior, release workflow, or architecture.
-2. Present an Alignment Brief after `grill-with-docs` and wait for the user to approve moving into triage.
+2. Present an Alignment Brief after alignment and wait for the user to approve moving into triage.
    - The brief includes links to ADRs and issues created or changed, decisions made, doubts closed, and the single decision: approve moving to triage.
    - This checkpoint is intentionally human-in-the-loop for now, even though the desired long-term direction is more automation after the loop proves itself.
 3. Triage the resulting issue or issues, including research and further alignment when necessary.
