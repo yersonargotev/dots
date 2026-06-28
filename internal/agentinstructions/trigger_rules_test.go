@@ -89,17 +89,12 @@ func TestConvergeDotsAgentRulesRemovesPersonaAndInjectsRules(t *testing.T) {
 	if strings.Count(out, dotsRulesStart) != 1 || strings.Count(out, dotsRulesEnd) != 1 {
 		t.Fatalf("dots rules block should be present once\n%s", out)
 	}
-	if strings.Count(out, codexDelegationStart) != 1 || strings.Count(out, codexDelegationEnd) != 1 {
-		t.Fatalf("Codex delegation block should be present once\n%s", out)
+	if strings.Contains(out, codexDelegationStart) || strings.Contains(out, codexDelegationEnd) {
+		t.Fatalf("baseline dots rules should not install Codex Spark delegation\n%s", out)
 	}
 	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Plan before editing", "Verify before declaring success", "Use sandboxed HOME/config paths"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dots rules missing %q\n%s", want, out)
-		}
-	}
-	for _, want := range []string{"Subagent delegation defaults", "gpt-5.3-codex-spark", "Implementation can be split into disjoint files/modules", "Avoid delegation when the task is tiny"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("Codex delegation guidance missing %q\n%s", want, out)
 		}
 	}
 	if strings.Contains(out, "Prefer dots JSON output") || strings.Contains(out, "scraping human prose") {
@@ -144,14 +139,17 @@ func TestConvergeDotsAgentRulesPreservesCustomPersonalitySection(t *testing.T) {
 	}
 }
 
-func TestConvergeDotsAgentRulesKeepsSparkDelegationCodexOnly(t *testing.T) {
+func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 	home := t.TempDir()
 
 	if err := ConvergeDotsAgentRules(home, "codex", "claude-code", "opencode", "antigravity", "vscode-copilot"); err != nil {
 		t.Fatalf("ConvergeDotsAgentRules() error = %v", err)
 	}
-	if err := ConvergeDotsAgentRules(home, "codex", "claude-code", "opencode", "antigravity", "vscode-copilot"); err != nil {
-		t.Fatalf("ConvergeDotsAgentRules() second run error = %v", err)
+	if err := ConvergeCodexSparkDelegation(home); err != nil {
+		t.Fatalf("ConvergeCodexSparkDelegation() error = %v", err)
+	}
+	if err := ConvergeCodexSparkDelegation(home); err != nil {
+		t.Fatalf("ConvergeCodexSparkDelegation() second run error = %v", err)
 	}
 
 	codexPath := filepath.Join(home, ".codex", "AGENTS.md")
@@ -165,6 +163,9 @@ func TestConvergeDotsAgentRulesKeepsSparkDelegationCodexOnly(t *testing.T) {
 	}
 	if strings.Count(codexContent, "gpt-5.3-codex-spark") != 2 {
 		t.Fatalf("Codex delegation block should include Spark role guidance exactly twice\n%s", codexContent)
+	}
+	if strings.Contains(codexContent, legacyCodexDelegationStart) || strings.Contains(codexContent, legacyCodexDelegationEnd) {
+		t.Fatalf("Codex delegation block should use dots-owned markers, not legacy markers\n%s", codexContent)
 	}
 
 	nonCodexPaths := []string{
@@ -229,5 +230,74 @@ func TestConvergeDotsAgentRulesRemovesLegacyMarkerlessPersona(t *testing.T) {
 	}
 	if !strings.Contains(out, dotsRulesStart) {
 		t.Fatalf("dots rules not injected\n%s", out)
+	}
+}
+
+func TestConvergeCodexSparkDelegationMigratesLegacyMarkers(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+	content := "before\n\n" + legacyCodexDelegationStart + "\nstale spark guidance\n" + legacyCodexDelegationEnd + "\n\nafter\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+
+	if err := ConvergeCodexSparkDelegation(home); err != nil {
+		t.Fatalf("ConvergeCodexSparkDelegation() error = %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	out := string(got)
+	for _, not := range []string{legacyCodexDelegationStart, legacyCodexDelegationEnd, "stale spark guidance"} {
+		if strings.Contains(out, not) {
+			t.Fatalf("legacy content kept %q\n%s", not, out)
+		}
+	}
+	if strings.Count(out, codexDelegationStart) != 1 || strings.Count(out, codexDelegationEnd) != 1 {
+		t.Fatalf("dots-owned Codex delegation block should be present once\n%s", out)
+	}
+	if !strings.Contains(out, "before") || !strings.Contains(out, "after") {
+		t.Fatalf("surrounding content not preserved\n%s", out)
+	}
+}
+
+func TestRemoveCodexSparkDelegationRemovesCurrentAndLegacyMarkers(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+	content := "before\n\n" +
+		dotsRulesStart + "\n" + dotsRulesBlock + "\n" + dotsRulesEnd + "\n\n" +
+		codexDelegationStart + "\ncurrent\n" + codexDelegationEnd + "\n\n" +
+		legacyCodexDelegationStart + "\nlegacy\n" + legacyCodexDelegationEnd + "\n\nafter\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+
+	if err := RemoveCodexSparkDelegation(home); err != nil {
+		t.Fatalf("RemoveCodexSparkDelegation() error = %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	out := string(got)
+	for _, not := range []string{codexDelegationStart, codexDelegationEnd, legacyCodexDelegationStart, legacyCodexDelegationEnd, "current", "legacy"} {
+		if strings.Contains(out, not) {
+			t.Fatalf("delegation cleanup kept %q\n%s", not, out)
+		}
+	}
+	if !strings.Contains(out, dotsRulesStart) || !strings.Contains(out, "Keep diffs surgical") {
+		t.Fatalf("delegation cleanup removed dots rules\n%s", out)
+	}
+	if !strings.Contains(out, "before") || !strings.Contains(out, "after") {
+		t.Fatalf("surrounding content not preserved\n%s", out)
 	}
 }

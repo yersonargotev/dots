@@ -319,6 +319,16 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 			}
 		}
 	}
+	selectedTags := manifest.SelectionTags(m.Profiles[profile], extraTags)
+	if hasTag(selectedTags, "without-codex-spark-delegation") {
+		if cleanupErr := agentinstructions.RemoveCodexSparkDelegation(home); cleanupErr != nil {
+			return report, errors.Join(err, cleanupErr)
+		}
+	} else if hasTag(selectedTags, "codex-spark-delegation") {
+		if cleanupErr := agentinstructions.ConvergeCodexSparkDelegation(home); cleanupErr != nil {
+			return report, errors.Join(err, cleanupErr)
+		}
+	}
 	if err != nil {
 		return report, err
 	}
@@ -326,6 +336,15 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 		return report, codexconfig.EnsureCodeGraphMode(home, agents...)
 	}
 	return report, nil
+}
+
+func hasTag(tags []string, want string) bool {
+	for _, tag := range tags {
+		if tag == want {
+			return true
+		}
+	}
+	return false
 }
 
 func gentleAIProvisionerRan(report provision.Report) bool {
