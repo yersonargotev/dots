@@ -89,9 +89,17 @@ func TestConvergeDotsAgentRulesRemovesPersonaAndInjectsRules(t *testing.T) {
 	if strings.Count(out, dotsRulesStart) != 1 || strings.Count(out, dotsRulesEnd) != 1 {
 		t.Fatalf("dots rules block should be present once\n%s", out)
 	}
+	if strings.Count(out, codexDelegationStart) != 1 || strings.Count(out, codexDelegationEnd) != 1 {
+		t.Fatalf("Codex delegation block should be present once\n%s", out)
+	}
 	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Plan before editing", "Verify before declaring success", "Use sandboxed HOME/config paths"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dots rules missing %q\n%s", want, out)
+		}
+	}
+	for _, want := range []string{"Subagent delegation defaults", "gpt-5.3-codex-spark", "Implementation can be split into disjoint files/modules", "Avoid delegation when the task is tiny"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Codex delegation guidance missing %q\n%s", want, out)
 		}
 	}
 	if strings.Contains(out, "Prefer dots JSON output") || strings.Contains(out, "scraping human prose") {
@@ -133,6 +141,53 @@ func TestConvergeDotsAgentRulesPreservesCustomPersonalitySection(t *testing.T) {
 	}
 	if !strings.Contains(out, dotsRulesStart) {
 		t.Fatalf("dots rules not injected\n%s", out)
+	}
+}
+
+func TestConvergeDotsAgentRulesKeepsSparkDelegationCodexOnly(t *testing.T) {
+	home := t.TempDir()
+
+	if err := ConvergeDotsAgentRules(home, "codex", "claude-code", "opencode", "antigravity", "vscode-copilot"); err != nil {
+		t.Fatalf("ConvergeDotsAgentRules() error = %v", err)
+	}
+	if err := ConvergeDotsAgentRules(home, "codex", "claude-code", "opencode", "antigravity", "vscode-copilot"); err != nil {
+		t.Fatalf("ConvergeDotsAgentRules() second run error = %v", err)
+	}
+
+	codexPath := filepath.Join(home, ".codex", "AGENTS.md")
+	codex, err := os.ReadFile(codexPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", codexPath, err)
+	}
+	codexContent := string(codex)
+	if strings.Count(codexContent, codexDelegationStart) != 1 || strings.Count(codexContent, codexDelegationEnd) != 1 {
+		t.Fatalf("Codex delegation block should be present once\n%s", codexContent)
+	}
+	if strings.Count(codexContent, "gpt-5.3-codex-spark") != 2 {
+		t.Fatalf("Codex delegation block should include Spark role guidance exactly twice\n%s", codexContent)
+	}
+
+	nonCodexPaths := []string{
+		filepath.Join(home, ".claude", "CLAUDE.md"),
+		filepath.Join(home, ".config", "opencode", "AGENTS.md"),
+		filepath.Join(home, ".gemini", "GEMINI.md"),
+		filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+		filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+	}
+	for _, path := range nonCodexPaths {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		content := string(got)
+		if !strings.Contains(content, dotsRulesStart) {
+			t.Fatalf("%s missing shared dots rules\n%s", path, content)
+		}
+		for _, not := range []string{codexDelegationStart, codexDelegationEnd, "gpt-5.3-codex-spark"} {
+			if strings.Contains(content, not) {
+				t.Fatalf("%s unexpectedly contains Codex delegation guidance %q\n%s", path, not, content)
+			}
+		}
 	}
 }
 

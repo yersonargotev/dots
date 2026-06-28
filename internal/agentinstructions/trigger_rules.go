@@ -17,6 +17,8 @@ const (
 	gentleAIPersonaEnd        = "<!-- /gentle-ai:persona -->"
 	dotsRulesStart            = "<!-- dots:rules -->"
 	dotsRulesEnd              = "<!-- /dots:rules -->"
+	codexDelegationStart      = "<!-- argote:subagent-delegation -->"
+	codexDelegationEnd        = "<!-- /argote:subagent-delegation -->"
 )
 
 const dotsRulesBlock = `## Dots Agent Rules
@@ -29,6 +31,23 @@ const dotsRulesBlock = `## Dots Agent Rules
 | Always | Verify before declaring success: use focused checks while iterating, then run the repo-required checks when the task is complete. |
 | Always | Use sandboxed HOME/config paths for dotfiles behavior; never validate by writing to the operator's real home config. |
 | Ask first | Stop when the safe path is unclear, the scope would broaden, or an action could mutate real user configuration. |`
+
+const codexDelegationBlock = `## Subagent delegation defaults
+
+Use subagents only when the user explicitly asks for delegation, parallel agents, or a workflow whose named goal includes delegation. Keep the main thread responsible for requirements, decisions, integration, and final verification; delegate bounded work that can return a compact summary instead of noisy logs.
+
+| Delegate when | Spark role |
+| --- | --- |
+| Codebase exploration, impact scans, or test/log triage can run independently | Spawn explorer on gpt-5.3-codex-spark and ask for findings with file refs. |
+| Implementation can be split into disjoint files/modules | Spawn worker on gpt-5.3-codex-spark, assign ownership, and require a changed-file list. |
+| Review needs parallel lenses (bugs, tests, security, maintainability) | Spawn one focused Spark agent per lens; wait before final judgment. |
+
+Avoid delegation when the task is tiny, requires a single coherent edit, touches real user configuration, or would create overlapping write scopes. For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize only distilled outcomes.`
+
+type instructionTarget struct {
+	agent string
+	path  string
+}
 
 // RemoveGentleAITriggerRules removes stale gentle-ai trigger recommendations
 // from supported agent instruction files. dots does not install the referenced
@@ -47,41 +66,55 @@ func RemoveGentleAITriggerRules(home string, agents ...string) error {
 // with the dots-managed baseline and injects the portable dots rules block into
 // supported global agent instruction files.
 func ConvergeDotsAgentRules(home string, agents ...string) error {
-	for _, path := range instructionPaths(home, agents) {
-		if err := convergeDotsRules(path); err != nil {
+	for _, target := range instructionTargets(home, agents) {
+		if err := convergeDotsRules(target.path); err != nil {
 			return err
+		}
+		if target.agent == "codex" {
+			if err := convergeCodexDelegation(target.path); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
 func instructionPaths(home string, agents []string) []string {
-	var paths []string
+	targets := instructionTargets(home, agents)
+	paths := make([]string, 0, len(targets))
+	for _, target := range targets {
+		paths = append(paths, target.path)
+	}
+	return paths
+}
+
+func instructionTargets(home string, agents []string) []instructionTarget {
 	seen := map[string]bool{}
-	add := func(path string) {
+	var targets []instructionTarget
+	add := func(agent, path string) {
 		if seen[path] {
 			return
 		}
 		seen[path] = true
-		paths = append(paths, path)
+		targets = append(targets, instructionTarget{agent: agent, path: path})
 	}
 
 	for _, agent := range agents {
 		switch agent {
 		case "codex":
-			add(filepath.Join(home, ".codex", "AGENTS.md"))
+			add(agent, filepath.Join(home, ".codex", "AGENTS.md"))
 		case "claude", "claude-code":
-			add(filepath.Join(home, ".claude", "CLAUDE.md"))
+			add(agent, filepath.Join(home, ".claude", "CLAUDE.md"))
 		case "opencode":
-			add(filepath.Join(home, ".config", "opencode", "AGENTS.md"))
+			add(agent, filepath.Join(home, ".config", "opencode", "AGENTS.md"))
 		case "antigravity":
-			add(filepath.Join(home, ".gemini", "GEMINI.md"))
+			add(agent, filepath.Join(home, ".gemini", "GEMINI.md"))
 		case "vscode-copilot":
-			add(filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"))
-			add(filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"))
+			add(agent, filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"))
+			add(agent, filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"))
 		}
 	}
-	return paths
+	return targets
 }
 
 func removeTriggerRules(path string) error {
@@ -126,6 +159,27 @@ func convergeDotsRules(path string) error {
 	updated, err = textblock.Upsert(updated, textblock.Markers{Start: dotsRulesStart, End: dotsRulesEnd}, dotsRulesBlock)
 	if err != nil {
 		return fmt.Errorf("upsert dots rules in %s: %w", path, err)
+	}
+	if updated == content {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir agent instructions %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(updated), mode); err != nil {
+		return fmt.Errorf("write agent instructions %s: %w", path, err)
+	}
+	return nil
+}
+
+func convergeCodexDelegation(path string) error {
+	content, mode, err := readInstructionFile(path)
+	if err != nil {
+		return err
+	}
+	updated, err := textblock.Upsert(content, textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd}, codexDelegationBlock)
+	if err != nil {
+		return fmt.Errorf("upsert Codex delegation guidance in %s: %w", path, err)
 	}
 	if updated == content {
 		return nil
