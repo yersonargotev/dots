@@ -49,14 +49,3 @@ The workflow starts when the user has an intention of change for the `dots` proj
 8. Present a Release/Closure Brief to close the workflow.
    - The brief includes merged PR links, merge commit, tag and release links when applicable, closed issues, final validation evidence, what changed for the user, and any remaining follow-ups.
    - If Spark was used at any point in the workflow, include final Delegation notes covering the delegated slices, accepted findings or changes, rejected findings or changes, and final verification performed by the main agent.
-
-## Implementation follow-ups
-
-- Implement `codex-spark-delegation` and `without-codex-spark-delegation` as separate selectable tags.
-- Migrate the Codex Spark delegation markers from `<!-- argote:subagent-delegation -->...<!-- /argote:subagent-delegation -->` to `<!-- dots:codex-spark-delegation -->...<!-- /dots:codex-spark-delegation -->`.
-- Ensure cleanup removes both the current `dots:codex-spark-delegation` marker pair and the legacy `argote:subagent-delegation` marker pair without touching `dots:rules`, Engram, CodeGraph, Codex config, or any other agent baseline.
-- Keep `dots:rules` coupled to the `agents` profile, but move Codex Spark delegation out of the automatic `ConvergeDotsAgentRules` path.
-- Add separate convergence functions for the opt-in capability:
-  - `ConvergeCodexSparkDelegation(home)` installs or updates only the `dots:codex-spark-delegation` block.
-  - `RemoveCodexSparkDelegation(home)` removes both `dots:codex-spark-delegation` and legacy `argote:subagent-delegation` blocks.
-- Invoke those functions from install/update based on selected tags: `codex-spark-delegation` installs, `without-codex-spark-delegation` removes, and `without-*` wins when both are selected.
