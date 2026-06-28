@@ -40,7 +40,7 @@ func TestHomebrewInstallerCommandIsOfficialCommand(t *testing.T) {
 	if cmd.Display != `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"` {
 		t.Fatalf("Display = %q", cmd.Display)
 	}
-	if cmd.Executable != "/bin/bash" || !reflect.DeepEqual(cmd.Args, []string{"-c", `$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)`}) {
+	if cmd.Executable != "/bin/sh" || !reflect.DeepEqual(cmd.Args, []string{"-c", pkgmgr.OfficialHomebrewInstallerCommand}) {
 		t.Fatalf("command = %#v", cmd)
 	}
 }

@@ -108,32 +108,12 @@ func newInstallCommand() *cobra.Command {
 				}
 			}
 
-			p, err := plan.Build(*m, plan.Options{
-				Profile:    profile,
-				ExtraTags:  extraTags,
-				OS:         hostOS,
-				SourceRoot: paths.SourceRoot,
-				Home:       paths.Home,
-				Metadata:   meta,
-			})
-			if err != nil {
-				return err
-			}
-
-			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: hostOS})
-			if err != nil {
-				return err
-			}
-
 			var dependenciesReport *installDependenciesReport
 			if depPreviewReport != nil {
 				dependenciesReport = &installDependenciesReport{Preview: depPreviewReport}
 			}
 			if wantsJSON(cmd) {
-				if dryRun {
-					return emitOK(cmd, installReport{DryRun: true, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
-				}
-				if !yes {
+				if !dryRun && !yes {
 					return rejectInteractiveJSON(cmd)
 				}
 			} else if depPreviewReport != nil {
@@ -146,13 +126,22 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if dryRun {
-				if !wantsJSON(cmd) {
-					if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profile); err != nil {
-						return err
-					}
+				p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, profile, extraTags, hostOS, paths)
+				if err != nil {
+					return err
+				}
+				if wantsJSON(cmd) {
+					return emitOK(cmd, installReport{DryRun: true, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+				}
+				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profile); err != nil {
+					return err
 				}
 				return nil
 			}
+
+			var p plan.Plan
+			var provPlan provision.Plan
+			installPlanReady := false
 
 			if !skipDeps {
 				depsConfirmed := yes
@@ -161,7 +150,7 @@ func newInstallCommand() *cobra.Command {
 						packageManagerSetup.Status = pkgmgr.StatusUnavailable
 						err := fmt.Errorf("Homebrew Package Manager Setup requires interactive confirmation; rerun without --yes or install Homebrew manually with %s", packageManagerSetup.Command.Display)
 						if wantsJSON(cmd) {
-							return installDependencyGateError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan}}
+							return installDependencyGateError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport}}
 						}
 						return err
 					}
@@ -197,6 +186,12 @@ func newInstallCommand() *cobra.Command {
 					renderDepsInstallPreview(cmd.OutOrStdout(), depPreview)
 					depsConfirmed = true
 				}
+				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profile, extraTags, hostOS, paths)
+				if err != nil {
+					return err
+				}
+				installPlanReady = true
+
 				depReport, depsApplied, err := runInstallDependencies(cmd, *m, depOptions, depTier, paths.Home, depPreview, depsConfirmed, depLookup, brewDetection.Path)
 				dependenciesReport.Result = &depReport
 				if err != nil {
@@ -207,6 +202,13 @@ func newInstallCommand() *cobra.Command {
 				}
 				if !depsApplied {
 					return nil
+				}
+			}
+
+			if !installPlanReady {
+				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profile, extraTags, hostOS, paths)
+				if err != nil {
+					return err
 				}
 			}
 
@@ -270,6 +272,26 @@ func renderInstallPlanAndProvisioners(cmd *cobra.Command, m manifest.Manifest, p
 	}
 	renderProvisionPlan(cmd.OutOrStdout(), provPlan)
 	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profile, runtime.GOOS)
+}
+
+func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, profile string, extraTags []string, hostOS string, paths resolvedPaths) (plan.Plan, provision.Plan, error) {
+	p, err := plan.Build(m, plan.Options{
+		Profile:    profile,
+		ExtraTags:  extraTags,
+		OS:         hostOS,
+		SourceRoot: paths.SourceRoot,
+		Home:       paths.Home,
+		Metadata:   meta,
+	})
+	if err != nil {
+		return plan.Plan{}, provision.Plan{}, err
+	}
+
+	provPlan, err := provision.Build(m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: hostOS})
+	if err != nil {
+		return plan.Plan{}, provision.Plan{}, err
+	}
+	return p, provPlan, nil
 }
 
 func resolveInstallTier(goos string) (deps.Tier, error) {

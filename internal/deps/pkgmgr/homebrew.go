@@ -2,6 +2,7 @@ package pkgmgr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +14,6 @@ import (
 )
 
 const OfficialHomebrewInstallerCommand = `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
-const homebrewInstallerScript = `$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)`
 
 var macOSHomebrewPrefixes = []string{"/opt/homebrew/bin/brew", "/usr/local/bin/brew"}
 
@@ -24,14 +24,23 @@ type Command struct {
 }
 
 func HomebrewInstallerCommand() Command {
-	return Command{Executable: "/bin/bash", Args: []string{"-c", homebrewInstallerScript}, Display: OfficialHomebrewInstallerCommand}
+	return Command{Executable: "/bin/sh", Args: []string{"-c", OfficialHomebrewInstallerCommand}, Display: OfficialHomebrewInstallerCommand}
 }
 
 type HomebrewDetection struct {
-	Found        bool   `json:"found"`
-	Path         string `json:"path,omitempty"`
-	NeedsPATH    bool   `json:"needs_path,omitempty"`
-	PATHGuidance string `json:"path_guidance,omitempty"`
+	Found        bool
+	Path         string
+	NeedsPATH    bool
+	PATHGuidance string
+}
+
+type homebrewDetectionJSON struct {
+	Found     bool `json:"found"`
+	NeedsPATH bool `json:"needs_path,omitempty"`
+}
+
+func (d HomebrewDetection) MarshalJSON() ([]byte, error) {
+	return json.Marshal(homebrewDetectionJSON{Found: d.Found, NeedsPATH: d.NeedsPATH})
 }
 
 type Detector struct {

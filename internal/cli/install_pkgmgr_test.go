@@ -261,7 +261,7 @@ func TestInstallAcceptingHomebrewSetupUsesPrefixBrewForCurrentRun(t *testing.T) 
 	if err != nil {
 		t.Fatalf("install accept error = %v\n%s", err, out)
 	}
-	if runner.executable != "/bin/bash" || !reflect.DeepEqual(runner.args, []string{"-c", `$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)`}) {
+	if runner.executable != "/bin/sh" || !reflect.DeepEqual(runner.args, []string{"-c", pkgmgr.OfficialHomebrewInstallerCommand}) {
 		t.Fatalf("setup runner = %#v", runner)
 	}
 	args, err := os.ReadFile(filepath.Join(binDir, "brew-args"))

@@ -495,10 +495,13 @@ func TestInstallDryRunJSONIncludesDependencyPreviewAndInstallPlan(t *testing.T) 
 	}
 }
 
-func TestInstallDryRunClassifiesMissingFNMToolchainAsManual(t *testing.T) {
+func TestInstallDryRunClassifiesMissingFNMToolchainAsInstallableWhenHomebrewIsAvailable(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
 	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "brew"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write fake brew: %v", err)
+	}
 	t.Setenv("PATH", binDir)
 	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
 	manifestPath := writeCLIManifest(t, home, fnmBootstrapCLIManifest)
@@ -513,14 +516,8 @@ func TestInstallDryRunClassifiesMissingFNMToolchainAsManual(t *testing.T) {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
 	got := out.String()
-	if strings.Contains(got, "Homebrew was found at") {
-		if !strings.Contains(got, "would-install Node LTS (fnm)") {
-			t.Fatalf("install --dry-run should use detected prefix Homebrew for missing fnm:\n%s", got)
-		}
-		return
-	}
-	if !strings.Contains(got, "manual") || strings.Contains(got, "would-install Node LTS (fnm)") {
-		t.Fatalf("install --dry-run should classify missing fnm bootstrap as manual without Homebrew:\n%s", got)
+	if !strings.Contains(got, "would-install Node LTS (fnm)") || strings.Contains(got, "manual        Node LTS (fnm)") {
+		t.Fatalf("install --dry-run should use sandboxed PATH Homebrew for missing fnm:\n%s", got)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/deps"
+	"github.com/yersonargotev/dots/internal/deps/pkgmgr"
 	"github.com/yersonargotev/dots/internal/doctor"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
@@ -15,8 +16,8 @@ import (
 // TestEnvelopeGolden locks the full JSON shape of the Agent Output Contract.
 // Any rename, removal, or addition of an exposed domain field changes a golden
 // file and must be a deliberate schema_version bump. The fixtures also prove the
-// machine-local / advisory fields (resolved_source, probe_detail, hint) stay out
-// of the contract.
+// machine-local / advisory fields (resolved_source, probe_detail, hint,
+// package-manager paths/guidance) stay out of the contract.
 func TestEnvelopeGolden(t *testing.T) {
 	installPreview := deps.InstallDryRunReport{Profile: "default", Tier: deps.TierHomebrew, Items: []deps.InstallPreview{
 		{Dependency: "starship", Requirement: "required", Status: deps.InstallPreviewWouldInstall, Provider: deps.TierHomebrew, Package: "starship", Executable: "brew", Args: []string{"install", "starship"}},
@@ -132,6 +133,19 @@ func TestEnvelopeGolden(t *testing.T) {
 				Status:        statusOK,
 				Data: installReport{
 					DryRun: false,
+					PackageManagerSetup: &pkgmgr.Report{
+						Manager: "homebrew",
+						Status:  pkgmgr.StatusInstalled,
+						Command: pkgmgr.HomebrewInstallerCommand(),
+						Detection: pkgmgr.HomebrewDetection{
+							Found:        true,
+							Path:         "/opt/homebrew/bin/brew-MUST-NOT-APPEAR",
+							NeedsPATH:    true,
+							PATHGuidance: "MUST NOT APPEAR",
+						},
+						Reason:       "selected required Dependencies need Homebrew, but brew is not available",
+						Dependencies: []string{"starship"},
+					},
 					Dependencies: &installDependenciesReport{
 						Preview: &installPreview,
 						Result:  &installResult,
