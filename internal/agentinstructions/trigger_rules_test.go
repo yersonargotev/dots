@@ -89,7 +89,7 @@ func TestConvergeDotsAgentRulesRemovesPersonaAndInjectsRules(t *testing.T) {
 	if strings.Count(out, dotsRulesStart) != 1 || strings.Count(out, dotsRulesEnd) != 1 {
 		t.Fatalf("dots rules block should be present once\n%s", out)
 	}
-	for _, want := range []string{"Keep diffs surgical", "Verify before declaring success", "Use sandboxed HOME/config paths"} {
+	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Verify before declaring success", "Use sandboxed HOME/config paths"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dots rules missing %q\n%s", want, out)
 		}

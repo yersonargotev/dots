@@ -24,6 +24,7 @@ const dotsRulesBlock = `## Dots Agent Rules
 | Boundary | Rule |
 | --- | --- |
 | Always | Keep diffs surgical: every changed line must trace to the user request; mention unrelated issues instead of fixing them silently. |
+| Always | Choose the simplest change that satisfies the request; avoid speculative abstractions, configurability, or features not explicitly needed. |
 | Always | Verify before declaring success: use focused checks while iterating, then run the repo-required checks when the task is complete. |
 | Always | Use sandboxed HOME/config paths for dotfiles behavior; never validate by writing to the operator's real home config. |
 | Always | Prefer dots JSON output and documented exit codes over scraping human prose. |
