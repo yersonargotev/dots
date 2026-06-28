@@ -69,7 +69,7 @@ Because no fast-forward is applied in a dry run, the rendered plan reflects the 
 
 ## Profiles and provisioners
 
-Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects no provisioners. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai memory/context setup and cleanup provisioners for Codex, Claude Code, OpenCode, Antigravity, and VS Code Copilot, plus agent settings baselines and shared engineering skills. Persona prompt Regenerated Content is optional and selected with `--tag persona`; SDD remains optional with `--tag sdd`. CodeGraph is independent and selected with `--tag codegraph`; CodeGraph's installer owns generated MCP/instruction setup, while dots owns only the scoped `<!-- dots:codegraph-mode -->` routing and verification policy overlay. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills plus the Dart and Flutter MCP server for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
+Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects no provisioners. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai memory/context setup and cleanup provisioners for Codex, Claude Code, OpenCode, Antigravity, and VS Code Copilot, plus agent settings baselines, shared engineering skills, and dots-owned global agent rules. gentle-ai persona prompt Regenerated Content is cleaned up rather than installed by this repository; SDD remains optional with `--tag sdd`. CodeGraph is independent and selected with `--tag codegraph`; CodeGraph's installer owns generated MCP/instruction setup, while dots owns only the scoped `<!-- dots:codegraph-mode -->` routing and verification policy overlay. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills plus the Dart and Flutter MCP server for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
 
 The gentle-ai provisioner can model cleanup before install by using separate entries in manifest order. Missing `action` still defaults to `install`; `yes` is only valid for `uninstall` because it confirms a cleanup action. Install/update plan output also calls out provisioners that may install or update user-local global tools, such as Claude Code through the npm prefix under `~/.local`:
 
@@ -85,7 +85,7 @@ provisioners:
     spec:
       action: uninstall
       agents: [codex, claude-code, opencode, antigravity, vscode-copilot]
-      components: [sdd]
+      components: [sdd, persona]
       yes: true
   - tool: gentle-ai
     tags: [agents]
@@ -93,13 +93,6 @@ provisioners:
       preset: custom
       agents: [claude-code]
       components: [engram, context7, permissions]
-  - tool: gentle-ai
-    tags: [persona]
-    spec:
-      preset: custom
-      persona: neutral
-      agents: [codex, claude-code, opencode, antigravity, vscode-copilot]
-      components: [persona]
 ```
 
 To keep that requirement discoverable, both `install` and `update` print a one-line hint when the active profile skips provisioners another profile would select on this OS:
