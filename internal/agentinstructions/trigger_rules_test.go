@@ -89,13 +89,50 @@ func TestConvergeDotsAgentRulesRemovesPersonaAndInjectsRules(t *testing.T) {
 	if strings.Count(out, dotsRulesStart) != 1 || strings.Count(out, dotsRulesEnd) != 1 {
 		t.Fatalf("dots rules block should be present once\n%s", out)
 	}
-	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Verify before declaring success", "Use sandboxed HOME/config paths"} {
+	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Plan before editing", "Verify before declaring success", "Use sandboxed HOME/config paths"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dots rules missing %q\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, "Prefer dots JSON output") || strings.Contains(out, "scraping human prose") {
+		t.Fatalf("dots rules kept JSON-output scope creep\n%s", out)
+	}
 	if !strings.Contains(out, "before") || !strings.Contains(out, "after") {
 		t.Fatalf("surrounding content not preserved\n%s", out)
+	}
+}
+
+func TestConvergeDotsAgentRulesPreservesCustomPersonalitySection(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+	content := "# Local Agent Guide\n\n" +
+		"## Personality\n\n" +
+		"Be concise, skeptical, and protect production data.\n\n" +
+		"## Project Workflow\n\n" +
+		"Keep this user-owned workflow section.\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+
+	if err := ConvergeDotsAgentRules(home, "codex"); err != nil {
+		t.Fatalf("ConvergeDotsAgentRules() error = %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	out := string(got)
+	for _, want := range []string{"## Personality", "Be concise, skeptical, and protect production data.", "## Project Workflow", "Keep this user-owned workflow section."} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("custom content missing %q\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, dotsRulesStart) {
+		t.Fatalf("dots rules not injected\n%s", out)
 	}
 }
 

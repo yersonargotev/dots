@@ -25,9 +25,9 @@ const dotsRulesBlock = `## Dots Agent Rules
 | --- | --- |
 | Always | Keep diffs surgical: every changed line must trace to the user request; mention unrelated issues instead of fixing them silently. |
 | Always | Choose the simplest change that satisfies the request; avoid speculative abstractions, configurability, or features not explicitly needed. |
+| Always | Plan before editing: think through the target behavior, inspect existing patterns, and state the smallest intended change before coding. |
 | Always | Verify before declaring success: use focused checks while iterating, then run the repo-required checks when the task is complete. |
 | Always | Use sandboxed HOME/config paths for dotfiles behavior; never validate by writing to the operator's real home config. |
-| Always | Prefer dots JSON output and documented exit codes over scraping human prose. |
 | Ask first | Stop when the safe path is unclear, the scope would broaden, or an action could mutate real user configuration. |`
 
 // RemoveGentleAITriggerRules removes stale gentle-ai trigger recommendations
@@ -183,6 +183,9 @@ func removeLegacyMarkerlessPersona(content string) string {
 			end = start + idx
 		}
 	}
+	if !isKnownLegacyMarkerlessPersona(content[start:end]) {
+		return content
+	}
 
 	updated := strings.TrimRight(content[:start], "\n")
 	if suffix := strings.TrimLeft(content[end:], "\n"); suffix != "" {
@@ -194,6 +197,35 @@ func removeLegacyMarkerlessPersona(content string) string {
 		updated += "\n"
 	}
 	return updated
+}
+
+func isKnownLegacyMarkerlessPersona(block string) bool {
+	requiredHeadings := []string{
+		"## Personality",
+		"## Persona Scope",
+		"## Language",
+		"## Tone",
+		"## Philosophy",
+		"## Expertise",
+		"## Behavior",
+	}
+	for _, heading := range requiredHeadings {
+		if !strings.Contains(block, heading) {
+			return false
+		}
+	}
+
+	for _, phrase := range []string{
+		"Senior Architect, 15+ years experience, GDE & MVP",
+		"The persona styles HOW YOU TALK",
+		"Match the user's current language in your REPLY ONLY",
+		"CONCEPTS > CODE",
+	} {
+		if strings.Contains(block, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func nextHeadingAfterBehavior(content string) int {
