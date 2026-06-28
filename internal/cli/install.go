@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/yersonargotev/dots/internal/agentinstructions"
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/codexconfig"
@@ -299,17 +300,25 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 		stdout: stdout,
 		stderr: cmd.ErrOrStderr(),
 	}
-	report, err := provision.Apply(m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS}, lookupCommand, fontInstalled(runtime.GOOS, home), runner)
+	provisionOpts := provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS}
+	selected, selectErr := provision.Select(m, provisionOpts)
+	if selectErr != nil {
+		return provision.Report{}, selectErr
+	}
+	report, err := provision.Apply(m, provisionOpts, lookupCommand, fontInstalled(runtime.GOOS, home), runner)
 	if !wantsJSON(cmd) {
 		renderProvisionReport(cmd.OutOrStdout(), report)
 	}
 	if recordErr := recordProvisionerMetadata(stateRoot, report); recordErr != nil {
 		return report, recordErr
 	}
-	if err != nil {
-		return report, err
+	if gentleAIProvisionerRan(report) {
+		if agents := selectedGentleAIAgents(selected); len(agents) > 0 {
+			if cleanupErr := agentinstructions.RemoveGentleAITriggerRules(home, agents...); cleanupErr != nil {
+				return report, errors.Join(err, cleanupErr)
+			}
+		}
 	}
-	selected, err := provision.Select(m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS})
 	if err != nil {
 		return report, err
 	}
@@ -317,6 +326,33 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 		return report, codexconfig.EnsureCodeGraphMode(home, agents...)
 	}
 	return report, nil
+}
+
+func gentleAIProvisionerRan(report provision.Report) bool {
+	for _, item := range report.Items {
+		if item.Tool == "gentle-ai" && item.Status != provision.RunStatusMissingDeps {
+			return true
+		}
+	}
+	return false
+}
+
+func selectedGentleAIAgents(selected []manifest.Provisioner) []string {
+	var agents []string
+	seen := map[string]bool{}
+	for _, prov := range selected {
+		if prov.Tool != "gentle-ai" {
+			continue
+		}
+		for _, agent := range prov.Spec.Agents {
+			if seen[agent] {
+				continue
+			}
+			seen[agent] = true
+			agents = append(agents, agent)
+		}
+	}
+	return agents
 }
 
 func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {

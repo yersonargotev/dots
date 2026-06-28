@@ -49,6 +49,33 @@ func Upsert(content string, primary Markers, block string, legacy ...Markers) (s
 	return b.String(), nil
 }
 
+// Remove deletes every marker-delimited block matching the provided markers.
+func Remove(content string, markers ...Markers) (string, error) {
+	if len(markers) == 0 {
+		return content, nil
+	}
+	ranges, err := findRanges(content, markers)
+	if err != nil {
+		return "", err
+	}
+	if len(ranges) == 0 {
+		return content, nil
+	}
+
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start < ranges[j].start })
+	var b strings.Builder
+	cursor := 0
+	for _, r := range ranges {
+		if r.start < cursor {
+			continue
+		}
+		b.WriteString(content[cursor:r.start])
+		cursor = r.end
+	}
+	b.WriteString(content[cursor:])
+	return b.String(), nil
+}
+
 type blockRange struct {
 	start int
 	end   int

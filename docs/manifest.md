@@ -362,6 +362,14 @@ Current Provisioners:
 | `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
 | `codegraph` | `codegraph` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. Select with `--tag codegraph`. | `curl` |
 
+After any `gentle-ai` provisioner runs, `dots` removes the
+`<!-- gentle-ai:trigger-rules -->` marker section from supported agent
+instruction files it can locate. The upstream 4R identifiers referenced by that
+block (`review-readability`, `review-risk`, `review-resilience`, and
+`review-reliability`) are not portable `gentle-ai` skills that the dots-managed
+baseline can install for every supported agent, so keeping the recommendation
+would leave agents pointing at commands that may not exist.
+
 ## Selection rules
 
 1. The chosen Profile provides the base tags.
