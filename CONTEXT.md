@@ -84,6 +84,10 @@ _Avoid_: package, app, required tool
 The OS-aware installation guidance the Dotfiles CLI produces for missing Dependencies. It is the reviewable intent that `dots deps plan` previews and that `dots deps install` may execute.
 _Avoid_: install script, package install, setup commands
 
+**Package Manager Setup**:
+An explicit, user-confirmed preparation step in `dots install` that installs or activates a supported package manager required to provision selected Dependencies. It is separate from Dependency installation and must not run in non-interactive Confirmed Install mode.
+_Avoid_: bootstrap install, hidden package-manager install, provider magic
+
 **Font Dependency**:
 A Dependency that is a font rather than an executable, such as a Nerd Font required so Starship, tmux, or editor configuration renders its glyphs. Because a font is not on the search path, its presence is detected by scanning the workstation font directories for its installed files, not by a command lookup.
 _Avoid_: typeface, glyph pack, icon font

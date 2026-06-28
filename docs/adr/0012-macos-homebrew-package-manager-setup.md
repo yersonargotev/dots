@@ -1,0 +1,19 @@
+# Offer macOS Homebrew Package Manager Setup from install
+
+`dots install` may offer Package Manager Setup for Homebrew on macOS when `brew` is missing and at least one selected required Dependency needs the Homebrew provider. This keeps fresh macOS setup achievable from the primary install flow while preserving the Bootstrapper boundary: `scripts/install.sh` remains limited to downloading, verifying, and launching the Dotfiles CLI.
+
+Package Manager Setup is explicit and interactive-only. `dots install` must show the exact official Homebrew installer command, ask for user confirmation, execute it with terminal stdio only after acceptance, then re-detect `brew` through PATH or the expected macOS prefixes for the current run; no extra opt-in flag is required because the interactive confirmation is the control point. `--yes` must not install Homebrew, and `--dry-run` only previews that setup would be offered. If the user declines Package Manager Setup, install aborts before touching Managed Configuration because the selected required Dependencies remain unresolved.
+
+**Considered Options**: Installing Homebrew from the shell Bootstrapper was rejected because it gives the curl-compatible entrypoint too much authority and conflicts with the Bootstrapper's minimal responsibility. Always installing Homebrew on macOS was rejected because Package Manager Setup should be justified by selected required Dependencies, not by the absence of `brew` itself. Linuxbrew setup is intentionally out of scope for this decision because Linux already has distro providers and User-Local Providers before Linuxbrew fallback, and Linuxbrew setup carries different PATH and permission concerns.
+
+**Consequences**: This refines ADR 0010: `dots` still does not install Homebrew automatically, but it can offer a transparent, user-confirmed macOS setup step when required Dependencies are otherwise blocked. The dependency gate needs to distinguish Package Manager Setup from normal Dependency installation so Confirmed Install remains conservative and no Managed Configuration is touched when required setup is declined or unavailable.
+
+Package Manager Setup should be represented separately from Dependencies in machine-readable output. Homebrew is provisioning infrastructure, not an Install Manifest Dependency, so JSON reports should expose setup state through a dedicated package-manager setup object rather than rendering `Homebrew` as a normal dependency item.
+
+Package Manager Setup must not execute Homebrew Tap Trust commands. Trusting third-party taps or formulas remains a separate security decision surfaced as guidance by the normal Dependency flow; if missing trust blocks a required formula, install should stop before Managed Configuration changes with the existing trust remediation.
+
+If setup succeeds but the new `brew` is not on the current process PATH, `dots install` may use the discovered macOS Homebrew binary path for the rest of that run and should report PATH repair guidance. Expected macOS locations are `/opt/homebrew/bin/brew` for Apple Silicon and `/usr/local/bin/brew` for Intel; if `brew` cannot be found there or on PATH after setup, Package Manager Setup is unavailable and install stops before Managed Configuration changes.
+
+Implementation should keep this as part of dependency provisioning, not Bootstrapper or filesystem installation. A small dependency-owned package can detect Homebrew, describe the setup command/result, and let `dots install` orchestrate setup before recalculating dependency actions and before building/applying the Managed Configuration Install Plan.
+
+Tests must never execute the real Homebrew installer. Verification should use unit tests for Homebrew detection, expected-prefix lookup, command rendering, and setup-need classification, plus CLI tests with fake runners and sandboxed home/state/source paths for interactive accept, interactive decline, `--yes`, and `--dry-run` behavior.
