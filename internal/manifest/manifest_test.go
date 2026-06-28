@@ -1029,8 +1029,8 @@ func TestRepositoryManifestIncludesMattPocockReviewSkillProvisioner(t *testing.T
 	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
 		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
 	}
-	if !sameStrings(skills.Spec.Skills, []string{"review", "writing-great-skills"}) {
-		t.Errorf("skills provisioner skills = %#v, want [review writing-great-skills]", skills.Spec.Skills)
+	if !sameStrings(skills.Spec.Skills, []string{"grilling", "loop-me", "review", "writing-great-skills"}) {
+		t.Errorf("skills provisioner skills = %#v, want [grilling loop-me review writing-great-skills]", skills.Spec.Skills)
 	}
 	if !skills.Spec.Global || !skills.Spec.Copy {
 		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)

@@ -931,6 +931,8 @@ provisioners:
         - opencode
         - github-copilot
       skills:
+        - grilling
+        - loop-me
         - review
         - writing-great-skills
       global: true
