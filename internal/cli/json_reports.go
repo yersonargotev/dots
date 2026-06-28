@@ -4,6 +4,7 @@ import (
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/deps"
+	"github.com/yersonargotev/dots/internal/deps/pkgmgr"
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
@@ -34,12 +35,13 @@ type manifestValidateReport struct {
 }
 
 type installReport struct {
-	DryRun             bool                       `json:"dry_run"`
-	Dependencies       *installDependenciesReport `json:"dependencies,omitempty"`
-	Plan               plan.Plan                  `json:"plan"`
-	Provisioners       provision.Plan             `json:"provisioners"`
-	BackupSets         []installBackupSetReport   `json:"backup_sets,omitempty"`
-	ProvisionerResults *provision.Report          `json:"provisioner_results,omitempty"`
+	DryRun              bool                       `json:"dry_run"`
+	PackageManagerSetup *pkgmgr.Report             `json:"package_manager_setup,omitempty"`
+	Dependencies        *installDependenciesReport `json:"dependencies,omitempty"`
+	Plan                plan.Plan                  `json:"plan"`
+	Provisioners        provision.Plan             `json:"provisioners"`
+	BackupSets          []installBackupSetReport   `json:"backup_sets,omitempty"`
+	ProvisionerResults  *provision.Report          `json:"provisioner_results,omitempty"`
 }
 
 type installDependenciesReport struct {

@@ -513,8 +513,14 @@ func TestInstallDryRunClassifiesMissingFNMToolchainAsManual(t *testing.T) {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
 	got := out.String()
+	if strings.Contains(got, "Homebrew was found at") {
+		if !strings.Contains(got, "would-install Node LTS (fnm)") {
+			t.Fatalf("install --dry-run should use detected prefix Homebrew for missing fnm:\n%s", got)
+		}
+		return
+	}
 	if !strings.Contains(got, "manual") || strings.Contains(got, "would-install Node LTS (fnm)") {
-		t.Fatalf("install --dry-run should classify missing fnm bootstrap as manual:\n%s", got)
+		t.Fatalf("install --dry-run should classify missing fnm bootstrap as manual without Homebrew:\n%s", got)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/codexconfig"
 	"github.com/yersonargotev/dots/internal/deps"
+	"github.com/yersonargotev/dots/internal/deps/pkgmgr"
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
@@ -24,6 +26,13 @@ import (
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/tui"
 	"github.com/yersonargotev/dots/internal/version"
+)
+
+var (
+	installHostOS                           = runtime.GOOS
+	installHostArch                         = runtime.GOARCH
+	packageManagerDetector                  = pkgmgr.Detector{}
+	packageManagerSetupRunner pkgmgr.Runner = pkgmgr.ExecRunner{}
 )
 
 func newInstallCommand() *cobra.Command {
@@ -75,25 +84,34 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
-			depOptions := deps.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS, Arch: runtime.GOARCH, Home: paths.Home, StateRoot: paths.StateRoot}
-			depTier, err := resolveTier("")
+			hostOS := installHostOS
+			hostArch := installHostArch
+			depOptions := deps.Options{Profile: profile, ExtraTags: extraTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot}
+			depTier, err := resolveInstallTier(hostOS)
 			if err != nil {
 				return err
 			}
 			var depPreview deps.InstallDryRunReport
 			var depPreviewReport *deps.InstallDryRunReport
+			var packageManagerSetup *pkgmgr.Report
+			brewDetection := packageManagerDetector.DetectHomebrew()
+			depLookup := packageManagerLookup(brewDetection)
 			if !skipDeps {
-				depPreview, err = deps.InstallDryRun(*m, depOptions, lookupCommand, fontInstalled(runtime.GOOS, paths.Home), depTier)
+				depPreview, err = deps.InstallDryRun(*m, depOptions, depLookup, fontInstalled(hostOS, paths.Home), depTier)
 				if err != nil {
 					return err
 				}
 				depPreviewReport = &depPreview
+				setup := pkgmgr.HomebrewSetupNeed(hostOS, depPreview, brewDetection)
+				if setup.Status != pkgmgr.StatusNotNeeded || setup.Detection.NeedsPATH {
+					packageManagerSetup = &setup
+				}
 			}
 
 			p, err := plan.Build(*m, plan.Options{
 				Profile:    profile,
 				ExtraTags:  extraTags,
-				OS:         runtime.GOOS,
+				OS:         hostOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
 				Metadata:   meta,
@@ -102,7 +120,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 
-			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS})
+			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: hostOS})
 			if err != nil {
 				return err
 			}
@@ -113,12 +131,13 @@ func newInstallCommand() *cobra.Command {
 			}
 			if wantsJSON(cmd) {
 				if dryRun {
-					return emitOK(cmd, installReport{DryRun: true, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+					return emitOK(cmd, installReport{DryRun: true, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
 				if !yes {
 					return rejectInteractiveJSON(cmd)
 				}
 			} else if depPreviewReport != nil {
+				renderPackageManagerSetup(cmd.OutOrStdout(), packageManagerSetup)
 				renderDepsInstallPreview(cmd.OutOrStdout(), *depPreviewReport)
 				fmt.Fprintln(cmd.OutOrStdout())
 			} else if skipDeps {
@@ -136,11 +155,53 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if !skipDeps {
-				depReport, depsApplied, err := runInstallDependencies(cmd, *m, depOptions, depTier, paths.Home, depPreview, yes)
+				depsConfirmed := yes
+				if packageManagerSetup != nil && packageManagerSetup.Status == pkgmgr.StatusWouldOffer {
+					if yes {
+						packageManagerSetup.Status = pkgmgr.StatusUnavailable
+						err := fmt.Errorf("Homebrew Package Manager Setup requires interactive confirmation; rerun without --yes or install Homebrew manually with %s", packageManagerSetup.Command.Display)
+						if wantsJSON(cmd) {
+							return installDependencyGateError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan}}
+						}
+						return err
+					}
+					confirmed, err := confirmPackageManagerSetup(cmd.InOrStdin(), cmd.OutOrStdout(), *packageManagerSetup)
+					if err != nil {
+						return err
+					}
+					if !confirmed {
+						packageManagerSetup.Status = pkgmgr.StatusDeclined
+						fmt.Fprintln(cmd.OutOrStdout(), "Package Manager Setup declined; install canceled before Managed Configuration.")
+						return nil
+					}
+					if err := pkgmgr.RunHomebrewSetup(cmd.Context(), packageManagerSetupRunner, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
+						packageManagerSetup.Status = pkgmgr.StatusFailed
+						return fmt.Errorf("Homebrew Package Manager Setup failed: %w", err)
+					}
+					brewDetection = packageManagerDetector.DetectHomebrew()
+					packageManagerSetup.Detection = brewDetection
+					if !brewDetection.Found {
+						packageManagerSetup.Status = pkgmgr.StatusUnavailable
+						return fmt.Errorf("Homebrew Package Manager Setup completed but brew was not found on PATH, /opt/homebrew/bin/brew, or /usr/local/bin/brew")
+					}
+					packageManagerSetup.Status = pkgmgr.StatusInstalled
+					if brewDetection.PATHGuidance != "" {
+						fmt.Fprintln(cmd.OutOrStdout(), brewDetection.PATHGuidance)
+					}
+					depLookup = packageManagerLookup(brewDetection)
+					depPreview, err = deps.InstallDryRun(*m, depOptions, depLookup, fontInstalled(hostOS, paths.Home), depTier)
+					if err != nil {
+						return err
+					}
+					dependenciesReport.Preview = &depPreview
+					renderDepsInstallPreview(cmd.OutOrStdout(), depPreview)
+					depsConfirmed = true
+				}
+				depReport, depsApplied, err := runInstallDependencies(cmd, *m, depOptions, depTier, paths.Home, depPreview, depsConfirmed, depLookup, brewDetection.Path)
 				dependenciesReport.Result = &depReport
 				if err != nil {
 					if wantsJSON(cmd) {
-						return installDependencyGateError{err: err, report: installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan}}
+						return installDependencyGateError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan}}
 					}
 					return err
 				}
@@ -169,7 +230,7 @@ func newInstallCommand() *cobra.Command {
 			}
 			if !applied {
 				if wantsJSON(cmd) {
-					return emitOK(cmd, installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+					return emitOK(cmd, installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
 				return nil
 			}
@@ -177,12 +238,12 @@ func newInstallCommand() *cobra.Command {
 			provResult, err := runProvisioners(cmd, *m, profile, extraTags, paths.Home, paths.StateRoot)
 			if err != nil {
 				if wantsJSON(cmd) {
-					return installProvisionerError{err: err, report: installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
+					return installProvisionerError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
 				}
 				return err
 			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, installReport{DryRun: false, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups})
+				return emitOK(cmd, installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups})
 			}
 			return nil
 		},
@@ -211,6 +272,59 @@ func renderInstallPlanAndProvisioners(cmd *cobra.Command, m manifest.Manifest, p
 	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profile, runtime.GOOS)
 }
 
+func resolveInstallTier(goos string) (deps.Tier, error) {
+	if goos == "darwin" {
+		return deps.TierHomebrew, nil
+	}
+	return resolveTier("")
+}
+
+func packageManagerLookup(detection pkgmgr.HomebrewDetection) deps.Lookup {
+	return func(command string) bool {
+		if command == "brew" && detection.Found {
+			return true
+		}
+		return lookupCommand(command)
+	}
+}
+
+func renderPackageManagerSetup(w io.Writer, report *pkgmgr.Report) {
+	if report == nil {
+		return
+	}
+	if report.Status == pkgmgr.StatusWouldOffer {
+		fmt.Fprintf(w, "Package Manager Setup for %s\n\n", report.Manager)
+		fmt.Fprintf(w, "  would-offer %s\n", report.Reason)
+		fmt.Fprintf(w, "  command     %s\n\n", report.Command.Display)
+		return
+	}
+	if report.Detection.PATHGuidance != "" {
+		fmt.Fprintln(w, report.Detection.PATHGuidance)
+		fmt.Fprintln(w)
+	}
+}
+
+func confirmPackageManagerSetup(r io.Reader, w io.Writer, report pkgmgr.Report) (bool, error) {
+	fmt.Fprintf(w, "Run Homebrew Package Manager Setup? This will execute: %s [y/N] ", report.Command.Display)
+	scanner := bufio.NewScanner(r)
+	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return false, fmt.Errorf("read package manager setup confirmation: %w", err)
+		}
+		return false, nil
+	}
+	answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
+	switch answer {
+	case "y", "yes":
+		return true, nil
+	case "", "n", "no":
+		return false, nil
+	default:
+		fmt.Fprintf(w, "Response %q is not yes/y; cancelling.\n", answer)
+		return false, nil
+	}
+}
+
 type installDependencyGateError struct {
 	err    error
 	report installReport
@@ -237,7 +351,7 @@ func (e installProvisionerError) JSONErrorData() any { return e.report }
 // Managed Configuration is applied. Interactive runs reuse the deps confirmation
 // prompt for package-manager execution; manual or unresolved Dependencies abort
 // the install before filesystem targets are touched.
-func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier, home string, preview deps.InstallDryRunReport, yes bool) (deps.InstallReport, bool, error) {
+func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier, home string, preview deps.InstallDryRunReport, yes bool, look deps.Lookup, brewPath string) (deps.InstallReport, bool, error) {
 	if !yes {
 		if hasRequiredInstallablePreviewAction(preview) {
 			confirmed, err := confirmDepsInstall(cmd.InOrStdin(), cmd.OutOrStdout())
@@ -261,13 +375,14 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 	if wantsJSON(cmd) {
 		stdout = cmd.ErrOrStderr()
 	}
-	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, depsExecRunner{
+	report, err := deps.Install(m, options, look, fontInstalled(options.OS, home), tier, depsExecRunner{
 		ctx:       cmd.Context(),
 		stdin:     cmd.InOrStdin(),
 		stdout:    stdout,
 		stderr:    cmd.ErrOrStderr(),
 		home:      home,
 		stateRoot: options.StateRoot,
+		brewPath:  brewPath,
 	})
 	if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
 		renderDepsInstall(cmd.OutOrStdout(), report)
