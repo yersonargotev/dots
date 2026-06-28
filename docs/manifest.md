@@ -45,7 +45,7 @@ Current Profiles:
 |---------|------|--------|----------------------|
 | `default` | `core` | Core dotfiles without provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
-| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai memory/context setup, cleanup, and shared engineering skills for supported agents. Add `--tag persona` for optional persona styling Regenerated Content or `--tag sdd` for Gentle-AI SDD setup. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set |
+| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai memory/context setup, cleanup, shared engineering skills, and dots-owned global rules for supported agents. Add `--tag sdd` for Gentle-AI SDD setup. gentle-ai persona Regenerated Content is cleaned up, not installed, by this repository. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set |
 | `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Playwright CLI` via Homebrew formula `playwright-cli` |
 | `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
@@ -339,14 +339,13 @@ Current Provisioners:
 | Tool | Tags | OS | Rendered intent | Dependencies |
 |------|------|----|-----------------|--------------|
 | `zimfw` | `core` | all | Install the ZimFW runtime under `~/.zim` when missing and run `zimfw init -q` using the dots-managed `~/.zimrc`. | `zsh`, `git`, `curl` |
-| `gentle-ai` | `agents` | all | Uninstall `sdd` for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot` with `--yes`. | `gentle-ai` |
-| `gentle-ai` | `sdd` | all | Install global stable neutral custom SDD setup in multi-agent mode for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot`. Select with `--profile agents --tag sdd`. | `gentle-ai` |
+| `gentle-ai` | `agents` | all | Uninstall `sdd` and `persona` for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot` with `--yes`. | `gentle-ai` |
+| `gentle-ai` | `sdd` | all | Install global stable custom SDD setup in multi-agent mode for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot`, without installing persona. Select with `--profile agents --tag sdd`. | `gentle-ai` |
 | `gentle-ai` | `agents` | all | Install global stable custom baseline for `codex` with `engram` and `context7`; persona prompt Regenerated Content is not installed by default. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable custom baseline for `claude-code` with `engram`, `context7`, and `permissions`; persona prompt Regenerated Content is not installed by default. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable custom baseline for `antigravity` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt Regenerated Content. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable custom baseline for `opencode` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt Regenerated Content. | `gentle-ai`, `engram` |
 | `gentle-ai` | `agents` | all | Install global stable custom baseline for `vscode-copilot` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt Regenerated Content. | `gentle-ai`, `engram` |
-| `gentle-ai` | `persona` | all | Install optional neutral persona prompt Regenerated Content for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot`. Select with `--profile agents --tag persona`. | `gentle-ai` |
 | `skills` | `web` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
 | `skills` | `web` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `web` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
@@ -362,9 +361,11 @@ Current Provisioners:
 | `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
 | `codegraph` | `codegraph` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. Select with `--tag codegraph`. | `curl` |
 
-After any `gentle-ai` provisioner runs, `dots` removes the
-`<!-- gentle-ai:trigger-rules -->` marker section from supported agent
-instruction files it can locate. The upstream 4R identifiers referenced by that
+After any `gentle-ai` provisioner runs, `dots` converges supported agent
+instruction files by removing `<!-- gentle-ai:trigger-rules -->` and
+`<!-- gentle-ai:persona -->` marker sections, cleaning known legacy markerless
+persona prose, and upserting a `<!-- dots:rules -->` block with dots-owned
+behavioral rules. The upstream 4R identifiers referenced by the trigger-rules
 block (`review-readability`, `review-risk`, `review-resilience`, and
 `review-reliability`) are not portable `gentle-ai` skills that the dots-managed
 baseline can install for every supported agent, so keeping the recommendation

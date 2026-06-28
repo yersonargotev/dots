@@ -314,7 +314,7 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 	}
 	if gentleAIProvisionerRan(report) {
 		if agents := selectedGentleAIAgents(selected); len(agents) > 0 {
-			if cleanupErr := agentinstructions.RemoveGentleAITriggerRules(home, agents...); cleanupErr != nil {
+			if cleanupErr := agentinstructions.ConvergeDotsAgentRules(home, agents...); cleanupErr != nil {
 				return report, errors.Join(err, cleanupErr)
 			}
 		}

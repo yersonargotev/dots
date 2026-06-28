@@ -1084,9 +1084,6 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	if codexInstall == nil {
 		t.Fatal("repository manifest missing gentle-ai codex basic install provisioner")
 	}
-	if personaInstall == nil {
-		t.Fatal("repository manifest missing opt-in gentle-ai persona install provisioner")
-	}
 	if claudeInstall == nil {
 		t.Fatal("repository manifest missing gentle-ai claude basic install provisioner")
 	}
@@ -1110,14 +1107,14 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	if !sameStrings(cleanup.Spec.Agents, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
 		t.Fatalf("gentle-ai cleanup agents = %#v, want [codex claude-code opencode antigravity vscode-copilot]", cleanup.Spec.Agents)
 	}
-	if !sameStrings(cleanup.Spec.Components, []string{"sdd"}) {
-		t.Fatalf("gentle-ai cleanup components = %#v, want [sdd]", cleanup.Spec.Components)
+	if !sameStrings(cleanup.Spec.Components, []string{"sdd", "persona"}) {
+		t.Fatalf("gentle-ai cleanup components = %#v, want [sdd persona]", cleanup.Spec.Components)
 	}
 	if !sameStrings(sddInstall.Tags, []string{"sdd"}) {
 		t.Fatalf("gentle-ai SDD install tags = %#v, want [sdd] so agents profile only installs SDD with --tag sdd", sddInstall.Tags)
 	}
-	if !sameStrings(personaInstall.Tags, []string{"persona"}) {
-		t.Fatalf("gentle-ai persona install tags = %#v, want [persona] so agents profile only installs persona with --tag persona", personaInstall.Tags)
+	if personaInstall != nil {
+		t.Fatalf("repository manifest must not install gentle-ai persona; found tags %#v spec %#v", personaInstall.Tags, personaInstall.Spec)
 	}
 	if !sameStrings(sddInstall.Spec.Agents, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
 		t.Fatalf("gentle-ai SDD install agents = %#v, want [codex claude-code opencode antigravity vscode-copilot]", sddInstall.Spec.Agents)
@@ -1157,9 +1154,6 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	}
 	if hasString(copilotInstall.Spec.Components, "sdd") || hasString(copilotInstall.Spec.Components, "permissions") {
 		t.Fatalf("gentle-ai vscode-copilot install components = %#v, must not include sdd or permissions", copilotInstall.Spec.Components)
-	}
-	if !sameStrings(personaInstall.Spec.Agents, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
-		t.Fatalf("gentle-ai persona install agents = %#v, want all supported gentle-ai agent targets", personaInstall.Spec.Agents)
 	}
 	for i := range got.Provisioners {
 		if &got.Provisioners[i] == cleanup {
@@ -1211,7 +1205,6 @@ func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *te
 		"install",
 		"--scope", "global",
 		"--channel", "stable",
-		"--persona", "neutral",
 		"--preset", "custom",
 		"--sdd-mode", "multi",
 		"--agents", "codex,claude-code,opencode,antigravity,vscode-copilot",
@@ -1257,15 +1250,10 @@ func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *te
 	if err != nil {
 		t.Fatalf("provision.Build(agents --tag persona) error = %v", err)
 	}
-	foundPersonaInstall := false
 	for _, step := range agentsWithPersona.Steps {
 		if step.Tool == "gentle-ai" && sameStrings(step.Args, wantPersonaArgs) {
-			foundPersonaInstall = true
-			break
+			t.Fatalf("agents profile with --tag persona selected persona install args %#v; repository manifest must not install persona", step.Args)
 		}
-	}
-	if !foundPersonaInstall {
-		t.Fatal("agents profile with --tag persona did not select the Gentle-AI persona install provisioner")
 	}
 }
 

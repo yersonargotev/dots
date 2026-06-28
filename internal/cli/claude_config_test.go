@@ -38,6 +38,11 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 printf '%s\n' "$*" >> "$HOME/gentle-ai-args"
 block='before
 
+<!-- gentle-ai:persona -->
+## Personality
+Senior Architect, 15+ years experience, GDE & MVP.
+<!-- /gentle-ai:persona -->
+
 <!-- gentle-ai:trigger-rules -->
 stale review-readability rule
 <!-- /gentle-ai:trigger-rules -->
@@ -199,8 +204,8 @@ printf '%s' "$block" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.m
 	if err != nil {
 		t.Fatalf("provisioner did not run under the sandbox HOME %q: %v", home, err)
 	}
-	if !strings.Contains(string(gotArgs), "uninstall --agents codex,claude-code,opencode,antigravity,vscode-copilot --components sdd --yes") {
-		t.Fatalf("provisioner argv = %q, want it to cleanup legacy SDD for codex,claude-code,opencode,antigravity,vscode-copilot before install", gotArgs)
+	if !strings.Contains(string(gotArgs), "uninstall --agents codex,claude-code,opencode,antigravity,vscode-copilot --components sdd,persona --yes") {
+		t.Fatalf("provisioner argv = %q, want it to cleanup legacy SDD and persona for codex,claude-code,opencode,antigravity,vscode-copilot before install", gotArgs)
 	}
 	if !strings.Contains(string(gotArgs), "install --scope global --channel stable --preset custom --agents codex --components engram,context7") {
 		t.Fatalf("provisioner argv = %q, want codex install without permissions", gotArgs)
@@ -258,8 +263,15 @@ printf '%s' "$block" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.m
 		if err != nil {
 			t.Fatalf("read cleaned agent instructions %s: %v", path, err)
 		}
-		if strings.Contains(string(got), "gentle-ai:trigger-rules") || strings.Contains(string(got), "review-readability") {
-			t.Fatalf("agent instructions %s kept stale gentle-ai trigger rules\ncontent:\n%s", path, got)
+		for _, forbidden := range []string{"gentle-ai:trigger-rules", "review-readability", "gentle-ai:persona", "Senior Architect"} {
+			if strings.Contains(string(got), forbidden) {
+				t.Fatalf("agent instructions %s kept stale gentle-ai content %q\ncontent:\n%s", path, forbidden, got)
+			}
+		}
+		for _, want := range []string{"<!-- dots:rules -->", "Keep diffs surgical", "Verify before declaring success", "Use sandboxed HOME/config paths"} {
+			if !strings.Contains(string(got), want) {
+				t.Fatalf("agent instructions %s missing dots rules content %q\ncontent:\n%s", path, want, got)
+			}
 		}
 	}
 	// And it must never have escaped into the inherited real HOME.
@@ -292,10 +304,10 @@ printf '%s' "$block" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.m
 	}
 }
 
-// TestClaudeAgentsPersonaTagRunsInSandbox proves that the explicit persona
-// opt-in path executes under the threaded sandbox HOME, not just in the
-// provisioner rendering layer.
-func TestClaudeAgentsPersonaTagRunsInSandbox(t *testing.T) {
+// TestClaudeAgentsPersonaTagDoesNotInstallPersona proves that the manifest
+// schema still accepts the persona tag, but the repository no longer uses it to
+// install gentle-ai persona content.
+func TestClaudeAgentsPersonaTagDoesNotInstallPersona(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -333,11 +345,11 @@ func TestClaudeAgentsPersonaTagRunsInSandbox(t *testing.T) {
 
 	gotArgs, err := os.ReadFile(filepath.Join(home, "gentle-ai-args"))
 	if err != nil {
-		t.Fatalf("persona provisioner did not run under the sandbox HOME %q: %v", home, err)
+		t.Fatalf("gentle-ai provisioner did not run under the sandbox HOME %q: %v", home, err)
 	}
 	wantPersona := "install --scope global --channel stable --persona neutral --preset custom --agents codex,claude-code,opencode,antigravity,vscode-copilot --components persona"
-	if !strings.Contains(string(gotArgs), wantPersona) {
-		t.Fatalf("provisioner argv = %q, want persona opt-in command %q", gotArgs, wantPersona)
+	if strings.Contains(string(gotArgs), wantPersona) || strings.Contains(string(gotArgs), "--components persona") && strings.Contains(string(gotArgs), "install ") {
+		t.Fatalf("provisioner argv = %q, repository must not install persona even with --tag persona", gotArgs)
 	}
 	if _, err := os.Stat(filepath.Join(realHome, "gentle-ai-args")); err == nil {
 		t.Fatalf("persona provisioner wrote into the inherited HOME %q instead of the sandbox", realHome)

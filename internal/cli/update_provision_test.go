@@ -117,8 +117,15 @@ func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *
 	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot)
 
-	if _, err := os.Stat(filepath.Join(sandboxHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("update with gentle-ai provisioner wrote CodeGraph instruction block without the codegraph tag; stat err = %v\noutput:\n%s", err, out)
+	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("update with gentle-ai provisioner did not write dots rules block: %v\noutput:\n%s", err, out)
+	}
+	if strings.Contains(string(got), "dots:codegraph-mode") {
+		t.Fatalf("update with gentle-ai provisioner wrote CodeGraph instruction block without the codegraph tag\ncontent:\n%s\noutput:\n%s", got, out)
+	}
+	if !strings.Contains(string(got), "<!-- dots:rules -->") {
+		t.Fatalf("update with gentle-ai provisioner did not write dots rules block\ncontent:\n%s\noutput:\n%s", got, out)
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
