@@ -179,6 +179,16 @@ if [ -f "$PROVISION_COUNT" ]; then
 fi
 printf first > "$PROVISION_COUNT"
 printf ok > "$HOME/first-attempt"
+mkdir -p "$HOME/.codex"
+cat > "$HOME/.codex/AGENTS.md" <<'EOF'
+before
+
+<!-- gentle-ai:trigger-rules -->
+stale review-readability rule
+<!-- /gentle-ai:trigger-rules -->
+
+after
+EOF
 `
 	if err := os.WriteFile(filepath.Join(stubDir, "gentle-ai"), []byte(script), 0o755); err != nil {
 		t.Fatalf("write gentle-ai stub: %v", err)
@@ -217,6 +227,13 @@ printf ok > "$HOME/first-attempt"
 		if !strings.Contains(got, want) {
 			t.Fatalf("partial report missing %q\noutput:\n%s", want, got)
 		}
+	}
+	instructions, readErr := os.ReadFile(filepath.Join(home, ".codex", "AGENTS.md"))
+	if readErr != nil {
+		t.Fatalf("read cleaned Codex instructions: %v", readErr)
+	}
+	if strings.Contains(string(instructions), "gentle-ai:trigger-rules") || strings.Contains(string(instructions), "review-readability") {
+		t.Fatalf("stale gentle-ai trigger rules survived after a later provisioner failure\ncontent:\n%s", instructions)
 	}
 }
 

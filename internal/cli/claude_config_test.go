@@ -30,10 +30,28 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	t.Setenv("HOME", realHome)
 
 	// The gentle-ai stub records the argv it received (under the threaded HOME)
-	// so the test can assert the resolved provisioner command, not just the
-	// rendered plan. engram only needs to be present on PATH for the dep check.
+	// and simulates stale trigger-rules output so the test can assert cleanup
+	// across the supported agent instruction files. engram only needs to be
+	// present on PATH for the dep check.
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/gentle-ai-args\"\n")
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), `#!/bin/sh
+printf '%s\n' "$*" >> "$HOME/gentle-ai-args"
+block='before
+
+<!-- gentle-ai:trigger-rules -->
+stale review-readability rule
+<!-- /gentle-ai:trigger-rules -->
+
+after
+'
+mkdir -p "$HOME/.codex" "$HOME/.claude" "$HOME/.config/opencode" "$HOME/.gemini" "$HOME/Library/Application Support/Code/User/prompts" "$HOME/.config/Code/User/prompts"
+printf '%s' "$block" > "$HOME/.codex/AGENTS.md"
+printf '%s' "$block" > "$HOME/.claude/CLAUDE.md"
+printf '%s' "$block" > "$HOME/.config/opencode/AGENTS.md"
+printf '%s' "$block" > "$HOME/.gemini/GEMINI.md"
+printf '%s' "$block" > "$HOME/Library/Application Support/Code/User/prompts/gentle-ai.instructions.md"
+printf '%s' "$block" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.md"
+`)
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/codegraph-args\"\n")
 	writeManifestDependencyStubs(t, stubDir)
@@ -227,6 +245,22 @@ func TestClaudeAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	}
 	if _, err := os.ReadFile(filepath.Join(home, "codegraph-args")); !os.IsNotExist(err) {
 		t.Fatalf("agents profile should not run CodeGraph without --tag codegraph: %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(home, ".codex", "AGENTS.md"),
+		filepath.Join(home, ".claude", "CLAUDE.md"),
+		filepath.Join(home, ".config", "opencode", "AGENTS.md"),
+		filepath.Join(home, ".gemini", "GEMINI.md"),
+		filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+		filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read cleaned agent instructions %s: %v", path, err)
+		}
+		if strings.Contains(string(got), "gentle-ai:trigger-rules") || strings.Contains(string(got), "review-readability") {
+			t.Fatalf("agent instructions %s kept stale gentle-ai trigger rules\ncontent:\n%s", path, got)
+		}
 	}
 	// And it must never have escaped into the inherited real HOME.
 	if _, err := os.Stat(filepath.Join(realHome, "gentle-ai-args")); err == nil {
