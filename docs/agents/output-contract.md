@@ -118,6 +118,11 @@ prose the text surface prints:
   dependency item/action is exposed. Omitted manifest values are normalized to
   `required`; optional unresolved Dependencies remain reportable but do not
   block Managed Configuration during integrated install.
+- `install` reports Package Manager Setup separately from Dependencies under
+  `data.package_manager_setup` when selected required Dependencies need
+  package-manager preparation before they can be provisioned. For example, a
+  macOS Homebrew setup preview or gate is reported there instead of rendering
+  Homebrew as a normal Dependency item.
 - `install --dry-run --output json` includes dependency preflight under
   `data.dependencies.preview` before the file `data.plan`. A confirmed
   `install --yes --output json` includes dependency execution results under

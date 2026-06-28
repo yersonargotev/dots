@@ -4,6 +4,26 @@
   "status": "ok",
   "data": {
     "dry_run": false,
+    "package_manager_setup": {
+      "manager": "homebrew",
+      "status": "installed",
+      "command": {
+        "executable": "/bin/sh",
+        "args": [
+          "-c",
+          "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        ],
+        "display": "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+      },
+      "detection": {
+        "found": true,
+        "needs_path": true
+      },
+      "reason": "selected required Dependencies need Homebrew, but brew is not available",
+      "dependencies": [
+        "starship"
+      ]
+    },
     "dependencies": {
       "preview": {
         "profile": "default",

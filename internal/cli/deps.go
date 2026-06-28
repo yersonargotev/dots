@@ -284,9 +284,13 @@ type depsExecRunner struct {
 	stderr    io.Writer
 	home      string
 	stateRoot string
+	brewPath  string
 }
 
 func (r depsExecRunner) Run(executable string, args []string) error {
+	if executable == "brew" && r.brewPath != "" {
+		executable = r.brewPath
+	}
 	cmd := exec.CommandContext(r.ctx, executable, args...)
 	cmd.Stdin = r.stdin
 	cmd.Stdout = r.stdout
