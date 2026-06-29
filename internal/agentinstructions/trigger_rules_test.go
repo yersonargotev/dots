@@ -92,7 +92,7 @@ func TestConvergeDotsAgentRulesRemovesPersonaAndInjectsRules(t *testing.T) {
 	if strings.Contains(out, codexDelegationStart) || strings.Contains(out, codexDelegationEnd) {
 		t.Fatalf("baseline dots rules should not install Codex Spark delegation\n%s", out)
 	}
-	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Plan before editing", "Verify before declaring success", "Use sandboxed HOME/config paths"} {
+	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Plan before editing", "Verify before declaring success", "Use sandboxed HOME/config paths", "Portable delegation policy", "selected agent surface", "model/tier choice", "strongest appropriate available model"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dots rules missing %q\n%s", want, out)
 		}
@@ -161,12 +161,23 @@ func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 	if strings.Count(codexContent, codexDelegationStart) != 1 || strings.Count(codexContent, codexDelegationEnd) != 1 {
 		t.Fatalf("Codex delegation block should be present once\n%s", codexContent)
 	}
-	if strings.Count(codexContent, "gpt-5.3-codex-spark") != 2 {
+	blockStart := strings.Index(codexContent, codexDelegationStart)
+	blockEnd := strings.Index(codexContent, codexDelegationEnd)
+	if blockStart < 0 || blockEnd < 0 || blockEnd <= blockStart {
+		t.Fatalf("Codex delegation block bounds missing\n%s", codexContent)
+	}
+	codexDelegationContent := codexContent[blockStart:blockEnd]
+	if strings.Count(codexDelegationContent, "gpt-5.3-codex-spark") != 2 {
 		t.Fatalf("Codex delegation block should include Spark role guidance exactly twice\n%s", codexContent)
 	}
-	for _, want := range []string{"Delegate by default for non-trivial work", "If a selected skill requires subagents, follow the skill", "would mutate GitHub/PR/release or other external state", "Use the strongest appropriate available model", "do not force Spark for judgment-heavy review"} {
-		if !strings.Contains(codexContent, want) {
+	for _, want := range []string{"Follow the portable delegation policy", "Codex-only overlay", "Use the strongest appropriate available model", "do not force Spark for judgment-heavy review"} {
+		if !strings.Contains(codexDelegationContent, want) {
 			t.Fatalf("Codex delegation block missing policy phrase %q\n%s", want, codexContent)
+		}
+	}
+	for _, duplicatedPolicy := range []string{"Delegate by default for non-trivial work", "would mutate GitHub/PR/release or other external state"} {
+		if strings.Contains(codexDelegationContent, duplicatedPolicy) {
+			t.Fatalf("Codex delegation overlay should not duplicate portable policy phrase %q\n%s", duplicatedPolicy, codexContent)
 		}
 	}
 	if strings.Contains(codexContent, legacyCodexDelegationStart) || strings.Contains(codexContent, legacyCodexDelegationEnd) {
@@ -188,6 +199,11 @@ func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 		content := string(got)
 		if !strings.Contains(content, dotsRulesStart) {
 			t.Fatalf("%s missing shared dots rules\n%s", path, content)
+		}
+		for _, want := range []string{"Portable delegation policy", "selected agent surface", "model/tier choice", "strongest appropriate available model"} {
+			if !strings.Contains(content, want) {
+				t.Fatalf("%s missing portable delegation policy phrase %q\n%s", path, want, content)
+			}
 		}
 		for _, not := range []string{codexDelegationStart, codexDelegationEnd, "gpt-5.3-codex-spark"} {
 			if strings.Contains(content, not) {
