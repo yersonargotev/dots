@@ -1,14 +1,17 @@
 # eza configuration
 
 eza is an **alias-only** slice (issue #45, epic #37). It has **no
-repository-managed config file** and **no `dots.yaml` entry** — the entire
-portable footprint is one guarded shell alias, and that alias is owned by the
-**Zsh slice**, not by eza.
+repository-managed config file** — the portable footprint is guarded shell
+aliases owned by the **Zsh slice**, while `dots.yaml` declares the `eza` binary
+as part of the core tool baseline.
 
 ```zsh
 # configs/zsh/rc.d/post/50-aliases.zsh
-command -v eza >/dev/null 2>&1 && \
+if command -v eza >/dev/null 2>&1; then
   alias ls='eza -a --icons=always --color=always --grid --group-directories-first'
+  alias ll='eza -la --icons=always --color=always --group-directories-first --git'
+  alias lt='eza -a --icons=always --color=always --tree --level=2 --group-directories-first'
+fi
 ```
 
 The `command -v eza` guard keeps the shell usable when eza is absent, so a fresh
@@ -42,15 +45,14 @@ The live eza usage was classified before adoption:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| **Portable** | the `ls` alias flag set (`-a --icons=always --color=always --grid --group-directories-first`) | Owned by the Zsh slice in `configs/zsh/rc.d/post/50-aliases.zsh`, guarded by `command -v eza`. |
+| **Portable** | the shared `ls`, `ll`, and `lt` alias flag sets | Owned by the Zsh slice in `configs/zsh/rc.d/post/50-aliases.zsh`, guarded by `command -v eza`. |
 | **Machine-specific** | `EZA_CONFIG_DIR`, any per-host theme | None in use. Would belong in `~/.zshrc.local` (env var) if ever needed — never committed. |
 | **Generated / private** | — | eza is stateless: no history, cache, tokens, or machine identity. Nothing to exclude. |
 
-The alias set is intentionally **strict**: only the single `ls` alias that runs
-on the Source of Truth machine is migrated. `ll`, `lt`, tree views, and other
-common eza aliases are **not** added, because they are not in real use — adding
-them would be the same "copy verbatim / invent config" failure mode rejected for
-`theme.yml`.
+The alias set stays small and conventional by explicit maintainer decision:
+`ls` keeps the grid default, `ll` adds long/all/git details without forcing grid
+layout, and `lt` provides a shallow tree. More specialized views remain local
+unless they become part of the shared workflow.
 
 ## Local machine overrides
 
@@ -90,10 +92,10 @@ go run ./cmd/dots status \
 Expected results:
 
 - `install` and `status` run clean and report existing managed entries as aligned.
-- **No** `~/.config/eza/` artifact is created inside `$sandbox_home` — there is no
-  eza entry in `dots.yaml` to install.
+- **No** `~/.config/eza/` artifact is created inside `$sandbox_home` — eza has no
+  managed config entry, only a dependency declaration and shell aliases.
 - The maintainer's real home directory is never touched.
 
 The alias-guard behavior is owned by the Zsh slice: sourcing
-`configs/zsh/rc.d/post/50-aliases.zsh` defines `ls` only when eza is present and
-starts the shell without error when it is absent.
+`configs/zsh/rc.d/post/50-aliases.zsh` defines eza aliases only when eza is
+present and starts the shell without error when it is absent.

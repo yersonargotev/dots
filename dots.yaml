@@ -97,6 +97,54 @@ dependencies:
           checksums:
             linux_amd64: 951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f
             linux_arm64: a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b
+      - name: fzf
+        command: fzf
+        brew: fzf
+        apt: fzf
+        dnf: fzf
+        pacman: fzf
+      - name: zoxide
+        command: zoxide
+        brew: zoxide
+        apt: zoxide
+        dnf: zoxide
+        pacman: zoxide
+      - name: lazygit
+        command: lazygit
+        brew: lazygit
+        linux_homebrew: true
+        dnf: lazygit
+        pacman: lazygit
+      - name: eza
+        command: eza
+        brew: eza
+        apt: eza
+        dnf: eza
+        pacman: eza
+      - name: ripgrep
+        command: rg
+        brew: ripgrep
+        apt: ripgrep
+        dnf: ripgrep
+        pacman: ripgrep
+      - name: delta
+        command: delta
+        brew: git-delta
+        linux_homebrew: true
+        dnf: git-delta
+        pacman: git-delta
+      - name: unzip
+        command: unzip
+        brew: unzip
+        apt: unzip
+        dnf: unzip
+        pacman: unzip
+      - name: fd
+        command: fd
+        brew: fd
+        linux_homebrew: true
+        dnf: fd-find
+        pacman: fd
   - tags:
       - agents
     os:

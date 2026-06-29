@@ -54,13 +54,17 @@ Current Profiles:
 
 Top-level `dependencies` declare shared toolchain baselines selected by tag,
 before Managed Entry and Provisioner Dependencies. The current `core` set is the
-Core Development Baseline from ADR 0010: shell/terminal foundations remain on
-their Managed Entries, while common runtimes and package tools are owned by
-Homebrew-provider declarations for `fnm`, `rustup`, `go`, `uv`, `pnpm`, and
-`bun`. The `agents` set adds `GitHub CLI` (`gh`) for issue and PR automation.
-Linux Homebrew fallback is explicit with `linux_homebrew: true`; GUI apps and
-fonts stay manual unless they have validated Linux support. Node and Rust use
-constrained built-in toolchain bootstrap commands after manager installation:
+Core Development Baseline from ADR 0010: shell/terminal foundations, shared
+terminal tools, and common development runtimes are owned by the `core`
+tag-scoped Dependency Set when they are useful across shell, editor, Git, or CLI
+workflows, even when a tool has no Managed Entry of its own. This includes
+runtime/package tools such as `fnm`, `rustup`, `go`, `uv`, `pnpm`, and `bun`,
+plus terminal/developer tools such as `fzf`, `zoxide`, `lazygit`, `eza`,
+`ripgrep`, `delta`, `unzip`, and `fd`. The `agents` set adds `GitHub CLI` (`gh`)
+for issue and PR automation. Linux Homebrew fallback is explicit with
+`linux_homebrew: true`; GUI apps and fonts stay manual unless they have
+validated Linux support. Node and Rust use constrained built-in toolchain
+bootstrap commands after manager installation:
 `fnm install --lts` for Node LTS and `rustup default stable` for Rust stable.
 Bootstrap declarations do not make an action executable by themselves: the
 manager executable must already be on `PATH` or a concrete installer/provider
@@ -191,6 +195,14 @@ Current dependency package coverage:
 | `uv` | `uv` | `uv` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `pnpm` | `pnpm` | `pnpm` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `bun` | `bun` | `bun` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
+| `fzf` | `fzf` | `fzf` | `fzf` | `fzf` | `fzf` |
+| `zoxide` | `zoxide` | `zoxide` | `zoxide` | `zoxide` | `zoxide` |
+| `lazygit` | `lazygit` | `lazygit` | Linuxbrew opt-in/manual | `lazygit` | `lazygit` |
+| `eza` | `eza` | `eza` | `eza` | `eza` | `eza` |
+| `ripgrep` | `rg` | `ripgrep` | `ripgrep` | `ripgrep` | `ripgrep` |
+| `delta` | `delta` | `git-delta` | Linuxbrew opt-in/manual | `git-delta` | `git-delta` |
+| `unzip` | `unzip` | `unzip` | `unzip` | `unzip` | `unzip` |
+| `fd` | `fd` | `fd` | Linuxbrew opt-in/manual | `fd-find` | `fd` |
 | `GitHub CLI` | `gh` | `gh` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `Playwright CLI` | `playwright-cli` | `playwright-cli` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `ghostty` | `ghostty` | `ghostty` | Manual; Ubuntu guidance includes Ghostty upstream binary docs, the community `.deb` installer command, and notes `snap install ghostty --classic` requires sudo/password interactivity | Manual | Manual |
@@ -210,7 +222,7 @@ Current dependency package coverage:
 
 Reviewed Linuxbrew opt-ins include CLI/runtime tools whose Homebrew formulas are
 expected to work on Linuxbrew: Starship, the core runtimes/package tools, GitHub CLI,
-Playwright CLI, atuin, gentle-ai, and engram. On Linux, gentle-ai and engram also
+Playwright CLI, lazygit, delta, fd, atuin, gentle-ai, and engram. On Linux, gentle-ai and engram also
 have reviewed User-Local Providers from pinned release tarballs, so Linuxbrew is
 only a fallback when that opt-in is absent or unavailable. Brew-only GUI apps such
 as Ghostty and Zed remain manual on Linux.
