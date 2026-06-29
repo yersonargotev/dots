@@ -32,19 +32,31 @@ const dotsRulesBlock = `## Dots Agent Rules
 | Always | Plan before editing: think through the target behavior, inspect existing patterns, and state the smallest intended change before coding. |
 | Always | Verify before declaring success: use focused checks while iterating, then run the repo-required checks when the task is complete. |
 | Always | Use sandboxed HOME/config paths for dotfiles behavior; never validate by writing to the operator's real home config. |
-| Ask first | Stop when the safe path is unclear, the scope would broaden, or an action could mutate real user configuration. |`
+| Ask first | Stop when the safe path is unclear, the scope would broaden, or an action could mutate real user configuration. |
+
+## Portable delegation policy
+
+Use delegation when a non-trivial task has an independent slice that can return a compact summary without transferring requirements, decisions, external state, integration, or final verification away from the main agent.
+
+| Delegate when | Model/tier choice |
+| --- | --- |
+| Codebase exploration, impact scans, or test/log triage can run independently | Use the fastest/cost-effective capable model or the surface's read-only/exploration agent. |
+| Implementation can be split into disjoint files or modules | Use an implementation-capable worker with explicit file ownership and require a changed-file list. |
+| Review, architecture, security, or other judgment-heavy work is delegated by a selected skill | Use the strongest appropriate available model, or the model the selected skill explicitly requires. |
+
+Skip delegation when the task is tiny/mechanical, has no independent slice, touches real user configuration, would mutate GitHub/PR/release or other external state, or would create overlapping write scopes. After delegated work returns, inspect the evidence or changes, accept or reject findings explicitly, run the relevant verification yourself, and summarize the delegated slice, selected agent surface, and model/tier choice.`
 
 const codexDelegationBlock = `## Subagent delegation defaults
 
-Delegate by default for non-trivial work. Keep the main thread responsible for requirements, decisions, external project state, integration, and final verification; delegate bounded work that can return a compact summary instead of noisy logs. If a selected skill requires subagents, follow the skill unless doing so would violate a safety boundary.
+Follow the portable delegation policy in the dots:rules block. This Codex-only overlay maps that policy to Codex subagents without replacing the main agent's responsibility for requirements, decisions, external project state, integration, and final verification.
 
 | Delegate when | Model choice |
 | --- | --- |
-| Codebase exploration, impact scans, or test/log triage can run independently | Spawn explorer on gpt-5.3-codex-spark and ask for findings with file refs. |
-| Implementation can be split into disjoint files/modules | Spawn worker on gpt-5.3-codex-spark, assign ownership, and require a changed-file list. |
+| Codebase exploration, impact scans, or test/log triage can run independently | Spawn a Codex explorer on gpt-5.3-codex-spark and ask for findings with file refs. |
+| Implementation can be split into disjoint files/modules | Spawn a Codex worker on gpt-5.3-codex-spark, assign ownership, and require a changed-file list. |
 | Review, architecture, security, or other high-judgment work is delegated by a selected skill | Use the strongest appropriate available model, or the model that the skill explicitly requires; do not force Spark for judgment-heavy review. |
 
-Skip delegation only when the task is tiny/mechanical, requires a single coherent edit with no independent research value, touches real user configuration, would mutate GitHub/PR/release or other external state, or would create overlapping write scopes. For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize delegated work, model choice, plus any explicit skip reasons.`
+For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize delegated work, model choice, plus any explicit skip reasons.`
 
 type instructionTarget struct {
 	agent string
