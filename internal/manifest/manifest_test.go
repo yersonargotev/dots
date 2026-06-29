@@ -3190,6 +3190,9 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		command   string
 		commands  []string
 		brew      string
+		apt       string
+		dnf       string
+		pacman    string
 		toolchain string
 		linuxBrew bool
 	}{
@@ -3199,6 +3202,14 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		"uv":                   {command: "uv", brew: "uv", linuxBrew: true},
 		"pnpm":                 {command: "pnpm", brew: "pnpm", linuxBrew: true},
 		"bun":                  {command: "bun", brew: "bun", linuxBrew: true},
+		"fzf":                  {command: "fzf", brew: "fzf", apt: "fzf", dnf: "fzf", pacman: "fzf"},
+		"zoxide":               {command: "zoxide", brew: "zoxide", apt: "zoxide", dnf: "zoxide", pacman: "zoxide"},
+		"lazygit":              {command: "lazygit", brew: "lazygit", dnf: "lazygit", pacman: "lazygit", linuxBrew: true},
+		"eza":                  {command: "eza", brew: "eza", apt: "eza", dnf: "eza", pacman: "eza"},
+		"ripgrep":              {command: "rg", brew: "ripgrep", apt: "ripgrep", dnf: "ripgrep", pacman: "ripgrep"},
+		"delta":                {command: "delta", brew: "git-delta", dnf: "git-delta", pacman: "git-delta", linuxBrew: true},
+		"unzip":                {command: "unzip", brew: "unzip", apt: "unzip", dnf: "unzip", pacman: "unzip"},
+		"fd":                   {command: "fd", brew: "fd", dnf: "fd-find", pacman: "fd", linuxBrew: true},
 	}
 	for name, wantDep := range want {
 		var dep *manifest.Dependency
@@ -3212,11 +3223,8 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		if dep == nil {
 			t.Fatalf("core dependency set missing %q: %#v", name, core.Dependencies)
 		}
-		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Toolchain != wantDep.toolchain || dep.LinuxHomebrew != wantDep.linuxBrew || !sameStrings(dep.Commands, wantDep.commands) {
-			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, toolchain %q, linux_homebrew %v", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.toolchain, wantDep.linuxBrew)
-		}
-		if dep.Apt != "" || dep.Dnf != "" || dep.Pacman != "" {
-			t.Fatalf("%s dependency = %#v, want Homebrew-owned runtime with no distro package mapping", name, *dep)
+		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Apt != wantDep.apt || dep.Dnf != wantDep.dnf || dep.Pacman != wantDep.pacman || dep.Toolchain != wantDep.toolchain || dep.LinuxHomebrew != wantDep.linuxBrew || !sameStrings(dep.Commands, wantDep.commands) {
+			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, apt %q, dnf %q, pacman %q, toolchain %q, linux_homebrew %v", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.apt, wantDep.dnf, wantDep.pacman, wantDep.toolchain, wantDep.linuxBrew)
 		}
 	}
 }

@@ -32,7 +32,7 @@ configs/zsh/
 │   └── post/              # sourced AFTER Zim initializes
 │       ├── 30-path.zsh    # portable PATH additions (guarded)
 │       ├── 40-tools.zsh   # zoxide/starship/atuin/fnm (guarded)
-│       ├── 50-aliases.zsh # eza-backed ls (guarded)
+│       ├── 50-aliases.zsh # eza listings (guarded)
 │       └── 60-ai.zsh      # Claude/Engram/Copilot knobs (no secrets)
 └── zshrc.local.example    # template for machine-specific values + secrets
 ```
