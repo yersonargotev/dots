@@ -164,6 +164,11 @@ func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 	if strings.Count(codexContent, "gpt-5.3-codex-spark") != 2 {
 		t.Fatalf("Codex delegation block should include Spark role guidance exactly twice\n%s", codexContent)
 	}
+	for _, want := range []string{"Delegate by default for non-trivial work", "If a selected skill requires subagents, follow the skill", "would mutate GitHub/PR/release or other external state", "Use the strongest appropriate available model", "do not force Spark for judgment-heavy review"} {
+		if !strings.Contains(codexContent, want) {
+			t.Fatalf("Codex delegation block missing policy phrase %q\n%s", want, codexContent)
+		}
+	}
 	if strings.Contains(codexContent, legacyCodexDelegationStart) || strings.Contains(codexContent, legacyCodexDelegationEnd) {
 		t.Fatalf("Codex delegation block should use dots-owned markers, not legacy markers\n%s", codexContent)
 	}
