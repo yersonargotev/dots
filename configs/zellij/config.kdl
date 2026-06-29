@@ -1,14 +1,52 @@
 // Zellij configuration - portable defaults for Neovim/LazyVim workflows.
 // Zellij starts locked so terminal applications receive normal keybindings.
-// Press Ctrl+g to enter the Zellij command flow, then Ctrl+g/Esc to lock again.
+// Press Ctrl+a for the tmux-like command prefix. Ctrl+g remains as the
+// compatibility entry point for the classic Zellij command flow.
 
 keybinds clear-defaults=true {
     locked {
+        bind "Ctrl a" { SwitchToMode "tmux"; }
         bind "Ctrl g" { SwitchToMode "normal"; }
     }
 
     normal {
+        bind "Ctrl a" { SwitchToMode "tmux"; }
         bind "Ctrl g" { SwitchToMode "locked"; }
+    }
+
+    // Tmux-like prefix table. This intentionally mirrors the portable tmux
+    // workflow from configs/tmux/tmux.conf where Zellij has matching actions.
+    tmux {
+        bind "Ctrl a" { Write 1; SwitchToMode "locked"; }
+        bind "Ctrl g" { SwitchToMode "locked"; }
+        bind "esc" { SwitchToMode "locked"; }
+        bind "v" "%" { NewPane "right"; SwitchToMode "locked"; }
+        bind "d" "\"" { NewPane "down"; SwitchToMode "locked"; }
+        bind "D" { Detach; }
+        bind "c" { NewTab; SwitchToMode "locked"; }
+        bind "," { SwitchToMode "renametab"; }
+        bind "n" { GoToNextTab; SwitchToMode "locked"; }
+        bind "p" { GoToPreviousTab; SwitchToMode "locked"; }
+        bind "h" "left" { MoveFocus "left"; SwitchToMode "locked"; }
+        bind "j" "down" { MoveFocus "down"; SwitchToMode "locked"; }
+        bind "k" "up" { MoveFocus "up"; SwitchToMode "locked"; }
+        bind "l" "right" { MoveFocus "right"; SwitchToMode "locked"; }
+        bind "H" { Resize "Decrease left"; SwitchToMode "locked"; }
+        bind "J" { Resize "Increase down"; SwitchToMode "locked"; }
+        bind "K" { Resize "Increase up"; SwitchToMode "locked"; }
+        bind "L" { Resize "Increase right"; SwitchToMode "locked"; }
+        bind "z" { ToggleFocusFullscreen; SwitchToMode "locked"; }
+        bind "x" { CloseFocus; SwitchToMode "locked"; }
+        bind "[" { SwitchToMode "scroll"; }
+        bind "1" { GoToTab 1; SwitchToMode "locked"; }
+        bind "2" { GoToTab 2; SwitchToMode "locked"; }
+        bind "3" { GoToTab 3; SwitchToMode "locked"; }
+        bind "4" { GoToTab 4; SwitchToMode "locked"; }
+        bind "5" { GoToTab 5; SwitchToMode "locked"; }
+        bind "6" { GoToTab 6; SwitchToMode "locked"; }
+        bind "7" { GoToTab 7; SwitchToMode "locked"; }
+        bind "8" { GoToTab 8; SwitchToMode "locked"; }
+        bind "9" { GoToTab 9; SwitchToMode "locked"; }
     }
 
     pane {
@@ -181,6 +219,7 @@ keybinds clear-defaults=true {
     }
 
     shared_except "locked" "renametab" "renamepane" {
+        bind "Ctrl a" { SwitchToMode "tmux"; }
         bind "Ctrl g" { SwitchToMode "locked"; }
         bind "Ctrl q" { Quit; }
     }

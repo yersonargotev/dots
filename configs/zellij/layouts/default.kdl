@@ -1,15 +1,15 @@
 layout {
     default_tab_template {
-        children
         pane size=1 borderless=true {
-            // Personal portable status bar preference. The zjstatus plugin
-            // binary is a manual per-machine prerequisite and is not vendored
-            // by this repository.
+            // Tmux-like Catppuccin status bar. The zjstatus plugin binary is a
+            // manual per-machine prerequisite and is not vendored by this
+            // repository. Keeping the status pane before `children` places it
+            // at the top, matching configs/tmux/tmux.conf.
             plugin location="file:~/.config/zellij/plugins/zjstatus.wasm" {
-                format_left  "{mode} #[fg=#89B4FA,bold]{session}"
+                format_left   "{mode} #[fg=#89B4FA,bold]{session}"
                 format_center "{tabs}"
-                format_right "{command_git_branch} {datetime}"
-                format_space ""
+                format_right  "{command_git_branch} {datetime}"
+                format_space  ""
 
                 border_enabled "false"
                 hide_frame_for_single_pane "true"
@@ -17,10 +17,14 @@ layout {
                 mode_normal "#[bg=#89B4FA,fg=#181825,bold] NORMAL "
                 mode_tmux   "#[bg=#FAB387,fg=#181825,bold] TMUX "
                 mode_locked "#[bg=#F38BA8,fg=#181825,bold] LOCKED "
+                mode_resize "#[bg=#F9E2AF,fg=#181825,bold] RESIZE "
+                mode_tab    "#[bg=#A6E3A1,fg=#181825,bold] TAB "
+                mode_scroll "#[bg=#CBA6F7,fg=#181825,bold] SCROLL "
 
                 tab_normal            "#[fg=#6C7086] {name} "
                 tab_active            "#[fg=#A6E3A1,bold,italic] {name} "
                 tab_active_fullscreen "#[fg=#A6E3A1,bold,italic] {name} [F]"
+                tab_separator         ""
 
                 datetime          "#[fg=#9399B2] {format} "
                 datetime_format   "%H:%M"
@@ -31,5 +35,6 @@ layout {
                 command_git_branch_interval "10"
             }
         }
+        children
     }
 }
