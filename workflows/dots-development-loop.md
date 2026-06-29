@@ -14,11 +14,32 @@ even when no GitHub issue exists yet.
 ## Scope
 
 Use this workflow for changes to `dots` itself: CLI behavior, installation and
-dependency behavior, generated agent instructions, documentation, release work,
-and repository process changes.
+dependency behavior, generated agent instructions, distributed configuration
+such as `configs/zellij` or `configs/tmux`, documentation, release work, and
+repository process changes.
 
 Do not use this workflow for unrelated personal dotfile edits outside this
 repository.
+
+## Delegation decision history
+
+Issue #263 exists because the #261/#262 Zellij/tmux parity loop did not delegate
+any subagent work. The instruction path that caused the conservative decision
+was:
+
+1. the installed Codex Spark block said to use subagents only when the user
+   explicitly asks or the workflow goal includes delegation;
+2. this workflow said to evaluate Spark but not delegate by default;
+3. the review phase said not to use Spark for review, even though `$review`
+   itself uses Standards and Spec subagents; and
+4. the Zellij/tmux work looked like one coherent distributed-config/docs change
+   plus GitHub/release external state, both of which matched the old opt-out
+   language.
+
+The current policy resolves that path by making delegation the default for
+non-trivial work, requiring explicit skip reasons, allowing skill-owned
+subagents such as `$review`, and preserving main-agent ownership of external
+state, integration, and final verification.
 
 ## Operating rules
 
@@ -55,14 +76,29 @@ Goal: turn the change intention into a shared, implementable direction.
    docs, source, tests, or command output. Use CodeGraph for source architecture,
    symbols, call flow, and impact analysis; use targeted shell reads for docs,
    manifests, configs, and scripts.
-3. Evaluate Spark subagent delegation, but do not delegate by default.
+3. Make an explicit Delegation Decision. Delegate by default for any
+   non-trivial change, then opt out only when a listed exception applies.
    - Good Spark slices: independent codebase exploration, impact scans,
      test/log triage, or implementation over disjoint files/modules.
-   - Bad Spark slices: tiny tasks, one coherent edit, review, real user
-     configuration, GitHub/external-state mutation, or overlapping write scopes.
+   - Expected default: for non-trivial work, launch at least one bounded
+     explorer unless every candidate slice is excluded by the opt-out list below.
+   - Good opt-outs: tiny mechanical tasks, one coherent edit with no independent
+     research value, real user configuration, GitHub/external-state mutation, or
+     overlapping write scopes.
+   - Skill-owned subagents are allowed when the selected skill requires them.
+     The skill output is still evidence for the main agent to inspect; it never
+     transfers requirements, integration, or final verification ownership.
+   - Choose the model/tier for the delegated job, not a single default for every
+     subagent. Spark is preferred for bounded exploration, test/log triage, and
+     separable implementation work; review, architecture, security, or other
+     judgment-heavy slices use the strongest appropriate available model, or
+     the model that the selected skill explicitly requires.
    - Spark may return findings, briefs, or local changes only. It must not open
      or edit issues, labels, comments, PRs, merges, releases, or any other
      external project state.
+   - Report the Delegation Decision even when no subagent was used: delegated,
+     skipped as trivial/mechanical, skipped because no independent slice existed,
+     or skipped for a safety boundary.
 4. When the direction is aligned, present an Alignment Brief and wait for the
    user to approve moving to triage.
 
@@ -72,8 +108,9 @@ Alignment Brief format:
 - Decisions made and doubts closed.
 - Links to ADRs, docs, issues, or notes created or changed.
 - Risks or open constraints that implementation must respect.
-- Delegation notes, if Spark was used: what was delegated, what came back, what
-  the main agent accepted or rejected, and what the main agent verified directly.
+- Delegation Decision: what was delegated or why delegation was skipped; which
+  model/tier was chosen for delegated work; what came back; what the main agent
+  accepted or rejected; and what the main agent verified directly.
 - Decision requested: approve moving to triage.
 
 ## Phase 2: Triage
@@ -96,8 +133,8 @@ Triage Brief format:
 - Exact implementation scope and explicit non-goals.
 - Acceptance criteria and required validation.
 - Risks, sandboxing needs, external-state hazards, and rollback notes.
-- Delegation notes, if Spark was used, with the same accept/reject/verification
-  shape as the Alignment Brief.
+- Delegation Decision with the same delegated/skipped, model/tier,
+  accept/reject/verification shape as the Alignment Brief.
 - Decision requested: approve moving to implementation.
 
 ## Phase 3: Implement
@@ -109,7 +146,9 @@ Goal: produce the smallest correct diff for the approved issue scope.
 2. Default path: local changes → local verification → local `$review` → PR.
 3. Use PR-before-review only when early GitHub/CI feedback or external visibility
    is materially useful before local review is complete.
-4. If Spark is used for implementation:
+4. Delegate implementation by default when the work can be split into
+   disjoint files or modules; otherwise record why the main thread is the only
+   coherent implementation owner. If Spark is used for implementation:
    - assign disjoint files or modules with explicit ownership;
    - require a changed-file list and concise handoff;
    - forbid reverting unrelated edits;
@@ -141,8 +180,10 @@ changes.
    closed.
 4. After the PR exists, rerun `$review` when PR feedback, CI fixes, or meaningful
    follow-up commits change the diff.
-5. Do not use Spark for review in this loop. Keep review centralized through
-   `$review` and the main agent's verification.
+5. `$review` may use its own Standards and Spec subagents because that is the
+   skill's review model. Do not replace `$review` with an ad-hoc Spark review,
+   do not force review subagents onto Spark when a stronger model is available,
+   and keep final finding triage, fixes, and verification in the main thread.
 
 ## Phase 5: PR, merge, and release
 
@@ -170,9 +211,9 @@ Present a Release/Closure Brief:
 - Final validation evidence.
 - User-facing change summary.
 - Remaining follow-ups, if any.
-- Final Delegation notes if Spark was used at any point: delegated slices,
-  accepted findings or changes, rejected findings or changes, and final
-  verification performed by the main agent.
+- Final Delegation Decision: delegated slices or explicit skip reasons,
+  model/tier choices, accepted findings or changes, rejected findings or
+  changes, and final verification performed by the main agent.
 
 ## Required verification
 

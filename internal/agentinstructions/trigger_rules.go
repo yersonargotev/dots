@@ -36,14 +36,15 @@ const dotsRulesBlock = `## Dots Agent Rules
 
 const codexDelegationBlock = `## Subagent delegation defaults
 
-Use subagents only when the user explicitly asks for delegation, parallel agents, or a workflow whose named goal includes delegation. Keep the main thread responsible for requirements, decisions, integration, and final verification; delegate bounded work that can return a compact summary instead of noisy logs.
+Delegate by default for non-trivial work. Keep the main thread responsible for requirements, decisions, external project state, integration, and final verification; delegate bounded work that can return a compact summary instead of noisy logs. If a selected skill requires subagents, follow the skill unless doing so would violate a safety boundary.
 
-| Delegate when | Spark role |
+| Delegate when | Model choice |
 | --- | --- |
 | Codebase exploration, impact scans, or test/log triage can run independently | Spawn explorer on gpt-5.3-codex-spark and ask for findings with file refs. |
 | Implementation can be split into disjoint files/modules | Spawn worker on gpt-5.3-codex-spark, assign ownership, and require a changed-file list. |
+| Review, architecture, security, or other high-judgment work is delegated by a selected skill | Use the strongest appropriate available model, or the model that the skill explicitly requires; do not force Spark for judgment-heavy review. |
 
-Avoid delegation when the task is tiny, requires a single coherent edit, touches real user configuration, review, or would create overlapping write scopes. For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize only distilled outcomes.`
+Skip delegation only when the task is tiny/mechanical, requires a single coherent edit with no independent research value, touches real user configuration, would mutate GitHub/PR/release or other external state, or would create overlapping write scopes. For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize delegated work, model choice, plus any explicit skip reasons.`
 
 type instructionTarget struct {
 	agent string
