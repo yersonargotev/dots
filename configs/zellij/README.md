@@ -41,8 +41,9 @@ The live `~/.config/zellij` directory was classified before adoption:
 
 ## Behavior carried by the portable config
 
-- Zellij starts in `default_mode "locked"` so Neovim/LazyVim receives normal
-  bindings without terminal multiplexer interference.
+- Zellij starts in `default_mode "locked"` so most terminal applications receive
+  normal bindings. The deliberate exception is direct tmux-style navigation:
+  `Ctrl+h/j/k/l` moves between Zellij panes without a prefix.
 - `C-a` is the primary tmux-like multiplexer prefix. From locked or normal mode
   it enters Zellij's `tmux` mode for one command, then most commands return to
   locked mode.
@@ -73,7 +74,9 @@ exact emulation.
 | New tab/window | `C-a c` | `NewTab` | Zellij tabs are the closest equivalent to tmux windows. |
 | Rename tab/window | `C-a ,` | rename tab | Mirrors tmux rename-window habit. |
 | Previous/next tab | `C-a p` / `C-a n` | previous/next tab | Zellij tab navigation equivalent. |
+| Direct previous/next tab | `Cmd+h` / `Cmd+l` when forwarded as `Super+h` / `Super+l` | previous/next tab | Mirrors the maintainer's direct tmux window navigation habit. Some terminals or macOS defaults may reserve Cmd keys before Zellij sees them. |
 | Focus pane | `C-a h/j/k/l` | move focus | Zellij pane focus equivalent. |
+| Direct focus pane | `Ctrl+h/j/k/l` | move focus | No-prefix navigation equivalent to the tmux/vim-tmux-navigator habit. |
 | Resize pane | `C-a H/J/K/L` | resize focused pane | Zellij resize actions use directional growth/shrink semantics. |
 | Fullscreen/zoom | `C-a z` | toggle fullscreen | Closest equivalent to tmux zoom. |
 | Close focused pane | `C-a x` | close focus | Zellij close equivalent. |

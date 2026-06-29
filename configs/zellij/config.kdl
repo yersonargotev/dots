@@ -183,6 +183,19 @@ keybinds clear-defaults=true {
         }
     }
 
+    // Direct tmux-style navigation shortcuts stay available in locked mode for
+    // no-prefix pane/tab movement. Cmd on supported terminals is delivered to
+    // Zellij as Super; terminals that cannot forward Cmd can keep using the
+    // existing Alt and C-a bindings below.
+    shared_among "normal" "locked" {
+        bind "Super h" { GoToPreviousTab; }
+        bind "Super l" { GoToNextTab; }
+        bind "Ctrl h" { MoveFocus "left"; }
+        bind "Ctrl j" { MoveFocus "down"; }
+        bind "Ctrl k" { MoveFocus "up"; }
+        bind "Ctrl l" { MoveFocus "right"; }
+    }
+
     // Shared Alt bindings stay available in locked mode because they do not
     // collide with normal Vim/LazyVim bindings.
     shared_among "normal" "locked" {
