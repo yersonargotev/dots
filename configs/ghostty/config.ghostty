@@ -12,7 +12,7 @@ font-size = 20
 
 # Catppuccin Mocha is the default. The optional adaptive-theme include below
 # overrides this with Ghostty's native light/dark theme syntax.
-theme = catppuccin-mocha
+theme = Catppuccin Mocha
 
 # Installed only by `dots install --tag adaptive-theme`; absent by default so
 # Mocha/dark remains the fallback for fresh installs. Loaded after the fallback

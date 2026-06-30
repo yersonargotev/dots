@@ -15,8 +15,8 @@ slice.
   `@catppuccin_flavor`. Missing helper/marker, macOS dark, Linux, unknown values,
   or missing `defaults` fall back to Mocha.
 - **Ghostty**: default `configs/ghostty/config.ghostty` uses `theme =
-  catppuccin-mocha`. On macOS, the tag installs `adaptive-theme.ghostty`, which uses
-  Ghostty's native `theme = light:catppuccin-latte,dark:catppuccin-mocha` form.
+  Catppuccin Mocha`. On macOS, the tag installs `adaptive-theme.ghostty`, which uses
+  Ghostty's native `theme = light:Catppuccin Latte,dark:Catppuccin Mocha` form.
 - **Neovim**: `lua/plugins/colorscheme.lua` selects `catppuccin-latte` only when
   the marker exists and macOS light appearance is proven; otherwise it uses
   `catppuccin-mocha`.
