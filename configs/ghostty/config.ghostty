@@ -2,39 +2,24 @@
 #
 # Machine-specific settings such as window dimensions, opacity/blur, shell paths,
 # working directories, and platform integrations live in the optional local file
-# below. Ghostty resolves this relative to this file and ignores it when it does
-# not exist.
-config-file = ?config.local.ghostty
+# included after the shared defaults below. Ghostty resolves optional includes
+# relative to this file and ignores them when they do not exist.
 
 # Shared font baseline. The Desktop Nerd Font dependency keeps this portable
 # across supported desktop hosts.
 font-family = "Cascadia Code NF"
 font-size = 20
 
-# Catppuccin Mocha palette and terminal colors.
-palette = 0=#45475a
-palette = 1=#f38ba8
-palette = 2=#a6e3a1
-palette = 3=#f9e2af
-palette = 4=#89b4fa
-palette = 5=#f5c2e7
-palette = 6=#94e2d5
-palette = 7=#a6adc8
-palette = 8=#585b70
-palette = 9=#f38ba8
-palette = 10=#a6e3a1
-palette = 11=#f9e2af
-palette = 12=#89b4fa
-palette = 13=#f5c2e7
-palette = 14=#94e2d5
-palette = 15=#bac2de
-background = 1e1e2e
-foreground = cdd6f4
-cursor-color = f5e0dc
-cursor-text = 11111b
-selection-background = 353749
-selection-foreground = cdd6f4
-split-divider-color = 313244
+# Catppuccin Mocha is the default. The optional adaptive-theme include below
+# overrides this with Ghostty's native light/dark theme syntax.
+theme = catppuccin-mocha
+
+# Installed only by `dots install --tag adaptive-theme`; absent by default so
+# Mocha/dark remains the fallback for fresh installs. Loaded after the fallback
+# theme so the opt-in fragment can override it.
+config-file = ?adaptive-theme.ghostty
+# Local overrides are loaded last so explicit machine preferences win.
+config-file = ?config.local.ghostty
 
 # Portable keyboard behavior for the terminal workflow.
 keybind = alt+left=unbind

@@ -32,7 +32,9 @@ Unknown YAML fields are rejected during manifest loading.
 A Profile is selected by commands such as `dots plan`, `dots install`,
 `dots status`, and `dots deps check`. Commands that expose `--tag` can add
 optional capability tags on top of the selected Profile without creating another
-Profile.
+Profile. For example, `--tag adaptive-theme` installs the opt-in marker and
+app-specific fragments used by managed configs to follow macOS light appearance
+where the app has a safe seam.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
@@ -88,6 +90,20 @@ unresolved Dependency.
 
 ## Managed Entries
 
+### Adaptive theme tag
+
+`adaptive-theme` is an explicit opt-in tag, not part of any default Profile. It
+installs `~/.config/dots/adaptive-theme` plus app-specific fragments such as
+Ghostty's optional `adaptive-theme.ghostty`. Shell-readable configs source
+`~/.config/dots/theme.sh` and select Catppuccin Latte only when both the marker
+exists and macOS light appearance is proven. Missing marker, macOS dark mode,
+Linux, missing appearance APIs, and unknown values keep Mocha/dark fallbacks.
+
+Static apps without a safe optional include/generation seam are documented in
+[`docs/adaptive-theme-audit.md`](adaptive-theme-audit.md) and left on Mocha rather
+than adding duplicate Install Plan targets or clobbering co-owned files.
+
+
 A Managed Entry declares one repository source and one target under `$HOME`.
 Targets must be `~` or `~/...`; `dots` rejects targets that escape the selected
 home directory.
@@ -110,11 +126,14 @@ Current Managed Entries:
 | `configs/zsh/zimrc` | `~/.zimrc` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
 | `configs/zsh/zshenv` | `~/.zshenv` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
 | `configs/git/gitconfig` | `~/.gitconfig` | `symlink` | `core` | `darwin`, `linux` | `git` |
+| `configs/dots/theme.sh` | `~/.config/dots/theme.sh` | `symlink` | `core` | `darwin`, `linux` | None |
+| `configs/dots/adaptive-theme` | `~/.config/dots/adaptive-theme` | `symlink` | `adaptive-theme` | `darwin`, `linux` | None |
 | `configs/starship/starship.toml` | `~/.config/starship.toml` | `symlink` | `core` | `darwin`, `linux` | `starship` |
 | `configs/tmux/tmux.conf` | `~/.tmux.conf` | `symlink` | `core` | `darwin`, `linux` | `tmux` |
 | `configs/zellij/config.kdl` | `~/.config/zellij/config.kdl` | `symlink` | `core` | `darwin`, `linux` | `zellij` |
 | `configs/zellij/layouts/default.kdl` | `~/.config/zellij/layouts/default.kdl` | `symlink` | `core` | `darwin`, `linux` | `zellij` |
 | `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `desktop` | `darwin`, `linux` | `ghostty` |
+| `configs/ghostty/adaptive/adaptive-theme.ghostty` | `~/.config/ghostty/adaptive-theme.ghostty` | `symlink` | `adaptive-theme` | `darwin` | None |
 | `configs/warp/settings.toml` | `~/.warp/settings.toml` | `copy` | `desktop` | `darwin` | None |
 | `configs/warp/keybindings.yaml` | `~/.warp/keybindings.yaml` | `copy` | `desktop` | `darwin` | None |
 | `configs/warp/settings.toml` | `~/.config/warp-terminal/settings.toml` | `copy` | `desktop` | `linux` | `Warp` |
