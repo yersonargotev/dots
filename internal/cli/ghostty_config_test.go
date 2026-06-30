@@ -66,6 +66,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	for _, want := range []string{
 		`font-family = "Cascadia Code NF"`,
 		"font-size = 20",
+		"theme = Catppuccin Mocha",
 		"config-file = ?adaptive-theme.ghostty",
 	} {
 		if !strings.Contains(string(managedConfig), want) {
@@ -201,8 +202,13 @@ func TestAdaptiveThemeTagInstallsMarkerAndGhosttyFragmentInSandbox(t *testing.T)
 	if err != nil {
 		t.Fatalf("read Ghostty adaptive fragment: %v", err)
 	}
-	if !strings.Contains(string(fragment), "theme = light:catppuccin-latte,dark:catppuccin-mocha") {
+	if !strings.Contains(string(fragment), "theme = light:Catppuccin Latte,dark:Catppuccin Mocha") {
 		t.Fatalf("Ghostty adaptive fragment does not use native light/dark theme syntax\ncontent:\n%s", fragment)
+	}
+	for _, invalidName := range []string{"catppuccin-latte", "catppuccin-mocha"} {
+		if strings.Contains(string(fragment), invalidName) {
+			t.Fatalf("Ghostty adaptive fragment uses invalid built-in theme name %q\ncontent:\n%s", invalidName, fragment)
+		}
 	}
 	if runtime.GOOS != "darwin" {
 		if _, err := os.Lstat(ghosttyAdaptiveTarget); !os.IsNotExist(err) {

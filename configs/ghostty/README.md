@@ -41,7 +41,7 @@ Fresh installs keep the Mocha theme from `config.ghostty`. When the user selects
 `--tag adaptive-theme`, dots also installs
 `~/.config/ghostty/adaptive-theme.ghostty`, and the shared config includes it with
 `config-file = ?adaptive-theme.ghostty`. That fragment uses Ghostty's native
-`theme = light:catppuccin-latte,dark:catppuccin-mocha` syntax, so Ghostty follows
+`theme = light:Catppuccin Latte,dark:Catppuccin Mocha` syntax, so Ghostty follows
 the desktop appearance while keeping Mocha as the dark fallback. The optional
 include is absent unless the tag is selected, so default desktop installs do not
 change theme behavior.
