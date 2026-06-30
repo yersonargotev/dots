@@ -263,6 +263,8 @@ entries:
         dnf: tmux
         pacman: tmux
   - source: configs/zellij/config.kdl
+    source_overrides:
+      adaptive-theme: configs/zellij/config-adaptive.kdl
     target: ~/.config/zellij/config.kdl
     strategy: symlink
     tags:

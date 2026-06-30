@@ -2993,6 +2993,8 @@ func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
 		"manual prerequisite",
 		"America/Bogota",
 		"Sandbox validation",
+		"adaptive-theme",
+		"config-adaptive.kdl",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("Zellij config documentation missing %q:\n%s", want, doc)
@@ -3181,17 +3183,23 @@ func TestRepositoryManifestSourcesExist(t *testing.T) {
 	}
 
 	for i, entry := range got.Entries {
-		sourcePath := filepath.Join(root, entry.Source)
-		info, err := os.Stat(sourcePath)
-		if err != nil {
-			t.Fatalf("entries[%d].source %q does not exist at %s: %v", i, entry.Source, sourcePath, err)
+		sources := []string{entry.Source}
+		for _, override := range entry.SourceOverrides {
+			sources = append(sources, override)
 		}
-		// For symlink strategy a directory source is valid: dots creates a directory
-		// symlink at the target pointing at the source directory. For copy and
-		// template strategies the source must be a regular file because those
-		// strategies operate on file content.
-		if info.IsDir() && entry.Strategy != "symlink" {
-			t.Fatalf("entries[%d].source %q points to a directory, want a file for strategy %q", i, entry.Source, entry.Strategy)
+		for _, source := range sources {
+			sourcePath := filepath.Join(root, source)
+			info, err := os.Stat(sourcePath)
+			if err != nil {
+				t.Fatalf("entries[%d].source %q does not exist at %s: %v", i, source, sourcePath, err)
+			}
+			// For symlink strategy a directory source is valid: dots creates a directory
+			// symlink at the target pointing at the source directory. For copy and
+			// template strategies the source must be a regular file because those
+			// strategies operate on file content.
+			if info.IsDir() && entry.Strategy != "symlink" {
+				t.Fatalf("entries[%d].source %q points to a directory, want a file for strategy %q", i, source, entry.Strategy)
+			}
 		}
 	}
 }
@@ -3359,6 +3367,28 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Apt != wantDep.apt || dep.Dnf != wantDep.dnf || dep.Pacman != wantDep.pacman || dep.Toolchain != wantDep.toolchain || dep.LinuxHomebrew != wantDep.linuxBrew || !sameStrings(dep.Commands, wantDep.commands) {
 			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, apt %q, dnf %q, pacman %q, toolchain %q, linux_homebrew %v", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.apt, wantDep.dnf, wantDep.pacman, wantDep.toolchain, wantDep.linuxBrew)
 		}
+	}
+}
+
+func TestRepositoryNeovimColorschemeUsesSharedAdaptiveHelper(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	path := filepath.Join(root, "configs/nvim/lua/plugins/colorscheme.lua")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", path, err)
+	}
+	config := string(data)
+	for _, want := range []string{
+		`/.config/dots/theme.sh`,
+		`dots_catppuccin_flavor`,
+		`catppuccin-" .. flavour`,
+	} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("Neovim colorscheme config missing %q:\n%s", want, config)
+		}
+	}
+	if strings.Contains(config, `defaults read -g AppleInterfaceStyle`) {
+		t.Fatalf("Neovim colorscheme duplicates macOS defaults probing instead of using shared helper:\n%s", config)
 	}
 }
 

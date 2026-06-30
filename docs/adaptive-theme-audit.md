@@ -21,16 +21,17 @@ slice.
   the marker exists and macOS light appearance is proven; otherwise it uses
   `catppuccin-mocha`.
 - **Claude/Copilot statuslines**: copied statusline scripts source the helper
-  and switch only their ANSI palettes. Claude's app-level `theme` remains
-  `dark-ansi` because changing that setting dynamically would require rewriting
-  the copied JSON settings file.
+  and switch only their ANSI palettes. Claude's app-level `theme` is `auto` so
+  Claude can use its own light/dark support without dots rewriting the copied
+  JSON settings file.
 
 ## Audited and left unchanged
 
-- **Zellij**: default `configs/zellij/config.kdl` stays Mocha-only. Zellij has
-  no safe dots-owned optional include seam in this symlinked config, and adding
-  a second whole config would duplicate the Install Plan target surface, so the
-  previous untagged light/dark switching was removed rather than moved.
+- **Zellij**: default `configs/zellij/config.kdl` stays Mocha-only. The same
+  Managed Entry uses `source_overrides.adaptive-theme` to select
+  `configs/zellij/config-adaptive.kdl`, restoring Zellij's native
+  `theme_light`/`theme_dark` behavior only when the opt-in tag is selected and
+  without adding a duplicate Install Plan target.
 - **Codex**: dots owns a TOML subset for status-line fields, not an app theme
   with a light/dark seam. No adaptive change was made.
 - **OpenCode**: dots owns only the MCP overlay from ADR 0005. There is no

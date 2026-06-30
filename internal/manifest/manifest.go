@@ -31,13 +31,14 @@ type Profile struct {
 }
 
 type Entry struct {
-	Source       string       `yaml:"source"`
-	Target       string       `yaml:"target"`
-	Strategy     string       `yaml:"strategy"`
-	Ownership    string       `yaml:"ownership,omitempty"`
-	Tags         []string     `yaml:"tags"`
-	OS           []string     `yaml:"os,omitempty"`
-	Dependencies []Dependency `yaml:"dependencies,omitempty"`
+	Source          string            `yaml:"source"`
+	SourceOverrides map[string]string `yaml:"source_overrides,omitempty"`
+	Target          string            `yaml:"target"`
+	Strategy        string            `yaml:"strategy"`
+	Ownership       string            `yaml:"ownership,omitempty"`
+	Tags            []string          `yaml:"tags"`
+	OS              []string          `yaml:"os,omitempty"`
+	Dependencies    []Dependency      `yaml:"dependencies,omitempty"`
 }
 
 // DependencySet declares Dependencies selected directly by tags rather than by
@@ -332,6 +333,19 @@ func (m Manifest) Validate() error {
 		}
 		if entry.Target == "" {
 			return fmt.Errorf("entries[%d].target is required", i)
+		}
+		overrideTags := make([]string, 0, len(entry.SourceOverrides))
+		for tag := range entry.SourceOverrides {
+			overrideTags = append(overrideTags, tag)
+		}
+		sort.Strings(overrideTags)
+		for _, tag := range overrideTags {
+			if strings.TrimSpace(tag) == "" {
+				return fmt.Errorf("entries[%d].source_overrides contains an empty tag", i)
+			}
+			if strings.TrimSpace(entry.SourceOverrides[tag]) == "" {
+				return fmt.Errorf("entries[%d].source_overrides[%q] must not be empty", i, tag)
+			}
 		}
 		if !allowedStrategy(entry.Strategy) {
 			return fmt.Errorf("entries[%d].strategy must be one of copy, symlink, template", i)
@@ -807,6 +821,15 @@ func SelectionTags(profile Profile, extraTags []string) []string {
 		tags = append(tags, tag)
 	}
 	return tags
+}
+
+func EntrySource(entry Entry, selectionTags []string) string {
+	for i := len(selectionTags) - 1; i >= 0; i-- {
+		if source, ok := entry.SourceOverrides[selectionTags[i]]; ok {
+			return source
+		}
+	}
+	return entry.Source
 }
 
 func SharesTag(itemTags, profileTags []string) bool {

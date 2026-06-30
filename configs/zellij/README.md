@@ -1,8 +1,11 @@
 # Zellij configuration
 
-`configs/zellij/config.kdl` is the repository-managed Zellij configuration
+`configs/zellij/config.kdl` is the default repository-managed Zellij configuration
 installed as `~/.config/zellij/config.kdl` (symlink strategy, `core` tag,
-`darwin`+`linux`). `configs/zellij/layouts/default.kdl` is installed as
+`darwin`+`linux`). When the manifest selection includes `--tag adaptive-theme`,
+that same Managed Entry uses the `configs/zellij/config-adaptive.kdl` source
+override for the same target instead of adding a duplicate Install Plan action.
+`configs/zellij/layouts/default.kdl` is installed as
 `~/.config/zellij/layouts/default.kdl` and selected by `default_layout "default"`.
 
 The Zellij UX intentionally follows the repository-managed tmux configuration
@@ -34,7 +37,7 @@ The live `~/.config/zellij` directory was classified before adoption:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| **Portable** | locked-by-default mode, tmux-like `C-a` prefix, `Ctrl+g` compatibility command flow, pane/tab/resize/move/scroll keybindings, Alt navigation shortcuts, Catppuccin Mocha fallback theme, rounded pane frames, mouse mode, scroll buffer size, Neovim scrollback editor, built-in plugin aliases, default layout selection, and the tmux-like personal `zjstatus` status bar layout | Managed in `configs/zellij/config.kdl` and `configs/zellij/layouts/default.kdl`. |
+| **Portable** | locked-by-default mode, tmux-like `C-a` prefix, `Ctrl+g` compatibility command flow, pane/tab/resize/move/scroll keybindings, Alt navigation shortcuts, Catppuccin Mocha fallback theme plus an opt-in adaptive source override, rounded pane frames, mouse mode, scroll buffer size, Neovim scrollback editor, built-in plugin aliases, default layout selection, and the tmux-like personal `zjstatus` status bar layout | Managed in `configs/zellij/config.kdl` and `configs/zellij/layouts/default.kdl`. |
 | **Machine-specific** | absolute user paths, hostnames, machine IDs, per-host overrides | **Excluded.** Use a separate config file or config directory through real Zellij mechanisms when a host needs divergence. |
 | **Generated** | downloaded `.wasm` plugin binaries, `plugexit`, plugin-manager output, caches, logs, sessions, serialized runtime state, backup files such as `config.kdl.bak-*` | **Never committed.** Runtime files live under the user's Zellij data/config locations. |
 | **Private** | secrets, tokens, local-only paths, private command wiring | **Excluded.** Keep them outside the managed files. |
@@ -50,13 +53,14 @@ The live `~/.config/zellij` directory was classified before adoption:
 - `Ctrl+g` remains as the compatibility entry point for the classic Zellij
   command flow: from locked mode it enters normal mode, and from active command
   modes it returns to locked mode.
-- The UI uses built-in `theme "catppuccin-mocha"` as the safe default. Zellij
-  does not have a dots-owned optional include seam in this symlinked config, so
-  the previous untagged `theme_light`/`theme_dark` switching is intentionally not
-  enabled by default. A future slice can add a generated or app-native seam if
-  it can be kept behind the `adaptive-theme` opt-in without duplicate Install
-  Plan targets. Rounded pane frames, `mouse_mode true`, and
-  `scroll_buffer_size 10000` stay managed here.
+- The default UI uses built-in `theme "catppuccin-mocha"` as the safe default.
+  The `adaptive-theme` tag switches this target's source to
+  `configs/zellij/config-adaptive.kdl`, which adds Zellij's native
+  `theme_light "catppuccin-latte"` and `theme_dark "catppuccin-mocha"` settings
+  behind the same opt-in without duplicate Install Plan targets. Zellij follows
+  terminal-reported light/dark appearance when available; otherwise Mocha remains
+  the fallback. Rounded pane frames, `mouse_mode true`, and
+  `scroll_buffer_size 10000` stay managed in both sources.
 - Scrollback opens in Neovim via `scrollback_editor "nvim"`.
 - The default layout includes a top `zjstatus` status bar with an intentional
   tmux-like left/center/right shape: mode and session on the left, tabs in the
@@ -148,7 +152,8 @@ go run ./cmd/dots status \
   --state-root "$sandbox_state"
 ```
 
-The expected result is that both `~/.config/zellij/config.kdl` and
-`~/.config/zellij/layouts/default.kdl` are installed/aligned inside
-`$sandbox_home` as symlinks to repository sources. The maintainer's real home
-directory must not be touched.
+The expected default result is that `~/.config/zellij/config.kdl` points at
+`configs/zellij/config.kdl` and `~/.config/zellij/layouts/default.kdl` points at
+`configs/zellij/layouts/default.kdl`. With `--tag adaptive-theme`, the config
+symlink points at `configs/zellij/config-adaptive.kdl` instead. The maintainer's
+real home directory must not be touched.
