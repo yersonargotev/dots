@@ -28,9 +28,10 @@ maintainer's machine state.
 The managed config uses Catppuccin Latte when macOS is in light appearance and
 Catppuccin Mocha when macOS is in dark appearance. The selection is made when
 Tmux sources this config with `defaults read -g AppleInterfaceStyle`: macOS
-reports `Dark` only for dark mode, so any other value means Latte. Non-macOS
-hosts fall back to Mocha. Re-source `~/.tmux.conf` or restart Tmux after
-changing the system appearance.
+reports `Dark` only for dark mode and leaves `AppleInterfaceStyle` unset in
+light mode. Only that expected empty value selects Latte. Non-macOS hosts, a
+missing `defaults` command, or unknown appearance values fall back to Mocha.
+Re-source `~/.tmux.conf` or restart Tmux after changing the system appearance.
 
 Custom window-status formats use Catppuccin theme variables instead of fixed
 Mocha hex values so the same status bar adapts to Latte or Mocha.

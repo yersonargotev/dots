@@ -2,6 +2,7 @@ package manifest_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -2991,6 +2992,99 @@ func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("Zellij config documentation missing %q:\n%s", want, doc)
 		}
+	}
+}
+
+func TestRepositoryTmuxCatppuccinFlavorCondition(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	managedPath := filepath.Join(root, "configs/tmux/tmux.conf")
+	managedBytes, err := os.ReadFile(managedPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", managedPath, err)
+	}
+
+	condition, ok := tmuxIfShellCondition(string(managedBytes), "@catppuccin_flavor")
+	if !ok {
+		t.Fatalf("managed tmux config missing @catppuccin_flavor if-shell")
+	}
+
+	tests := []struct {
+		name         string
+		uname        string
+		defaults     string
+		defaultsExit int
+		wantLatte    bool
+	}{
+		{name: "darwin light", uname: "Darwin", defaults: "", defaultsExit: 1, wantLatte: true},
+		{name: "darwin dark", uname: "Darwin", defaults: "Dark", wantLatte: false},
+		{name: "darwin unknown", uname: "Darwin", defaults: "Blue", wantLatte: false},
+		{name: "linux", uname: "Linux", defaults: "", wantLatte: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bin := t.TempDir()
+			writeExecutable(t, filepath.Join(bin, "uname"), "#!/bin/sh\nprintf '%s\\n' '"+tt.uname+"'\n")
+			writeDefaultsStub(t, filepath.Join(bin, "defaults"), tt.defaults, tt.defaultsExit)
+
+			gotLatte := shellConditionSucceeds(t, condition, bin)
+			if gotLatte != tt.wantLatte {
+				t.Fatalf("condition selected latte = %v, want %v; condition: %s", gotLatte, tt.wantLatte, condition)
+			}
+		})
+	}
+
+	t.Run("darwin missing defaults falls back to mocha", func(t *testing.T) {
+		bin := t.TempDir()
+		writeExecutable(t, filepath.Join(bin, "uname"), "#!/bin/sh\nprintf '%s\\n' 'Darwin'\n")
+
+		gotLatte := shellConditionSucceeds(t, condition, bin)
+		if gotLatte {
+			t.Fatalf("condition selected latte when defaults(1) was unavailable; condition: %s", condition)
+		}
+	})
+}
+
+func tmuxIfShellCondition(config, marker string) (string, bool) {
+	for _, line := range strings.Split(config, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "if-shell '") || !strings.Contains(line, marker) {
+			continue
+		}
+		rest := strings.TrimPrefix(line, "if-shell '")
+		end := strings.Index(rest, "'")
+		if end == -1 {
+			return "", false
+		}
+		return rest[:end], true
+	}
+	return "", false
+}
+
+func shellConditionSucceeds(t *testing.T, condition, path string) bool {
+	t.Helper()
+	cmd := exec.Command("sh", "-c", condition)
+	cmd.Env = append(os.Environ(), "PATH="+path)
+	err := cmd.Run()
+	return err == nil
+}
+
+func writeDefaultsStub(t *testing.T, path, output string, exitCode int) {
+	t.Helper()
+	script := "#!/bin/sh\n"
+	if output != "" {
+		script += "printf '%s\\n' '" + output + "'\n"
+	}
+	if exitCode != 0 {
+		script += "exit 1\n"
+	}
+	writeExecutable(t, path, script)
+}
+
+func writeExecutable(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", path, err)
 	}
 }
 
