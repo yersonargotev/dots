@@ -35,7 +35,11 @@ fall back to Mocha. Re-source `~/.tmux.conf` or restart Tmux after changing the
 system appearance or opt-in marker.
 
 Custom window-status formats use Catppuccin theme variables instead of fixed
-Mocha hex values so the same status bar adapts to Latte or Mocha.
+Mocha hex values so the same status bar adapts to Latte or Mocha. The right-side
+status module icons share the private `@dots_catppuccin_status_icon_fg` helper:
+it keeps Mocha's default dark `crust` foreground, but switches to Latte's darker
+`fg` foreground because Catppuccin/tmux's default Latte `crust` is too pale on
+accent-colored icon backgrounds.
 
 ## Portability classification
 
