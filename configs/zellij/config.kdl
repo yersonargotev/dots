@@ -328,7 +328,12 @@ plugins {
 load_plugins {
 }
 
+// Follow terminal-reported light/dark appearance (macOS-aware terminals
+// usually mirror the system setting). Mocha remains the fallback when no
+// appearance is reported.
 theme "catppuccin-mocha"
+theme_light "catppuccin-latte"
+theme_dark "catppuccin-mocha"
 default_mode "locked"
 mouse_mode true
 scroll_buffer_size 10000
