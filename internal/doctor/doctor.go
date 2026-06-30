@@ -136,12 +136,16 @@ func ScanSecrets(m manifest.Manifest, opts Options) (SecretReport, error) {
 	var report SecretReport
 	seen := map[string]bool{}
 	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, tags) || !manifest.MatchesOS(entry.OS, opts.OS) || seen[entry.Source] {
+		if !manifest.SharesTag(entry.Tags, tags) || !manifest.MatchesOS(entry.OS, opts.OS) {
 			continue
 		}
-		seen[entry.Source] = true
+		source := manifest.EntrySource(entry, tags)
+		if seen[source] {
+			continue
+		}
+		seen[source] = true
 
-		sourceAbs, err := plan.ResolveSource(entry.Source, opts.SourceRoot)
+		sourceAbs, err := plan.ResolveSource(source, opts.SourceRoot)
 		if err != nil {
 			return SecretReport{}, err
 		}
@@ -152,7 +156,7 @@ func ScanSecrets(m manifest.Manifest, opts Options) (SecretReport, error) {
 			return SecretReport{}, err
 		}
 
-		findings, err := scanSource(entry.Source, sourceAbs)
+		findings, err := scanSource(source, sourceAbs)
 		if err != nil {
 			return SecretReport{}, err
 		}

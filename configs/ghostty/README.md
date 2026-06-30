@@ -29,10 +29,22 @@ The live `~/.config/ghostty/config` file was classified before adoption:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| **Portable** | font family, font size, Catppuccin Mocha palette, foreground/background/cursor/selection colors, split divider color, intentional keybindings for terminal workflow and Zellij/tmux forwarding | Managed in `configs/ghostty/config.ghostty`. |
+| **Portable** | font family, font size, Catppuccin Mocha fallback theme, optional `adaptive-theme` native light/dark include, intentional keybindings for terminal workflow and Zellij/tmux forwarding | Managed in `configs/ghostty/config.ghostty`. |
 | **Machine-specific** | window dimensions, opacity/blur, window padding ergonomics, explicit shell/command paths, initial working directories, OS integrations, display/GPU/host-dependent behavior | Excluded from the shared file; document deliberate host-specific exceptions in `configs/ghostty/config.local.ghostty.example`. |
 | **Generated** | logs, caches, sessions, backups, temporary files, generated state, local shaders | Never committed. |
 | **Private** | secrets, authenticated state, private paths, hostnames, machine IDs | Excluded. |
+
+
+## Adaptive theme opt-in
+
+Fresh installs keep the Mocha theme from `config.ghostty`. When the user selects
+`--tag adaptive-theme`, dots also installs
+`~/.config/ghostty/adaptive-theme.ghostty`, and the shared config includes it with
+`config-file = ?adaptive-theme.ghostty`. That fragment uses Ghostty's native
+`theme = light:catppuccin-latte,dark:catppuccin-mocha` syntax, so Ghostty follows
+the desktop appearance while keeping Mocha as the dark fallback. The optional
+include is absent unless the tag is selected, so default desktop installs do not
+change theme behavior.
 
 ## Legacy config migration
 
@@ -43,7 +55,7 @@ legacy file can override the repository-managed Source of Truth after install.
 Before switching a real workstation to this slice, classify the legacy file, move
 portable settings into `configs/ghostty/config.ghostty`, move machine-specific
 settings into `~/.config/ghostty/config.local.ghostty`, then archive or remove
-the legacy `~/.config/ghostty/config` file. Do not leave duplicated font, color,
+the legacy `~/.config/ghostty/config` file. Do not leave duplicated font, theme/color,
 or keybinding settings in the legacy file because they can override the managed
 Source of Truth. Do the same review for macOS
 Application Support Ghostty config files if they exist.
@@ -98,6 +110,7 @@ GOMODCACHE="$sandbox_modcache" \
 XDG_CACHE_HOME="$sandbox_cache" \
 go run ./cmd/dots install \
   --profile desktop \
+  --tag adaptive-theme \
   --yes \
   --home "$sandbox_home" \
   --source-root "$PWD" \
@@ -115,6 +128,5 @@ go run ./cmd/dots status \
   --state-root "$sandbox_state"
 ```
 
-The expected result is that `~/.config/ghostty/config.ghostty` is
-installed/aligned inside `$sandbox_home` as a symlink to the repository source.
+The expected result is that `~/.config/ghostty/config.ghostty` is installed/aligned inside `$sandbox_home` as a symlink to the repository source; add `--tag adaptive-theme` on macOS to also install `~/.config/ghostty/adaptive-theme.ghostty`. Linux keeps the Mocha fallback because the adaptive fragment is Darwin-only.
 The maintainer's real home directory must not be touched.

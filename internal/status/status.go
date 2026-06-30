@@ -92,7 +92,8 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			continue
 		}
 
-		evaluated := Entry{Source: entry.Source, Target: entry.Target, Strategy: entry.Strategy}
+		source := manifest.EntrySource(entry, tags)
+		evaluated := Entry{Source: source, Target: entry.Target, Strategy: entry.Strategy}
 		if !manifest.MatchesOS(entry.OS, opts.OS) {
 			evaluated.State = StateSkipped
 			report.Entries = append(report.Entries, evaluated)
@@ -108,6 +109,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			return Report{}, err
 		}
 
+		entry.Source = source
 		st, err := evaluate(entry, target, meta, opts.SourceRoot)
 		if err != nil {
 			return Report{}, err

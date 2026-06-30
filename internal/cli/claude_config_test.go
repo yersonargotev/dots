@@ -398,7 +398,7 @@ cat > "$HOME/.claude/settings.json" <<'JSON'
     "command": "bash ~/.claude/statusline-command.sh",
     "type": "command"
   },
-  "theme": "dark-ansi",
+  "theme": "auto",
   "enabledPlugins": {
     "chrome-devtools-mcp": true
   }

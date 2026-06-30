@@ -328,10 +328,12 @@ plugins {
 load_plugins {
 }
 
-// Mocha is the safe default. Zellij has no native include mechanism in this
-// managed config, so automatic Latte switching is not enabled unless a future
-// dots-owned generation seam can put it behind the adaptive-theme opt-in.
+// Follow terminal-reported light/dark appearance only when the manifest
+// adaptive-theme tag selects this source override. Mocha remains the fallback
+// when no appearance is reported.
 theme "catppuccin-mocha"
+theme_light "catppuccin-latte"
+theme_dark "catppuccin-mocha"
 default_mode "locked"
 mouse_mode true
 scroll_buffer_size 10000

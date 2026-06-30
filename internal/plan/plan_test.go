@@ -714,6 +714,46 @@ func TestBuildSelection(t *testing.T) {
 	}
 }
 
+func TestBuildUsesSourceOverrideForSelectedExtraTag(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "default.conf", "dark\n")
+	writeSource(t, sourceRoot, "adaptive.conf", "light\n")
+
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {Tags: []string{"core"}},
+		},
+		Entries: []manifest.Entry{{
+			Source:          "default.conf",
+			SourceOverrides: map[string]string{"adaptive-theme": "adaptive.conf"},
+			Target:          "~/.config/app/config",
+			Strategy:        "symlink",
+			Tags:            []string{"core"},
+		}},
+	}
+
+	withoutTag, err := plan.Build(m, plan.Options{Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() without tag error = %v", err)
+	}
+	if got := withoutTag.Actions[0].Source; got != "default.conf" {
+		t.Fatalf("source without extra tag = %q, want default.conf", got)
+	}
+
+	withTag, err := plan.Build(m, plan.Options{Profile: "default", ExtraTags: []string{"adaptive-theme"}, OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() with tag error = %v", err)
+	}
+	if got := withTag.Actions[0].Source; got != "adaptive.conf" {
+		t.Fatalf("source with adaptive-theme = %q, want adaptive.conf", got)
+	}
+	if len(withTag.Actions) != 1 {
+		t.Fatalf("len(Actions) with source override = %d, want 1", len(withTag.Actions))
+	}
+}
+
 func TestBuildRejectsUnknownProfile(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code statusLine — plain text + Catppuccin Mocha palette
+# Claude Code statusLine — plain text + Catppuccin adaptive palette
 
 input=$(cat)
 
@@ -13,16 +13,23 @@ seven_d_resets=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empt
 vim_mode=$(echo "$input" | jq -r '.vim.mode // ""')
 perm_mode=$(echo "$input" | jq -r '.permission_mode // .permissionMode // ""')
 
-# Catppuccin Mocha palette
-blue='\033[38;2;137;180;250m'
-mauve='\033[38;2;203;166;247m'
-green='\033[38;2;166;227;161m'
-yellow='\033[38;2;249;226;175m'
-subtext='\033[38;2;166;173;200m'
-overlay='\033[38;2;108;112;134m'
-red='\033[38;2;243;139;168m'
-pink='\033[38;2;245;194;231m'
-reset='\033[0m'
+# Catppuccin palette. Latte is used only when the adaptive-theme marker is
+# installed and macOS reports light appearance; otherwise Mocha is the fallback.
+if [ -r "$HOME/.config/dots/theme.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOME/.config/dots/theme.sh"
+  dots_apply_catppuccin_ansi_palette
+else
+  blue='\033[38;2;137;180;250m'
+  mauve='\033[38;2;203;166;247m'
+  green='\033[38;2;166;227;161m'
+  yellow='\033[38;2;249;226;175m'
+  subtext='\033[38;2;166;173;200m'
+  overlay='\033[38;2;108;112;134m'
+  red='\033[38;2;243;139;168m'
+  pink='\033[38;2;245;194;231m'
+  reset='\033[0m'
+fi
 
 sep="${overlay} | ${reset}"
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -65,6 +66,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	for _, want := range []string{
 		`font-family = "Cascadia Code NF"`,
 		"font-size = 20",
+		"config-file = ?adaptive-theme.ghostty",
 	} {
 		if !strings.Contains(string(managedConfig), want) {
 			t.Fatalf("managed ghostty config missing %q", want)
@@ -141,5 +143,70 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 
 	if !strings.Contains(installOut.String(), "configs/ghostty/config.ghostty") {
 		t.Fatalf("install plan did not include the Ghostty managed entry\noutput:\n%s", installOut.String())
+	}
+	if strings.Contains(installOut.String(), "adaptive-theme.ghostty") {
+		t.Fatalf("install without adaptive-theme tag included adaptive Ghostty fragment\noutput:\n%s", installOut.String())
+	}
+}
+
+func TestAdaptiveThemeTagInstallsMarkerAndGhosttyFragmentInSandbox(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	stubGentleAIProvisionerTools(t)
+	seedDesktopNerdFont(t, home)
+
+	install := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	install.SetOut(&installOut)
+	install.SetErr(&installOut)
+	install.SetArgs([]string{
+		"install",
+		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "desktop",
+		"--tag", "adaptive-theme",
+		"--source-root", repoRoot,
+		"--home", home,
+		"--state-root", stateRoot,
+		"--yes",
+	})
+
+	if err := install.Execute(); err != nil {
+		t.Fatalf("dots install with adaptive-theme failed in sandbox: %v\noutput:\n%s", err, installOut.String())
+	}
+
+	targets := map[string]string{
+		filepath.Join(home, ".config", "dots", "theme.sh"):       filepath.Join(repoRoot, "configs", "dots", "theme.sh"),
+		filepath.Join(home, ".config", "dots", "adaptive-theme"): filepath.Join(repoRoot, "configs", "dots", "adaptive-theme"),
+	}
+	ghosttyAdaptiveTarget := filepath.Join(home, ".config", "ghostty", "adaptive-theme.ghostty")
+	if runtime.GOOS == "darwin" {
+		targets[ghosttyAdaptiveTarget] = filepath.Join(repoRoot, "configs", "ghostty", "adaptive", "adaptive-theme.ghostty")
+	}
+	for target, wantSource := range targets {
+		gotSource, err := os.Readlink(target)
+		if err != nil {
+			t.Fatalf("adaptive-theme target %s is not a symlink: %v\noutput:\n%s", target, err, installOut.String())
+		}
+		if gotSource != wantSource {
+			t.Fatalf("adaptive-theme symlink %s = %q, want %q", target, gotSource, wantSource)
+		}
+	}
+
+	fragment, err := os.ReadFile(filepath.Join(repoRoot, "configs", "ghostty", "adaptive", "adaptive-theme.ghostty"))
+	if err != nil {
+		t.Fatalf("read Ghostty adaptive fragment: %v", err)
+	}
+	if !strings.Contains(string(fragment), "theme = light:catppuccin-latte,dark:catppuccin-mocha") {
+		t.Fatalf("Ghostty adaptive fragment does not use native light/dark theme syntax\ncontent:\n%s", fragment)
+	}
+	if runtime.GOOS != "darwin" {
+		if _, err := os.Lstat(ghosttyAdaptiveTarget); !os.IsNotExist(err) {
+			t.Fatalf("non-Darwin adaptive-theme install created Ghostty adaptive fragment; err=%v output:\n%s", err, installOut.String())
+		}
 	}
 }

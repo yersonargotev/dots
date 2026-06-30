@@ -86,20 +86,22 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			continue
 		}
 
+		source := manifest.EntrySource(entry, tags)
 		target, err := ResolveTarget(entry.Target, opts.Home)
 		if err != nil {
 			return Plan{}, err
 		}
-		sourceAbs, err := ResolveSource(entry.Source, opts.SourceRoot)
+		sourceAbs, err := ResolveSource(source, opts.SourceRoot)
 		if err != nil {
 			return Plan{}, err
 		}
+		entry.Source = source
 		actionStatus, err := status(entry, target, sourceAbs, opts.SourceRoot, opts.Metadata)
 		if err != nil {
 			return Plan{}, err
 		}
 		plan.Actions = append(plan.Actions, Action{
-			Source:         entry.Source,
+			Source:         source,
 			ResolvedSource: sourceAbs,
 			Target:         target,
 			Strategy:       entry.Strategy,

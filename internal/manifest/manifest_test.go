@@ -2719,7 +2719,8 @@ func TestRepositoryTmuxConfigClassifiesPortableConfigSafely(t *testing.T) {
 	for _, want := range []string{
 		"set -g @plugin 'tmux-plugins/tpm'",
 		"set -g @plugin 'catppuccin/tmux#v2.3.0'",
-		`defaults read -g AppleInterfaceStyle`,
+		`.config/dots/theme.sh`,
+		`dots_catppuccin_flavor`,
 		`set -g @catppuccin_flavor "latte"`,
 		`set -g @catppuccin_flavor "mocha"`,
 		`#{@thm_text}`,
@@ -2884,8 +2885,6 @@ func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
 		`bind "Ctrl g" { SwitchToMode "normal"; }`,
 		`bind "Ctrl g" { SwitchToMode "locked"; }`,
 		`theme "catppuccin-mocha"`,
-		`theme_light "catppuccin-latte"`,
-		`theme_dark "catppuccin-mocha"`,
 		`default_mode "locked"`,
 		`mouse_mode true`,
 		`scroll_buffer_size 10000`,
@@ -2899,6 +2898,12 @@ func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
 	} {
 		if !strings.Contains(config, want) {
 			t.Fatalf("managed Zellij config missing portable segment %q:\n%s", want, config)
+		}
+	}
+
+	for _, notWant := range []string{`theme_light "catppuccin-latte"`, `theme_dark "catppuccin-mocha"`} {
+		if strings.Contains(config, notWant) {
+			t.Fatalf("default Zellij config contains untagged adaptive segment %q:\n%s", notWant, config)
 		}
 	}
 
@@ -2988,6 +2993,8 @@ func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
 		"manual prerequisite",
 		"America/Bogota",
 		"Sandbox validation",
+		"adaptive-theme",
+		"config-adaptive.kdl",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("Zellij config documentation missing %q:\n%s", want, doc)
@@ -3013,12 +3020,14 @@ func TestRepositoryTmuxCatppuccinFlavorCondition(t *testing.T) {
 		uname        string
 		defaults     string
 		defaultsExit int
+		marker       bool
 		wantLatte    bool
 	}{
-		{name: "darwin light", uname: "Darwin", defaults: "", defaultsExit: 1, wantLatte: true},
-		{name: "darwin dark", uname: "Darwin", defaults: "Dark", wantLatte: false},
-		{name: "darwin unknown", uname: "Darwin", defaults: "Blue", wantLatte: false},
-		{name: "linux", uname: "Linux", defaults: "", wantLatte: false},
+		{name: "darwin light with opt-in marker", uname: "Darwin", defaults: "", defaultsExit: 1, marker: true, wantLatte: true},
+		{name: "darwin light without marker", uname: "Darwin", defaults: "", defaultsExit: 1, marker: false, wantLatte: false},
+		{name: "darwin dark with marker", uname: "Darwin", defaults: "Dark", marker: true, wantLatte: false},
+		{name: "darwin unknown with marker", uname: "Darwin", defaults: "Blue", marker: true, wantLatte: false},
+		{name: "linux with marker", uname: "Linux", defaults: "", marker: true, wantLatte: false},
 	}
 
 	for _, tt := range tests {
@@ -3027,7 +3036,10 @@ func TestRepositoryTmuxCatppuccinFlavorCondition(t *testing.T) {
 			writeExecutable(t, filepath.Join(bin, "uname"), "#!/bin/sh\nprintf '%s\\n' '"+tt.uname+"'\n")
 			writeDefaultsStub(t, filepath.Join(bin, "defaults"), tt.defaults, tt.defaultsExit)
 
-			gotLatte := shellConditionSucceeds(t, condition, bin)
+			home := t.TempDir()
+			installAdaptiveThemeHelperForCondition(t, root, home, tt.marker)
+
+			gotLatte := shellConditionSucceeds(t, condition, bin, home)
 			if gotLatte != tt.wantLatte {
 				t.Fatalf("condition selected latte = %v, want %v; condition: %s", gotLatte, tt.wantLatte, condition)
 			}
@@ -3038,7 +3050,10 @@ func TestRepositoryTmuxCatppuccinFlavorCondition(t *testing.T) {
 		bin := t.TempDir()
 		writeExecutable(t, filepath.Join(bin, "uname"), "#!/bin/sh\nprintf '%s\\n' 'Darwin'\n")
 
-		gotLatte := shellConditionSucceeds(t, condition, bin)
+		home := t.TempDir()
+		installAdaptiveThemeHelperForCondition(t, root, home, true)
+
+		gotLatte := shellConditionSucceeds(t, condition, bin, home)
 		if gotLatte {
 			t.Fatalf("condition selected latte when defaults(1) was unavailable; condition: %s", condition)
 		}
@@ -3061,12 +3076,32 @@ func tmuxIfShellCondition(config, marker string) (string, bool) {
 	return "", false
 }
 
-func shellConditionSucceeds(t *testing.T, condition, path string) bool {
+func shellConditionSucceeds(t *testing.T, condition, path, home string) bool {
 	t.Helper()
 	cmd := exec.Command("sh", "-c", condition)
-	cmd.Env = append(os.Environ(), "PATH="+path)
+	cmd.Env = append(os.Environ(), "PATH="+path, "HOME="+home)
 	err := cmd.Run()
 	return err == nil
+}
+
+func installAdaptiveThemeHelperForCondition(t *testing.T, root, home string, marker bool) {
+	t.Helper()
+	dir := filepath.Join(home, ".config", "dots")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q) error = %v", dir, err)
+	}
+	helper, err := os.ReadFile(filepath.Join(root, "configs", "dots", "theme.sh"))
+	if err != nil {
+		t.Fatalf("read theme helper: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "theme.sh"), helper, 0o755); err != nil {
+		t.Fatalf("write theme helper: %v", err)
+	}
+	if marker {
+		if err := os.WriteFile(filepath.Join(dir, "adaptive-theme"), []byte("adaptive-theme\n"), 0o644); err != nil {
+			t.Fatalf("write adaptive marker: %v", err)
+		}
+	}
 }
 
 func writeDefaultsStub(t *testing.T, path, output string, exitCode int) {
@@ -3148,17 +3183,23 @@ func TestRepositoryManifestSourcesExist(t *testing.T) {
 	}
 
 	for i, entry := range got.Entries {
-		sourcePath := filepath.Join(root, entry.Source)
-		info, err := os.Stat(sourcePath)
-		if err != nil {
-			t.Fatalf("entries[%d].source %q does not exist at %s: %v", i, entry.Source, sourcePath, err)
+		sources := []string{entry.Source}
+		for _, override := range entry.SourceOverrides {
+			sources = append(sources, override)
 		}
-		// For symlink strategy a directory source is valid: dots creates a directory
-		// symlink at the target pointing at the source directory. For copy and
-		// template strategies the source must be a regular file because those
-		// strategies operate on file content.
-		if info.IsDir() && entry.Strategy != "symlink" {
-			t.Fatalf("entries[%d].source %q points to a directory, want a file for strategy %q", i, entry.Source, entry.Strategy)
+		for _, source := range sources {
+			sourcePath := filepath.Join(root, source)
+			info, err := os.Stat(sourcePath)
+			if err != nil {
+				t.Fatalf("entries[%d].source %q does not exist at %s: %v", i, source, sourcePath, err)
+			}
+			// For symlink strategy a directory source is valid: dots creates a directory
+			// symlink at the target pointing at the source directory. For copy and
+			// template strategies the source must be a regular file because those
+			// strategies operate on file content.
+			if info.IsDir() && entry.Strategy != "symlink" {
+				t.Fatalf("entries[%d].source %q points to a directory, want a file for strategy %q", i, source, entry.Strategy)
+			}
 		}
 	}
 }
@@ -3326,5 +3367,96 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Apt != wantDep.apt || dep.Dnf != wantDep.dnf || dep.Pacman != wantDep.pacman || dep.Toolchain != wantDep.toolchain || dep.LinuxHomebrew != wantDep.linuxBrew || !sameStrings(dep.Commands, wantDep.commands) {
 			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, apt %q, dnf %q, pacman %q, toolchain %q, linux_homebrew %v", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.apt, wantDep.dnf, wantDep.pacman, wantDep.toolchain, wantDep.linuxBrew)
 		}
+	}
+}
+
+func TestRepositoryNeovimColorschemeUsesSharedAdaptiveHelper(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	path := filepath.Join(root, "configs/nvim/lua/plugins/colorscheme.lua")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", path, err)
+	}
+	config := string(data)
+	for _, want := range []string{
+		`/.config/dots/theme.sh`,
+		`dots_catppuccin_flavor`,
+		`catppuccin-" .. flavour`,
+	} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("Neovim colorscheme config missing %q:\n%s", want, config)
+		}
+	}
+	if strings.Contains(config, `defaults read -g AppleInterfaceStyle`) {
+		t.Fatalf("Neovim colorscheme duplicates macOS defaults probing instead of using shared helper:\n%s", config)
+	}
+}
+
+func TestDotsThemeHelperAdaptiveMatrix(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	tests := []struct {
+		name       string
+		uname      string
+		defaults   string
+		exitCode   int
+		marker     bool
+		wantFlavor string
+	}{
+		{name: "tag present macOS light", uname: "Darwin", defaults: "", exitCode: 1, marker: true, wantFlavor: "latte"},
+		{name: "tag absent macOS light", uname: "Darwin", defaults: "", exitCode: 1, marker: false, wantFlavor: "mocha"},
+		{name: "tag present macOS dark", uname: "Darwin", defaults: "Dark", marker: true, wantFlavor: "mocha"},
+		{name: "tag present macOS unknown", uname: "Darwin", defaults: "Blue", marker: true, wantFlavor: "mocha"},
+		{name: "tag present Linux", uname: "Linux", defaults: "", marker: true, wantFlavor: "mocha"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bin := t.TempDir()
+			writeExecutable(t, filepath.Join(bin, "uname"), "#!/bin/sh\nprintf '%s\n' '"+tt.uname+"'\n")
+			writeDefaultsStub(t, filepath.Join(bin, "defaults"), tt.defaults, tt.exitCode)
+			home := t.TempDir()
+			installAdaptiveThemeHelperForCondition(t, root, home, tt.marker)
+
+			cmd := exec.Command("sh", "-c", `. "$HOME/.config/dots/theme.sh" && dots_catppuccin_flavor`)
+			cmd.Env = append(os.Environ(), "PATH="+bin, "HOME="+home)
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("dots_catppuccin_flavor error = %v", err)
+			}
+			if got := strings.TrimSpace(string(out)); got != tt.wantFlavor {
+				t.Fatalf("flavor = %q, want %q", got, tt.wantFlavor)
+			}
+		})
+	}
+}
+
+func TestAgentStatuslinePalettesUseAdaptiveHelper(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	for _, script := range []string{
+		"configs/claude/statusline-command.sh",
+		"configs/copilot/statusline-command.sh",
+	} {
+		t.Run(script, func(t *testing.T) {
+			bin := t.TempDir()
+			writeExecutable(t, filepath.Join(bin, "uname"), "#!/bin/sh\nprintf '%s\n' 'Darwin'\n")
+			writeDefaultsStub(t, filepath.Join(bin, "defaults"), "", 1)
+			writeExecutable(t, filepath.Join(bin, "jq"), `#!/bin/sh
+case "$*" in
+  *model*) printf 'opus\n' ;;
+esac
+`)
+			home := t.TempDir()
+			installAdaptiveThemeHelperForCondition(t, root, home, true)
+
+			cmd := exec.Command("bash", filepath.Join(root, script))
+			cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "HOME="+home)
+			cmd.Stdin = strings.NewReader(`{"model":{"display_name":"opus"}}`)
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("%s error = %v", script, err)
+			}
+			if !strings.Contains(string(out), "\033[38;2;92;95;119m") {
+				t.Fatalf("%s did not use Latte subtext color with adaptive marker; output %q", script, out)
+			}
+		})
 	}
 }

@@ -212,6 +212,22 @@ entries:
         apt: git
         dnf: git
         pacman: git
+  - source: configs/dots/theme.sh
+    target: ~/.config/dots/theme.sh
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+  - source: configs/dots/adaptive-theme
+    target: ~/.config/dots/adaptive-theme
+    strategy: symlink
+    tags:
+      - adaptive-theme
+    os:
+      - darwin
+      - linux
   - source: configs/starship/starship.toml
     target: ~/.config/starship.toml
     strategy: symlink
@@ -247,6 +263,8 @@ entries:
         dnf: tmux
         pacman: tmux
   - source: configs/zellij/config.kdl
+    source_overrides:
+      adaptive-theme: configs/zellij/config-adaptive.kdl
     target: ~/.config/zellij/config.kdl
     strategy: symlink
     tags:
@@ -305,6 +323,13 @@ entries:
           interactivity. After installation, verify ghostty --version and rerun
           dots deps check.
         brew: ghostty
+  - source: configs/ghostty/adaptive/adaptive-theme.ghostty
+    target: ~/.config/ghostty/adaptive-theme.ghostty
+    strategy: symlink
+    tags:
+      - adaptive-theme
+    os:
+      - darwin
   - source: configs/warp/settings.toml
     target: ~/.warp/settings.toml
     strategy: copy
