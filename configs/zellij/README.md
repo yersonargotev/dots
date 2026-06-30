@@ -34,7 +34,7 @@ The live `~/.config/zellij` directory was classified before adoption:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| **Portable** | locked-by-default mode, tmux-like `C-a` prefix, `Ctrl+g` compatibility command flow, pane/tab/resize/move/scroll keybindings, Alt navigation shortcuts, Catppuccin Mocha theme, rounded pane frames, mouse mode, scroll buffer size, Neovim scrollback editor, built-in plugin aliases, default layout selection, and the tmux-like personal `zjstatus` status bar layout | Managed in `configs/zellij/config.kdl` and `configs/zellij/layouts/default.kdl`. |
+| **Portable** | locked-by-default mode, tmux-like `C-a` prefix, `Ctrl+g` compatibility command flow, pane/tab/resize/move/scroll keybindings, Alt navigation shortcuts, Catppuccin Latte/Mocha light-dark theme selection, rounded pane frames, mouse mode, scroll buffer size, Neovim scrollback editor, built-in plugin aliases, default layout selection, and the tmux-like personal `zjstatus` status bar layout | Managed in `configs/zellij/config.kdl` and `configs/zellij/layouts/default.kdl`. |
 | **Machine-specific** | absolute user paths, hostnames, machine IDs, per-host overrides | **Excluded.** Use a separate config file or config directory through real Zellij mechanisms when a host needs divergence. |
 | **Generated** | downloaded `.wasm` plugin binaries, `plugexit`, plugin-manager output, caches, logs, sessions, serialized runtime state, backup files such as `config.kdl.bak-*` | **Never committed.** Runtime files live under the user's Zellij data/config locations. |
 | **Private** | secrets, tokens, local-only paths, private command wiring | **Excluded.** Keep them outside the managed files. |
@@ -50,8 +50,12 @@ The live `~/.config/zellij` directory was classified before adoption:
 - `Ctrl+g` remains as the compatibility entry point for the classic Zellij
   command flow: from locked mode it enters normal mode, and from active command
   modes it returns to locked mode.
-- The UI uses the built-in `catppuccin-mocha` theme, rounded pane frames,
-  `mouse_mode true`, and `scroll_buffer_size 10000`.
+- The UI uses built-in Catppuccin themes: `theme_light "catppuccin-latte"`,
+  `theme_dark "catppuccin-mocha"`, and `theme "catppuccin-mocha"` as the
+  fallback when the terminal does not report light/dark appearance. On macOS,
+  this follows the system setting when the terminal forwards appearance changes
+  to Zellij; otherwise Mocha remains the safe default. Rounded pane frames,
+  `mouse_mode true`, and `scroll_buffer_size 10000` stay managed here.
 - Scrollback opens in Neovim via `scrollback_editor "nvim"`.
 - The default layout includes a top `zjstatus` status bar with an intentional
   tmux-like left/center/right shape: mode and session on the left, tabs in the
