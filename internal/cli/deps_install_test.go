@@ -51,7 +51,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependency install preview for profile "default" (homebrew)`,
+		`Dependency install preview for profile "default" (tags: core) (homebrew)`,
 		"would-install definitely-missing-starship",
 		"brew install starship",
 		"Proceed with dependency installation? [y/N]",
@@ -213,7 +213,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependency install preview for profile "default" (homebrew)`,
+		`Dependency install preview for profile "default" (tags: core) (homebrew)`,
 		`manual        definitely-missing-manual no homebrew package declared for "definitely-missing-manual"; install it manually`,
 		"Summary: 0 installable, 1 manual",
 	} {
@@ -399,7 +399,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependency install dry-run for profile "default" (homebrew)`,
+		`Dependency install dry-run for profile "default" (tags: core) (homebrew)`,
 		"would-install definitely-missing-starship",
 		"brew install starship",
 		"Summary: 1 installable, 0 manual",
@@ -469,11 +469,11 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependency install preview for profile "default" (homebrew)`,
+		`Dependency install preview for profile "default" (tags: core) (homebrew)`,
 		"Proceed with dependency installation? [y/N]",
 		"package stdout",
 		"package stderr",
-		`Dependency install for profile "default" (homebrew)`,
+		`Dependency install for profile "default" (tags: core) (homebrew)`,
 		"Summary: 1 installed, 0 manual, 0 unresolved, 0 failed",
 	} {
 		if !strings.Contains(got, want) {
@@ -549,7 +549,7 @@ entries:
 	for _, want := range []string{
 		"package stdout",
 		"package stderr",
-		`Dependency install for profile "default" (homebrew)`,
+		`Dependency install for profile "default" (tags: core) (homebrew)`,
 		"installed",
 		"definitely-missing-starship",
 		"Summary: 1 installed, 0 manual, 0 unresolved, 0 failed",

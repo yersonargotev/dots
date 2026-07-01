@@ -47,7 +47,7 @@ func TestUpdateDryRunRendersProvisionerPlan(t *testing.T) {
 		"--home", home, "--source-root", sourceRoot)
 
 	for _, want := range []string{
-		`Provisioners for profile "default"`,
+		`Provisioners for profile "default" (tags: core)`,
 		"gentle-ai install --scope global --persona neutral --agents codex",
 		"Summary: 1 provisioner(s)",
 	} {
@@ -89,7 +89,7 @@ func TestUpdateExecutesProvisionersAfterApply(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(fakeRealHome, "gentle-ai-ran")); err == nil {
 		t.Fatalf("update ran the provisioner under the inherited HOME %q instead of the sandbox", fakeRealHome)
 	}
-	if !strings.Contains(out, `Provisioner results for profile "default"`) {
+	if !strings.Contains(out, `Provisioner results for profile "default" (tags: core)`) {
 		t.Fatalf("update output missing provisioner results report\noutput:\n%s", out)
 	}
 }

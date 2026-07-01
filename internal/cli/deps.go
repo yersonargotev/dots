@@ -18,7 +18,7 @@ import (
 
 func newDepsCommand() *cobra.Command {
 	var (
-		profile   string
+		profiles  []string
 		extraTags []string
 	)
 
@@ -27,15 +27,15 @@ func newDepsCommand() *cobra.Command {
 		Short: "Inspect external tool Dependencies declared by managed entries",
 		Long:  "deps reports which external Dependencies a profile needs, offers OS-aware installation guidance, and can execute missing install actions with explicit confirmation.",
 	}
-	cmd.PersistentFlags().StringVarP(&profile, "profile", "p", "default", "profile to inspect")
+	cmd.PersistentFlags().StringArrayVarP(&profiles, "profile", "p", nil, "profile to inspect")
 	cmd.PersistentFlags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
-	cmd.AddCommand(newDepsCheckCommand(&profile, &extraTags))
-	cmd.AddCommand(newDepsPlanCommand(&profile, &extraTags))
-	cmd.AddCommand(newDepsInstallCommand(&profile, &extraTags))
+	cmd.AddCommand(newDepsCheckCommand(&profiles, &extraTags))
+	cmd.AddCommand(newDepsPlanCommand(&profiles, &extraTags))
+	cmd.AddCommand(newDepsInstallCommand(&profiles, &extraTags))
 	return cmd
 }
 
-func newDepsCheckCommand(profile *string, extraTags *[]string) *cobra.Command {
+func newDepsCheckCommand(profiles *[]string, extraTags *[]string) *cobra.Command {
 	var (
 		file string
 		home string
@@ -55,7 +55,7 @@ func newDepsCheckCommand(profile *string, extraTags *[]string) *cobra.Command {
 			}
 
 			report, err := deps.Check(*m, deps.Options{
-				Profile:   *profile,
+				Profiles:  *profiles,
 				ExtraTags: *extraTags,
 				OS:        runtime.GOOS,
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome))
@@ -75,7 +75,7 @@ func newDepsCheckCommand(profile *string, extraTags *[]string) *cobra.Command {
 	return cmd
 }
 
-func newDepsPlanCommand(profile *string, extraTags *[]string) *cobra.Command {
+func newDepsPlanCommand(profiles *[]string, extraTags *[]string) *cobra.Command {
 	var (
 		file string
 		tier string
@@ -102,7 +102,7 @@ func newDepsPlanCommand(profile *string, extraTags *[]string) *cobra.Command {
 			}
 
 			report, err := deps.Plan(*m, deps.Options{
-				Profile:   *profile,
+				Profiles:  *profiles,
 				ExtraTags: *extraTags,
 				OS:        runtime.GOOS,
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
@@ -123,7 +123,7 @@ func newDepsPlanCommand(profile *string, extraTags *[]string) *cobra.Command {
 	return cmd
 }
 
-func newDepsInstallCommand(profile *string, extraTags *[]string) *cobra.Command {
+func newDepsInstallCommand(profiles *[]string, extraTags *[]string) *cobra.Command {
 	var (
 		file      string
 		tier      string
@@ -156,7 +156,7 @@ func newDepsInstallCommand(profile *string, extraTags *[]string) *cobra.Command 
 			}
 
 			options := deps.Options{
-				Profile:   *profile,
+				Profiles:  *profiles,
 				ExtraTags: *extraTags,
 				OS:        runtime.GOOS,
 				Arch:      runtime.GOARCH,

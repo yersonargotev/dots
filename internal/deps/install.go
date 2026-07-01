@@ -36,9 +36,11 @@ type InstallPreview struct {
 // InstallDryRunReport previews the install actions for a Profile without
 // invoking any package manager.
 type InstallDryRunReport struct {
-	Profile string           `json:"profile"`
-	Tier    Tier             `json:"tier"`
-	Items   []InstallPreview `json:"items"`
+	Profile  string           `json:"profile,omitempty"`
+	Profiles []string         `json:"profiles,omitempty"`
+	Tags     []string         `json:"tags,omitempty"`
+	Tier     Tier             `json:"tier"`
+	Items    []InstallPreview `json:"items"`
 }
 
 // Runner executes one argv-shaped install action.
@@ -74,9 +76,11 @@ type InstallItem struct {
 
 // InstallReport records the stable dots summary for a real install run.
 type InstallReport struct {
-	Profile string        `json:"profile"`
-	Tier    Tier          `json:"tier"`
-	Items   []InstallItem `json:"items"`
+	Profile  string        `json:"profile,omitempty"`
+	Profiles []string      `json:"profiles,omitempty"`
+	Tags     []string      `json:"tags,omitempty"`
+	Tier     Tier          `json:"tier"`
+	Items    []InstallItem `json:"items"`
 }
 
 // InstallDryRun computes the install preview for missing Dependencies without
@@ -87,7 +91,7 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook Font
 		return InstallDryRunReport{}, err
 	}
 
-	report := InstallDryRunReport{Profile: plan.Profile, Tier: plan.Tier}
+	report := InstallDryRunReport{Profile: plan.Profile, Profiles: plan.Profiles, Tags: plan.Tags, Tier: plan.Tier}
 	for _, action := range plan.Actions {
 		status := InstallPreviewWouldInstall
 		if !actionExecutable(action) {
@@ -119,7 +123,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 		return InstallReport{}, err
 	}
 
-	report := InstallReport{Profile: plan.Profile, Tier: plan.Tier}
+	report := InstallReport{Profile: plan.Profile, Profiles: plan.Profiles, Tags: plan.Tags, Tier: plan.Tier}
 	requiredUnresolved := false
 	for _, action := range plan.Actions {
 		if !actionExecutable(action) {

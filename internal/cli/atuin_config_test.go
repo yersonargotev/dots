@@ -27,7 +27,7 @@ func TestAtuinDefaultProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	install.SetArgs([]string{
 		"install",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
-		"--profile", "default",
+		"--profile", "core",
 		"--source-root", repoRoot,
 		"--home", home,
 		"--state-root", stateRoot,
@@ -83,7 +83,7 @@ func TestAtuinDefaultProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	status.SetArgs([]string{
 		"status",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
-		"--profile", "default",
+		"--profile", "core",
 		"--source-root", repoRoot,
 		"--home", home,
 		"--state-root", stateRoot,

@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -125,5 +126,35 @@ func TestSkippedEntriesUnknownProfileErrors(t *testing.T) {
 	}
 	if _, _, err := plan.SkippedEntries(m, plan.Options{Profile: "ghost", OS: "darwin"}); err == nil {
 		t.Fatal("SkippedEntries() error = nil, want unknown-profile error")
+	}
+}
+
+func TestSkippedEntriesComposedSelectionSuggestsAddingProfile(t *testing.T) {
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"core":    {Tags: []string{"core"}},
+			"web":     {Tags: []string{"web"}},
+			"desktop": {Tags: []string{"desktop"}},
+		},
+		Entries: []manifest.Entry{
+			coreEntry(),
+			{Source: "configs/opencode", Target: "~/.config/opencode", Strategy: "copy", Tags: []string{"web"}},
+			desktopEntry("configs/ghostty/config.ghostty"),
+		},
+	}
+
+	hint, ok, err := plan.SkippedEntries(m, plan.Options{Profiles: []string{"core", "web"}, OS: "darwin"})
+	if err != nil {
+		t.Fatalf("SkippedEntries() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("SkippedEntries() ok = false, want true")
+	}
+	if hint.SuggestedProfile != "desktop" {
+		t.Fatalf("SuggestedProfile = %q, want desktop", hint.SuggestedProfile)
+	}
+	if got, want := hint.SuggestedProfiles, []string{"core", "web", "desktop"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("SuggestedProfiles = %#v, want %#v", got, want)
 	}
 }

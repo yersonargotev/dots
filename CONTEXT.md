@@ -145,7 +145,7 @@ A terminal preference that can follow the user across machines without encoding 
 _Avoid_: terminal setup, my terminal config, machine terminal preference
 
 **Install Profile**:
-A named selection in `dots.yaml` (such as `default` or `desktop`) that resolves to a set of tags and decides which Managed Entries are installed on a given machine. It is about machine scope, not editor behavior.
+A named selection in `dots.yaml` (such as `core`, `desktop`, or `workstation`) that resolves to a set of tags and decides which Managed Entries are installed on a given machine. Install Profiles are explicit and can be composed by repeating `--profile`; there is no repository-owned implicit `default` install baseline. It is about machine scope, not editor behavior.
 _Avoid_: profile, machine profile, install set
 
 **Project Name**:
@@ -157,11 +157,11 @@ The executable name users run to manage installation, status, diagnostics, backu
 _Avoid_: binary name, CLI name, app name
 
 **Profile**:
-A named installation selection that represents an intended workstation role, such as `default`, `personal`, `work`, or `minimal`. Profiles select Managed Entries through tags rather than duplicating manifests per machine.
+A named installation selection that represents an intended workstation role, such as `core`, `desktop`, `agents`, `workstation`, `personal`, `work`, or `minimal`. Profiles select Managed Entries through tags rather than duplicating manifests per machine, and repeated Profiles compose by ordered tag union.
 _Avoid_: machine config, host config, preset
 
 **Tag**:
-A label assigned to a Managed Entry so Profiles can include related configuration by intent, such as `core`, `dev`, `personal`, `work`, or `desktop`.
+A label assigned to a Managed Entry so Profiles can include related configuration by intent, such as `core`, `agents`, `web`, `mobile`, or `desktop`. Tags from repeated Profiles and explicit `--tag` flags are de-duplicated while preserving order.
 _Avoid_: category, group, label
 
 **Core Development Baseline**:

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -921,8 +922,8 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 	if !ok {
 		t.Fatal("repository manifest missing mobile profile")
 	}
-	if !sameStrings(mobile.Tags, []string{"core", "mobile"}) {
-		t.Fatalf("mobile profile tags = %#v, want [core mobile]", mobile.Tags)
+	if !sameStrings(mobile.Tags, []string{"mobile"}) {
+		t.Fatalf("mobile profile tags = %#v, want [mobile]", mobile.Tags)
 	}
 
 	mobileSkillPackages := []struct {
@@ -3209,7 +3210,7 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 	}
 
 	p, err := plan.Build(*got, plan.Options{
-		Profile:    "default",
+		Profile:    "core",
 		OS:         "darwin",
 		SourceRoot: root,
 		Home:       t.TempDir(),
@@ -3223,7 +3224,7 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 	// and that passes the OS filter must produce exactly one action. This is the
 	// same selection plan.Build applies, so adding or removing a dots.yaml entry
 	// never forces a magic-number bump here.
-	profile, ok := got.Profiles["default"]
+	profile, ok := got.Profiles["core"]
 	if !ok {
 		t.Fatal("manifest missing profile \"default\"")
 	}
@@ -3531,5 +3532,38 @@ esac
 				t.Fatalf("%s did not use Latte subtext color with adaptive marker; output %q", script, out)
 			}
 		})
+	}
+}
+
+func TestResolveSelectionComposesProfilesInOrder(t *testing.T) {
+	m := manifest.Manifest{Profiles: map[string]manifest.Profile{
+		"core":   {Tags: []string{"core"}},
+		"agents": {Tags: []string{"agents", "core"}},
+		"web":    {Tags: []string{"web"}},
+	}}
+
+	got, err := manifest.ResolveSelection(m, []string{"core", "agents", "web", "agents"}, []string{"web", "sdd"})
+	if err != nil {
+		t.Fatalf("ResolveSelection() error = %v", err)
+	}
+	if !reflect.DeepEqual(got.Profiles, []string{"core", "agents", "web"}) {
+		t.Fatalf("Profiles = %#v", got.Profiles)
+	}
+	if !reflect.DeepEqual(got.Tags, []string{"core", "agents", "web", "sdd"}) {
+		t.Fatalf("Tags = %#v", got.Tags)
+	}
+}
+
+func TestRepositoryManifestRequiresExplicitProfileSelection(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+	if _, ok := got.Profiles["default"]; ok {
+		t.Fatal("repository manifest must not define default profile")
+	}
+	if _, err := manifest.ResolveSelection(*got, nil, nil); err == nil {
+		t.Fatal("ResolveSelection() error = nil, want explicit profile error")
 	}
 }

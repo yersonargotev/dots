@@ -38,8 +38,10 @@ type Action struct {
 
 // Plan is the preview of changes the installer would apply for a Profile.
 type Plan struct {
-	Profile string   `json:"profile"`
-	Actions []Action `json:"actions"`
+	Profile  string   `json:"profile,omitempty"`
+	Profiles []string `json:"profiles,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Actions  []Action `json:"actions"`
 }
 
 // HasFindings reports whether the Install Plan contains an action the caller
@@ -58,6 +60,7 @@ func (p Plan) HasFindings() bool {
 // Options carries the resolved inputs needed to compute a Plan.
 type Options struct {
 	Profile    string
+	Profiles   []string
 	ExtraTags  []string
 	OS         string
 	SourceRoot string
@@ -70,14 +73,13 @@ type Options struct {
 // Profile's tags and that pass the OS filter, then determines each target's
 // status against the current workstation state.
 func Build(m manifest.Manifest, opts Options) (Plan, error) {
-	profile, ok := m.Profiles[opts.Profile]
-	if !ok {
-		return Plan{}, fmt.Errorf("profile %q not found", opts.Profile)
+	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	if err != nil {
+		return Plan{}, err
 	}
+	tags := selection.Tags
 
-	tags := manifest.SelectionTags(profile, opts.ExtraTags)
-
-	plan := Plan{Profile: opts.Profile}
+	plan := Plan{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue

@@ -1,7 +1,6 @@
 package provision
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -11,6 +10,7 @@ import (
 // Options carries the resolved inputs needed to select and plan Provisioners.
 type Options struct {
 	Profile   string
+	Profiles  []string
 	ExtraTags []string
 	OS        string
 }
@@ -29,15 +29,17 @@ type Step struct {
 // Plan is the preview of Provisioner steps the installer would run for a
 // Profile, in manifest order.
 type Plan struct {
-	Profile string `json:"profile"`
-	Steps   []Step `json:"steps"`
+	Profile  string   `json:"profile,omitempty"`
+	Profiles []string `json:"profiles,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Steps    []Step   `json:"steps"`
 }
 
 // Select gathers the Provisioners that belong to the Profile (their tags
 // intersect the Profile's tags) and pass the OS filter, preserving manifest
 // order. It mirrors the Entry selection used by deps, plan, and status.
 func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
-	indices, err := selectedIndices(m, opts.Profile, opts.OS, opts.ExtraTags)
+	indices, err := selectedIndices(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.OS, opts.ExtraTags)
 	if err != nil {
 		return nil, err
 	}
@@ -56,13 +58,12 @@ func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
 // provisioner identity across profiles (which provisioner, not just how many)
 // without depending on struct equality, and keeps Select and SkippedProvisioners
 // filtering through one tag/OS rule.
-func selectedIndices(m manifest.Manifest, profileName, os string, extraTags []string) (map[int]bool, error) {
-	profile, ok := m.Profiles[profileName]
-	if !ok {
-		return nil, fmt.Errorf("profile %q not found", profileName)
+func selectedIndices(m manifest.Manifest, profileNames []string, os string, extraTags []string) (map[int]bool, error) {
+	selection, err := manifest.ResolveSelection(m, profileNames, extraTags)
+	if err != nil {
+		return nil, err
 	}
-
-	tags := manifest.SelectionTags(profile, extraTags)
+	tags := selection.Tags
 
 	indices := make(map[int]bool)
 	for i, prov := range m.Provisioners {
@@ -80,8 +81,14 @@ func selectedIndices(m manifest.Manifest, profileName, os string, extraTags []st
 // shared math. It is PURE: no I/O, safe in a dry-run, and mirrors the tag/OS
 // scoping used by Select.
 func SkippedProvisioners(m manifest.Manifest, opts Options) (profilesel.Hint, bool, error) {
-	return profilesel.Skipped(m.Profiles, opts.Profile, opts.OS, func(name, os string) (map[int]bool, error) {
-		return selectedIndices(m, name, os, nil)
+	active := selectionLabel(opts.Profile, opts.Profiles)
+	if len(opts.Profiles) > 1 {
+		return profilesel.SkippedSelection(m.Profiles, opts.Profiles, opts.OS, func(name, os string) (map[int]bool, error) {
+			return selectedIndices(m, []string{name}, os, nil)
+		})
+	}
+	return profilesel.Skipped(m.Profiles, active, opts.OS, func(name, os string) (map[int]bool, error) {
+		return selectedIndices(m, []string{name}, os, nil)
 	})
 }
 
@@ -94,7 +101,8 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		return Plan{}, err
 	}
 
-	plan := Plan{Profile: opts.Profile}
+	selection, _ := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	plan := Plan{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
 		plan.Steps = append(plan.Steps, Step{
@@ -251,4 +259,14 @@ func includes(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func selectionLabel(profile string, profiles []string) string {
+	if len(profiles) > 0 {
+		return profiles[0]
+	}
+	if profile != "" {
+		return profile
+	}
+	return "default"
 }

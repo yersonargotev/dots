@@ -153,7 +153,7 @@ printf 'npm-local' > "$HOME/gentle-ai-npm-mode"
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
-	if _, err := runProvisioners(cmd, m, "workstation", nil, home, t.TempDir()); err != nil {
+	if _, err := runProvisioners(cmd, m, []string{"workstation"}, nil, home, t.TempDir()); err != nil {
 		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
 	}
 	got, err := os.ReadFile(filepath.Join(home, "gentle-ai-npm-mode"))
@@ -213,14 +213,14 @@ EOF
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
-	_, err := runProvisioners(cmd, m, "default", nil, home, t.TempDir())
+	_, err := runProvisioners(cmd, m, []string{"default"}, nil, home, t.TempDir())
 	if err == nil {
 		t.Fatal("runProvisioners() error = nil, want second provisioner failure")
 	}
 
 	got := out.String()
 	for _, want := range []string{
-		`Provisioner results for profile "default"`,
+		`Provisioner results for profile "default" (tags: core)`,
 		"gentle-ai install --scope global --agents codex — provisioned",
 		"gentle-ai install --scope global --agents claude — failed",
 	} {
@@ -278,7 +278,7 @@ printf '%s\n' "$*" > "$HOME/skills-args"
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
-	if _, err := runProvisioners(cmd, m, "default", nil, home, t.TempDir()); err != nil {
+	if _, err := runProvisioners(cmd, m, []string{"default"}, nil, home, t.TempDir()); err != nil {
 		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
 	}
 
@@ -340,7 +340,7 @@ done
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
-	if _, err := runProvisioners(cmd, m, "default", []string{"codegraph"}, home, t.TempDir()); err != nil {
+	if _, err := runProvisioners(cmd, m, []string{"default"}, []string{"codegraph"}, home, t.TempDir()); err != nil {
 		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
 	}
 

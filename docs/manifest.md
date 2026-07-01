@@ -29,9 +29,10 @@ Unknown YAML fields are rejected during manifest loading.
 
 ## Profiles
 
-A Profile is selected by commands such as `dots plan`, `dots install`,
-`dots status`, and `dots deps check`. Commands that expose `--tag` can add
-optional capability tags on top of the selected Profile without creating another
+A Profile is selected explicitly by commands such as `dots plan`, `dots install`,
+`dots status`, and `dots deps check`. Repeat `--profile` to compose multiple
+Profiles by the ordered union of their tags. Commands that expose `--tag` can add
+optional capability tags on top of the selected Profile set without creating another
 Profile. For example, `--tag adaptive-theme` installs the opt-in marker and
 app-specific fragments used by managed configs to follow macOS light appearance
 where the app has a safe seam.
@@ -45,12 +46,12 @@ Current Profiles:
 
 | Profile | Tags | Intent | Profile Dependencies |
 |---------|------|--------|----------------------|
-| `default` | `core` | Core dotfiles without provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
-| `desktop` | `core`, `desktop` | Desktop dotfiles and desktop-only tool integrations; no gentle-ai agent setup. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
-| `agents` | `core`, `agents` | Core dotfiles plus gentle-ai memory/context setup, cleanup, shared engineering skills, and dots-owned global rules for supported agents. The global rules include the portable task-fit delegation policy documented in [`docs/agents/delegation.md`](agents/delegation.md); native per-agent delegation artifacts are only added when their official format and dots ownership boundary are clear. Add `--tag codex-spark-delegation` for Codex-only Spark subagent delegation guidance, `--tag without-codex-spark-delegation` to remove it, and `--tag sdd` for Gentle-AI SDD setup. gentle-ai persona Regenerated Content is cleaned up, not installed, by this repository. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set |
-| `web` | `core`, `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | Core Development Baseline via the `core` tag-scoped Dependency Set; `Playwright CLI` via Homebrew formula `playwright-cli` |
-| `mobile` | `core`, `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | Core Development Baseline via the `core` tag-scoped Dependency Set |
-| `workstation` | `core`, `desktop`, `agents` | Full workstation setup when both desktop integrations and agent setup are desired; web tooling remains explicit opt-in. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
+| `core` | `core` | Core dotfiles without agent/web/mobile provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
+| `desktop` | `desktop` | Desktop-only configuration and integrations; compose with `--profile core` when core dotfiles are desired too. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
+| `agents` | `agents` | gentle-ai memory/context setup, cleanup, shared engineering skills, and dots-owned global rules for supported agents. Add `--profile core` separately for core dotfiles. | `GitHub CLI` via the `agents` tag-scoped Dependency Set |
+| `web` | `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | `Playwright CLI` via Homebrew formula `playwright-cli` |
+| `mobile` | `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | — |
+| `workstation` | `core`, `desktop`, `agents` | Opinionated composite when core, desktop integrations, and agent setup are desired; web and mobile remain explicit opt-ins. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
 
 ## Tag-scoped Dependency Sets
 
@@ -408,7 +409,7 @@ would leave agents pointing at commands that may not exist.
 
 ## Selection rules
 
-1. The chosen Profile provides the base tags.
+1. The chosen Profile or repeated Profiles provide the base tag union in CLI order.
 2. Each repeated `--tag` adds an optional tag to that selection. Duplicate tags are ignored.
 3. A Managed Entry or Provisioner is selected when any of its tags matches the effective tag set.
 4. If `os` is empty, the item matches all supported operating systems.

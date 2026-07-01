@@ -69,6 +69,7 @@ printf '%s' "$block" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.m
 	install.SetArgs([]string{
 		"install",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "core",
 		"--profile", "agents",
 		"--source-root", repoRoot,
 		"--home", home,
@@ -331,6 +332,7 @@ func TestClaudeAgentsPersonaTagDoesNotInstallPersona(t *testing.T) {
 	install.SetArgs([]string{
 		"install",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "core",
 		"--profile", "agents",
 		"--tag", "persona",
 		"--source-root", repoRoot,
@@ -417,6 +419,7 @@ JSON
 	install.SetArgs([]string{
 		"install",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "core",
 		"--profile", "agents",
 		"--source-root", repoRoot,
 		"--home", home,
@@ -434,6 +437,7 @@ JSON
 	statusCmd.SetArgs([]string{
 		"status",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "core",
 		"--profile", "agents",
 		"--source-root", repoRoot,
 		"--home", home,

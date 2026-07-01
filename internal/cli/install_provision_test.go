@@ -65,7 +65,7 @@ func TestInstallDryRunRendersProvisionerWithoutInvoking(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		`Provisioners for profile "default"`,
+		`Provisioners for profile "default" (tags: core)`,
 		"gentle-ai install --scope global --persona neutral --agents codex",
 		"affects: ~/.codex, ~/.gentle-ai",
 	} {
@@ -769,7 +769,7 @@ func TestInstallPersistsFailedProvisionerForStatusResumeGuidance(t *testing.T) {
 	requireFindings(t, statusCmd.Execute())
 	got := statusOut.String()
 	for _, want := range []string{
-		`Declared provisioners for profile "default" — failed`,
+		`Declared provisioners for profile "default" (tags: core) — failed`,
 		"failed               gentle-ai install --scope global --persona neutral --agents codex",
 		"resume: run dots install again after addressing failed or missing provisioners.",
 	} {

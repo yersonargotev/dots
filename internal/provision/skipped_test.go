@@ -1,6 +1,7 @@
 package provision_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -130,5 +131,34 @@ func TestSkippedProvisionersUnknownProfileErrors(t *testing.T) {
 	})
 	if _, _, err := provision.SkippedProvisioners(m, provision.Options{Profile: "ghost", OS: "darwin"}); err == nil {
 		t.Fatal("SkippedProvisioners() error = nil, want unknown-profile error")
+	}
+}
+
+func TestSkippedProvisionersComposedSelectionSuggestsAddingProfile(t *testing.T) {
+	coreProv := manifest.Provisioner{Tool: "gentle-ai", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Scope: "global"}}
+	webProv := manifest.Provisioner{Tool: "codex", Tags: []string{"web"}, Spec: manifest.ProvisionerSpec{MCP: "web", Command: []string{"npx"}}}
+	desktopProv := manifest.Provisioner{Tool: "claude", Tags: []string{"desktop"}, Spec: manifest.ProvisionerSpec{Marketplace: "owner/repo"}}
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"core":    {Tags: []string{"core"}},
+			"web":     {Tags: []string{"web"}},
+			"desktop": {Tags: []string{"desktop"}},
+		},
+		Provisioners: []manifest.Provisioner{coreProv, webProv, desktopProv},
+	}
+
+	hint, ok, err := provision.SkippedProvisioners(m, provision.Options{Profiles: []string{"core", "web"}, OS: "darwin"})
+	if err != nil {
+		t.Fatalf("SkippedProvisioners() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("SkippedProvisioners() ok = false, want true")
+	}
+	if hint.SuggestedProfile != "desktop" {
+		t.Fatalf("SuggestedProfile = %q, want desktop", hint.SuggestedProfile)
+	}
+	if got, want := hint.SuggestedProfiles, []string{"core", "web", "desktop"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("SuggestedProfiles = %#v, want %#v", got, want)
 	}
 }

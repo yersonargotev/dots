@@ -108,7 +108,7 @@ entries:
 	got := out.String()
 	wantTarget := filepath.Join(home, ".zshrc")
 	for _, want := range []string{
-		`Plan for profile "default"`,
+		`Plan for profile "default" (tags: core)`,
 		"create",
 		"symlink",
 		"configs/zsh/zshrc -> " + wantTarget,
@@ -251,7 +251,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Doctor for profile "default"`,
+		`Doctor for profile "default" (tags: core)`,
 		"Platform: ok",
 		"Dependencies: ok (no dependencies declared)",
 		"Configuration: ok (1 ok, 0 concerns)",
@@ -307,7 +307,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Doctor for profile "default"`,
+		`Doctor for profile "default" (tags: core)`,
 		"Dependencies: warn (1 missing)",
 		"missing dependency: definitely-missing-dots-test-tool",
 		"Configuration: warn (1 concerns)",
@@ -509,7 +509,7 @@ entries:
 	if gotDest != srcPath {
 		t.Fatalf("symlink target = %q, want %q", gotDest, srcPath)
 	}
-	if !strings.Contains(out.String(), `Plan for profile "default"`) {
+	if !strings.Contains(out.String(), `Plan for profile "default" (tags: core)`) {
 		t.Fatalf("install output did not include plan\noutput:\n%s", out.String())
 	}
 }
@@ -559,7 +559,7 @@ entries:
 	}
 	got := out.String()
 	for _, want := range []string{
-		`Plan for profile "default"`,
+		`Plan for profile "default" (tags: core)`,
 		"create",
 		"Summary: 1 create, 0 conflict, 0 unchanged, 0 missing-source",
 	} {
@@ -972,7 +972,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Status for profile "default"`,
+		`Status for profile "default" (tags: core)`,
 		"ok",
 		"configs/zsh/zshrc -> " + filepath.Join(home, ".zshrc"),
 		"Summary: 1 ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported",
@@ -1002,6 +1002,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	install.SetArgs([]string{
 		"install",
 		"--yes",
+		"--profile", "core",
 		"--file", manifestPath,
 		"--home", home,
 		"--source-root", sourceRoot,
@@ -1036,6 +1037,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	statusCmd.SetErr(&statusOut)
 	statusCmd.SetArgs([]string{
 		"status",
+		"--profile", "core",
 		"--file", manifestPath,
 		"--home", home,
 		"--source-root", sourceRoot,
@@ -1062,7 +1064,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 	countPlan, err := plan.Build(*loaded, plan.Options{
-		Profile:    "default",
+		Profile:    "core",
 		OS:         runtime.GOOS,
 		SourceRoot: sourceRoot,
 		Home:       t.TempDir(),
@@ -1265,7 +1267,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependencies for profile "default"`,
+		`Dependencies for profile "default" (tags: core)`,
 		"present  presenttool",
 		"missing  absenttool",
 		"Summary: 1 present, 1 missing",
@@ -1308,7 +1310,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependencies for profile "default"`,
+		`Dependencies for profile "default" (tags: desktop)`,
 		"missing  Desktop Nerd Font",
 		"Summary: 0 present, 1 missing",
 	} {
@@ -1364,7 +1366,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependencies for profile "default"`,
+		`Dependencies for profile "default" (tags: desktop)`,
 		"present  Desktop Nerd Font",
 		"Summary: 1 present, 0 missing",
 	} {
@@ -1412,7 +1414,7 @@ entries:
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependency plan for profile "default" (debian)`,
+		`Dependency plan for profile "default" (tags: core) (debian)`,
 		"starship",
 		"sudo apt-get install starship",
 		"Summary: 1 dependency to install",
@@ -1780,7 +1782,7 @@ entries:
 		{
 			name:         "doctor",
 			args:         []string{"doctor", "--home", home},
-			want:         `Doctor for profile "default"`,
+			want:         `Doctor for profile "default" (tags: core)`,
 			wantFindings: true,
 		},
 	} {
@@ -1866,5 +1868,35 @@ func writeCLIInstalledRepository(t *testing.T, sourceRoot, manifestContent strin
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "dots.yaml"), []byte(manifestContent), 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
+	}
+}
+
+func TestInstallRequiresExplicitProfileWithRepositoryManifest(t *testing.T) {
+	sourceRoot, err := filepath.Abs(filepath.Clean(filepath.Join("..", "..")))
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{
+		"install",
+		"--dry-run",
+		"--skip-deps",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home,
+		"--source-root", sourceRoot,
+		"--state-root", stateRoot,
+	})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "at least one --profile is required") {
+		t.Fatalf("Execute() error = %v, want explicit profile guidance\noutput:\n%s", err, out.String())
+	}
+	if entries, err := os.ReadDir(home); err != nil {
+		t.Fatalf("ReadDir(home) error = %v", err)
+	} else if len(entries) != 0 {
+		t.Fatalf("home was mutated without profile: %#v", entries)
 	}
 }

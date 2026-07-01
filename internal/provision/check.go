@@ -20,8 +20,10 @@ type Readiness struct {
 // CheckReport is the readiness report for a Profile's selected Provisioners, in
 // manifest order. It mirrors deps.CheckReport for Managed Entry dependencies.
 type CheckReport struct {
-	Profile string      `json:"profile"`
-	Items   []Readiness `json:"items"`
+	Profile  string      `json:"profile,omitempty"`
+	Profiles []string    `json:"profiles,omitempty"`
+	Tags     []string    `json:"tags,omitempty"`
+	Items    []Readiness `json:"items"`
 }
 
 // HasFindings reports whether any selected Provisioner is missing a dependency
@@ -44,7 +46,8 @@ func Check(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 		return CheckReport{}, err
 	}
 
-	report := CheckReport{Profile: opts.Profile}
+	selection, _ := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	report := CheckReport{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
 		report.Items = append(report.Items, Readiness{

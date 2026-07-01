@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -18,7 +19,7 @@ var (
 func newUpgradeCommand() *cobra.Command {
 	var (
 		file       string
-		profile    string
+		profiles   []string
 		extraTags  []string
 		sourceRoot string
 		home       string
@@ -44,7 +45,7 @@ func newUpgradeCommand() *cobra.Command {
 			"Managed Entries, and Provisioners. It never performs a broad system package upgrade.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts := updateOptions{file: file, profile: profile, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI}
+			opts := updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI}
 			if continue_ {
 				updateReport, err := runUpdateWorkflow(cmd, opts, !wantsJSON(cmd))
 				if err != nil {
@@ -82,6 +83,17 @@ func newUpgradeCommand() *cobra.Command {
 				return nil
 			}
 
+			preflightPlan, err := upgrade.Preview(cmd.Context(), binOpts)
+			if err != nil {
+				return err
+			}
+			if preflightPlan.Action == upgrade.ActionManualRebuild {
+				_, err := upgrade.Execute(cmd.Context(), binOpts)
+				return err
+			}
+			if err := validateUpgradeProfileSelection(cmd, opts); err != nil {
+				return err
+			}
 			binPlan, err := upgrade.Execute(cmd.Context(), binOpts)
 			if err != nil {
 				return err
@@ -90,7 +102,7 @@ func newUpgradeCommand() *cobra.Command {
 				renderUpgradeBinary(cmd.OutOrStdout(), binPlan, false)
 			}
 			if binPlan.Action == upgrade.ActionHomebrewUpgrade || binPlan.Action == upgrade.ActionReplaceBinary {
-				return execBinary(exe, upgradeContinuationArgs(file, cmd.Flags().Changed("file"), profile, extraTags, sourceRoot, home, stateRoot, yes, noTUI, wantsJSON(cmd), binPlan), os.Environ())
+				return execBinary(exe, upgradeContinuationArgs(file, cmd.Flags().Changed("file"), profiles, extraTags, sourceRoot, home, stateRoot, yes, noTUI, wantsJSON(cmd), binPlan), os.Environ())
 			}
 			updateReport, err := runUpdateWorkflow(cmd, opts, false)
 			if err != nil {
@@ -103,7 +115,7 @@ func newUpgradeCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to install after upgrading")
-	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to install after upgrading")
+	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, "profile to install after upgrading")
 	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root to update (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
@@ -130,12 +142,26 @@ func newUpgradeCommand() *cobra.Command {
 	return cmd
 }
 
-func upgradeContinuationArgs(file string, fileChanged bool, profile string, extraTags []string, sourceRoot, home, stateRoot string, yes, noTUI, json bool, binPlan upgrade.Plan) []string {
+func validateUpgradeProfileSelection(cmd *cobra.Command, opts updateOptions) error {
+	paths, err := resolvePaths(opts.home, opts.sourceRoot, opts.stateRoot)
+	if err != nil {
+		return err
+	}
+	manifestPath := opts.file
+	if !cmd.Flags().Changed("file") {
+		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
+	}
+	return validateProfileSelectionFile(manifestPath, opts.profiles, opts.extraTags)
+}
+
+func upgradeContinuationArgs(file string, fileChanged bool, profiles []string, extraTags []string, sourceRoot, home, stateRoot string, yes, noTUI, json bool, binPlan upgrade.Plan) []string {
 	args := []string{"dots", "upgrade", "--continue"}
 	if fileChanged {
 		args = append(args, "--file", file)
 	}
-	args = append(args, "--profile", profile)
+	for _, profile := range profiles {
+		args = append(args, "--profile", profile)
+	}
 	for _, tag := range extraTags {
 		args = append(args, "--tag", tag)
 	}

@@ -16,7 +16,7 @@ import (
 
 type updateOptions struct {
 	file       string
-	profile    string
+	profiles   []string
 	extraTags  []string
 	sourceRoot string
 	home       string
@@ -29,7 +29,7 @@ type updateOptions struct {
 func newUpdateCommand() *cobra.Command {
 	var (
 		file       string
-		profile    string
+		profiles   []string
 		extraTags  []string
 		sourceRoot string
 		home       string
@@ -53,13 +53,13 @@ func newUpdateCommand() *cobra.Command {
 		// conditions, not command misuse, so do not dump the usage block.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := runUpdateWorkflow(cmd, updateOptions{file: file, profile: profile, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI}, true)
+			_, err := runUpdateWorkflow(cmd, updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI}, true)
 			return err
 		},
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to install after updating")
-	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to install after updating")
+	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, "profile to install after updating")
 	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root to update (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
@@ -127,6 +127,15 @@ func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
 	fmt.Fprintln(out)
 }
 
+func validateProfileSelectionFile(manifestPath string, profiles []string, extraTags []string) error {
+	m, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+	_, err = manifest.ResolveSelection(*m, profiles, extraTags)
+	return err
+}
+
 func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updateReport, error) {
 	paths, err := resolvePaths(opts.home, opts.sourceRoot, opts.stateRoot)
 	if err != nil {
@@ -135,6 +144,14 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if !gitrepo.IsRepo(paths.SourceRoot) {
 		return updateReport{}, fmt.Errorf("installed repository %s is not a git repository; clone the Source of Truth before updating", paths.SourceRoot)
 	}
+	manifestPath := opts.file
+	if !cmd.Flags().Changed("file") {
+		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
+	}
+	if err := validateProfileSelectionFile(manifestPath, opts.profiles, opts.extraTags); err != nil {
+		return updateReport{}, err
+	}
+
 	out := cmd.OutOrStdout()
 	var update gitrepo.Update
 	if wantsJSON(cmd) {
@@ -159,10 +176,6 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 	}
 
-	manifestPath := opts.file
-	if !cmd.Flags().Changed("file") {
-		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
-	}
 	m, err := manifest.LoadFile(manifestPath)
 	if err != nil {
 		return updateReport{}, err
@@ -171,11 +184,11 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	p, err := plan.Build(*m, plan.Options{Profile: opts.profile, ExtraTags: opts.extraTags, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, Home: paths.Home, Metadata: meta})
+	p, err := plan.Build(*m, plan.Options{Profiles: opts.profiles, ExtraTags: opts.extraTags, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, Home: paths.Home, Metadata: meta})
 	if err != nil {
 		return updateReport{}, err
 	}
-	provPlan, err := provision.Build(*m, provision.Options{Profile: opts.profile, ExtraTags: opts.extraTags, OS: runtime.GOOS})
+	provPlan, err := provision.Build(*m, provision.Options{Profiles: opts.profiles, ExtraTags: opts.extraTags, OS: runtime.GOOS})
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -186,11 +199,11 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 	} else {
 		renderPlan(out, p)
-		if err := renderSkippedEntryHint(out, *m, opts.profile, runtime.GOOS); err != nil {
+		if err := renderSkippedEntryHint(out, *m, opts.profiles, runtime.GOOS); err != nil {
 			return updateReport{}, err
 		}
 		renderProvisionPlan(out, provPlan)
-		if err := renderSkippedProvisionerHint(out, *m, opts.profile, runtime.GOOS); err != nil {
+		if err := renderSkippedProvisionerHint(out, *m, opts.profiles, runtime.GOOS); err != nil {
 			return updateReport{}, err
 		}
 	}
@@ -202,7 +215,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		return updateReport{}, err
 	}
 	if applied {
-		if _, err := runProvisioners(cmd, *m, opts.profile, opts.extraTags, paths.Home, paths.StateRoot); err != nil {
+		if _, err := runProvisioners(cmd, *m, opts.profiles, opts.extraTags, paths.Home, paths.StateRoot); err != nil {
 			return updateReport{}, err
 		}
 	}

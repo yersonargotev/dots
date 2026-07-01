@@ -16,13 +16,15 @@ import (
 type initReport bootstrap.Result
 
 type statusReport struct {
-	Profile      string                 `json:"profile"`
+	Profile      string                 `json:"profile,omitempty"`
+	Profiles     []string               `json:"profiles,omitempty"`
+	Tags         []string               `json:"tags,omitempty"`
 	Entries      []status.Entry         `json:"entries"`
 	Provisioners provision.StatusReport `json:"provisioners"`
 }
 
 func (r statusReport) HasFindings() bool {
-	return status.Report{Profile: r.Profile, Entries: r.Entries}.HasFindings() || r.Provisioners.HasFindings()
+	return status.Report{Profile: r.Profile, Profiles: r.Profiles, Tags: r.Tags, Entries: r.Entries}.HasFindings() || r.Provisioners.HasFindings()
 }
 
 type versionReport struct {

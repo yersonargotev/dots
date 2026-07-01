@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
@@ -12,7 +13,7 @@ import (
 // The output is stable for a given Plan so it can be locked with a golden test
 // and read predictably by the user during a dry run.
 func renderPlan(w io.Writer, p plan.Plan) {
-	fmt.Fprintf(w, "Plan for profile %q\n\n", p.Profile)
+	fmt.Fprintf(w, "Plan for %s\n\n", renderProfileSelection(p.Profile, p.Profiles, p.Tags))
 
 	if len(p.Actions) == 0 {
 		fmt.Fprintln(w, "Nothing to do.")
@@ -62,8 +63,8 @@ func renderPlan(w io.Writer, p plan.Plan) {
 // because "file entry"/"file entries" does not read well as "entry(s)". Together
 // the two hints close the profile-scope discoverability gap for both surfaces
 // (issue #87, following #85).
-func renderSkippedEntryHint(w io.Writer, m manifest.Manifest, profile, os string) error {
-	hint, ok, err := plan.SkippedEntries(m, plan.Options{Profile: profile, OS: os})
+func renderSkippedEntryHint(w io.Writer, m manifest.Manifest, profiles []string, os string) error {
+	hint, ok, err := plan.SkippedEntries(m, plan.Options{Profiles: profiles, OS: os})
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,37 @@ func renderSkippedEntryHint(w io.Writer, m manifest.Manifest, profile, os string
 	if hint.Count == 1 {
 		noun = "file entry"
 	}
-	fmt.Fprintf(w, "\nNote: profile %q skips %d %s; run with --profile %s to include them.\n",
-		hint.Profile, hint.Count, noun, hint.SuggestedProfile)
+	fmt.Fprintf(w, "\nNote: %s skips %d %s; run with %s to include them.\n",
+		renderProfileSelection(hint.Profile, hint.Profiles, nil), hint.Count, noun, renderProfileFlags(hint.SuggestedProfiles))
 	return nil
+}
+
+func renderProfileSelection(profile string, profiles []string, tags []string) string {
+	var selection string
+	if len(profiles) == 0 {
+		selection = fmt.Sprintf("profile %q", profile)
+	} else if len(profiles) == 1 {
+		selection = fmt.Sprintf("profile %q", profiles[0])
+	} else {
+		quoted := make([]string, 0, len(profiles))
+		for _, name := range profiles {
+			quoted = append(quoted, fmt.Sprintf("%q", name))
+		}
+		selection = "profiles " + strings.Join(quoted, ", ")
+	}
+	if len(tags) == 0 {
+		return selection
+	}
+	return selection + " (tags: " + strings.Join(tags, ", ") + ")"
+}
+
+func renderProfileFlags(profiles []string) string {
+	if len(profiles) == 0 {
+		return "--profile"
+	}
+	parts := make([]string, 0, len(profiles)*2)
+	for _, profile := range profiles {
+		parts = append(parts, "--profile", profile)
+	}
+	return strings.Join(parts, " ")
 }

@@ -31,6 +31,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	install.SetArgs([]string{
 		"install",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "core",
 		"--profile", "desktop",
 		"--source-root", repoRoot,
 		"--home", home,
@@ -121,6 +122,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	status.SetArgs([]string{
 		"status",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "core",
 		"--profile", "desktop",
 		"--source-root", repoRoot,
 		"--home", home,
@@ -168,6 +170,7 @@ func TestAdaptiveThemeTagInstallsMarkerAndGhosttyFragmentInSandbox(t *testing.T)
 	install.SetArgs([]string{
 		"install",
 		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "core",
 		"--profile", "desktop",
 		"--tag", "adaptive-theme",
 		"--source-root", repoRoot,

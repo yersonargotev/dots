@@ -42,12 +42,12 @@ Non-interactive runs (`--yes`) default every conflict to `skip`, so an unattende
 
 ## Flags
 
-`update` accepts the same path, profile, and safety flags as `install`:
+`update` accepts the same path, explicit profile composition, and safety flags as `install`:
 
 | Flag | Purpose |
 |------|---------|
 | `--dry-run` | Fetch and report the available fast-forward and the Install Plan without fast-forwarding the working tree or installing files. |
-| `--file`, `--profile`, `--tag` | Select the manifest, base profile, and optional capability tags to install after updating. Repeat `--tag` to include multiple opt-in tags. |
+| `--file`, `--profile`, `--tag` | Select the manifest, one or more Profiles, and optional capability tags to install after updating. Repeat `--profile` to compose Profiles and repeat `--tag` for opt-in tags. |
 | `--source-root` | Installed Repository to update (default `~/.local/share/dots`). |
 | `--home` | Target home directory; use a sandbox path to avoid touching real config. |
 | `--state-root` | State directory for Installation Metadata and Backup Sets. |
@@ -69,7 +69,7 @@ Because no fast-forward is applied in a dry run, the rendered plan reflects the 
 
 ## Profiles and provisioners
 
-Provisioners are scoped by profile tags, exactly like file entries. The `default` profile selects no provisioners. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai memory/context setup and cleanup provisioners for Codex, Claude Code, OpenCode, Antigravity, and VS Code Copilot, plus agent settings baselines, shared engineering skills, and dots-owned global agent rules; Codex-only Spark subagent delegation guidance is opt-in with `--tag codex-spark-delegation` and removable with `--tag without-codex-spark-delegation`. gentle-ai persona prompt Regenerated Content is cleaned up rather than installed by this repository; SDD remains optional with `--tag sdd`. CodeGraph is independent and selected with `--tag codegraph`; CodeGraph's installer owns generated MCP/instruction setup, while dots owns only the scoped `<!-- dots:codegraph-mode -->` routing and verification policy overlay. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills plus the Dart and Flutter MCP server for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
+Provisioners are scoped by selected tags, exactly like file entries. There is no implicit default Profile; choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai memory/context setup and cleanup provisioners for Codex, Claude Code, OpenCode, Antigravity, and VS Code Copilot, plus agent settings baselines, shared engineering skills, and dots-owned global agent rules; Codex-only Spark subagent delegation guidance is opt-in with `--tag codex-spark-delegation` and removable with `--tag without-codex-spark-delegation`. gentle-ai persona prompt Regenerated Content is cleaned up rather than installed by this repository; SDD remains optional with `--tag sdd`. CodeGraph is independent and selected with `--tag codegraph`; CodeGraph's installer owns generated MCP/instruction setup, while dots owns only the scoped `<!-- dots:codegraph-mode -->` routing and verification policy overlay. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills plus the Dart and Flutter MCP server for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
 
 See [`docs/agents/delegation.md`](agents/delegation.md) for the portable task-fit delegation policy and the current inventory of native delegation artifacts by supported agent surface.
 
@@ -100,13 +100,13 @@ provisioners:
 To keep that requirement discoverable, both `install` and `update` print a one-line hint when the active profile skips provisioners another profile would select on this OS:
 
 ```
-Note: profile "default" skips provisioner(s); run with --profile agents, --profile desktop, --profile mobile, or --profile web to include the relevant group.
+Note: profile "core" skips provisioner(s); run with --profile core --profile agents to keep core and add agent setup.
 ```
 
-File entries are profile-scoped the same way, and the `default` profile silently omits profile-specific entries such as the `desktop` Ghostty/Zed configs and the `web` OpenCode MCP overlay. To close the same discoverability gap, both commands print a parallel hint for skipped file entries:
+File entries are profile-scoped the same way, and `core` intentionally omits profile-specific entries such as the `desktop` Ghostty/Zed configs and the `web` OpenCode MCP overlay. To close the same discoverability gap, both commands print a parallel hint for skipped file entries:
 
 ```
-Note: profile "default" skips file entries; run with --profile desktop or --profile web to include the relevant group.
+Note: profile "core" skips file entries; run with --profile core --profile desktop to keep core and add desktop entries.
 ```
 
 Both hints also appear in `--dry-run`, so you can see what a profile omits before committing to it. The fuller profile that already selects every entry and provisioner prints no hint.

@@ -1,6 +1,6 @@
 # Adaptive theme audit
 
-Issue #275 introduces an explicit `adaptive-theme` tag. The default profile/tag
+Issue #275 introduces an explicit `adaptive-theme` tag. The core profile/tag
 sets continue to prefer Catppuccin Mocha or app dark defaults. Adaptive behavior
 must either be behind the tag or intentionally documented as out of scope for the
 slice.

@@ -1,0 +1,28 @@
+# Require explicit, composable install profiles
+
+The Dotfiles CLI previously treated `default` as an implicit install baseline.
+That made bare `dots install` select the `core` tag and install base shell,
+terminal, editor, and Git configuration without the caller naming that intent.
+This is convenient for the maintainer but unsafe for sharing the Source of Truth
+with people who may only want one capability area.
+
+We now require an explicit Profile selection for the repository manifest and make
+Profile composition first-class. The repository no longer defines `default`; it
+has an explicit `core` Profile (`tags: [core]`). Capability Profiles are pure:
+`desktop`, `agents`, `web`, and `mobile` select only their own tag. The
+opinionated `workstation` Profile remains a composite of `core`, `desktop`, and
+`agents`; `web` and `mobile` stay opt-in.
+
+`--profile` is repeatable anywhere profile selection is accepted. The effective
+selection is the ordered, de-duplicated union of all selected Profile tags,
+followed by any explicit `--tag` values. Human and JSON reports expose the
+composed Profile list (`profiles`) and resolved `tags` so agents can branch on
+structured data instead of inferring from prose.
+
+Consequences: `dots install` with this repository manifest and no `--profile`
+fails before dependency installation, Managed Entries, Provisioners, or home
+mutation. Users run commands such as `dots install --profile core`,
+`dots install --profile agents --profile web`, or
+`dots install --profile core --profile agents --profile web` to state exactly
+what they want. Legacy test fixtures may still define a `default` Profile, but
+that name is no longer part of the repository manifest or public examples.

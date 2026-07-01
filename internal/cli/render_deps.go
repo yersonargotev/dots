@@ -11,7 +11,7 @@ import (
 // renderDepsCheck writes a deterministic Dependency presence report so it can be
 // locked with a golden test and read predictably by the user.
 func renderDepsCheck(w io.Writer, report deps.CheckReport) {
-	fmt.Fprintf(w, "Dependencies for profile %q\n\n", report.Profile)
+	fmt.Fprintf(w, "Dependencies for %s\n\n", renderProfileSelection(report.Profile, report.Profiles, report.Tags))
 
 	if len(report.Results) == 0 {
 		fmt.Fprintln(w, "No dependencies declared for this profile.")
@@ -36,7 +36,7 @@ func renderDepsCheck(w io.Writer, report deps.CheckReport) {
 // renderDepsPlan writes a deterministic, advisory Dependency Plan: OS-aware
 // installation guidance for the missing Dependencies under the active Tier.
 func renderDepsPlan(w io.Writer, report deps.PlanReport) {
-	fmt.Fprintf(w, "Dependency plan for profile %q (%s)\n\n", report.Profile, report.Tier)
+	fmt.Fprintf(w, "Dependency plan for %s (%s)\n\n", renderProfileSelection(report.Profile, report.Profiles, report.Tags), report.Tier)
 
 	if len(report.Items) == 0 {
 		fmt.Fprintln(w, "All declared dependencies are already installed.")
@@ -75,7 +75,7 @@ func renderDepsInstallPreview(w io.Writer, report deps.InstallDryRunReport) {
 }
 
 func renderDepsInstallPreviewWithTitle(w io.Writer, title string, report deps.InstallDryRunReport) {
-	fmt.Fprintf(w, "%s for profile %q (%s)\n\n", title, report.Profile, report.Tier)
+	fmt.Fprintf(w, "%s for %s (%s)\n\n", title, renderProfileSelection(report.Profile, report.Profiles, report.Tags), report.Tier)
 
 	if len(report.Items) == 0 {
 		fmt.Fprintln(w, "All declared dependencies are already installed.")
@@ -119,7 +119,7 @@ func hasRequiredInstallablePreviewAction(report deps.InstallDryRunReport) bool {
 }
 
 func unresolvedInstallReportFromPreview(preview deps.InstallDryRunReport) (deps.InstallReport, error) {
-	report := deps.InstallReport{Profile: preview.Profile, Tier: preview.Tier}
+	report := deps.InstallReport{Profile: preview.Profile, Profiles: preview.Profiles, Tags: preview.Tags, Tier: preview.Tier}
 	requiredUnresolved := false
 	for _, item := range preview.Items {
 		status := deps.InstallStatusUnresolved
@@ -166,7 +166,7 @@ func countInstallPreviewActions(report deps.InstallDryRunReport) (installable in
 // renderDepsInstall writes the stable dots summary after real package-manager
 // execution has already streamed through the command's stdio handles.
 func renderDepsInstall(w io.Writer, report deps.InstallReport) {
-	fmt.Fprintf(w, "\nDependency install for profile %q (%s)\n\n", report.Profile, report.Tier)
+	fmt.Fprintf(w, "\nDependency install for %s (%s)\n\n", renderProfileSelection(report.Profile, report.Profiles, report.Tags), report.Tier)
 
 	if len(report.Items) == 0 {
 		fmt.Fprintln(w, "All declared dependencies are already installed.")

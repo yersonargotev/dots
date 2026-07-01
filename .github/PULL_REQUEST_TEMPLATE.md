@@ -29,7 +29,7 @@ Check exactly one and add the matching `type:*` label to the PR.
 - [ ] `go vet ./...`
 - [ ] `gofmt -l .`
 - [ ] `go run ./cmd/dots manifest validate --file dots.yaml`
-- [ ] Sandboxed plan only when dotfiles behavior changes: `go run ./cmd/dots plan --file dots.yaml --profile default --source-root "$PWD" --home <tmp>`
+- [ ] Sandboxed plan only when dotfiles behavior changes: `go run ./cmd/dots plan --file dots.yaml --profile core --source-root "$PWD" --home <tmp>`
 
 ## Dotfiles Safety
 

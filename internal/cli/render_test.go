@@ -29,13 +29,13 @@ func TestRenderSkippedEntryHint(t *testing.T) {
 			name:    "plural for more than one skipped entry",
 			entries: []manifest.Entry{core, desktop("configs/ghostty/config.ghostty"), desktop("configs/zed/settings.json")},
 			profile: "default",
-			want:    "\nNote: profile \"default\" skips 2 file entries; run with --profile desktop to include them.\n",
+			want:    "\nNote: profile \"default\" skips 2 file entries; run with --profile default --profile desktop to include them.\n",
 		},
 		{
 			name:    "singular for exactly one skipped entry",
 			entries: []manifest.Entry{core, desktop("configs/ghostty/config.ghostty")},
 			profile: "default",
-			want:    "\nNote: profile \"default\" skips 1 file entry; run with --profile desktop to include them.\n",
+			want:    "\nNote: profile \"default\" skips 1 file entry; run with --profile default --profile desktop to include them.\n",
 		},
 		{
 			name:    "quiet when the active profile selects everything",
@@ -49,7 +49,7 @@ func TestRenderSkippedEntryHint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := manifest.Manifest{Version: 1, Profiles: profiles, Entries: tt.entries}
 			var out bytes.Buffer
-			if err := renderSkippedEntryHint(&out, m, tt.profile, "darwin"); err != nil {
+			if err := renderSkippedEntryHint(&out, m, []string{tt.profile}, "darwin"); err != nil {
 				t.Fatalf("renderSkippedEntryHint() error = %v", err)
 			}
 			if out.String() != tt.want {

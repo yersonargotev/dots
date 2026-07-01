@@ -19,7 +19,7 @@ func renderProvisionPlan(w io.Writer, p provision.Plan) {
 		return
 	}
 
-	fmt.Fprintf(w, "\nProvisioners for profile %q\n\n", p.Profile)
+	fmt.Fprintf(w, "\nProvisioners for %s\n\n", renderProfileSelection(p.Profile, p.Profiles, p.Tags))
 	for _, step := range p.Steps {
 		fmt.Fprintf(w, "  %s %s\n", step.Executable, strings.Join(step.Args, " "))
 		if len(step.Targets) > 0 {
@@ -48,16 +48,16 @@ func renderProvisionPlan(w io.Writer, p provision.Plan) {
 // SuggestedProfile is rendered with %s, not %q: it is a copy-pasteable shell
 // argument the user types as `--profile desktop`, so it is intentionally
 // unquoted while the descriptive active profile uses %q.
-func renderSkippedProvisionerHint(w io.Writer, m manifest.Manifest, profile, os string) error {
-	hint, ok, err := provision.SkippedProvisioners(m, provision.Options{Profile: profile, OS: os})
+func renderSkippedProvisionerHint(w io.Writer, m manifest.Manifest, profiles []string, os string) error {
+	hint, ok, err := provision.SkippedProvisioners(m, provision.Options{Profiles: profiles, OS: os})
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return nil
 	}
-	fmt.Fprintf(w, "\nNote: profile %q skips %d provisioner(s); run with --profile %s to include them.\n",
-		hint.Profile, hint.Count, hint.SuggestedProfile)
+	fmt.Fprintf(w, "\nNote: %s skips %d provisioner(s); run with %s to include them.\n",
+		renderProfileSelection(hint.Profile, hint.Profiles, nil), hint.Count, renderProfileFlags(hint.SuggestedProfiles))
 	return nil
 }
 
@@ -69,7 +69,7 @@ func renderProvisionReport(w io.Writer, r provision.Report) {
 		return
 	}
 
-	fmt.Fprintf(w, "\nProvisioner results for profile %q\n\n", r.Profile)
+	fmt.Fprintf(w, "\nProvisioner results for %s\n\n", renderProfileSelection(r.Profile, r.Profiles, r.Tags))
 	for _, item := range r.Items {
 		fmt.Fprintf(w, "  %s %s — %s", item.Executable, strings.Join(item.Args, " "), item.Status)
 		if len(item.Missing) > 0 {

@@ -5,7 +5,6 @@
 package deps
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -27,6 +26,7 @@ type CommandRunner func(command string, args ...string) (string, error)
 // Options carries the resolved inputs needed to select Dependencies.
 type Options struct {
 	Profile   string
+	Profiles  []string
 	ExtraTags []string
 	OS        string
 	Arch      string
@@ -51,8 +51,10 @@ type Result struct {
 
 // CheckReport is the Dependency presence report for a Profile.
 type CheckReport struct {
-	Profile string   `json:"profile"`
-	Results []Result `json:"results"`
+	Profile  string   `json:"profile,omitempty"`
+	Profiles []string `json:"profiles,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Results  []Result `json:"results"`
 }
 
 // HasFindings reports whether any declared Dependency is absent from the
@@ -82,7 +84,8 @@ func CheckWithToolProbes(m manifest.Manifest, opts Options, look Lookup, fontLoo
 		return CheckReport{}, err
 	}
 
-	report := CheckReport{Profile: opts.Profile}
+	selection, _ := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	report := CheckReport{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, dep := range selected {
 		result := checkResult(dep, look, fontLook)
 		probeToolchain(&result, opts, run)
@@ -196,9 +199,9 @@ func fontProbeLabel(matches []string) string {
 // first-declared order.
 
 func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependency, error) {
-	profile, ok := m.Profiles[opts.Profile]
-	if !ok {
-		return nil, fmt.Errorf("profile %q not found", opts.Profile)
+	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	if err != nil {
+		return nil, err
 	}
 
 	var selected []manifest.Dependency
@@ -224,8 +227,10 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 		}
 	}
 
-	addDependencies(profile.Dependencies)
-	tags := manifest.SelectionTags(profile, opts.ExtraTags)
+	for _, profileName := range selection.Profiles {
+		addDependencies(m.Profiles[profileName].Dependencies)
+	}
+	tags := selection.Tags
 	for _, set := range m.Dependencies {
 		if !manifest.SharesTag(set.Tags, tags) {
 			continue

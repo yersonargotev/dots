@@ -798,11 +798,73 @@ func containsControl(value string) bool {
 	return strings.ContainsFunc(value, unicode.IsControl)
 }
 
-// SharesTag reports whether an item's tags intersect a profile's tags. It is
-// half the profile-scoping rule entries and provisioners share: an item belongs
-// to a profile when at least one of its tags matches one of the profile's tags.
-// Centralizing it here keeps plan, status, deps, doctor, and provision filtering
-// through one rule instead of each carrying its own copy.
+// Selection describes the ordered Profile and Tag union selected by a command.
+// Profiles preserves the user-supplied Profile order after de-duplication; Tags
+// preserves the ordered union of all selected Profile tags plus explicit --tag
+// values. Profile is a compatibility label for existing metadata and prose.
+type Selection struct {
+	Profile  string
+	Profiles []string
+	Tags     []string
+}
+
+// SelectedProfileNames returns the repeatable profile list when present, or the
+// legacy single-profile option used by tests and internal callers.
+func SelectedProfileNames(profile string, profiles []string) []string {
+	if len(profiles) > 0 {
+		return profiles
+	}
+	if profile == "" {
+		return nil
+	}
+	return []string{profile}
+}
+
+// ResolveSelection validates selected Profile names and returns their ordered,
+// de-duplicated tag union. Repository manifests without a legacy default Profile
+// require an explicit Profile so install never falls back to an implicit baseline.
+func ResolveSelection(m Manifest, profileNames []string, extraTags []string) (Selection, error) {
+	profiles := make([]string, 0, len(profileNames))
+	profileSeen := make(map[string]bool, len(profileNames))
+	tags := make([]string, 0, len(extraTags))
+	tagSeen := map[string]bool{}
+	addTag := func(tag string) {
+		if tagSeen[tag] {
+			return
+		}
+		tagSeen[tag] = true
+		tags = append(tags, tag)
+	}
+	for _, name := range profileNames {
+		if name == "" || profileSeen[name] {
+			continue
+		}
+		profile, ok := m.Profiles[name]
+		if !ok {
+			return Selection{}, fmt.Errorf("profile %q not found", name)
+		}
+		profileSeen[name] = true
+		profiles = append(profiles, name)
+		for _, tag := range profile.Tags {
+			addTag(tag)
+		}
+	}
+	if len(profiles) == 0 {
+		if profile, ok := m.Profiles["default"]; ok {
+			profiles = append(profiles, "default")
+			for _, tag := range profile.Tags {
+				addTag(tag)
+			}
+		} else {
+			return Selection{}, fmt.Errorf("at least one --profile is required; choose one or repeat --profile to compose profiles (for example: --profile core, --profile workstation, or --profile agents --profile web)")
+		}
+	}
+	for _, tag := range extraTags {
+		addTag(tag)
+	}
+	return Selection{Profile: strings.Join(profiles, ","), Profiles: profiles, Tags: tags}, nil
+}
+
 // SelectionTags returns the effective tag set for a profile plus any
 // explicit tags requested by the caller. The profile tags stay first so selected
 // entries and provisioners preserve the manifest's role-oriented baseline while
@@ -832,6 +894,11 @@ func EntrySource(entry Entry, selectionTags []string) string {
 	return entry.Source
 }
 
+// SharesTag reports whether an item's tags intersect a profile's tags. It is
+// half the profile-scoping rule entries and provisioners share: an item belongs
+// to a profile when at least one of its tags matches one of the profile's tags.
+// Centralizing it here keeps plan, status, deps, doctor, and provision filtering
+// through one rule instead of each carrying its own copy.
 func SharesTag(itemTags, profileTags []string) bool {
 	for _, it := range itemTags {
 		for _, pt := range profileTags {

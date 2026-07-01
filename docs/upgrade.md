@@ -58,7 +58,7 @@ The Source of Truth phase accepts the same relevant flags as `dots update`:
 ```bash
 dots upgrade \
   --file dots.yaml \
-  --profile default \
+  --profile core \
   --tag desktop \
   --source-root ~/.local/share/dots \
   --home "$HOME" \

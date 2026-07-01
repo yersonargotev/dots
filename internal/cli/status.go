@@ -13,7 +13,7 @@ import (
 func newStatusCommand() *cobra.Command {
 	var (
 		file       string
-		profile    string
+		profiles   []string
 		extraTags  []string
 		sourceRoot string
 		home       string
@@ -53,7 +53,7 @@ func newStatusCommand() *cobra.Command {
 			}
 
 			report, err := status.Build(*m, meta, status.Options{
-				Profile:    profile,
+				Profiles:   profiles,
 				ExtraTags:  extraTags,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
@@ -63,12 +63,14 @@ func newStatusCommand() *cobra.Command {
 				return err
 			}
 
-			provPlan, err := provision.Build(*m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS})
+			provPlan, err := provision.Build(*m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS})
 			if err != nil {
 				return err
 			}
 			fullReport := statusReport{
 				Profile:      report.Profile,
+				Profiles:     report.Profiles,
+				Tags:         report.Tags,
 				Entries:      report.Entries,
 				Provisioners: provision.BuildStatus(provPlan, meta),
 			}
@@ -84,7 +86,7 @@ func newStatusCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to evaluate")
-	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to evaluate")
+	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, "profile to evaluate")
 	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to evaluate (default: the current user's home); use a sandbox path to inspect without touching real config")

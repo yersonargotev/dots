@@ -49,8 +49,10 @@ type Entry struct {
 
 // Report is the Dotfiles Status for a Profile, in manifest order.
 type Report struct {
-	Profile string  `json:"profile"`
-	Entries []Entry `json:"entries"`
+	Profile  string   `json:"profile,omitempty"`
+	Profiles []string `json:"profiles,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Entries  []Entry  `json:"entries"`
 }
 
 // HasFindings reports whether the Dotfiles Status contains any entry that
@@ -70,6 +72,7 @@ func (r Report) HasFindings() bool {
 // Options carries the resolved inputs needed to evaluate status.
 type Options struct {
 	Profile    string
+	Profiles   []string
 	ExtraTags  []string
 	OS         string
 	SourceRoot string
@@ -79,14 +82,13 @@ type Options struct {
 // Build evaluates the Dotfiles Status for the selected Profile. It does not
 // mutate the filesystem.
 func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, error) {
-	profile, ok := m.Profiles[opts.Profile]
-	if !ok {
-		return Report{}, fmt.Errorf("profile %q not found", opts.Profile)
+	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	if err != nil {
+		return Report{}, err
 	}
+	tags := selection.Tags
 
-	tags := manifest.SelectionTags(profile, opts.ExtraTags)
-
-	report := Report{Profile: opts.Profile}
+	report := Report{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue

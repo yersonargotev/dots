@@ -1,11 +1,10 @@
 version: 1
 profiles:
-  default:
+  core:
     tags:
       - core
   desktop:
     tags:
-      - core
       - desktop
     dependencies:
       - name: Desktop Nerd Font
@@ -15,11 +14,9 @@ profiles:
           - "CaskaydiaCoveNerdFont*"
   agents:
     tags:
-      - core
       - agents
   web:
     tags:
-      - core
       - web
     dependencies:
       - name: Playwright CLI
@@ -28,7 +25,6 @@ profiles:
         linux_homebrew: true
   mobile:
     tags:
-      - core
       - mobile
   workstation:
     tags:

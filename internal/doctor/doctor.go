@@ -23,6 +23,7 @@ import (
 // Options carries the resolved inputs needed to build read-only diagnostics.
 type Options struct {
 	Profile    string
+	Profiles   []string
 	ExtraTags  []string
 	OS         string
 	SourceRoot string
@@ -32,7 +33,9 @@ type Options struct {
 
 // Report is the consolidated doctor diagnostic output for a profile.
 type Report struct {
-	Profile       string                `json:"profile"`
+	Profile       string                `json:"profile,omitempty"`
+	Profiles      []string              `json:"profiles,omitempty"`
+	Tags          []string              `json:"tags,omitempty"`
 	OS            string                `json:"os"`
 	Platform      Platform              `json:"platform"`
 	Dependencies  deps.CheckReport      `json:"dependencies"`
@@ -84,13 +87,19 @@ var secretPatterns = []secretPattern{
 
 // Build runs all doctor diagnostics without mutating the filesystem.
 func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Lookup, fontLook deps.FontLookup) (Report, error) {
+	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	if err != nil {
+		return Report{}, err
+	}
 	report := Report{
-		Profile:  opts.Profile,
+		Profile:  selection.Profile,
+		Profiles: selection.Profiles,
+		Tags:     selection.Tags,
 		OS:       opts.OS,
 		Platform: Platform{Supported: supportedOS(opts.OS), OS: opts.OS},
 	}
 
-	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, ExtraTags: opts.ExtraTags, OS: opts.OS}, look, fontLook, opts.ToolRunner)
+	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, OS: opts.OS}, look, fontLook, opts.ToolRunner)
 	if err != nil {
 		return Report{}, err
 	}
@@ -98,6 +107,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 
 	statusReport, err := status.Build(m, meta, status.Options{
 		Profile:    opts.Profile,
+		Profiles:   opts.Profiles,
 		ExtraTags:  opts.ExtraTags,
 		OS:         opts.OS,
 		SourceRoot: opts.SourceRoot,
@@ -108,7 +118,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 	}
 	report.Configuration = statusReport
 
-	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, ExtraTags: opts.ExtraTags, OS: opts.OS}, look, fontLook)
+	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, OS: opts.OS}, look, fontLook)
 	if err != nil {
 		return Report{}, err
 	}
@@ -126,12 +136,11 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 // ScanSecrets scans selected repository-managed source files for obvious secret
 // patterns. It is intentionally conservative scope-wise and advisory in meaning.
 func ScanSecrets(m manifest.Manifest, opts Options) (SecretReport, error) {
-	profile, ok := m.Profiles[opts.Profile]
-	if !ok {
-		return SecretReport{}, fmt.Errorf("profile %q not found", opts.Profile)
+	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	if err != nil {
+		return SecretReport{}, err
 	}
-
-	tags := manifest.SelectionTags(profile, opts.ExtraTags)
+	tags := selection.Tags
 
 	var report SecretReport
 	seen := map[string]bool{}
