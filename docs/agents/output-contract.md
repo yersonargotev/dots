@@ -137,6 +137,12 @@ prose the text surface prints:
   `data.backup_sets` lists the Backup Sets created by that run, including each
   set ID, target list, and state-root path.
 
+Profile-aware reports expose both the compatibility `profile` label and the
+first-class composed selection: `profiles` is the ordered list supplied with
+repeatable `--profile`, and `tags` is the resolved, de-duplicated tag union after
+explicit `--tag` values are applied. Agents should prefer `profiles` and `tags`
+when branching on composed selections.
+
 The domain reports' `json:` field names are part of the public contract.
 Renaming, removing, or changing the meaning of an existing field is a
 `schema_version` bump, locked by the JSON Golden Output Test

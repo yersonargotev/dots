@@ -11,7 +11,7 @@ import (
 )
 
 func renderDoctor(w io.Writer, report doctor.Report) {
-	fmt.Fprintf(w, "Doctor for profile %q\n\n", report.Profile)
+	fmt.Fprintf(w, "Doctor for %s\n\n", renderProfileSelection(report.Profile, report.Profiles))
 
 	if report.Platform.Supported {
 		fmt.Fprintf(w, "Platform: ok (%s)\n", report.Platform.OS)

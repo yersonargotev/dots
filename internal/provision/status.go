@@ -46,9 +46,11 @@ type StatusItem struct {
 
 // StatusReport is the read-only diagnostic view of Provisioner completion.
 type StatusReport struct {
-	Profile string        `json:"profile"`
-	Summary StatusSummary `json:"summary"`
-	Items   []StatusItem  `json:"items"`
+	Profile  string        `json:"profile,omitempty"`
+	Profiles []string      `json:"profiles,omitempty"`
+	Tags     []string      `json:"tags,omitempty"`
+	Summary  StatusSummary `json:"summary"`
+	Items    []StatusItem  `json:"items"`
 }
 
 // HasFindings reports whether Provisioners are pending or failed for the active
@@ -60,7 +62,7 @@ func (r StatusReport) HasFindings() bool {
 // BuildStatus joins the selected Provisioner plan with persisted Installation
 // Metadata to expose whether Provisioners are pending, failed, or completed.
 func BuildStatus(p Plan, meta state.Metadata) StatusReport {
-	report := StatusReport{Profile: p.Profile}
+	report := StatusReport{Profile: p.Profile, Profiles: p.Profiles, Tags: p.Tags}
 	if len(p.Steps) == 0 {
 		report.Summary.State = SummaryStateNone
 		return report

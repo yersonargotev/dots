@@ -35,8 +35,10 @@ type RunItem struct {
 // on failure, so the caller can show exactly how far provisioning got and never
 // leaves the run half-applied without an account of it.
 type Report struct {
-	Profile string    `json:"profile"`
-	Items   []RunItem `json:"items"`
+	Profile  string    `json:"profile,omitempty"`
+	Profiles []string  `json:"profiles,omitempty"`
+	Tags     []string  `json:"tags,omitempty"`
+	Items    []RunItem `json:"items"`
 }
 
 // Apply runs every selected Provisioner in manifest order via the deps Runner
@@ -51,7 +53,8 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 		return Report{}, err
 	}
 
-	report := Report{Profile: opts.Profile}
+	selection, _ := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	report := Report{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
 

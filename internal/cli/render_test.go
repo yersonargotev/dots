@@ -49,7 +49,7 @@ func TestRenderSkippedEntryHint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := manifest.Manifest{Version: 1, Profiles: profiles, Entries: tt.entries}
 			var out bytes.Buffer
-			if err := renderSkippedEntryHint(&out, m, tt.profile, "darwin"); err != nil {
+			if err := renderSkippedEntryHint(&out, m, []string{tt.profile}, "darwin"); err != nil {
 				t.Fatalf("renderSkippedEntryHint() error = %v", err)
 			}
 			if out.String() != tt.want {

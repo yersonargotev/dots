@@ -1002,6 +1002,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	install.SetArgs([]string{
 		"install",
 		"--yes",
+		"--profile", "core",
 		"--file", manifestPath,
 		"--home", home,
 		"--source-root", sourceRoot,
@@ -1036,6 +1037,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	statusCmd.SetErr(&statusOut)
 	statusCmd.SetArgs([]string{
 		"status",
+		"--profile", "core",
 		"--file", manifestPath,
 		"--home", home,
 		"--source-root", sourceRoot,
@@ -1062,7 +1064,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 	countPlan, err := plan.Build(*loaded, plan.Options{
-		Profile:    "default",
+		Profile:    "core",
 		OS:         runtime.GOOS,
 		SourceRoot: sourceRoot,
 		Home:       t.TempDir(),
@@ -1866,5 +1868,35 @@ func writeCLIInstalledRepository(t *testing.T, sourceRoot, manifestContent strin
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "dots.yaml"), []byte(manifestContent), 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
+	}
+}
+
+func TestInstallRequiresExplicitProfileWithRepositoryManifest(t *testing.T) {
+	sourceRoot, err := filepath.Abs(filepath.Clean(filepath.Join("..", "..")))
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{
+		"install",
+		"--dry-run",
+		"--skip-deps",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home,
+		"--source-root", sourceRoot,
+		"--state-root", stateRoot,
+	})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "at least one --profile is required") {
+		t.Fatalf("Execute() error = %v, want explicit profile guidance\noutput:\n%s", err, out.String())
+	}
+	if entries, err := os.ReadDir(home); err != nil {
+		t.Fatalf("ReadDir(home) error = %v", err)
+	} else if len(entries) != 0 {
+		t.Fatalf("home was mutated without profile: %#v", entries)
 	}
 }

@@ -38,7 +38,7 @@ var (
 func newInstallCommand() *cobra.Command {
 	var (
 		file             string
-		profile          string
+		profiles         []string
 		extraTags        []string
 		sourceRoot       string
 		home             string
@@ -78,6 +78,9 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if _, err := manifest.ResolveSelection(*m, profiles, extraTags); err != nil {
+				return err
+			}
 
 			meta, err := loadInstallationMetadata(paths, stateRoot)
 			if err != nil {
@@ -86,7 +89,7 @@ func newInstallCommand() *cobra.Command {
 
 			hostOS := installHostOS
 			hostArch := installHostArch
-			depOptions := deps.Options{Profile: profile, ExtraTags: extraTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot}
+			depOptions := deps.Options{Profiles: profiles, ExtraTags: extraTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot}
 			depTier, err := resolveInstallTier(hostOS)
 			if err != nil {
 				return err
@@ -126,14 +129,14 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if dryRun {
-				p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, profile, extraTags, hostOS, paths)
+				p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths)
 				if err != nil {
 					return err
 				}
 				if wantsJSON(cmd) {
 					return emitOK(cmd, installReport{DryRun: true, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
-				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profile); err != nil {
+				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profiles); err != nil {
 					return err
 				}
 				return nil
@@ -186,7 +189,7 @@ func newInstallCommand() *cobra.Command {
 					renderDepsInstallPreview(cmd.OutOrStdout(), depPreview)
 					depsConfirmed = true
 				}
-				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profile, extraTags, hostOS, paths)
+				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths)
 				if err != nil {
 					return err
 				}
@@ -206,14 +209,14 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if !installPlanReady {
-				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profile, extraTags, hostOS, paths)
+				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths)
 				if err != nil {
 					return err
 				}
 			}
 
 			if !wantsJSON(cmd) {
-				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profile); err != nil {
+				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profiles); err != nil {
 					return err
 				}
 			}
@@ -237,7 +240,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			provResult, err := runProvisioners(cmd, *m, profile, extraTags, paths.Home, paths.StateRoot)
+			provResult, err := runProvisioners(cmd, *m, profiles, extraTags, paths.Home, paths.StateRoot)
 			if err != nil {
 				if wantsJSON(cmd) {
 					return installProvisionerError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
@@ -252,7 +255,7 @@ func newInstallCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to install")
-	cmd.Flags().StringVarP(&profile, "profile", "p", "default", "profile to install")
+	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, "profile to install")
 	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
@@ -265,18 +268,18 @@ func newInstallCommand() *cobra.Command {
 	return cmd
 }
 
-func renderInstallPlanAndProvisioners(cmd *cobra.Command, m manifest.Manifest, p plan.Plan, provPlan provision.Plan, profile string) error {
+func renderInstallPlanAndProvisioners(cmd *cobra.Command, m manifest.Manifest, p plan.Plan, provPlan provision.Plan, profiles []string) error {
 	renderPlan(cmd.OutOrStdout(), p)
-	if err := renderSkippedEntryHint(cmd.OutOrStdout(), m, profile, runtime.GOOS); err != nil {
+	if err := renderSkippedEntryHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS); err != nil {
 		return err
 	}
 	renderProvisionPlan(cmd.OutOrStdout(), provPlan)
-	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profile, runtime.GOOS)
+	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS)
 }
 
-func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, profile string, extraTags []string, hostOS string, paths resolvedPaths) (plan.Plan, provision.Plan, error) {
+func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, profiles []string, extraTags []string, hostOS string, paths resolvedPaths) (plan.Plan, provision.Plan, error) {
 	p, err := plan.Build(m, plan.Options{
-		Profile:    profile,
+		Profiles:   profiles,
 		ExtraTags:  extraTags,
 		OS:         hostOS,
 		SourceRoot: paths.SourceRoot,
@@ -287,7 +290,7 @@ func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, p
 		return plan.Plan{}, provision.Plan{}, err
 	}
 
-	provPlan, err := provision.Build(m, provision.Options{Profile: profile, ExtraTags: extraTags, OS: hostOS})
+	provPlan, err := provision.Build(m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: hostOS})
 	if err != nil {
 		return plan.Plan{}, provision.Plan{}, err
 	}
@@ -421,7 +424,7 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 // temporary home. Apply stops at the first failing provisioner and returns the
 // error, which the caller surfaces; the tool's own stdout/stderr are streamed
 // through so its progress is visible.
-func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, extraTags []string, home string, stateRoot string) (provision.Report, error) {
+func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string, extraTags []string, home string, stateRoot string) (provision.Report, error) {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -437,7 +440,7 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 		stdout: stdout,
 		stderr: cmd.ErrOrStderr(),
 	}
-	provisionOpts := provision.Options{Profile: profile, ExtraTags: extraTags, OS: runtime.GOOS}
+	provisionOpts := provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS}
 	selected, selectErr := provision.Select(m, provisionOpts)
 	if selectErr != nil {
 		return provision.Report{}, selectErr
@@ -456,7 +459,7 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profile string, ex
 			}
 		}
 	}
-	selectedTags := manifest.SelectionTags(m.Profiles[profile], extraTags)
+	selectedTags := report.Tags
 	if hasTag(selectedTags, "without-codex-spark-delegation") {
 		if cleanupErr := agentinstructions.RemoveCodexSparkDelegation(home); cleanupErr != nil {
 			return report, errors.Join(err, cleanupErr)
