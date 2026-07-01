@@ -127,6 +127,15 @@ func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
 	fmt.Fprintln(out)
 }
 
+func validateProfileSelectionFile(manifestPath string, profiles []string, extraTags []string) error {
+	m, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+	_, err = manifest.ResolveSelection(*m, profiles, extraTags)
+	return err
+}
+
 func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updateReport, error) {
 	paths, err := resolvePaths(opts.home, opts.sourceRoot, opts.stateRoot)
 	if err != nil {
@@ -135,6 +144,14 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if !gitrepo.IsRepo(paths.SourceRoot) {
 		return updateReport{}, fmt.Errorf("installed repository %s is not a git repository; clone the Source of Truth before updating", paths.SourceRoot)
 	}
+	manifestPath := opts.file
+	if !cmd.Flags().Changed("file") {
+		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
+	}
+	if err := validateProfileSelectionFile(manifestPath, opts.profiles, opts.extraTags); err != nil {
+		return updateReport{}, err
+	}
+
 	out := cmd.OutOrStdout()
 	var update gitrepo.Update
 	if wantsJSON(cmd) {
@@ -159,10 +176,6 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 	}
 
-	manifestPath := opts.file
-	if !cmd.Flags().Changed("file") {
-		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
-	}
 	m, err := manifest.LoadFile(manifestPath)
 	if err != nil {
 		return updateReport{}, err

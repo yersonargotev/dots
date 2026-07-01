@@ -83,7 +83,9 @@ func selectedIndices(m manifest.Manifest, profileNames []string, os string, extr
 func SkippedProvisioners(m manifest.Manifest, opts Options) (profilesel.Hint, bool, error) {
 	active := selectionLabel(opts.Profile, opts.Profiles)
 	if len(opts.Profiles) > 1 {
-		return profilesel.Hint{}, false, nil
+		return profilesel.SkippedSelection(m.Profiles, opts.Profiles, opts.OS, func(name, os string) (map[int]bool, error) {
+			return selectedIndices(m, []string{name}, os, nil)
+		})
 	}
 	return profilesel.Skipped(m.Profiles, active, opts.OS, func(name, os string) (map[int]bool, error) {
 		return selectedIndices(m, []string{name}, os, nil)

@@ -117,7 +117,7 @@ func TestInstallDryRunHintsSkippedDesktopEntries(t *testing.T) {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
 
-	want := `Note: profile "default" skips 2 file entries; run with --profile desktop to include them.`
+	want := `Note: profile "default" skips 2 file entries; run with --profile default --profile desktop to include them.`
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("install --dry-run output missing skipped-entry hint %q\noutput:\n%s", want, out.String())
 	}
@@ -166,7 +166,7 @@ func TestUpdateDryRunHintsSkippedDesktopEntries(t *testing.T) {
 	out := runUpdate(t, "--dry-run", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot)
 
-	want := `Note: profile "default" skips 2 file entries; run with --profile desktop to include them.`
+	want := `Note: profile "default" skips 2 file entries; run with --profile default --profile desktop to include them.`
 	if !strings.Contains(out, want) {
 		t.Fatalf("update --dry-run output missing skipped-entry hint %q\noutput:\n%s", want, out)
 	}
@@ -183,12 +183,12 @@ func TestInstallDryRunPrefersSupersetProvisionerHint(t *testing.T) {
 		{
 			name:    "desktop keeps desktop provisioners and adds agents",
 			profile: "desktop",
-			want:    `Note: profile "desktop" skips 1 provisioner(s); run with --profile workstation to include them.`,
+			want:    `Note: profile "desktop" skips 1 provisioner(s); run with --profile desktop --profile workstation to include them.`,
 		},
 		{
 			name:    "agents keeps agent provisioners and adds desktop",
 			profile: "agents",
-			want:    `Note: profile "agents" skips 1 provisioner(s); run with --profile workstation to include them.`,
+			want:    `Note: profile "agents" skips 1 provisioner(s); run with --profile agents --profile workstation to include them.`,
 		},
 	}
 
@@ -236,7 +236,7 @@ func TestInstallDryRunHintsSkippedDesktopProvisioners(t *testing.T) {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
 
-	want := `Note: profile "default" skips 2 provisioner(s); run with --profile desktop to include them.`
+	want := `Note: profile "default" skips 2 provisioner(s); run with --profile default --profile desktop to include them.`
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("install --dry-run output missing skipped-provisioner hint %q\noutput:\n%s", want, out.String())
 	}
@@ -281,7 +281,7 @@ func TestUpdateDryRunHintsSkippedDesktopProvisioners(t *testing.T) {
 	out := runUpdate(t, "--dry-run", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot)
 
-	want := `Note: profile "default" skips 2 provisioner(s); run with --profile desktop to include them.`
+	want := `Note: profile "default" skips 2 provisioner(s); run with --profile default --profile desktop to include them.`
 	if !strings.Contains(out, want) {
 		t.Fatalf("update --dry-run output missing skipped-provisioner hint %q\noutput:\n%s", want, out)
 	}

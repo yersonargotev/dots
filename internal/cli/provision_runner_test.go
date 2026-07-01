@@ -220,7 +220,7 @@ EOF
 
 	got := out.String()
 	for _, want := range []string{
-		`Provisioner results for profile "default"`,
+		`Provisioner results for profile "default" (tags: core)`,
 		"gentle-ai install --scope global --agents codex — provisioned",
 		"gentle-ai install --scope global --agents claude — failed",
 	} {

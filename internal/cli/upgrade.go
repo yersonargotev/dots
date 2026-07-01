@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -82,6 +83,17 @@ func newUpgradeCommand() *cobra.Command {
 				return nil
 			}
 
+			preflightPlan, err := upgrade.Preview(cmd.Context(), binOpts)
+			if err != nil {
+				return err
+			}
+			if preflightPlan.Action == upgrade.ActionManualRebuild {
+				_, err := upgrade.Execute(cmd.Context(), binOpts)
+				return err
+			}
+			if err := validateUpgradeProfileSelection(cmd, opts); err != nil {
+				return err
+			}
 			binPlan, err := upgrade.Execute(cmd.Context(), binOpts)
 			if err != nil {
 				return err
@@ -128,6 +140,18 @@ func newUpgradeCommand() *cobra.Command {
 	_ = cmd.Flags().MarkHidden("binary-artifact")
 	_ = cmd.Flags().MarkHidden("binary-checksum")
 	return cmd
+}
+
+func validateUpgradeProfileSelection(cmd *cobra.Command, opts updateOptions) error {
+	paths, err := resolvePaths(opts.home, opts.sourceRoot, opts.stateRoot)
+	if err != nil {
+		return err
+	}
+	manifestPath := opts.file
+	if !cmd.Flags().Changed("file") {
+		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
+	}
+	return validateProfileSelectionFile(manifestPath, opts.profiles, opts.extraTags)
 }
 
 func upgradeContinuationArgs(file string, fileChanged bool, profiles []string, extraTags []string, sourceRoot, home, stateRoot string, yes, noTUI, json bool, binPlan upgrade.Plan) []string {

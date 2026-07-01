@@ -69,7 +69,7 @@ entries:
 	if dest != pulled {
 		t.Fatalf("symlink target = %q, want %q", dest, pulled)
 	}
-	for _, want := range []string{"add tmux config", `Plan for profile "default"`} {
+	for _, want := range []string{"add tmux config", `Plan for profile "default" (tags: core)`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("update output missing %q\noutput:\n%s", want, out)
 		}
@@ -109,7 +109,7 @@ entries:
 	if _, err := os.Lstat(filepath.Join(home, ".zshrc")); !os.IsNotExist(err) {
 		t.Fatalf("dry-run installed a target; lstat err = %v", err)
 	}
-	for _, want := range []string{"add tmux config", `Plan for profile "default"`} {
+	for _, want := range []string{"add tmux config", `Plan for profile "default" (tags: core)`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dry-run output missing %q\noutput:\n%s", want, out)
 		}
@@ -139,7 +139,7 @@ entries:
 
 	out := runUpdate(t, "--dry-run", "--home", home, "--source-root", sourceRoot)
 
-	if !strings.Contains(out, `Plan for profile "default"`) {
+	if !strings.Contains(out, `Plan for profile "default" (tags: core)`) {
 		t.Fatalf("update output missing default manifest plan\noutput:\n%s", out)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".zshrc")); !os.IsNotExist(err) {
@@ -426,4 +426,43 @@ func runGitOutput(t *testing.T, dir string, args ...string) string {
 		return string(out)
 	}
 	return ""
+}
+
+func TestUpdateRequiresProfileBeforeFastForward(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/zsh/zshrc": "export A=1\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`,
+	})
+	oldHead := strings.TrimSpace(runGitOutput(t, sourceRoot, "rev-parse", "HEAD"))
+	advanceUpstream(t, origin, "add tmux config", map[string]string{
+		"configs/tmux/tmux.conf": "set -g mouse on\n",
+	})
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"update", "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "at least one --profile is required") {
+		t.Fatalf("update error = %v, want explicit profile error\noutput:\n%s", err, out.String())
+	}
+	if got := strings.TrimSpace(runGitOutput(t, sourceRoot, "rev-parse", "HEAD")); got != oldHead {
+		t.Fatalf("update fast-forwarded before profile validation: HEAD = %s, want %s", got, oldHead)
+	}
+	if _, statErr := os.Stat(filepath.Join(sourceRoot, "configs/tmux/tmux.conf")); !os.IsNotExist(statErr) {
+		t.Fatalf("update created incoming file before profile validation; stat err = %v", statErr)
+	}
 }

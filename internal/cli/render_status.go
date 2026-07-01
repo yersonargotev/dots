@@ -13,7 +13,7 @@ import (
 // The output is stable for a given Report so it can be locked with a golden test
 // and read predictably by the user.
 func renderStatus(w io.Writer, report status.Report) {
-	fmt.Fprintf(w, "Status for %s\n\n", renderProfileSelection(report.Profile, report.Profiles))
+	fmt.Fprintf(w, "Status for %s\n\n", renderProfileSelection(report.Profile, report.Profiles, report.Tags))
 
 	if len(report.Entries) == 0 {
 		fmt.Fprintln(w, "No managed entries for this profile.")
@@ -59,7 +59,7 @@ func renderStatusProvisioners(w io.Writer, r provision.StatusReport) {
 		return
 	}
 
-	fmt.Fprintf(w, "\nDeclared provisioners for %s — %s\n\n", renderProfileSelection(r.Profile, r.Profiles), r.Summary.State)
+	fmt.Fprintf(w, "\nDeclared provisioners for %s — %s\n\n", renderProfileSelection(r.Profile, r.Profiles, r.Tags), r.Summary.State)
 	for _, item := range r.Items {
 		fmt.Fprintf(w, "  %-20s %s %s\n", item.Status, item.Executable, strings.Join(item.Args, " "))
 		if len(item.Targets) > 0 {

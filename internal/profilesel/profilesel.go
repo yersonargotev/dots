@@ -7,6 +7,7 @@ package profilesel
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 )
@@ -15,8 +16,10 @@ import (
 // select on this OS, so a caller can nudge the user toward the fuller profile
 // instead of silently dropping them.
 type Hint struct {
-	// Profile is the active profile being installed.
+	// Profile is the active profile selection label.
 	Profile string
+	// Profiles is the active profile list.
+	Profiles []string
 	// Count is how many of the skipped items SuggestedProfile would recover. It
 	// is intentionally the suggested profile's coverage, not the union of
 	// omissions across every profile, so the "run --profile S to include them"
@@ -28,6 +31,9 @@ type Hint struct {
 	// SuggestedProfile is the other profile that covers the most skipped items —
 	// the single most complete profile worth recommending.
 	SuggestedProfile string
+	// SuggestedProfiles is the full profile list to pass on the CLI to preserve the
+	// active selection while adding SuggestedProfile.
+	SuggestedProfiles []string
 }
 
 // Selector returns the set of item positions (index space) a profile selects on
@@ -121,5 +127,75 @@ func Skipped(profiles map[string]manifest.Profile, active, os string, sel Select
 	// whenever skipped is non-empty: every skipped index came from some other
 	// profile's selection, so that profile covers it. Reporting best (not
 	// len(skipped)) keeps "run --profile S to include them" exact.
-	return Hint{Profile: active, Count: best, SuggestedProfile: suggested}, true, nil
+	return Hint{Profile: active, Profiles: []string{active}, Count: best, SuggestedProfile: suggested, SuggestedProfiles: []string{active, suggested}}, true, nil
+}
+
+// SkippedSelection reports skipped items for a composed active profile list. It
+// suggests adding one Profile to the existing list, so the remediation preserves
+// currently selected capabilities instead of switching to a Profile that drops
+// them.
+func SkippedSelection(profiles map[string]manifest.Profile, activeProfiles []string, os string, sel Selector) (Hint, bool, error) {
+	activeSet := map[int]bool{}
+	activeNames := map[string]bool{}
+	cleanActive := make([]string, 0, len(activeProfiles))
+	for _, name := range activeProfiles {
+		if name == "" || activeNames[name] {
+			continue
+		}
+		set, err := sel(name, os)
+		if err != nil {
+			return Hint{}, false, err
+		}
+		activeNames[name] = true
+		cleanActive = append(cleanActive, name)
+		for i := range set {
+			activeSet[i] = true
+		}
+	}
+
+	others := make([]string, 0, len(profiles))
+	for name := range profiles {
+		if !activeNames[name] {
+			others = append(others, name)
+		}
+	}
+	sort.Strings(others)
+
+	selections := make(map[string]map[int]bool, len(others))
+	skipped := map[int]bool{}
+	for _, name := range others {
+		set, err := sel(name, os)
+		if err != nil {
+			return Hint{}, false, err
+		}
+		selections[name] = set
+		for i := range set {
+			if !activeSet[i] {
+				skipped[i] = true
+			}
+		}
+	}
+	if len(skipped) == 0 {
+		return Hint{}, false, nil
+	}
+
+	var suggested string
+	best := 0
+	for _, name := range others {
+		covered := 0
+		for i := range selections[name] {
+			if skipped[i] {
+				covered++
+			}
+		}
+		if covered > best {
+			best = covered
+			suggested = name
+		}
+	}
+	if best == 0 {
+		return Hint{}, false, nil
+	}
+	suggestedProfiles := append(append([]string(nil), cleanActive...), suggested)
+	return Hint{Profile: strings.Join(cleanActive, ","), Profiles: cleanActive, Count: best, SuggestedProfile: suggested, SuggestedProfiles: suggestedProfiles}, true, nil
 }

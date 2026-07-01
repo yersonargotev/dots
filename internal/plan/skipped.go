@@ -34,7 +34,9 @@ func selectedEntryIndices(m manifest.Manifest, profileName, os string) (map[int]
 // shared math. It is PURE: no I/O and safe in a dry-run.
 func SkippedEntries(m manifest.Manifest, opts Options) (profilesel.Hint, bool, error) {
 	if len(opts.Profiles) > 1 {
-		return profilesel.Hint{}, false, nil
+		return profilesel.SkippedSelection(m.Profiles, opts.Profiles, opts.OS, func(name, os string) (map[int]bool, error) {
+			return selectedEntryIndices(m, name, os)
+		})
 	}
 	active := opts.Profile
 	if len(opts.Profiles) == 1 {

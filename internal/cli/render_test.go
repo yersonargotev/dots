@@ -29,13 +29,13 @@ func TestRenderSkippedEntryHint(t *testing.T) {
 			name:    "plural for more than one skipped entry",
 			entries: []manifest.Entry{core, desktop("configs/ghostty/config.ghostty"), desktop("configs/zed/settings.json")},
 			profile: "default",
-			want:    "\nNote: profile \"default\" skips 2 file entries; run with --profile desktop to include them.\n",
+			want:    "\nNote: profile \"default\" skips 2 file entries; run with --profile default --profile desktop to include them.\n",
 		},
 		{
 			name:    "singular for exactly one skipped entry",
 			entries: []manifest.Entry{core, desktop("configs/ghostty/config.ghostty")},
 			profile: "default",
-			want:    "\nNote: profile \"default\" skips 1 file entry; run with --profile desktop to include them.\n",
+			want:    "\nNote: profile \"default\" skips 1 file entry; run with --profile default --profile desktop to include them.\n",
 		},
 		{
 			name:    "quiet when the active profile selects everything",

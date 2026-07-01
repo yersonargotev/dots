@@ -38,7 +38,7 @@ entries:
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("upgrade --dry-run error = %v\noutput:\n%s", err, out.String())
 	}
-	for _, want := range []string{"Binary upgrade preview", "action=manual-rebuild", "update zsh config", `Plan for profile "default"`} {
+	for _, want := range []string{"Binary upgrade preview", "action=manual-rebuild", "update zsh config", `Plan for profile "default" (tags: core)`} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("output missing %q\n%s", want, out.String())
 		}
