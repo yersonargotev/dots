@@ -2726,6 +2726,7 @@ func TestRepositoryTmuxConfigClassifiesPortableConfigSafely(t *testing.T) {
 		`@dots_catppuccin_status_icon_fg`,
 		`@catppuccin_status_directory_icon_fg`,
 		`#{E:@dots_catppuccin_status_icon_fg}`,
+		`set -g @catppuccin_reset "true"`,
 		`#{@thm_text}`,
 		"set -g prefix C-a",
 		"set -g mode-keys vi",
@@ -3001,6 +3002,75 @@ func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("Zellij config documentation missing %q:\n%s", want, doc)
+		}
+	}
+}
+
+func TestRepositoryTmuxConfigResetsGeneratedCatppuccinStateBeforeReload(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	managedPath := filepath.Join(root, "configs/tmux/tmux.conf")
+	managedBytes, err := os.ReadFile(managedPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", managedPath, err)
+	}
+	managed := string(managedBytes)
+
+	resetLine := `set -g @catppuccin_reset "true"`
+	resetIndex := strings.Index(managed, resetLine)
+	if resetIndex == -1 {
+		t.Fatalf("managed tmux config missing Catppuccin reset line %q:\n%s", resetLine, managed)
+	}
+
+	firstLoadLine := `run "$HOME/.tmux/plugins/tmux/catppuccin.tmux"`
+	firstLoadIndex := strings.Index(managed[resetIndex:], firstLoadLine)
+	if firstLoadIndex == -1 {
+		t.Fatalf("managed tmux config does not load Catppuccin after reset:\n%s", managed)
+	}
+	firstLoadIndex += resetIndex
+
+	for _, generated := range []string{
+		`set -gu @catppuccin_directory_color`,
+		`set -gu @catppuccin_status_directory_icon_bg`,
+		`set -gu @catppuccin_status_directory_text_fg`,
+		`set -gu @catppuccin_status_uptime_text_bg`,
+		`set -gu @cpu_low_bg_color`,
+		`set -gu @ram_medium_bg_color`,
+	} {
+		generatedIndex := strings.Index(managed, generated)
+		if generatedIndex == -1 {
+			t.Fatalf("managed tmux config missing generated module reset %q", generated)
+		}
+		if generatedIndex < firstLoadIndex {
+			t.Fatalf("generated module reset %q occurs before Catppuccin reset load", generated)
+		}
+	}
+
+	customLine := `set -g @catppuccin_status_directory_icon_fg`
+	customIndex := strings.Index(managed, customLine)
+	if customIndex == -1 {
+		t.Fatalf("managed tmux config missing custom Catppuccin option %q", customLine)
+	}
+	if customIndex < firstLoadIndex {
+		t.Fatalf("custom Catppuccin options are set before reset load; reset would discard them")
+	}
+
+	secondLoadIndex := strings.Index(managed[firstLoadIndex+len(firstLoadLine):], firstLoadLine)
+	if secondLoadIndex == -1 {
+		t.Fatalf("managed tmux config does not reload Catppuccin after custom options:\n%s", managed)
+	}
+	secondLoadIndex += firstLoadIndex + len(firstLoadLine)
+	if secondLoadIndex < customIndex {
+		t.Fatalf("Catppuccin reload occurs before custom options; generated modules may ignore dots options")
+	}
+
+	for _, preserved := range []string{
+		`set -g @catppuccin_window_status_style "rounded"`,
+		`set -g @catppuccin_status_background "default"`,
+		`set -g @catppuccin_status_directory_icon_fg`,
+		`set -g @catppuccin_status_uptime_icon_fg`,
+	} {
+		if !strings.Contains(managed, preserved) {
+			t.Fatalf("managed tmux config missing custom Catppuccin option %q", preserved)
 		}
 	}
 }

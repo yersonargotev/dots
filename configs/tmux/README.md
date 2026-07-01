@@ -32,7 +32,9 @@ selection is opt-in: install or update with `--tag adaptive-theme`, which places
 when macOS light appearance is proven with `defaults read -g AppleInterfaceStyle`;
 macOS dark mode, non-macOS hosts, a missing `defaults` command, or unknown values
 fall back to Mocha. Re-source `~/.tmux.conf` or restart Tmux after changing the
-system appearance or opt-in marker.
+system appearance or opt-in marker. During re-source, the config resets
+Catppuccin/tmux's generated palette and status-module defaults before rebuilding
+the status line, so stale Latte colors cannot survive a switch back to Mocha.
 
 Custom window-status formats use Catppuccin theme variables instead of fixed
 Mocha hex values so the same status bar adapts to Latte or Mocha. The right-side
