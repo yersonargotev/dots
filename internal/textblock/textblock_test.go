@@ -56,3 +56,28 @@ func TestUpsertInsertsUpdatesAndMigratesBlocks(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractBodyReturnsTrimmedMarkedBlock(t *testing.T) {
+	markers := Markers{Start: "<!-- dots:block -->", End: "<!-- /dots:block -->"}
+	content := "prefix\n" + markers.Start + "\n\nbody\n\n" + markers.End + "\nsuffix\n"
+
+	got, ok, err := ExtractBody(content, markers)
+	if err != nil {
+		t.Fatalf("ExtractBody() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("ExtractBody() ok = false, want true")
+	}
+	if got != "body" {
+		t.Fatalf("ExtractBody() = %q, want %q", got, "body")
+	}
+}
+
+func TestExtractBodyReportsMissingClosingMarker(t *testing.T) {
+	markers := Markers{Start: "<!-- dots:block -->", End: "<!-- /dots:block -->"}
+
+	_, _, err := ExtractBody(markers.Start+"\nbody\n", markers)
+	if err == nil {
+		t.Fatal("ExtractBody() error = nil, want missing closing marker error")
+	}
+}

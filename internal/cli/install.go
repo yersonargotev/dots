@@ -457,14 +457,19 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string,
 			if cleanupErr := agentinstructions.ConvergeDotsAgentRules(home, agents...); cleanupErr != nil {
 				return report, errors.Join(err, cleanupErr)
 			}
+			if containsString(agents, "vscode-copilot") {
+				if syncErr := agentinstructions.SyncCopilotCLIEngramProtocol(home); syncErr != nil {
+					return report, errors.Join(err, syncErr)
+				}
+			}
 		}
 	}
 	selectedTags := report.Tags
-	if hasTag(selectedTags, "without-codex-spark-delegation") {
+	if containsString(selectedTags, "without-codex-spark-delegation") {
 		if cleanupErr := agentinstructions.RemoveCodexSparkDelegation(home); cleanupErr != nil {
 			return report, errors.Join(err, cleanupErr)
 		}
-	} else if hasTag(selectedTags, "codex-spark-delegation") {
+	} else if containsString(selectedTags, "codex-spark-delegation") {
 		if cleanupErr := agentinstructions.ConvergeCodexSparkDelegation(home); cleanupErr != nil {
 			return report, errors.Join(err, cleanupErr)
 		}
@@ -478,9 +483,9 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string,
 	return report, nil
 }
 
-func hasTag(tags []string, want string) bool {
-	for _, tag := range tags {
-		if tag == want {
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
 			return true
 		}
 	}

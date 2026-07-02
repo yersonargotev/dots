@@ -49,13 +49,20 @@ stale review-readability rule
 
 after
 '
+engram='
+<!-- gentle-ai:engram-protocol -->
+## Engram Persistent Memory — Protocol
+
+Use Engram proactively in Copilot CLI too.
+<!-- /gentle-ai:engram-protocol -->
+'
 mkdir -p "$HOME/.codex" "$HOME/.claude" "$HOME/.config/opencode" "$HOME/.gemini" "$HOME/Library/Application Support/Code/User/prompts" "$HOME/.config/Code/User/prompts"
 printf '%s' "$block" > "$HOME/.codex/AGENTS.md"
 printf '%s' "$block" > "$HOME/.claude/CLAUDE.md"
 printf '%s' "$block" > "$HOME/.config/opencode/AGENTS.md"
 printf '%s' "$block" > "$HOME/.gemini/GEMINI.md"
-printf '%s' "$block" > "$HOME/Library/Application Support/Code/User/prompts/gentle-ai.instructions.md"
-printf '%s' "$block" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.md"
+printf '%s%s' "$block" "$engram" > "$HOME/Library/Application Support/Code/User/prompts/gentle-ai.instructions.md"
+printf '%s%s' "$block" "$engram" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.md"
 `)
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/codegraph-args\"\n")
@@ -274,6 +281,15 @@ printf '%s' "$block" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.m
 			if !strings.Contains(string(got), want) {
 				t.Fatalf("agent instructions %s missing dots rules content %q\ncontent:\n%s", path, want, got)
 			}
+		}
+	}
+	copilotInstructions, err := os.ReadFile(filepath.Join(home, ".copilot", "copilot-instructions.md"))
+	if err != nil {
+		t.Fatalf("read Copilot CLI instructions: %v", err)
+	}
+	for _, want := range []string{"<!-- gentle-ai:engram-protocol -->", "## Engram Persistent Memory", "Use Engram proactively in Copilot CLI too.", "<!-- /gentle-ai:engram-protocol -->"} {
+		if !strings.Contains(string(copilotInstructions), want) {
+			t.Fatalf("Copilot CLI instructions missing synced gentle-ai Engram protocol %q\ncontent:\n%s", want, copilotInstructions)
 		}
 	}
 	// And it must never have escaped into the inherited real HOME.
