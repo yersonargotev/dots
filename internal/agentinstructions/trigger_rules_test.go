@@ -9,15 +9,7 @@ import (
 
 func TestRemoveGentleAITriggerRulesRemovesSupportedAgentBlocks(t *testing.T) {
 	home := t.TempDir()
-	paths := []string{
-		filepath.Join(home, ".codex", "AGENTS.md"),
-		filepath.Join(home, ".claude", "CLAUDE.md"),
-		filepath.Join(home, ".config", "opencode", "AGENTS.md"),
-		filepath.Join(home, ".gemini", "GEMINI.md"),
-		filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"),
-		filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"),
-		filepath.Join(home, ".copilot", "copilot-instructions.md"),
-	}
+	paths := instructionPaths(home, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"})
 	for _, path := range paths {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", path, err)
@@ -185,14 +177,7 @@ func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 		t.Fatalf("Codex delegation block should use dots-owned markers, not legacy markers\n%s", codexContent)
 	}
 
-	nonCodexPaths := []string{
-		filepath.Join(home, ".claude", "CLAUDE.md"),
-		filepath.Join(home, ".config", "opencode", "AGENTS.md"),
-		filepath.Join(home, ".gemini", "GEMINI.md"),
-		filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"),
-		filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"),
-		filepath.Join(home, ".copilot", "copilot-instructions.md"),
-	}
+	nonCodexPaths := instructionPaths(home, []string{"claude-code", "opencode", "antigravity", "vscode-copilot"})
 	for _, path := range nonCodexPaths {
 		got, err := os.ReadFile(path)
 		if err != nil {
