@@ -132,6 +132,51 @@ func TestConvergeDotsAgentRulesPreservesCustomPersonalitySection(t *testing.T) {
 	}
 }
 
+func TestSyncCopilotCLIEngramProtocolCopiesVSCodePromptBlock(t *testing.T) {
+	home := t.TempDir()
+	source := filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md")
+	target := filepath.Join(home, ".copilot", "copilot-instructions.md")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	sourceContent := "prefix\n\n" +
+		gentleAIEngramStart + "\n## Engram Persistent Memory — Protocol\n\nUse Engram proactively.\n" + gentleAIEngramEnd +
+		"\n\nsuffix\n"
+	if err := os.WriteFile(source, []byte(sourceContent), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := os.WriteFile(target, []byte("existing\n\n"+dotsRulesStart+"\n"+dotsRulesBlock+"\n"+dotsRulesEnd+"\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	if err := SyncCopilotCLIEngramProtocol(home); err != nil {
+		t.Fatalf("SyncCopilotCLIEngramProtocol() error = %v", err)
+	}
+	if err := SyncCopilotCLIEngramProtocol(home); err != nil {
+		t.Fatalf("SyncCopilotCLIEngramProtocol() second run error = %v", err)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	out := string(got)
+	for _, want := range []string{"existing", dotsRulesStart, "Keep diffs surgical", gentleAIEngramStart, "## Engram Persistent Memory — Protocol", "Use Engram proactively.", gentleAIEngramEnd} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Copilot CLI instructions missing %q\n%s", want, out)
+		}
+	}
+	if strings.Count(out, gentleAIEngramStart) != 1 || strings.Count(out, gentleAIEngramEnd) != 1 {
+		t.Fatalf("Engram block should be present once\n%s", out)
+	}
+	if strings.Contains(out, "prefix") || strings.Contains(out, "suffix") {
+		t.Fatalf("sync should copy only the marked Engram block body\n%s", out)
+	}
+}
+
 func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 	home := t.TempDir()
 

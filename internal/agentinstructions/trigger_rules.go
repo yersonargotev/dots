@@ -15,6 +15,8 @@ const (
 	gentleAITriggerRulesEnd    = "<!-- /gentle-ai:trigger-rules -->"
 	gentleAIPersonaStart       = "<!-- gentle-ai:persona -->"
 	gentleAIPersonaEnd         = "<!-- /gentle-ai:persona -->"
+	gentleAIEngramStart        = "<!-- gentle-ai:engram-protocol -->"
+	gentleAIEngramEnd          = "<!-- /gentle-ai:engram-protocol -->"
 	dotsRulesStart             = "<!-- dots:rules -->"
 	dotsRulesEnd               = "<!-- /dots:rules -->"
 	codexDelegationStart       = "<!-- dots:codex-spark-delegation -->"
@@ -84,6 +86,40 @@ func ConvergeDotsAgentRules(home string, agents ...string) error {
 		if err := convergeDotsRules(target.path); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// SyncCopilotCLIEngramProtocol copies the gentle-ai generated Engram protocol
+// for vscode-copilot into Copilot CLI's global instruction file. gentle-ai does
+// not write Copilot CLI instructions directly, but the protocol is portable
+// Markdown and required for the same Engram behavior in Copilot CLI.
+func SyncCopilotCLIEngramProtocol(home string) error {
+	sourceBlock, ok, err := firstMarkedBlock(
+		textblock.Markers{Start: gentleAIEngramStart, End: gentleAIEngramEnd},
+		filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+		filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+	)
+	if err != nil || !ok {
+		return err
+	}
+	target := filepath.Join(home, ".copilot", "copilot-instructions.md")
+	content, mode, err := readInstructionFile(target)
+	if err != nil {
+		return err
+	}
+	updated, err := textblock.Upsert(content, textblock.Markers{Start: gentleAIEngramStart, End: gentleAIEngramEnd}, sourceBlock)
+	if err != nil {
+		return fmt.Errorf("upsert gentle-ai Engram protocol in %s: %w", target, err)
+	}
+	if updated == content {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return fmt.Errorf("mkdir Copilot CLI instructions %s: %w", filepath.Dir(target), err)
+	}
+	if err := os.WriteFile(target, []byte(updated), mode); err != nil {
+		return fmt.Errorf("write Copilot CLI instructions %s: %w", target, err)
 	}
 	return nil
 }
@@ -269,6 +305,39 @@ func readInstructionFile(path string) (string, os.FileMode, error) {
 		return "", 0, fmt.Errorf("stat agent instructions %s: %w", path, err)
 	}
 	return string(content), info.Mode().Perm(), nil
+}
+
+func firstMarkedBlock(markers textblock.Markers, paths ...string) (string, bool, error) {
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return "", false, fmt.Errorf("read agent instructions %s: %w", path, err)
+		}
+		block, ok, err := markedBlockBody(string(content), markers)
+		if err != nil {
+			return "", false, fmt.Errorf("read marked block from %s: %w", path, err)
+		}
+		if ok {
+			return block, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func markedBlockBody(content string, markers textblock.Markers) (string, bool, error) {
+	start := strings.Index(content, markers.Start)
+	if start < 0 {
+		return "", false, nil
+	}
+	bodyStart := start + len(markers.Start)
+	end := strings.Index(content[bodyStart:], markers.End)
+	if end < 0 {
+		return "", false, fmt.Errorf("marker %q is missing closing marker %q", markers.Start, markers.End)
+	}
+	return strings.TrimSpace(content[bodyStart : bodyStart+end]), true, nil
 }
 
 func removeLegacyMarkerlessPersona(content string) string {

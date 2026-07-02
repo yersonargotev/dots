@@ -457,6 +457,11 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string,
 			if cleanupErr := agentinstructions.ConvergeDotsAgentRules(home, agents...); cleanupErr != nil {
 				return report, errors.Join(err, cleanupErr)
 			}
+			if includesString(agents, "vscode-copilot") {
+				if syncErr := agentinstructions.SyncCopilotCLIEngramProtocol(home); syncErr != nil {
+					return report, errors.Join(err, syncErr)
+				}
+			}
 		}
 	}
 	selectedTags := report.Tags
@@ -512,6 +517,15 @@ func selectedGentleAIAgents(selected []manifest.Provisioner) []string {
 		}
 	}
 	return agents
+}
+
+func includesString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
