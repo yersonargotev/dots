@@ -127,9 +127,10 @@ func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *
 	if !strings.Contains(string(got), "<!-- dots:rules -->") {
 		t.Fatalf("update with gentle-ai provisioner did not write dots rules block\ncontent:\n%s\noutput:\n%s", got, out)
 	}
-	if strings.Contains(string(got), "dots:codex-spark-delegation") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.3-codex-spark") {
+	if strings.Contains(string(got), "<!-- dots:codex-spark-delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.3-codex-spark") {
 		t.Fatalf("update without Codex Spark tag wrote delegation guidance\ncontent:\n%s\noutput:\n%s", got, out)
 	}
+	assertNoNativeCodexSparkAgents(t, sandboxHome, "update without Codex Spark tag")
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
@@ -165,9 +166,61 @@ func TestUpdateCodexSparkDelegationTagInstallsGuidance(t *testing.T) {
 			t.Fatalf("update with Codex Spark tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out)
 		}
 	}
+	assertNativeCodexSparkAgents(t, sandboxHome, "update with Codex Spark tag")
 	if strings.Contains(content, "argote:subagent-delegation") {
 		t.Fatalf("update with Codex Spark tag used legacy markers\ncontent:\n%s", content)
 	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	}
+}
+
+func TestUpdateWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgents(t *testing.T) {
+	requireGitCLI(t)
+	sandboxHome := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	codexPath := filepath.Join(sandboxHome, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(codexPath), 0o755); err != nil {
+		t.Fatalf("mkdir Codex dir: %v", err)
+	}
+	preexisting := "before\n\n<!-- dots:codex-spark-delegation -->\ncurrent\n<!-- /dots:codex-spark-delegation -->\n\n<!-- argote:subagent-delegation -->\nlegacy\n<!-- /argote:subagent-delegation -->\n\nafter\n"
+	if err := os.WriteFile(codexPath, []byte(preexisting), 0o600); err != nil {
+		t.Fatalf("write preexisting Codex instructions: %v", err)
+	}
+	agentsDir := writeStaleNativeCodexSparkAgents(t, sandboxHome)
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/git/gitconfig": "managed\n",
+		"dots.yaml":             updateProvisionerManifest,
+	})
+
+	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-spark-delegation", "--tag", "without-codex-spark-delegation")
+
+	got, err := os.ReadFile(codexPath)
+	if err != nil {
+		t.Fatalf("read Codex instructions: %v", err)
+	}
+	content := string(got)
+	for _, not := range []string{"<!-- dots:codex-spark-delegation -->", "argote:subagent-delegation", "\ncurrent\n", "\nlegacy\n", "gpt-5.3-codex-spark"} {
+		if strings.Contains(content, not) {
+			t.Fatalf("without Codex Spark tag kept %q\ncontent:\n%s\noutput:\n%s", not, content, out)
+		}
+	}
+	for _, want := range []string{"<!-- dots:rules -->", "Keep diffs surgical", "before", "after"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("without Codex Spark tag removed expected %q\ncontent:\n%s", want, content)
+		}
+	}
+	assertRemovedNativeCodexSparkAgents(t, agentsDir, "without Codex Spark tag")
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}

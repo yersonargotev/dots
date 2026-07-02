@@ -23,6 +23,8 @@ const (
 	codexDelegationEnd         = "<!-- /dots:codex-spark-delegation -->"
 	legacyCodexDelegationStart = "<!-- argote:subagent-delegation -->"
 	legacyCodexDelegationEnd   = "<!-- /argote:subagent-delegation -->"
+	codexExplorerAgentFile     = "dots-explorer.toml"
+	codexWorkerAgentFile       = "dots-worker.toml"
 )
 
 const dotsRulesBlock = `## Dots Agent Rules
@@ -40,13 +42,22 @@ const dotsRulesBlock = `## Dots Agent Rules
 
 Use delegation when a non-trivial task has an independent slice that can return a compact summary without transferring requirements, decisions, external state, integration, or final verification away from the main agent.
 
+Run Delegation Preflight before non-trivial work:
+
+1. Confirm whether the active instructions include every surface-specific delegation overlay and native artifact needed by the task. For Codex Spark, check both the dots:codex-spark-delegation overlay and the native dots-explorer.toml / dots-worker.toml custom agents.
+2. Decide whether the task is non-trivial.
+3. Identify at least one safe explorer or worker slice, or choose one closed-list skip reason.
+4. If a workflow authorizes delegation but the current tool requires explicit permission, ask once at the start or record tool-level permission required.
+
+Closed-list skip reasons: tiny/mechanical, no independent slice, real user configuration, external state mutation, overlapping write scopes, or tool-level permission required.
+
 | Delegate when | Model/tier choice |
 | --- | --- |
 | Codebase exploration, impact scans, or test/log triage can run independently | Use the fastest/cost-effective capable model or the surface's read-only/exploration agent. |
 | Implementation can be split into disjoint files or modules | Use an implementation-capable worker with explicit file ownership and require a changed-file list. |
 | Review, architecture, security, or other judgment-heavy work is delegated by a selected skill | Use the strongest appropriate available model, or the model the selected skill explicitly requires. |
 
-Skip delegation when the task is tiny/mechanical, has no independent slice, touches real user configuration, would mutate GitHub/PR/release or other external state, or would create overlapping write scopes. After delegated work returns, inspect the evidence or changes, accept or reject findings explicitly, run the relevant verification yourself, and summarize the delegated slice, selected agent surface, and model/tier choice.`
+Skip delegation only for one of the closed-list reasons. After delegated work returns, inspect the evidence or changes, accept or reject findings explicitly, run the relevant verification yourself, and summarize delegated slice, agent surface, model/tier, accepted/rejected findings or changes, main-agent verification, and skip reason when no subagent was used.`
 
 const codexDelegationBlock = `## Subagent delegation defaults
 
@@ -58,7 +69,55 @@ Follow the portable delegation policy in the dots:rules block. This Codex-only o
 | Implementation can be split into disjoint files/modules | Spawn a Codex worker on gpt-5.3-codex-spark, assign ownership, and require a changed-file list. |
 | Review, architecture, security, or other high-judgment work is delegated by a selected skill | Use the strongest appropriate available model, or the model that the skill explicitly requires; do not force Spark for judgment-heavy review. |
 
-For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize delegated work, model choice, plus any explicit skip reasons.`
+Starting the dots-development-loop workflow counts as repo-level authorization to delegate safe slices under the portable policy. If the active Codex tool still requires explicit user permission before spawning subagents, ask once at workflow start or record tool-level permission required as the skip reason.
+
+For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize delegated work, model choice, accepted/rejected findings or changes, main-agent verification, plus any explicit skip reasons.`
+
+const codexExplorerAgent = `name = "dots-explorer"
+description = "Read-only dots explorer for bounded codebase exploration, impact scans, and test/log triage."
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+You are a dots explorer subagent.
+
+Scope:
+- Inspect code, docs, tests, manifests, logs, and command output.
+- Return concise findings with file:line references and confidence.
+- Prefer CodeGraph for source-code architecture, symbols, call flow, and impact analysis.
+- Prefer targeted rg/sed reads for manifests, docs, config, and scripts.
+
+Boundaries:
+- Do not edit files.
+- Do not mutate GitHub, PRs, releases, package managers, or real user configuration.
+- Do not validate dotfiles behavior against the operator's real home.
+- Keep the main agent responsible for requirements, decisions, integration, and final verification.
+"""
+nickname_candidates = ["Dots Scout", "Dots Cartographer", "Dots Radar"]
+`
+
+const codexWorkerAgent = `name = "dots-worker"
+description = "dots implementation worker for explicitly assigned, non-overlapping files or modules."
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+You are a dots worker subagent.
+
+Scope:
+- Implement only the explicitly assigned files or modules.
+- Keep diffs surgical and trace every changed line to the requested slice.
+- Follow existing repository patterns and the dots domain language.
+- Return a concise handoff with changed files, tests run, and any remaining risks.
+
+Boundaries:
+- You are not alone in the codebase; do not revert or overwrite edits outside your assigned ownership.
+- Do not mutate GitHub, PRs, releases, package managers, or real user configuration.
+- Use sandboxed --home, --source-root, --state-root, or temporary config paths for dotfiles behavior.
+- Leave requirements, decisions, external state, integration, and final verification to the main agent.
+"""
+nickname_candidates = ["Dots Builder", "Dots Mason", "Dots Stitcher"]
+`
 
 type instructionTarget struct {
 	agent string
@@ -128,14 +187,41 @@ func SyncCopilotCLIEngramProtocol(home string) error {
 // guidance into Codex instructions only. Legacy argote-owned marker pairs are
 // migrated to the dots-owned marker pair during the upsert.
 func ConvergeCodexSparkDelegation(home string) error {
-	return convergeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md"))
+	return errors.Join(
+		convergeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md")),
+		writeCodexAgentFile(home, codexExplorerAgentFile, codexExplorerAgent),
+		writeCodexAgentFile(home, codexWorkerAgentFile, codexWorkerAgent),
+	)
 }
 
 // RemoveCodexSparkDelegation removes both current dots-owned and legacy
 // argote-owned Codex Spark delegation blocks without touching the rest of the
 // agent baseline.
 func RemoveCodexSparkDelegation(home string) error {
-	return removeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md"))
+	return errors.Join(
+		removeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md")),
+		removeCodexAgentFile(home, codexExplorerAgentFile),
+		removeCodexAgentFile(home, codexWorkerAgentFile),
+	)
+}
+
+func writeCodexAgentFile(home, name, content string) error {
+	path := filepath.Join(home, ".codex", "agents", name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir Codex agents %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		return fmt.Errorf("write Codex agent %s: %w", path, err)
+	}
+	return nil
+}
+
+func removeCodexAgentFile(home, name string) error {
+	path := filepath.Join(home, ".codex", "agents", name)
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove Codex agent %s: %w", path, err)
+	}
+	return nil
 }
 
 func instructionPaths(home string, agents []string) []string {

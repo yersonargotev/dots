@@ -85,7 +85,12 @@ func TestConvergeDotsAgentRulesRemovesPersonaAndInjectsRules(t *testing.T) {
 	if strings.Contains(out, codexDelegationStart) || strings.Contains(out, codexDelegationEnd) {
 		t.Fatalf("baseline dots rules should not install Codex Spark delegation\n%s", out)
 	}
-	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Plan before editing", "Verify before declaring success", "Use sandboxed HOME/config paths", "Portable delegation policy", "selected agent surface", "model/tier choice", "strongest appropriate available model"} {
+	for _, name := range []string{codexExplorerAgentFile, codexWorkerAgentFile} {
+		if _, err := os.Stat(filepath.Join(home, ".codex", "agents", name)); !os.IsNotExist(err) {
+			t.Fatalf("baseline dots rules should not install native Codex agent %s; stat err = %v", name, err)
+		}
+	}
+	for _, want := range []string{"Keep diffs surgical", "Choose the simplest change", "Plan before editing", "Verify before declaring success", "Use sandboxed HOME/config paths", "Portable delegation policy", "agent surface", "model/tier", "strongest appropriate available model"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dots rules missing %q\n%s", want, out)
 		}
@@ -221,6 +226,25 @@ func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 	if strings.Contains(codexContent, legacyCodexDelegationStart) || strings.Contains(codexContent, legacyCodexDelegationEnd) {
 		t.Fatalf("Codex delegation block should use dots-owned markers, not legacy markers\n%s", codexContent)
 	}
+	for _, tc := range []struct {
+		name  string
+		wants []string
+	}{
+		{name: codexExplorerAgentFile, wants: []string{`name = "dots-explorer"`, `sandbox_mode = "read-only"`, `model = "gpt-5.3-codex-spark"`, "Do not edit files."}},
+		{name: codexWorkerAgentFile, wants: []string{`name = "dots-worker"`, `sandbox_mode = "workspace-write"`, `model = "gpt-5.3-codex-spark"`, "changed files"}},
+	} {
+		path := filepath.Join(home, ".codex", "agents", tc.name)
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read native Codex agent %s: %v", path, err)
+		}
+		content := string(got)
+		for _, want := range tc.wants {
+			if !strings.Contains(content, want) {
+				t.Fatalf("native Codex agent %s missing %q\n%s", path, want, content)
+			}
+		}
+	}
 
 	nonCodexPaths := instructionPaths(home, []string{"claude-code", "opencode", "antigravity", "vscode-copilot"})
 	for _, path := range nonCodexPaths {
@@ -232,7 +256,7 @@ func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 		if !strings.Contains(content, dotsRulesStart) {
 			t.Fatalf("%s missing shared dots rules\n%s", path, content)
 		}
-		for _, want := range []string{"Portable delegation policy", "selected agent surface", "model/tier choice", "strongest appropriate available model"} {
+		for _, want := range []string{"Portable delegation policy", "agent surface", "model/tier", "strongest appropriate available model"} {
 			if !strings.Contains(content, want) {
 				t.Fatalf("%s missing portable delegation policy phrase %q\n%s", path, want, content)
 			}
@@ -332,6 +356,15 @@ func TestRemoveCodexSparkDelegationRemovesCurrentAndLegacyMarkers(t *testing.T) 
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+	agentsDir := filepath.Join(home, ".codex", "agents")
+	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
+		t.Fatalf("mkdir Codex agents dir: %v", err)
+	}
+	for _, name := range []string{codexExplorerAgentFile, codexWorkerAgentFile} {
+		if err := os.WriteFile(filepath.Join(agentsDir, name), []byte("stale dots-owned agent"), 0o600); err != nil {
+			t.Fatalf("write native Codex agent %s: %v", name, err)
+		}
+	}
 
 	if err := RemoveCodexSparkDelegation(home); err != nil {
 		t.Fatalf("RemoveCodexSparkDelegation() error = %v", err)
@@ -342,7 +375,7 @@ func TestRemoveCodexSparkDelegationRemovesCurrentAndLegacyMarkers(t *testing.T) 
 		t.Fatalf("read %s: %v", path, err)
 	}
 	out := string(got)
-	for _, not := range []string{codexDelegationStart, codexDelegationEnd, legacyCodexDelegationStart, legacyCodexDelegationEnd, "current", "legacy"} {
+	for _, not := range []string{codexDelegationStart, codexDelegationEnd, legacyCodexDelegationStart, legacyCodexDelegationEnd, "\ncurrent\n", "\nlegacy\n"} {
 		if strings.Contains(out, not) {
 			t.Fatalf("delegation cleanup kept %q\n%s", not, out)
 		}
@@ -352,5 +385,51 @@ func TestRemoveCodexSparkDelegationRemovesCurrentAndLegacyMarkers(t *testing.T) 
 	}
 	if !strings.Contains(out, "before") || !strings.Contains(out, "after") {
 		t.Fatalf("surrounding content not preserved\n%s", out)
+	}
+	for _, name := range []string{codexExplorerAgentFile, codexWorkerAgentFile} {
+		if _, err := os.Stat(filepath.Join(home, ".codex", "agents", name)); !os.IsNotExist(err) {
+			t.Fatalf("RemoveCodexSparkDelegation should remove native Codex agent %s; stat err = %v", name, err)
+		}
+	}
+}
+
+func TestDelegationWorkflowDocumentsPreflightAndToolLevelConflict(t *testing.T) {
+	workflowPath := filepath.Join("..", "..", "workflows", "dots-development-loop.md")
+	got, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+	workflow := string(got)
+	for _, want := range []string{
+		"Starting this workflow counts as repo-level authorization",
+		"tool-level permission required",
+		"Delegation Preflight",
+		"~/.codex/AGENTS.md",
+		"dots:codex-spark-delegation",
+		"dots-explorer.toml",
+		"dots-worker.toml",
+		"agent surface; model/tier",
+	} {
+		if !strings.Contains(workflow, want) {
+			t.Fatalf("workflow delegation docs missing %q", want)
+		}
+	}
+
+	delegationDocPath := filepath.Join("..", "..", "docs", "agents", "delegation.md")
+	got, err = os.ReadFile(delegationDocPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", delegationDocPath, err)
+	}
+	delegationDoc := string(got)
+	for _, want := range []string{
+		"Delegation Preflight is required for non-trivial work",
+		"tool-level permission required",
+		"~/.codex/agents/dots-explorer.toml",
+		"~/.codex/agents/dots-worker.toml",
+		"--tag without-codex-spark-delegation",
+	} {
+		if !strings.Contains(delegationDoc, want) {
+			t.Fatalf("delegation docs missing %q", want)
+		}
 	}
 }
