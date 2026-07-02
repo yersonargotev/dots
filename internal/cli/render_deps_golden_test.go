@@ -20,7 +20,7 @@ func TestRenderDepsCheckGolden(t *testing.T) {
 			report: deps.CheckReport{
 				Profile: "default",
 				Results: []deps.Result{
-					{Name: "tmux", Command: "tmux", Present: true},
+					{Name: "tmux", Command: "tmux", Present: true, Warning: "tmux 3.7a has a known synchronized-update redraw regression", ProbeDetail: "tmux 3.7a", Hint: "Upgrade tmux to 3.7b or newer, then stop old servers with `tmux kill-server` so new sessions use the fixed binary."},
 					{Name: "ripgrep", Command: "rg", Present: false},
 					{Name: "starship", Command: "starship", Present: false},
 				},

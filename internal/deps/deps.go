@@ -125,6 +125,8 @@ func probeToolchain(result *Result, opts Options, run CommandRunner) {
 		probeGitToolchain(result, opts, run)
 	case "claude":
 		probeClaudeCode(result, run)
+	case "tmux":
+		probeTmuxToolchain(result, run)
 	}
 }
 
@@ -150,6 +152,28 @@ func probeClaudeCode(result *Result, run CommandRunner) {
 	result.Warning = "claude resolved on PATH but `claude --version` failed"
 	result.ProbeDetail = probeDetail(output, err)
 	result.Hint = "Repair Claude Code's native binary install from its package directory with `node install.cjs`, then verify with `claude --version` and rerun `dots doctor`."
+}
+
+func probeTmuxToolchain(result *Result, run CommandRunner) {
+	output, err := run("tmux", "-V")
+	if err != nil {
+		return
+	}
+
+	version := tmuxVersion(output)
+	if version == "3.7" || version == "3.7a" {
+		result.Warning = "tmux " + version + " has a known synchronized-update redraw regression"
+		result.ProbeDetail = probeDetail(output, nil)
+		result.Hint = "Upgrade tmux to 3.7b or newer, then stop old servers with `tmux kill-server` so new sessions use the fixed binary."
+	}
+}
+
+func tmuxVersion(output string) string {
+	fields := strings.Fields(output)
+	if len(fields) < 2 || fields[0] != "tmux" {
+		return ""
+	}
+	return fields[1]
 }
 
 func probeDetail(output string, err error) string {

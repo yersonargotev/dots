@@ -54,11 +54,11 @@ func newDepsCheckCommand(profiles *[]string, extraTags *[]string) *cobra.Command
 				return err
 			}
 
-			report, err := deps.Check(*m, deps.Options{
+			report, err := deps.CheckWithToolProbes(*m, deps.Options{
 				Profiles:  *profiles,
 				ExtraTags: *extraTags,
 				OS:        runtime.GOOS,
-			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome))
+			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), commandOutput)
 			if err != nil {
 				return err
 			}
