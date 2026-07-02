@@ -2732,6 +2732,7 @@ func TestRepositoryTmuxConfigClassifiesPortableConfigSafely(t *testing.T) {
 		"set -g prefix C-a",
 		"set -g mode-keys vi",
 		"set -g status-position top",
+		`set-environment -g COLORTERM "truecolor"`,
 		"display-popup",
 		"source-file ~/.tmux.conf.local",
 	} {
