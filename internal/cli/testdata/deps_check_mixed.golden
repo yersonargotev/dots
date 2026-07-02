@@ -1,6 +1,9 @@
 Dependencies for profile "default"
 
   present  tmux (required)
+    warning: tmux 3.7a has a known synchronized-update redraw regression
+    detail: tmux 3.7a
+    hint: Upgrade tmux to 3.7b or newer, then stop old servers with `tmux kill-server` so new sessions use the fixed binary.
   missing  ripgrep (required)
   missing  starship (required)
 

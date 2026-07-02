@@ -28,6 +28,15 @@ func renderDepsCheck(w io.Writer, report deps.CheckReport) {
 			missing++
 		}
 		fmt.Fprintf(w, "  %-8s %s (%s)\n", state, r.Name, dependencyRequirementLabel(r.Requirement))
+		if r.Warning != "" {
+			fmt.Fprintf(w, "    warning: %s\n", r.Warning)
+			if r.ProbeDetail != "" {
+				fmt.Fprintf(w, "    detail: %s\n", r.ProbeDetail)
+			}
+			if r.Hint != "" {
+				fmt.Fprintf(w, "    hint: %s\n", r.Hint)
+			}
+		}
 	}
 
 	fmt.Fprintf(w, "\nSummary: %d present, %d missing\n", present, missing)

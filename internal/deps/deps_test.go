@@ -372,6 +372,85 @@ func TestCheckWithToolProbesDetectsBrokenClaudeCodeBinary(t *testing.T) {
 	}
 }
 
+func TestCheckWithToolProbesWarnsAboutTmux37RedrawRegression(t *testing.T) {
+	tests := []struct {
+		name        string
+		output      string
+		runErr      error
+		wantWarning string
+		wantHint    string
+	}{
+		{
+			name:        "tmux 3.7a warns",
+			output:      "tmux 3.7a",
+			wantWarning: "tmux 3.7a has a known synchronized-update redraw regression",
+			wantHint:    "tmux kill-server",
+		},
+		{
+			name:        "tmux 3.7 warns",
+			output:      "tmux 3.7",
+			wantWarning: "tmux 3.7 has a known synchronized-update redraw regression",
+			wantHint:    "3.7b or newer",
+		},
+		{
+			name:   "tmux 3.7b is clean",
+			output: "tmux 3.7b",
+		},
+		{
+			name:   "older tmux is not this regression",
+			output: "tmux 3.6b",
+		},
+		{
+			name:   "version probe failure is ignored",
+			runErr: errors.New("exit status 1"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := manifest.Manifest{
+				Version:  1,
+				Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+				Entries: []manifest.Entry{{
+					Source: "configs/tmux/tmux.conf", Target: "~/.tmux.conf", Strategy: "symlink", Tags: []string{"core"},
+					Dependencies: []manifest.Dependency{{Name: "tmux"}},
+				}},
+			}
+
+			report, err := deps.CheckWithToolProbes(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("tmux"), fontLookupSet(),
+				func(command string, args ...string) (string, error) {
+					if command != "tmux" {
+						t.Fatalf("probe command = %q, want tmux", command)
+					}
+					if len(args) != 1 || args[0] != "-V" {
+						t.Fatalf("probe args = %#v, want [-V]", args)
+					}
+					return tt.output, tt.runErr
+				})
+			if err != nil {
+				t.Fatalf("CheckWithToolProbes() error = %v", err)
+			}
+
+			result := report.Results[0]
+			if tt.wantWarning == "" {
+				if result.Warning != "" {
+					t.Fatalf("Warning = %q, want none", result.Warning)
+				}
+				if result.Hint != "" {
+					t.Fatalf("Hint = %q, want none", result.Hint)
+				}
+				return
+			}
+			if result.Warning != tt.wantWarning {
+				t.Fatalf("Warning = %q, want %q", result.Warning, tt.wantWarning)
+			}
+			if tt.wantHint != "" && !strings.Contains(result.Hint, tt.wantHint) {
+				t.Fatalf("Hint = %q, want to contain %q", result.Hint, tt.wantHint)
+			}
+		})
+	}
+}
+
 func TestCheckDedupesAndSkipsEntriesFilteredOutByOS(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,
