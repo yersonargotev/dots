@@ -49,6 +49,23 @@ func Upsert(content string, primary Markers, block string, legacy ...Markers) (s
 	return b.String(), nil
 }
 
+// ExtractBody returns the trimmed body of the first marker-delimited block.
+func ExtractBody(content string, markers Markers) (string, bool, error) {
+	if markers.Start == "" || markers.End == "" {
+		return "", false, fmt.Errorf("markers are required")
+	}
+	start := strings.Index(content, markers.Start)
+	if start < 0 {
+		return "", false, nil
+	}
+	bodyStart := start + len(markers.Start)
+	end := strings.Index(content[bodyStart:], markers.End)
+	if end < 0 {
+		return "", false, fmt.Errorf("marker %q is missing closing marker %q", markers.Start, markers.End)
+	}
+	return strings.TrimSpace(content[bodyStart : bodyStart+end]), true, nil
+}
+
 // Remove deletes every marker-delimited block matching the provided markers.
 func Remove(content string, markers ...Markers) (string, error) {
 	if len(markers) == 0 {

@@ -316,7 +316,7 @@ func firstMarkedBlock(markers textblock.Markers, paths ...string) (string, bool,
 			}
 			return "", false, fmt.Errorf("read agent instructions %s: %w", path, err)
 		}
-		block, ok, err := markedBlockBody(string(content), markers)
+		block, ok, err := textblock.ExtractBody(string(content), markers)
 		if err != nil {
 			return "", false, fmt.Errorf("read marked block from %s: %w", path, err)
 		}
@@ -325,19 +325,6 @@ func firstMarkedBlock(markers textblock.Markers, paths ...string) (string, bool,
 		}
 	}
 	return "", false, nil
-}
-
-func markedBlockBody(content string, markers textblock.Markers) (string, bool, error) {
-	start := strings.Index(content, markers.Start)
-	if start < 0 {
-		return "", false, nil
-	}
-	bodyStart := start + len(markers.Start)
-	end := strings.Index(content[bodyStart:], markers.End)
-	if end < 0 {
-		return "", false, fmt.Errorf("marker %q is missing closing marker %q", markers.Start, markers.End)
-	}
-	return strings.TrimSpace(content[bodyStart : bodyStart+end]), true, nil
 }
 
 func removeLegacyMarkerlessPersona(content string) string {
