@@ -56,8 +56,12 @@ Install the latest tap formula with a fully-qualified formula name:
 ```bash
 brew install yersonargotev/tap/dots
 dots --version
-dots install
+dots install --profile workstation
 ```
+
+First-run installs require an explicit Profile. Repeat `--profile` to compose
+selections: `workstation` covers `core + desktop + agents`, while `web` and
+`mobile` remain opt-ins.
 
 This is the preferred Tap Trust path for `dots`: Homebrew trusts only the formula being installed instead of trusting every current and future formula, cask, or external command in `yersonargotev/tap`.
 
@@ -105,7 +109,7 @@ The Bootstrapper downloads `checksums.txt` and the matching platform artifact fr
 
 ```bash
 ~/.local/bin/dots --version
-~/.local/bin/dots install
+~/.local/bin/dots install --profile workstation
 ```
 
 For development checkouts, pass the Installed Repository override through the Bootstrapper instead of duplicating install behavior in shell:
@@ -124,7 +128,7 @@ DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 | Artifacts | Raw `dots` binaries named `dots_<version>_<goos>_<goarch>`. |
 | Platforms | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, and `linux/arm64`. |
 | Checksums | One `checksums.txt` file covers every Release Artifact. |
-| Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and `checksums.txt`; the workflow locally prepares the tap commit, dry-run proves that prepared state can be pushed, then pushes it to `yersonargotev/homebrew-tap` with `HOMEBREW_TAP_TOKEN` after release assets upload. Users should prefer formula-level Tap Trust through `brew install yersonargotev/tap/dots`, `brew trust --formula yersonargotev/tap/dots`, or Brewfile `trusted: true`. Homebrew installs only the binary, so first-run package-manager installs must run `dots init` to clone the default Installed Repository before `dots status`, `dots doctor`, or `dots install --dry-run`. |
+| Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and `checksums.txt`; the workflow locally prepares the tap commit, dry-run proves that prepared state can be pushed, then pushes it to `yersonargotev/homebrew-tap` with `HOMEBREW_TAP_TOKEN` after release assets upload. Users should prefer formula-level Tap Trust through `brew install yersonargotev/tap/dots`, `brew trust --formula yersonargotev/tap/dots`, or Brewfile `trusted: true`. Homebrew installs only the binary, so first-run package-manager installs must run `dots init` to clone the default Installed Repository before `dots status`, `dots doctor`, or `dots install --profile workstation --dry-run`. |
 
 ## First v0.x checklist
 

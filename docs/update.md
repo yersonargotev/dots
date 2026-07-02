@@ -56,7 +56,7 @@ Non-interactive runs (`--yes`) default every conflict to `skip`, so an unattende
 
 ## Dry run
 
-`dots update --dry-run` fetches the upstream and reports the commits a fast-forward would apply, then renders the current Install Plan, without modifying the repository working tree or installing anything:
+`dots update --profile workstation --dry-run` fetches the upstream and reports the commits a fast-forward would apply, then renders the current Install Plan, without modifying the repository working tree or installing anything:
 
 ```
 Installed Repository can fast-forward a1b2c3d -> e4f5a6b:
@@ -66,6 +66,12 @@ Installed Repository can fast-forward a1b2c3d -> e4f5a6b:
 ```
 
 Because no fast-forward is applied in a dry run, the rendered plan reflects the **current** Source of Truth, not the post-update state. Run `update` without `--dry-run` to apply the fast-forward and compute the plan against the updated repository.
+
+For unattended updates, keep the explicit Profile selection and add `--yes`:
+
+```bash
+dots update --profile workstation --yes
+```
 
 ## Profiles and provisioners
 

@@ -4,7 +4,7 @@
 
 ## `dots backups list`
 
-`list` reports each recorded Backup Set: when it was created, why the backup was taken, and which targets it protected. `dots install --yes --backup-and-replace` records the same Backup Metadata as an interactive `replace`, so backups created by that non-interactive adoption flow appear here too.
+`list` reports each recorded Backup Set: when it was created, why the backup was taken, and which targets it protected. `dots install --profile workstation --yes --backup-and-replace` records the same Backup Metadata as an interactive `replace`, so backups created by that non-interactive adoption flow appear here too.
 
 ```
 Backup Sets
@@ -75,7 +75,7 @@ Dry run: no files changed.
 
 Before using `dots install` against a real home directory, validate the safety
 guarantee in a temporary sandbox: create a small manifest, pre-create the target
-file under `--home`, run `dots install --no-tui` and choose `replace`, then run
+file under `--home`, run `dots install --profile core --no-tui` and choose `replace`, then run
 `dots backups restore <set>` with the same `--home` and `--state-root`. The
 expected result is:
 

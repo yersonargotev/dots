@@ -71,8 +71,13 @@ Start with a dry run. If you installed through Homebrew, run `dots init` first.
 The CLI should show the Install Plan without writing files:
 
 ```bash
-dots install --dry-run
+dots install --profile workstation --dry-run
 ```
+
+There is no implicit install Profile. Repeat `--profile` to compose selections:
+`workstation` covers `core + desktop + agents`, while `web` and `mobile` stay
+explicit opt-ins. For a full workstation plus optional web and mobile setup, run
+`dots install --profile workstation --profile web --profile mobile`.
 
 Then inspect the current machine state:
 
@@ -126,13 +131,13 @@ When the plan looks right, run the install for real:
 
 ```bash
 dots --version
-dots install
+dots install --profile workstation
 ```
 
-Non-interactive installs stay conservative: `dots install --yes` skips Conflicts. To explicitly adopt an existing machine by backing up and replacing every Conflict, use:
+Non-interactive installs stay conservative: `dots install --profile workstation --yes` skips Conflicts. To explicitly adopt an existing machine by backing up and replacing every Conflict, use:
 
 ```bash
-dots install --yes --backup-and-replace
+dots install --profile workstation --yes --backup-and-replace
 ```
 
 That mode creates Backup Sets before replacement, reports them in JSON as `data.backup_sets`, and still runs selected Provisioners after Managed Configuration is applied.
