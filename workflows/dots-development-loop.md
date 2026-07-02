@@ -41,6 +41,32 @@ non-trivial work, requiring explicit skip reasons, allowing skill-owned
 subagents such as `$review`, and preserving main-agent ownership of external
 state, integration, and final verification.
 
+## Delegation contract
+
+Starting this workflow counts as repo-level authorization to delegate safe
+explorer/worker slices under the portable dots delegation policy. If the active
+agent tool has a stricter tool-level rule that still requires explicit user
+permission before spawning subagents, ask for that permission once at the start
+or record the closed-list skip reason `tool-level permission required`. This
+resolves the conflict between workflow-level authorization and tool-level
+permission gates without silently skipping delegation.
+
+Every non-trivial task in this workflow requires Delegation Preflight before
+implementation or review work proceeds:
+
+1. Confirm the relevant delegation capability is installed or available; for
+   Codex Spark this means `~/.codex/AGENTS.md` contains
+   `dots:codex-spark-delegation`, or the workflow records that the overlay is
+   missing.
+2. Decide whether the task is non-trivial.
+3. Identify at least one safe explorer or worker slice that can run without
+   transferring requirements, decisions, external state, integration, or final
+   verification away from the main agent.
+4. If no subagent is used, choose exactly one closed-list skip reason:
+   `tiny/mechanical`, `no independent slice`, `real user configuration`,
+   `external state mutation`, `overlapping write scopes`, or
+   `tool-level permission required`.
+
 ## Operating rules
 
 - Keep the main agent responsible for requirements, decisions, GitHub state,
@@ -82,9 +108,9 @@ Goal: turn the change intention into a shared, implementable direction.
      test/log triage, or implementation over disjoint files/modules.
    - Expected default: for non-trivial work, launch at least one bounded
      explorer unless every candidate slice is excluded by the opt-out list below.
-   - Good opt-outs: tiny mechanical tasks, one coherent edit with no independent
-     research value, real user configuration, GitHub/external-state mutation, or
-     overlapping write scopes.
+   - Allowed skip reasons are only: `tiny/mechanical`, `no independent slice`,
+     `real user configuration`, `external state mutation`,
+     `overlapping write scopes`, or `tool-level permission required`.
    - Skill-owned subagents are allowed when the selected skill requires them.
      The skill output is still evidence for the main agent to inspect; it never
      transfers requirements, integration, or final verification ownership.
@@ -96,9 +122,9 @@ Goal: turn the change intention into a shared, implementable direction.
    - Spark may return findings, briefs, or local changes only. It must not open
      or edit issues, labels, comments, PRs, merges, releases, or any other
      external project state.
-   - Report the Delegation Decision even when no subagent was used: delegated,
-     skipped as trivial/mechanical, skipped because no independent slice existed,
-     or skipped for a safety boundary.
+   - Report the Delegation Decision even when no subagent was used: delegated
+     slice, agent surface, model/tier, accepted/rejected findings or changes,
+     main-agent verification, and closed-list skip reason when skipped.
 4. When the direction is aligned, present an Alignment Brief and wait for the
    user to approve moving to triage.
 
@@ -108,9 +134,9 @@ Alignment Brief format:
 - Decisions made and doubts closed.
 - Links to ADRs, docs, issues, or notes created or changed.
 - Risks or open constraints that implementation must respect.
-- Delegation Decision: what was delegated or why delegation was skipped; which
-  model/tier was chosen for delegated work; what came back; what the main agent
-  accepted or rejected; and what the main agent verified directly.
+- Delegation Decision: delegated slice; agent surface; model/tier;
+  accepted/rejected findings or changes; main-agent verification; and, if no
+  subagent was used, the closed-list skip reason.
 - Decision requested: approve moving to triage.
 
 ## Phase 2: Triage
@@ -159,11 +185,14 @@ Goal: produce the smallest correct diff for the approved issue scope.
      `codex-spark-delegation` tag rather than coupling it to the default
      `agents` profile;
    - use `without-codex-spark-delegation` as the declarative cleanup tag;
-   - remove only the
+   - install Codex-native custom agents at `~/.codex/agents/dots-explorer.toml`
+     and `~/.codex/agents/dots-worker.toml` as dots-owned executable delegation
+     artifacts, not only persuasive text;
+   - remove the
      `<!-- dots:codex-spark-delegation -->...<!-- /dots:codex-spark-delegation -->`
-     block during cleanup;
-   - preserve `dots:rules`, Engram, CodeGraph, Codex config, and the rest of the
-     agent baseline;
+     block and the two dots-owned native agent files during cleanup;
+   - preserve `dots:rules`, Engram, CodeGraph, Codex config, user-owned custom
+     agents, and the rest of the agent baseline;
    - if both `codex-spark-delegation` and `without-codex-spark-delegation` are
      selected, `without-*` wins because explicit exclusion expresses the desired
      final state.
@@ -211,9 +240,10 @@ Present a Release/Closure Brief:
 - Final validation evidence.
 - User-facing change summary.
 - Remaining follow-ups, if any.
-- Final Delegation Decision: delegated slices or explicit skip reasons,
-  model/tier choices, accepted findings or changes, rejected findings or
-  changes, and final verification performed by the main agent.
+- Final Delegation Decision: delegated slices; agent surfaces; model/tier
+  choices; accepted findings or changes; rejected findings or changes; final
+  verification performed by the main agent; and closed-list skip reason if no
+  subagent was used.
 
 ## Required verification
 
