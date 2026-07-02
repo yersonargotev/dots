@@ -16,6 +16,7 @@ func TestRemoveGentleAITriggerRulesRemovesSupportedAgentBlocks(t *testing.T) {
 		filepath.Join(home, ".gemini", "GEMINI.md"),
 		filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"),
 		filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+		filepath.Join(home, ".copilot", "copilot-instructions.md"),
 	}
 	for _, path := range paths {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -190,6 +191,7 @@ func TestConvergeCodexSparkDelegationIsOptInCodexOnly(t *testing.T) {
 		filepath.Join(home, ".gemini", "GEMINI.md"),
 		filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"),
 		filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+		filepath.Join(home, ".copilot", "copilot-instructions.md"),
 	}
 	for _, path := range nonCodexPaths {
 		got, err := os.ReadFile(path)

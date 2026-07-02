@@ -135,6 +135,7 @@ func instructionTargets(home string, agents []string) []instructionTarget {
 		case "vscode-copilot":
 			add(agent, filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"))
 			add(agent, filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"))
+			add(agent, filepath.Join(home, ".copilot", "copilot-instructions.md"))
 		}
 	}
 	return targets
