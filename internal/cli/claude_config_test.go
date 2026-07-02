@@ -259,6 +259,7 @@ printf '%s' "$block" > "$HOME/.config/Code/User/prompts/gentle-ai.instructions.m
 		filepath.Join(home, ".gemini", "GEMINI.md"),
 		filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"),
 		filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"),
+		filepath.Join(home, ".copilot", "copilot-instructions.md"),
 	} {
 		got, err := os.ReadFile(path)
 		if err != nil {

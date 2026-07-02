@@ -1,5 +1,10 @@
 # GitHub Copilot CLI configuration
 
+Copilot CLI reads global custom instructions from
+`~/.copilot/copilot-instructions.md`. `gentle-ai` currently supports
+`vscode-copilot`, not Copilot CLI, so dots converges that file after the
+`vscode-copilot` provisioner runs and injects the shared dots agent rules there.
+
 `statusline-command.sh` uses Catppuccin Mocha by default and switches its ANSI
 palette to Catppuccin Latte only when the shared dots `adaptive-theme` marker is
 installed and macOS light appearance is proven by `~/.config/dots/theme.sh`.

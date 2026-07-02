@@ -133,11 +133,21 @@ func instructionTargets(home string, agents []string) []instructionTarget {
 		case "antigravity":
 			add(agent, filepath.Join(home, ".gemini", "GEMINI.md"))
 		case "vscode-copilot":
-			add(agent, filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"))
-			add(agent, filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"))
+			// gentle-ai exposes Copilot through its vscode-copilot agent key.
+			// dots uses that completed provisioner as the ownership boundary for
+			// Copilot portable-policy files only: VS Code prompt instructions and
+			// Copilot CLI global instructions. This does not add a native Copilot
+			// custom-agent artifact.
+			addCopilotPortablePolicyTargets(add, agent, home)
 		}
 	}
 	return targets
+}
+
+func addCopilotPortablePolicyTargets(add func(agent, path string), agent, home string) {
+	add(agent, filepath.Join(home, "Library", "Application Support", "Code", "User", "prompts", "gentle-ai.instructions.md"))
+	add(agent, filepath.Join(home, ".config", "Code", "User", "prompts", "gentle-ai.instructions.md"))
+	add(agent, filepath.Join(home, ".copilot", "copilot-instructions.md"))
 }
 
 func removeTriggerRules(path string) error {
