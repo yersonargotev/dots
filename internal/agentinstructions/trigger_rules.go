@@ -44,7 +44,7 @@ Use delegation when a non-trivial task has an independent slice that can return 
 
 Run Delegation Preflight before non-trivial work:
 
-1. Confirm whether the active instructions include any surface-specific delegation overlay needed by the task.
+1. Confirm whether the active instructions include every surface-specific delegation overlay and native artifact needed by the task. For Codex Spark, check both the dots:codex-spark-delegation overlay and the native dots-explorer.toml / dots-worker.toml custom agents.
 2. Decide whether the task is non-trivial.
 3. Identify at least one safe explorer or worker slice, or choose one closed-list skip reason.
 4. If a workflow authorizes delegation but the current tool requires explicit permission, ask once at the start or record tool-level permission required.

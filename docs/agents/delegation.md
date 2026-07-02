@@ -22,10 +22,14 @@ delegated slice, selected agent surface, selected model/tier, accepted/rejected
 findings or changes, main-agent verification, and the skip reason when no subagent
 was used.
 
-Delegation Preflight is required for non-trivial work: confirm the relevant
-surface-specific overlay or native artifact is available, decide whether the task is
+Delegation Preflight is required for non-trivial work: confirm every relevant
+surface-specific overlay and native artifact is available, decide whether the task is
 non-trivial, identify a safe explorer/worker slice, and use only a closed-list skip
-reason when not delegating. The closed-list skip reasons are `tiny/mechanical`,
+reason when not delegating. For Codex Spark, that means checking the
+`dots:codex-spark-delegation` overlay plus both native custom agents at
+`~/.codex/agents/dots-explorer.toml` and
+`~/.codex/agents/dots-worker.toml`. The closed-list skip reasons are
+`tiny/mechanical`,
 `no independent slice`, `real user configuration`, `external state mutation`,
 `overlapping write scopes`, and `tool-level permission required`.
 

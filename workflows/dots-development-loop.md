@@ -54,10 +54,12 @@ permission gates without silently skipping delegation.
 Every non-trivial task in this workflow requires Delegation Preflight before
 implementation or review work proceeds:
 
-1. Confirm the relevant delegation capability is installed or available; for
+1. Confirm every relevant delegation capability is installed or available; for
    Codex Spark this means `~/.codex/AGENTS.md` contains
-   `dots:codex-spark-delegation`, or the workflow records that the overlay is
-   missing.
+   `dots:codex-spark-delegation` and both native custom agents exist at
+   `~/.codex/agents/dots-explorer.toml` and
+   `~/.codex/agents/dots-worker.toml`, or the workflow records which overlay or
+   artifact is missing.
 2. Decide whether the task is non-trivial.
 3. Identify at least one safe explorer or worker slice that can run without
    transferring requirements, decisions, external state, integration, or final
