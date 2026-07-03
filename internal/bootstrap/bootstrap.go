@@ -94,7 +94,7 @@ func ensureRepositoryRef(opts Options) error {
 		return err
 	}
 	if !validSourceRoot(opts.SourceRoot) {
-		return errors.New("updated Source of Truth does not contain a valid dots.yaml at repository root")
+		return errors.New("updated Installed Repository does not contain a valid dots.yaml at repository root")
 	}
 	return nil
 }
