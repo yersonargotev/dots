@@ -258,6 +258,17 @@ entries:
         apt: tmux
         dnf: tmux
         pacman: tmux
+  - source: configs/herdr/config.toml
+    target: ~/.config/herdr/config.toml
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+    dependencies:
+      - name: herdr
+        command: herdr
+        brew: herdr
   - source: configs/zellij/config.kdl
     source_overrides:
       adaptive-theme: configs/zellij/config-adaptive.kdl

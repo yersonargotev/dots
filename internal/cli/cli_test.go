@@ -1054,15 +1054,16 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("sandbox nvim symlink = %q, want %q", target, want)
 	}
 
-	// Derive the expected "ok" count from the loaded manifest rather than a
-	// hardcoded literal: install/status run for runtime.GOOS and the default
-	// profile, so a clean-home plan for the same inputs yields one create action
-	// per managed entry. On this freshly installed sandbox every managed entry
-	// must therefore report ok with zero conflict/drift.
+	// Derive the expected counts from the loaded manifest rather than hardcoded
+	// literals: install/status run for runtime.GOOS and the core profile, so a
+	// clean-home plan for the same inputs yields one create action per managed
+	// entry that applies on this OS. Profile-selected entries filtered out by OS
+	// must be reported as skipped.
 	loaded, err := manifest.LoadFile(manifestPath)
 	if err != nil {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
+	coreProfile := loaded.Profiles["core"]
 	countPlan, err := plan.Build(*loaded, plan.Options{
 		Profile:    "core",
 		OS:         runtime.GOOS,
@@ -1076,7 +1077,13 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	if wantManaged == 0 {
 		t.Fatalf("no managed entries apply to profile \"default\" on %s; derived plan is empty", runtime.GOOS)
 	}
-	wantSummary := fmt.Sprintf("Summary: %d ok, 0 missing, 0 conflict, 0 skipped, 0 drifted, 0 unsupported", wantManaged)
+	wantSkipped := 0
+	for _, entry := range loaded.Entries {
+		if manifest.SharesTag(entry.Tags, coreProfile.Tags) && !manifest.MatchesOS(entry.OS, runtime.GOOS) {
+			wantSkipped++
+		}
+	}
+	wantSummary := fmt.Sprintf("Summary: %d ok, 0 missing, 0 conflict, %d skipped, 0 drifted, 0 unsupported", wantManaged, wantSkipped)
 
 	got := statusOut.String()
 	for _, want := range []string{
