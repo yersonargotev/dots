@@ -135,6 +135,7 @@ Current Managed Entries:
 | `configs/dots/adaptive-theme` | `~/.config/dots/adaptive-theme` | `symlink` | `adaptive-theme` | `darwin`, `linux` | None |
 | `configs/starship/starship.toml` | `~/.config/starship.toml` | `symlink` | `core` | `darwin`, `linux` | `starship` |
 | `configs/tmux/tmux.conf` | `~/.tmux.conf` | `symlink` | `core` | `darwin`, `linux` | `tmux` |
+| `configs/herdr/config.toml` (`adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `symlink` | `core` | `darwin` | `herdr` |
 | `configs/zellij/config.kdl` (`adaptive-theme` override: `configs/zellij/config-adaptive.kdl`) | `~/.config/zellij/config.kdl` | `symlink` | `core` | `darwin`, `linux` | `zellij` |
 | `configs/zellij/layouts/default.kdl` | `~/.config/zellij/layouts/default.kdl` | `symlink` | `core` | `darwin`, `linux` | `zellij` |
 | `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `desktop` | `darwin`, `linux` | `ghostty` |

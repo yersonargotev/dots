@@ -3505,6 +3505,84 @@ func TestDotsThemeHelperAdaptiveMatrix(t *testing.T) {
 	}
 }
 
+func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var herdrEntry *manifest.Entry
+	for i := range got.Entries {
+		if got.Entries[i].Target == "~/.config/herdr/config.toml" {
+			herdrEntry = &got.Entries[i]
+			break
+		}
+	}
+	if herdrEntry == nil {
+		t.Fatalf("manifest missing Herdr managed entry")
+	}
+	if got := herdrEntry.SourceOverrides["adaptive-theme"]; got != "configs/herdr/config-adaptive.toml" {
+		t.Fatalf("Herdr adaptive source override = %q, want configs/herdr/config-adaptive.toml", got)
+	}
+
+	defaultConfig, err := os.ReadFile(filepath.Join(root, "configs/herdr/config.toml"))
+	if err != nil {
+		t.Fatalf("read default Herdr config: %v", err)
+	}
+	for _, notWant := range []string{
+		`auto_switch = true`,
+		`light_name = "catppuccin-latte"`,
+	} {
+		if strings.Contains(string(defaultConfig), notWant) {
+			t.Fatalf("default Herdr config contains opt-in-only setting %q:\n%s", notWant, defaultConfig)
+		}
+	}
+
+	adaptiveConfig, err := os.ReadFile(filepath.Join(root, "configs/herdr/config-adaptive.toml"))
+	if err != nil {
+		t.Fatalf("read adaptive Herdr config: %v", err)
+	}
+	for _, want := range []string{
+		`name = "catppuccin"`,
+		`auto_switch = true`,
+		`dark_name = "catppuccin"`,
+		`light_name = "catppuccin-latte"`,
+	} {
+		if !strings.Contains(string(adaptiveConfig), want) {
+			t.Fatalf("adaptive Herdr config missing %q:\n%s", want, adaptiveConfig)
+		}
+	}
+
+	defaultText := string(defaultConfig)
+	adaptiveText := string(adaptiveConfig)
+	if got, want := herdrConfigWithoutTheme(t, adaptiveText), herdrConfigWithoutTheme(t, defaultText); got != want {
+		t.Fatalf("adaptive Herdr config non-theme sections drifted from default; got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func herdrConfigWithoutTheme(t *testing.T, config string) string {
+	t.Helper()
+	start := strings.Index(config, "onboarding =")
+	if start == -1 {
+		t.Fatalf("Herdr config missing onboarding setting:\n%s", config)
+	}
+	body := config[start:]
+	themeStart := strings.Index(body, "[theme]")
+	if themeStart == -1 {
+		t.Fatalf("Herdr config missing [theme] section:\n%s", config)
+	}
+	afterThemeHeader := body[themeStart+len("[theme]"):]
+	nextSection := strings.Index(afterThemeHeader, "\n[")
+	if nextSection == -1 {
+		t.Fatalf("Herdr config missing non-theme section after [theme]:\n%s", config)
+	}
+	themeEnd := themeStart + len("[theme]") + nextSection + 1
+	return body[:themeStart] + body[themeEnd:]
+}
+
 func TestAgentStatuslinePalettesUseAdaptiveHelper(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	for _, script := range []string{
