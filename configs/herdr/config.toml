@@ -40,12 +40,12 @@ prefix = "ctrl+a"
 
 # Session/workspace
 # Keep Herdr's default detach plus dots' tmux/Zellij capital-D muscle memory.
-detach = ["prefix+q", "prefix+D"]
+detach = ["prefix+q", "prefix+shift+d"]
 workspace_picker = "prefix+w"
 goto = "prefix+g"
 new_workspace = "prefix+shift+n"
 rename_workspace = "prefix+shift+w"
-close_workspace = "prefix+shift+d"
+close_workspace = "prefix+alt+d"
 toggle_sidebar = "prefix+b"
 
 # Tabs: prefix-first tmux-like core plus explicit direct tab navigation.

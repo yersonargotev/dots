@@ -172,12 +172,12 @@ prefix = "ctrl+a"
 
 # Session/workspace
 # Keep Herdr's default detach plus dots' tmux/Zellij capital-D muscle memory.
-detach = ["prefix+q", "prefix+D"]
+detach = ["prefix+q", "prefix+shift+d"]
 workspace_picker = "prefix+w"
 goto = "prefix+g"
 new_workspace = "prefix+shift+n"
 rename_workspace = "prefix+shift+w"
-close_workspace = "prefix+shift+d"
+close_workspace = "prefix+alt+d"
 toggle_sidebar = "prefix+b"
 
 # Tabs: prefix-first tmux-like core plus explicit direct tab navigation.
@@ -208,7 +208,7 @@ copy_mode = "prefix+["
 Notes on this proposed map:
 
 - `prefix = "ctrl+a"` is the key decision: it makes Herdr follow dots' tmux/Zellij prefix muscle memory instead of Herdr's default `ctrl+b`.
-- Herdr defaults use `detach = "prefix+q"`; dots' tmux/Zellij config uses capital `D` for detach, so the proposal keeps the Herdr default and adds `prefix+D` for dots parity.
+- Herdr defaults use `detach = "prefix+q"`; dots' tmux/Zellij config uses capital `D` for detach, so the proposal keeps the Herdr default and adds the equivalent explicit `prefix+shift+d` for dots parity. Close workspace moves to `prefix+alt+d` to avoid disabling the detach alias.
 - Herdr defaults use `split_horizontal = "prefix+minus"`; dots' tmux/Zellij config uses `prefix+d` for down split. The proposal keeps the documented Herdr default and adds `prefix+d` as the dots-parity alias.
 - Herdr's documented tab rename default is `prefix+shift+t`; tmux commonly uses prefix comma. The proposal keeps the Herdr default and adds `prefix+comma` as a parity alias.
 - Herdr's docs recommend explicit modified chords for intentional direct shortcuts and warn that some chords are terminal/OS-dependent. The implementation keeps plain keys behind prefix mode and adds only `ctrl+alt+h/j/k/l` pane focus plus `ctrl+alt+[` / `ctrl+alt+]` tab navigation.
