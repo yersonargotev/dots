@@ -12,9 +12,10 @@ import (
 const DefaultRepositoryURL = "https://github.com/yersonargotev/dots.git"
 
 type Options struct {
-	SourceRoot    string
-	RepositoryURL string
-	RepositoryRef string
+	SourceRoot     string
+	RepositoryURL  string
+	RepositoryRef  string
+	UpdateExisting bool
 }
 
 type Result struct {
@@ -32,6 +33,11 @@ func Ensure(opts Options) (Result, error) {
 
 	result := Result{SourceRoot: opts.SourceRoot}
 	if validSourceRoot(opts.SourceRoot) {
+		if opts.UpdateExisting {
+			if err := ensureRepositoryRef(opts); err != nil {
+				return Result{}, err
+			}
+		}
 		return result, nil
 	}
 
@@ -62,6 +68,107 @@ func Ensure(opts Options) (Result, error) {
 	}
 	result.Cloned = true
 	return result, nil
+}
+
+func ensureRepositoryRef(opts Options) error {
+	ref := strings.TrimSpace(opts.RepositoryRef)
+	if ref == "" {
+		return nil
+	}
+	matches, err := repositoryRefMatches(opts.SourceRoot, ref, fmt.Sprintf("cannot update it to %s", ref))
+	if err != nil {
+		return err
+	}
+	if matches {
+		return nil
+	}
+	if dirty, err := repositoryDirty(opts.SourceRoot); err != nil {
+		return err
+	} else if dirty {
+		return fmt.Errorf("Installed Repository at %s has local changes; refusing to update to %s. Commit/stash them, move it aside, or pass --source-root", opts.SourceRoot, ref)
+	}
+	if err := fetchRepositoryRef(opts.SourceRoot, ref); err != nil {
+		return err
+	}
+	if err := checkoutFetchHead(opts.SourceRoot, ref); err != nil {
+		return err
+	}
+	if !validSourceRoot(opts.SourceRoot) {
+		return errors.New("updated Source of Truth does not contain a valid dots.yaml at repository root")
+	}
+	return nil
+}
+
+// RequireCurrentRef verifies a valid Installed Repository already matches the
+// requested release ref without mutating it. It lets dry-run commands fail before
+// reading a stale manifest while preserving dry-run's no-write contract.
+func RequireCurrentRef(opts Options) error {
+	ref := strings.TrimSpace(opts.RepositoryRef)
+	if ref == "" || !validSourceRoot(opts.SourceRoot) {
+		return nil
+	}
+	matches, err := repositoryRefMatches(opts.SourceRoot, ref, fmt.Sprintf("cannot verify it is at %s", ref))
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return fmt.Errorf("Installed Repository at %s is not at %s; rerun without --dry-run to update it, or pass --source-root", opts.SourceRoot, ref)
+	}
+	return nil
+}
+
+func repositoryRefMatches(sourceRoot, ref, missingGitReason string) (bool, error) {
+	if _, err := os.Stat(filepath.Join(sourceRoot, ".git")); err != nil {
+		if os.IsNotExist(err) {
+			return false, fmt.Errorf("Installed Repository at %s is not a git checkout; %s. Move it aside or pass --source-root", sourceRoot, missingGitReason)
+		}
+		return false, fmt.Errorf("inspect Installed Repository git metadata: %w", err)
+	}
+	return repositoryAtRef(sourceRoot, ref)
+}
+
+func repositoryAtRef(sourceRoot, ref string) (bool, error) {
+	head, err := gitOutput(sourceRoot, "rev-parse", "--verify", "HEAD")
+	if err != nil {
+		return false, fmt.Errorf("inspect Installed Repository HEAD: %w", err)
+	}
+	target, err := gitOutput(sourceRoot, "rev-parse", "--verify", ref+"^{commit}")
+	if err != nil {
+		return false, nil
+	}
+	return strings.TrimSpace(head) == strings.TrimSpace(target), nil
+}
+
+func repositoryDirty(sourceRoot string) (bool, error) {
+	status, err := gitOutput(sourceRoot, "status", "--porcelain")
+	if err != nil {
+		return false, fmt.Errorf("inspect Installed Repository status: %w", err)
+	}
+	return strings.TrimSpace(status) != "", nil
+}
+
+func fetchRepositoryRef(sourceRoot, ref string) error {
+	if _, err := gitOutput(sourceRoot, "fetch", "--depth", "1", "origin", ref); err != nil {
+		return fmt.Errorf("update Installed Repository to %s: %w", ref, err)
+	}
+	return nil
+}
+
+func checkoutFetchHead(sourceRoot, ref string) error {
+	if _, err := gitOutput(sourceRoot, "checkout", "--detach", "FETCH_HEAD"); err != nil {
+		return fmt.Errorf("checkout Installed Repository ref %s: %w", ref, err)
+	}
+	return nil
+}
+
+func gitOutput(sourceRoot string, args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"-C", sourceRoot}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git %s failed: %w\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return string(output), nil
 }
 
 func validSourceRoot(dir string) bool {

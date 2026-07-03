@@ -65,11 +65,17 @@ func newInstallCommand() *cobra.Command {
 				return fmt.Errorf("--backup-and-replace requires --yes for non-interactive conflict replacement")
 			}
 
-			if !dryRun && !cmd.Flags().Changed("file") && !cmd.Flags().Changed("source-root") {
-				if _, err := bootstrap.Ensure(bootstrap.Options{
-					SourceRoot:    paths.SourceRoot,
-					RepositoryRef: defaultInitRepositoryRef("", version.Value),
-				}); err != nil {
+			if !cmd.Flags().Changed("file") && !cmd.Flags().Changed("source-root") {
+				bootstrapOpts := bootstrap.Options{
+					SourceRoot:     paths.SourceRoot,
+					RepositoryRef:  defaultInitRepositoryRef("", version.Value),
+					UpdateExisting: !dryRun,
+				}
+				if dryRun {
+					if err := bootstrap.RequireCurrentRef(bootstrapOpts); err != nil {
+						return err
+					}
+				} else if _, err := bootstrap.Ensure(bootstrapOpts); err != nil {
 					return err
 				}
 			}
