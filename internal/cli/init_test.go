@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/testrepo"
+	"github.com/yersonargotev/dots/internal/version"
 )
 
 func TestInitCommandClonesInstalledRepository(t *testing.T) {
@@ -104,5 +107,42 @@ func writeCLISourceFile(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestInstallDryRunRejectsStaleDefaultInstalledRepository(t *testing.T) {
+	sourceRepo := newCLISourceRepo(t)
+	if err := testrepo.TagWithHerdrManifest(sourceRepo, "v0.99.1"); err != nil {
+		t.Fatalf("tag Source of Truth with Herdr manifest: %v", err)
+	}
+
+	home := t.TempDir()
+	sourceRoot := filepath.Join(home, ".local", "share", "dots")
+	if _, err := bootstrap.Ensure(bootstrap.Options{
+		SourceRoot:    sourceRoot,
+		RepositoryURL: sourceRepo,
+		RepositoryRef: "v0.99.0",
+	}); err != nil {
+		t.Fatalf("seed stale Installed Repository: %v", err)
+	}
+
+	oldVersion := version.Value
+	version.Value = "v0.99.1"
+	defer func() { version.Value = oldVersion }()
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"install", "--dry-run", "--profile", "default", "--home", home}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("install --dry-run with stale source exit code = %d, want 1\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "not at v0.99.1") {
+		t.Fatalf("dry-run stale source error should explain release mismatch, got:\n%s", errOut.String())
+	}
+	manifest, err := os.ReadFile(filepath.Join(sourceRoot, "dots.yaml"))
+	if err != nil {
+		t.Fatalf("read stale manifest: %v", err)
+	}
+	if strings.Contains(string(manifest), "configs/herdr/config.toml") {
+		t.Fatalf("dry-run must not update the Installed Repository, got:\n%s", manifest)
 	}
 }
