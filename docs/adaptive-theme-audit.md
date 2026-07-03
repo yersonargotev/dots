@@ -20,6 +20,12 @@ slice.
 - **Neovim**: `lua/plugins/colorscheme.lua` selects `catppuccin-latte` only when
   the marker exists and macOS light appearance is proven; otherwise it uses
   `catppuccin-mocha`.
+- **Herdr**: default `configs/herdr/config.toml` keeps Herdr on dark
+  `catppuccin`. On macOS, the `adaptive-theme` tag selects
+  `configs/herdr/config-adaptive.toml` for the same target, enabling Herdr's
+  native `theme.auto_switch` with `catppuccin-latte` for light appearance and
+  `catppuccin` for dark appearance. Herdr has no dots-owned include seam, so a
+  manifest test keeps non-theme sections synchronized between both Herdr files.
 - **Claude/Copilot statuslines**: copied statusline scripts source the helper
   and switch only their ANSI palettes. Claude's app-level `theme` is `auto` so
   Claude can use its own light/dark support without dots rewriting the copied
