@@ -3,7 +3,9 @@ package cli_test
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -91,6 +93,54 @@ func assertRemovedNativeCodexSparkAgents(t *testing.T, agentsDir, context string
 			t.Fatalf("%s kept native Codex agent %s; stat err = %v", context, name, err)
 		}
 	}
+}
+
+func codexHookCommandFromConfig(t *testing.T, content string) string {
+	t.Helper()
+	for _, line := range strings.Split(content, "\n") {
+		raw, ok := strings.CutPrefix(strings.TrimSpace(line), "command = ")
+		if !ok {
+			continue
+		}
+		command, err := strconv.Unquote(raw)
+		if err != nil {
+			t.Fatalf("parse Codex hook command %q: %v", raw, err)
+		}
+		return command
+	}
+	t.Fatal("Codex config missing hook command")
+	return ""
+}
+
+func runCodexSessionStartHook(t *testing.T, dir, command string) {
+	t.Helper()
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("run CodeGraph SessionStart hook in %s: %v\noutput:\n%s", dir, err, output)
+	}
+}
+
+func initGitRepo(t *testing.T, gitPath, dir string) {
+	t.Helper()
+	cmd := exec.Command(gitPath, "init", "-q")
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git init %s: %v\noutput:\n%s", dir, err, output)
+	}
+}
+
+func gitTopLevel(t *testing.T, gitPath, dir string) string {
+	t.Helper()
+	cmd := exec.Command(gitPath, "rev-parse", "--show-toplevel")
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git top-level %s: %v\noutput:\n%s", dir, err, output)
+	}
+	return strings.TrimSpace(string(output))
 }
 
 // TestInstallDryRunRendersProvisionerWithoutInvoking proves --dry-run prints the
@@ -550,6 +600,11 @@ provisioners:
 }
 
 func TestInstallAgentsCodeGraphTagWritesScopedPolicyOverlayInSandbox(t *testing.T) {
+	initialPath := os.Getenv("PATH")
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is required to exercise the CodeGraph SessionStart hook")
+	}
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -563,6 +618,11 @@ func TestInstallAgentsCodeGraphTagWritesScopedPolicyOverlayInSandbox(t *testing.
 	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), `#!/bin/sh
+if [ "$1" = init ]; then
+  printf '%s|%s\n' "$PWD" "$*" >> "$HOME/codegraph-init-calls"
+  mkdir -p .codegraph
+  exit 0
+fi
 printf '%s\n' "$*" >> "$HOME/codegraph-args"
 mkdir -p "$HOME/.codex" "$HOME/.claude" "$HOME/.gemini" "$HOME/.config/opencode"
 for file in "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md" "$HOME/.gemini/GEMINI.md" "$HOME/.config/opencode/codegraph.md"; do
@@ -603,6 +663,58 @@ done
 	wantArgs := "install --target codex,claude,antigravity,opencode --location global --yes\n"
 	if string(gotArgs) != wantArgs {
 		t.Fatalf("codegraph args = %q, want %q", gotArgs, wantArgs)
+	}
+
+	codexConfig, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "config.toml"))
+	if err != nil {
+		t.Fatalf("missing CodeGraph-tagged Codex config in sandbox HOME: %v", err)
+	}
+	for _, want := range []string{
+		"[[hooks.SessionStart]]",
+		`matcher = "startup|resume"`,
+		`command = "sh -c`,
+		"codegraph init",
+		`[ -d \"$root/.codegraph\" ] || (cd \"$root\" && codegraph init)`,
+	} {
+		if !strings.Contains(string(codexConfig), want) {
+			t.Fatalf("CodeGraph-tagged Codex config missing %q\ncontent:\n%s", want, codexConfig)
+		}
+	}
+	hookCommand := codexHookCommandFromConfig(t, string(codexConfig))
+	t.Setenv("HOME", sandboxHome)
+	hookStubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(hookStubDir, "codegraph"), `#!/bin/sh
+printf '%s|%s\n' "$PWD" "$*" >> "$HOME/codegraph-init-calls"
+mkdir -p .codegraph
+`)
+	t.Setenv("PATH", hookStubDir+string(os.PathListSeparator)+filepath.Dir(realGit)+string(os.PathListSeparator)+initialPath)
+	runCodexSessionStartHook(t, t.TempDir(), hookCommand)
+
+	repoWithIndex := t.TempDir()
+	initGitRepo(t, realGit, repoWithIndex)
+	repoWithIndexRoot := gitTopLevel(t, realGit, repoWithIndex)
+	if err := os.MkdirAll(filepath.Join(repoWithIndexRoot, ".codegraph"), 0o755); err != nil {
+		t.Fatalf("seed existing CodeGraph index: %v", err)
+	}
+	runCodexSessionStartHook(t, repoWithIndex, hookCommand)
+
+	repoWithoutIndex := t.TempDir()
+	initGitRepo(t, realGit, repoWithoutIndex)
+	repoWithoutIndexRoot := gitTopLevel(t, realGit, repoWithoutIndex)
+	runCodexSessionStartHook(t, repoWithoutIndex, hookCommand)
+	if _, err := os.Stat(filepath.Join(repoWithoutIndexRoot, ".codegraph")); err != nil {
+		t.Fatalf("CodeGraph hook did not initialize temp repo index: %v", err)
+	}
+	gotInitCalls, err := os.ReadFile(filepath.Join(sandboxHome, "codegraph-init-calls"))
+	if err != nil {
+		t.Fatalf("CodeGraph hook did not record sandboxed init calls: %v", err)
+	}
+	wantInitCalls := repoWithoutIndexRoot + "|init\n"
+	if string(gotInitCalls) != wantInitCalls {
+		t.Fatalf("CodeGraph hook calls = %q, want %q", gotInitCalls, wantInitCalls)
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, "codegraph-init-calls")); !os.IsNotExist(err) {
+		t.Fatalf("CodeGraph hook wrote into inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 
 	for _, path := range []string{

@@ -1398,6 +1398,9 @@ func TestRepositoryManifestMarksCodexConfigAsTOMLSubsetOwned(t *testing.T) {
 	if settings.Ownership != "toml-subset" {
 		t.Fatalf("Codex config ownership = %q, want toml-subset", settings.Ownership)
 	}
+	if settings.SourceOverrides["codegraph"] != "configs/codex/config-codegraph.toml" {
+		t.Fatalf("Codex config codegraph override = %q, want configs/codex/config-codegraph.toml", settings.SourceOverrides["codegraph"])
+	}
 }
 
 func TestDependencyProbeTrimsWhitespace(t *testing.T) {
