@@ -1,0 +1,15 @@
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "git-branch", "branch-changes", "five-hour-limit", "weekly-limit", "used-tokens"]
+status_line_use_colors = true
+
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "sh -c 'command -v codegraph >/dev/null 2>&1 || exit 0; root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -d \"$root/.codegraph\" ] || (cd \"$root\" && codegraph init)'"
+timeout = 120
+statusMessage = "Initializing CodeGraph index"

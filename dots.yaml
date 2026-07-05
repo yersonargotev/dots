@@ -507,6 +507,8 @@ entries:
       - darwin
       - linux
   - source: configs/codex/config.toml
+    source_overrides:
+      codegraph: configs/codex/config-codegraph.toml
     target: ~/.codex/config.toml
     strategy: copy
     ownership: toml-subset

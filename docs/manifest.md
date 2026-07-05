@@ -153,7 +153,7 @@ Current Managed Entries:
 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `core` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `core` | `darwin`, `linux` | None |
-| `configs/codex/config.toml` | `~/.codex/config.toml` | `copy` | `agents` | `darwin`, `linux` | None; owns TOML subset |
+| `configs/codex/config.toml` (`codegraph` override: `configs/codex/config-codegraph.toml`) | `~/.codex/config.toml` | `copy` | `agents` | `darwin`, `linux` | None; owns TOML subset; CodeGraph tag adds a Codex SessionStart hook |
 | `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
 | `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns the broad Antigravity JSON baseline |
