@@ -18,6 +18,7 @@ type Status string
 
 const (
 	StatusCreate        Status = "create"
+	StatusUpdate        Status = "update"
 	StatusConflict      Status = "conflict"
 	StatusUnchanged     Status = "unchanged"
 	StatusMissingSource Status = "missing-source"
@@ -34,6 +35,7 @@ type Action struct {
 	Target         string `json:"target"`
 	Strategy       string `json:"strategy"`
 	Status         Status `json:"status"`
+	Ownership      string `json:"-"`
 }
 
 // Plan is the preview of changes the installer would apply for a Profile.
@@ -88,6 +90,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			continue
 		}
 
+		defaultSource := entry.Source
 		source := manifest.EntrySource(entry, tags)
 		target, err := ResolveTarget(entry.Target, opts.Home)
 		if err != nil {
@@ -98,7 +101,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			return Plan{}, err
 		}
 		entry.Source = source
-		actionStatus, err := status(entry, target, sourceAbs, opts.SourceRoot, opts.Metadata)
+		actionStatus, err := status(entry, target, sourceAbs, opts.SourceRoot, opts.Metadata, defaultSource)
 		if err != nil {
 			return Plan{}, err
 		}
@@ -108,6 +111,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			Target:         target,
 			Strategy:       entry.Strategy,
 			Status:         actionStatus,
+			Ownership:      entry.Ownership,
 		})
 	}
 
@@ -280,7 +284,7 @@ func InsideRoot(path, root string) bool {
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
-func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta state.Metadata) (Status, error) {
+func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta state.Metadata, defaultSource string) (Status, error) {
 	// The managed source must exist before any target comparison is
 	// meaningful: a missing source cannot be installed, and a symlink that
 	// still points at a deleted source is broken, not unchanged.
@@ -322,6 +326,9 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta sta
 					return StatusUnchanged, nil
 				}
 			}
+			if entry.Ownership == "toml-subset" && targetContainsCompatibleRecordedSource(entry, target, sourceRoot, meta, defaultSource) {
+				return StatusUpdate, nil
+			}
 			return StatusConflict, nil
 		}
 		return StatusUnchanged, nil
@@ -333,6 +340,34 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta sta
 func metadataMatchesEntry(meta state.Metadata, target, source, strategy string) bool {
 	rec, ok := meta.FindByTarget(target)
 	return ok && rec.Source == source && rec.Strategy == strategy
+}
+
+func targetContainsCompatibleRecordedSource(entry manifest.Entry, target, sourceRoot string, meta state.Metadata, defaultSource string) bool {
+	rec, ok := meta.FindByTarget(target)
+	if !ok || rec.Strategy != entry.Strategy || !compatibleEntrySource(entry, defaultSource, rec.Source) {
+		return false
+	}
+	sourceAbs, err := ResolveSource(rec.Source, sourceRoot)
+	if err != nil {
+		return false
+	}
+	if err := ValidateResolvedSource(sourceAbs, sourceRoot); err != nil {
+		return false
+	}
+	subset, err := subsetContent(entry.Ownership, target, sourceAbs)
+	return err == nil && subset
+}
+
+func compatibleEntrySource(entry manifest.Entry, defaultSource, source string) bool {
+	if source == entry.Source || source == defaultSource {
+		return true
+	}
+	for _, override := range entry.SourceOverrides {
+		if source == override {
+			return true
+		}
+	}
+	return false
 }
 
 func safeSourceExists(sourceAbs, sourceRoot string) (bool, error) {

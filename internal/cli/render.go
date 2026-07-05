@@ -21,13 +21,15 @@ func renderPlan(w io.Writer, p plan.Plan) {
 	}
 
 	var counts struct {
-		create, conflict, unchanged, missingSource int
+		create, update, conflict, unchanged, missingSource int
 	}
 	for _, a := range p.Actions {
 		fmt.Fprintf(w, "  %-15s %-9s %s -> %s\n", a.Status, a.Strategy, a.Source, a.Target)
 		switch a.Status {
 		case plan.StatusCreate:
 			counts.create++
+		case plan.StatusUpdate:
+			counts.update++
 		case plan.StatusConflict:
 			counts.conflict++
 		case plan.StatusUnchanged:
@@ -41,8 +43,13 @@ func renderPlan(w io.Writer, p plan.Plan) {
 		}
 	}
 
-	fmt.Fprintf(w, "\nSummary: %d create, %d conflict, %d unchanged, %d missing-source\n",
-		counts.create, counts.conflict, counts.unchanged, counts.missingSource)
+	if counts.update > 0 {
+		fmt.Fprintf(w, "\nSummary: %d create, %d update, %d conflict, %d unchanged, %d missing-source\n",
+			counts.create, counts.update, counts.conflict, counts.unchanged, counts.missingSource)
+	} else {
+		fmt.Fprintf(w, "\nSummary: %d create, %d conflict, %d unchanged, %d missing-source\n",
+			counts.create, counts.conflict, counts.unchanged, counts.missingSource)
+	}
 	if counts.conflict > 0 {
 		renderConflictResolutionGuidance(w)
 	}

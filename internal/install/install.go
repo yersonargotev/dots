@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yersonargotev/dots/internal/backups"
+	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -47,6 +48,10 @@ func Apply(p plan.Plan, opts Options) error {
 			continue
 		case plan.StatusCreate:
 			if err := applyCreate(action, resolvedSources[i]); err != nil {
+				return err
+			}
+		case plan.StatusUpdate:
+			if err := applyUpdate(action, resolvedSources[i], opts); err != nil {
 				return err
 			}
 		case plan.StatusConflict:
@@ -173,6 +178,28 @@ func validatePlan(p plan.Plan, opts Options) ([]string, error) {
 			}
 		case plan.StatusUnchanged:
 			continue
+		case plan.StatusUpdate:
+			if opts.StateRoot == "" {
+				return nil, fmt.Errorf("update for %s requires state root for Backup Set metadata", action.Target)
+			}
+			if action.Strategy != "copy" || action.Ownership != "toml-subset" {
+				return nil, fmt.Errorf("update for %s requires copy strategy with toml-subset ownership", action.Target)
+			}
+			if err := validateBackupStateRoot(opts.StateRoot, home); err != nil {
+				return nil, err
+			}
+			if err := validateTargetParentInsideHome(action.Target, home); err != nil {
+				return nil, err
+			}
+			if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(action.Target, home, "update target"); err != nil {
+				return nil, err
+			}
+			if err := plan.ValidateBackupableTarget(action.Target); err != nil {
+				return nil, err
+			}
+			if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
+				return nil, err
+			}
 		case plan.StatusConflict:
 			switch conflictDecision(action, opts) {
 			case DecisionSkip:
@@ -241,7 +268,7 @@ func conflictDecision(action plan.Action, opts Options) ConflictDecision {
 }
 
 func recordsMetadata(action plan.Action, decision ConflictDecision) bool {
-	if action.Status == plan.StatusCreate || action.Status == plan.StatusUnchanged {
+	if action.Status == plan.StatusCreate || action.Status == plan.StatusUpdate || action.Status == plan.StatusUnchanged {
 		return true
 	}
 	return action.Status == plan.StatusConflict && (decision == DecisionReplace || decision == DecisionAdopt)
@@ -382,6 +409,19 @@ func applyReplace(action plan.Action, source string, opts Options) error {
 	}
 	if err := applyCreate(action, source); err != nil {
 		return err
+	}
+	return nil
+}
+
+func applyUpdate(action plan.Action, source string, opts Options) error {
+	if err := createBackupSet(opts, action.Target); err != nil {
+		return err
+	}
+	if action.Ownership != "toml-subset" {
+		return fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)
+	}
+	if err := configsubset.MergeTOMLFile(action.Target, source); err != nil {
+		return fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
 	}
 	return nil
 }

@@ -441,6 +441,125 @@ func TestApplyLeavesUnchangedActionUntouched(t *testing.T) {
 	}
 }
 
+func TestApplyStatusUpdateMergesTOMLSubsetAndRecordsMetadata(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "codex", "config-codegraph.toml")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte(`sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "codegraph init"
+timeout = 120
+`), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	target := filepath.Join(home, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`model = "gpt-5.5"
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
+[tui]
+theme = "catppuccin-mocha"
+`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:    "configs/codex/config-codegraph.toml",
+		Target:    target,
+		Strategy:  "copy",
+		Status:    plan.StatusUpdate,
+		Ownership: "toml-subset",
+	}}}
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	for _, want := range []string{`model = "gpt-5.5"`, `[tui]`, `command = "codegraph init"`} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("target missing %q\ncontent:\n%s", want, got)
+		}
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	rec, ok := meta.FindByTarget(target)
+	if !ok {
+		t.Fatalf("metadata missing target %s", target)
+	}
+	if rec.Source != "configs/codex/config-codegraph.toml" {
+		t.Fatalf("metadata source = %q, want CodeGraph source", rec.Source)
+	}
+	backupMeta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Backup Metadata: %v", err)
+	}
+	if len(backupMeta.Sets) != 1 {
+		t.Fatalf("backup sets = %d, want 1", len(backupMeta.Sets))
+	}
+}
+
+func TestApplyStatusUpdateRejectsSymlinkTargetBeforeMutation(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "codex", "config-codegraph.toml")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte(`[[hooks.SessionStart]]
+matcher = "startup|resume"
+`), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.toml")
+	if err := os.WriteFile(outside, []byte("outside\n"), 0o600); err != nil {
+		t.Fatalf("write outside target: %v", err)
+	}
+	target := filepath.Join(home, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.Symlink(outside, target); err != nil {
+		t.Fatalf("symlink target: %v", err)
+	}
+
+	p := plan.Plan{Profile: "default", Actions: []plan.Action{{
+		Source:    "configs/codex/config-codegraph.toml",
+		Target:    target,
+		Strategy:  "copy",
+		Status:    plan.StatusUpdate,
+		Ownership: "toml-subset",
+	}}}
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err == nil {
+		t.Fatal("Apply() error = nil, want symlink update target rejection")
+	}
+	got, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatalf("read outside target: %v", err)
+	}
+	if string(got) != "outside\n" {
+		t.Fatalf("outside target changed to %q", got)
+	}
+}
+
 func TestApplyRejectsMissingSourceWithoutMutatingAnyAction(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

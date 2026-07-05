@@ -756,6 +756,101 @@ mkdir -p .codegraph
 	}
 }
 
+func TestInstallAgentsCodeGraphTagMigratesExistingManagedCodexConfig(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	sandboxHome := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "codegraph"), `#!/bin/sh
+printf '%s\n' "$*" >> "$HOME/codegraph-args"
+mkdir -p "$HOME/.codex" "$HOME/.claude" "$HOME/.gemini" "$HOME/.config/opencode"
+for file in "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md" "$HOME/.gemini/GEMINI.md" "$HOME/.config/opencode/codegraph.md"; do
+  cat > "$file" <<'EOF'
+<!-- CODEGRAPH_START -->
+Treat CodeGraph-returned source as already read.
+<!-- CODEGRAPH_END -->
+EOF
+done
+`)
+	writeExecStub(t, filepath.Join(stubDir, "curl"), "#!/bin/sh\nexit 0\n")
+	writeManifestDependencyStubs(t, stubDir)
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	base := cli.NewRootCommand()
+	var baseOut bytes.Buffer
+	base.SetOut(&baseOut)
+	base.SetErr(&baseOut)
+	base.SetArgs([]string{
+		"install",
+		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "agents",
+		"--source-root", repoRoot,
+		"--home", sandboxHome,
+		"--state-root", stateRoot,
+		"--yes",
+	})
+	if err := base.Execute(); err != nil {
+		t.Fatalf("base dots install failed in sandbox: %v\noutput:\n%s", err, baseOut.String())
+	}
+
+	codexConfigPath := filepath.Join(sandboxHome, ".codex", "config.toml")
+	baseCodexConfig, err := os.ReadFile(codexConfigPath)
+	if err != nil {
+		t.Fatalf("read base Codex config: %v", err)
+	}
+	if strings.Contains(string(baseCodexConfig), "codegraph init") {
+		t.Fatalf("base Codex config unexpectedly contains CodeGraph hook\ncontent:\n%s", baseCodexConfig)
+	}
+	runtimeAugmented := append([]byte("model = \"gpt-5.5\"\n\n"), baseCodexConfig...)
+	runtimeAugmented = append(runtimeAugmented, []byte("\n[mcp_servers.codegraph]\ncommand = \"codegraph\"\nargs = [\"serve\", \"--mcp\"]\n")...)
+	if err := os.WriteFile(codexConfigPath, runtimeAugmented, 0o600); err != nil {
+		t.Fatalf("write runtime-augmented Codex config: %v", err)
+	}
+
+	upgrade := cli.NewRootCommand()
+	var upgradeOut bytes.Buffer
+	upgrade.SetOut(&upgradeOut)
+	upgrade.SetErr(&upgradeOut)
+	upgrade.SetArgs([]string{
+		"install",
+		"--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "agents",
+		"--tag", "codegraph",
+		"--source-root", repoRoot,
+		"--home", sandboxHome,
+		"--state-root", stateRoot,
+		"--yes",
+	})
+	if err := upgrade.Execute(); err != nil {
+		t.Fatalf("CodeGraph tagged dots install failed in sandbox: %v\noutput:\n%s", err, upgradeOut.String())
+	}
+	if strings.Contains(upgradeOut.String(), "conflict        copy      configs/codex/config-codegraph.toml") {
+		t.Fatalf("CodeGraph tagged install reported Codex config conflict\noutput:\n%s", upgradeOut.String())
+	}
+	got, err := os.ReadFile(codexConfigPath)
+	if err != nil {
+		t.Fatalf("read migrated Codex config: %v", err)
+	}
+	for _, want := range []string{
+		`model = "gpt-5.5"`,
+		`[mcp_servers.codegraph]`,
+		`[[hooks.SessionStart]]`,
+		"codegraph init",
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("migrated Codex config missing %q\ncontent:\n%s", want, got)
+		}
+	}
+}
+
 // TestInstallExecutesClaudeProvisionerHomeThreaded proves a claude provisioner
 // renders and runs the exact `claude plugin ...` invocations, in manifest order,
 // under the sandbox HOME and never the inherited one.

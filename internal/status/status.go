@@ -94,6 +94,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			continue
 		}
 
+		defaultSource := entry.Source
 		source := manifest.EntrySource(entry, tags)
 		evaluated := Entry{Source: source, Target: entry.Target, Strategy: entry.Strategy}
 		if !manifest.MatchesOS(entry.OS, opts.OS) {
@@ -112,7 +113,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 		}
 
 		entry.Source = source
-		st, err := evaluate(entry, target, meta, opts.SourceRoot)
+		st, err := evaluate(entry, target, meta, opts.SourceRoot, defaultSource)
 		if err != nil {
 			return Report{}, err
 		}
@@ -123,7 +124,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 	return report, nil
 }
 
-func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRoot string) (State, error) {
+func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRoot string, defaultSource string) (State, error) {
 	if _, err := os.Lstat(target); err != nil {
 		if os.IsNotExist(err) {
 			return StateMissing, nil
@@ -163,6 +164,9 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 			return StateOK, nil
 		}
 	}
+	if entry.Ownership == "toml-subset" && targetContainsCompatibleRecordedSource(entry, target, sourceRoot, meta, defaultSource) {
+		return StateDrifted, nil
+	}
 
 	// The target diverges from the Source of Truth. Installation Metadata is the
 	// discriminator: if dots installed this target, the divergence is Drift; if
@@ -176,6 +180,34 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 func metadataMatchesEntry(meta state.Metadata, target, source, strategy string) bool {
 	rec, ok := meta.FindByTarget(target)
 	return ok && rec.Source == source && rec.Strategy == strategy
+}
+
+func targetContainsCompatibleRecordedSource(entry manifest.Entry, target, sourceRoot string, meta state.Metadata, defaultSource string) bool {
+	rec, ok := meta.FindByTarget(target)
+	if !ok || rec.Strategy != entry.Strategy || !compatibleEntrySource(entry, defaultSource, rec.Source) {
+		return false
+	}
+	sourceAbs, err := plan.ResolveSource(rec.Source, sourceRoot)
+	if err != nil {
+		return false
+	}
+	if err := plan.ValidateResolvedSource(sourceAbs, sourceRoot); err != nil {
+		return false
+	}
+	subset, err := subsetContent(entry.Ownership, target, sourceAbs)
+	return err == nil && subset
+}
+
+func compatibleEntrySource(entry manifest.Entry, defaultSource, source string) bool {
+	if source == entry.Source || source == defaultSource {
+		return true
+	}
+	for _, override := range entry.SourceOverrides {
+		if source == override {
+			return true
+		}
+	}
+	return false
 }
 
 func matchesSource(strategy, target, sourceAbs string) (bool, error) {

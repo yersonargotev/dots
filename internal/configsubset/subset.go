@@ -70,6 +70,62 @@ func TOMLFileContains(target, source string) (bool, error) {
 	return true, nil
 }
 
+// MergeTOMLFile appends missing source-owned array-of-table blocks to target.
+// It is intentionally narrower than a full TOML formatter: dots only needs this
+// for co-owned Codex config hooks, where preserving user/Codex-owned settings is
+// more important than reformatting the whole file. Scalar/table value changes
+// remain conflicts unless a caller adds a dedicated migration.
+func MergeTOMLFile(target, source string) error {
+	contains, err := TOMLFileContains(target, source)
+	if err != nil {
+		return err
+	}
+	if contains {
+		return nil
+	}
+
+	sourceData, err := os.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", source, err)
+	}
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", target, err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", target, err)
+	}
+	blocks, err := missingArrayTableBlocks(targetData, sourceData)
+	if err != nil {
+		return err
+	}
+	if len(blocks) == 0 {
+		return fmt.Errorf("source-owned TOML differences cannot be merged safely")
+	}
+
+	merged := append([]byte(nil), targetData...)
+	if len(merged) > 0 && merged[len(merged)-1] != '\n' {
+		merged = append(merged, '\n')
+	}
+	merged = append(merged, '\n')
+	for _, block := range blocks {
+		merged = append(merged, strings.TrimRight(block, "\n")...)
+		merged = append(merged, '\n', '\n')
+	}
+	if err := os.WriteFile(target, merged, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("write %s: %w", target, err)
+	}
+	contains, err = TOMLFileContains(target, source)
+	if err != nil {
+		return err
+	}
+	if !contains {
+		return fmt.Errorf("merged TOML target still misses source-owned values")
+	}
+	return nil
+}
+
 func jsonContains(target, source any) bool {
 	switch sourceTyped := source.(type) {
 	case map[string]any:
@@ -124,9 +180,6 @@ func parseSimpleTOML(data []byte, wanted map[string]struct{}) (map[string]string
 			continue
 		}
 		if strings.HasPrefix(line, "[[") {
-			if wanted == nil {
-				return nil, fmt.Errorf("line %d: arrays of tables are unsupported", lineNo+1)
-			}
 			if !strings.HasSuffix(line, "]]") {
 				return nil, fmt.Errorf("line %d: malformed array-of-table header", lineNo+1)
 			}
@@ -173,6 +226,67 @@ func parseSimpleTOML(data []byte, wanted map[string]struct{}) (map[string]string
 		values[path] = canonical
 	}
 	return values, nil
+}
+
+func missingArrayTableBlocks(targetData, sourceData []byte) ([]string, error) {
+	sourceValues, err := parseSimpleTOML(sourceData, nil)
+	if err != nil {
+		return nil, err
+	}
+	targetValues, err := parseSimpleTOML(targetData, sourceValuePaths(sourceValues))
+	if err != nil {
+		return nil, err
+	}
+	missing := map[string]struct{}{}
+	for path, sourceValue := range sourceValues {
+		if targetValues[path] != sourceValue {
+			missing[path] = struct{}{}
+		}
+	}
+	if len(missing) == 0 {
+		return nil, nil
+	}
+
+	var blocks []string
+	lines := strings.Split(string(sourceData), "\n")
+	for i := 0; i < len(lines); {
+		line := strings.TrimSpace(stripTOMLComment(lines[i]))
+		if !strings.HasPrefix(line, "[[") || !strings.HasSuffix(line, "]]") {
+			i++
+			continue
+		}
+		start := i
+		section := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "[["), "]]"))
+		i++
+		blockValues := map[string]string{}
+		for i < len(lines) {
+			next := strings.TrimSpace(stripTOMLComment(lines[i]))
+			if strings.HasPrefix(next, "[") && strings.HasSuffix(next, "]") {
+				break
+			}
+			key, value, ok := strings.Cut(next, "=")
+			if ok {
+				path := section + "." + strings.TrimSpace(key)
+				canonical, err := canonicalTOMLValue(strings.TrimSpace(value))
+				if err != nil {
+					return nil, err
+				}
+				blockValues[path] = canonical
+			}
+			i++
+		}
+		appendBlock := false
+		for path := range blockValues {
+			if _, ok := missing[path]; ok {
+				appendBlock = true
+				break
+			}
+		}
+		if appendBlock {
+			blocks = append(blocks, strings.Join(lines[start:i], "\n"))
+		}
+	}
+	return blocks, nil
 }
 
 func stripTOMLComment(line string) string {

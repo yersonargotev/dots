@@ -40,6 +40,15 @@ A fast-forward changes the Source of Truth, so targets that were previously alig
 
 Non-interactive runs (`--yes`) default every conflict to `skip`, so an unattended `update` never silently overwrites a workstation file.
 
+Some co-owned copied configuration can be updated without treating the target as
+a Conflict. When Installation Metadata proves dots installed the previous
+Source of Truth and the target still contains that dots-owned subset, the Install
+Plan may report an `update` action. Today this is used for TOML subset-owned
+Codex config migrations such as adding the CodeGraph `SessionStart` hook while
+preserving Codex- or user-owned settings. An `update` creates a Backup Set before
+mutating the target, and it is safe for Confirmed Install mode because unmanaged
+or incompatible targets still remain Conflicts.
+
 ## Flags
 
 `update` accepts the same path, explicit profile composition, and safety flags as `install`:

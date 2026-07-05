@@ -9,6 +9,7 @@ func TestPlanHasFindings(t *testing.T) {
 		want   bool
 	}{
 		{"create is not a finding", StatusCreate, false},
+		{"update is not a finding", StatusUpdate, false},
 		{"unchanged is not a finding", StatusUnchanged, false},
 		{"conflict is a finding", StatusConflict, true},
 		{"missing-source is a finding", StatusMissingSource, true},
