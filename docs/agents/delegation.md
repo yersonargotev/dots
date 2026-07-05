@@ -28,7 +28,12 @@ non-trivial, identify a safe explorer/worker slice, and use only a closed-list s
 reason when not delegating. For Codex Spark, that means checking the
 `dots:codex-spark-delegation` overlay plus both native custom agents at
 `~/.codex/agents/dots-explorer.toml` and
-`~/.codex/agents/dots-worker.toml`. The closed-list skip reasons are
+`~/.codex/agents/dots-worker.toml`. The Codex overlay is portable global
+guidance: installing or selecting the tag is standing user authorization for safe
+bounded Codex delegation across repositories, not only for the dots repository.
+Codex still only spawns subagents when the active prompt, workflow, or skill gives
+a direct subagent/parallel-agent/delegation ask, so reusable workflows should say
+that explicitly instead of relying on a dots-only workflow name. The closed-list skip reasons are
 `tiny/mechanical`,
 `no independent slice`, `real user configuration`, `external state mutation`,
 `overlapping write scopes`, and `tool-level permission required`.
@@ -50,7 +55,9 @@ Skip delegation only when one of those closed-list reasons applies.
 The portable policy lives inside the existing `<!-- dots:rules -->` block and is
 updated in place by `dots install --profile agents`. The Codex Spark block remains a
 separate `<!-- dots:codex-spark-delegation -->` opt-in overlay that maps the portable
-policy to Codex explorer/worker usage instead of duplicating the global rules. The
+policy to Codex explorer/worker usage instead of duplicating the global rules. It
+must remain repository-neutral because the same global Codex instructions are loaded
+in non-dots projects. The
 same opt-in tag also writes two dots-owned native Codex custom-agent files:
 `~/.codex/agents/dots-explorer.toml` and `~/.codex/agents/dots-worker.toml`.
 `--tag without-codex-spark-delegation` removes the overlay plus those two dots-owned
