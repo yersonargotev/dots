@@ -1024,6 +1024,24 @@ provisioners:
     dependencies:
       - name: npx
         command: npx
+  - tool: skills
+    tags:
+      - agents
+    spec:
+      package: yersonargotev/dots/skills/delegation
+      agents:
+        - codex
+        - claude-code
+        - antigravity
+        - opencode
+        - github-copilot
+      skills:
+        - delegation
+      global: true
+      copy: true
+    dependencies:
+      - name: npx
+        command: npx
   - tool: claude
     tags:
       - web

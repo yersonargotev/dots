@@ -48,7 +48,7 @@ Current Profiles:
 |---------|------|--------|----------------------|
 | `core` | `core` | Core dotfiles without agent/web/mobile provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
 | `desktop` | `desktop` | Desktop-only configuration and integrations; compose with `--profile core` when core dotfiles are desired too. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
-| `agents` | `agents` | gentle-ai memory/context setup, cleanup, shared engineering skills, and dots-owned global rules for supported agents. Add `--profile core` separately for core dotfiles. | `GitHub CLI` via the `agents` tag-scoped Dependency Set |
+| `agents` | `agents` | gentle-ai memory/context setup, cleanup, shared engineering skills, the dots-owned `delegation` skill, and compact dots-owned global rules for supported agents. Add `--profile core` separately for core dotfiles. | `GitHub CLI` via the `agents` tag-scoped Dependency Set |
 | `web` | `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | `Playwright CLI` via Homebrew formula `playwright-cli` |
 | `mobile` | `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | — |
 | `workstation` | `core`, `desktop`, `agents` | Opinionated composite when core, desktop integrations, and agent setup are desired; web and mobile remain explicit opt-ins. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
@@ -393,6 +393,7 @@ Current Provisioners:
 | `codex` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `codex mcp add dart -- dart mcp-server --force-roots-fallback`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `codex`, `dart` |
 | `skills` | `agents` | all | Install the reviewed Matt Pocock engineering skill set from `mattpocock/skills/skills/engineering` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `agents` | all | Install `grilling`, `loop-me`, `review`, and `writing-great-skills` from `mattpocock/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skills into agent skill roots. | `npx` |
+| `skills` | `agents` | all | Install the dots-owned `delegation` skill from `yersonargotev/dots/skills/delegation` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill into agent skill roots. | `npx` |
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
@@ -401,8 +402,9 @@ Current Provisioners:
 After any `gentle-ai` provisioner runs, `dots` converges supported agent
 instruction files by removing `<!-- gentle-ai:trigger-rules -->` and
 `<!-- gentle-ai:persona -->` marker sections, cleaning known legacy markerless
-persona prose, and upserting a `<!-- dots:rules -->` block with dots-owned
-behavioral rules. The upstream 4R identifiers referenced by the trigger-rules
+persona prose, and upserting a compact `<!-- dots:rules -->` block with
+critical dots-owned behavioral rules plus a pointer to the installed
+`delegation` skill. The upstream 4R identifiers referenced by the trigger-rules
 block (`review-readability`, `review-risk`, `review-resilience`, and
 `review-reliability`) are not portable `gentle-ai` skills that the dots-managed
 baseline can install for every supported agent, so keeping the recommendation
