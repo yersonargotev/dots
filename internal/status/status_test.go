@@ -282,6 +282,56 @@ func TestBuildReportsDriftedForChangedDotsOwnedCodexConfigValues(t *testing.T) {
 	}
 }
 
+func TestBuildReportsDriftedForTOMLSubsetSourceOverrideFromCompatibleManagedTarget(t *testing.T) {
+	entry := manifest.Entry{
+		Source: "configs/codex/config.toml",
+		SourceOverrides: map[string]string{
+			"codegraph": "configs/codex/config-codegraph.toml",
+		},
+		Target:    "~/.codex/config.toml",
+		Strategy:  "copy",
+		Ownership: "toml-subset",
+		Tags:      []string{"core"},
+	}
+	f := newFixture(entry)
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+	writeSource(t, f.sourceRoot, "configs/codex/config.toml", "sandbox_mode = \"danger-full-access\"\napproval_policy = \"never\"\n")
+	writeSource(t, f.sourceRoot, "configs/codex/config-codegraph.toml", `sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "codegraph init"
+timeout = 120
+`)
+	target := filepath.Join(f.home, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	if err := os.WriteFile(target, []byte("model = \"gpt-5.5\"\nsandbox_mode = \"danger-full-access\"\napproval_policy = \"never\"\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	meta := state.Metadata{Version: 1, Entries: []state.Record{{
+		Target: target, Source: "configs/codex/config.toml", Strategy: "copy", Hash: "installed-hash",
+	}}}
+
+	report, err := status.Build(manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{entry},
+	}, meta, status.Options{Profile: "default", ExtraTags: []string{"codegraph"}, OS: "darwin", SourceRoot: f.sourceRoot, Home: f.home})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got := onlyEntry(t, report).State; got != status.StateDrifted {
+		t.Fatalf("state = %q, want drifted because the managed target needs the CodeGraph hook update", got)
+	}
+}
+
 func TestBuildReportsMissingWhenTargetAbsent(t *testing.T) {
 	f := newFixture(manifest.Entry{Source: "configs/git/gitconfig", Target: "~/.gitconfig", Strategy: "copy", Tags: []string{"core"}})
 	f.sourceRoot = t.TempDir()

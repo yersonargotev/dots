@@ -158,7 +158,7 @@ dots uninstall --restore-backups  # also restore each target's pre-install Backu
 | Source of Truth | This repository's tracked dotfiles and manifest are the canonical desired state. |
 | Install Manifest | The manifest that maps repository files to home-directory targets. |
 | Managed Entry | A target file or link managed by `dots`, such as shell, git, terminal, editor, or agent-tool config. |
-| Install Plan | The preview of create, replace, skip, or conflict actions before install applies changes. |
+| Install Plan | The preview of create, update, replace, skip, or conflict actions before install applies changes. |
 | Uninstall Plan | The preview of remove, skip, modified, or not-owned actions before uninstall reverses an install, driven by the Installation Metadata. |
 | Installation Metadata | Local state used to remember what `dots` installed. |
 | Backup Set | A preserved copy of user-owned files before a restore or overwrite path changes them. |

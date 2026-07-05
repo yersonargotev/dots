@@ -108,6 +108,12 @@ prose the text surface prints:
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the
   `deps plan` install action).
+- `plan` action `status` values are portable intent, not prose. `create`,
+  `update`, and `unchanged` are non-findings; `conflict` and `missing-source`
+  are findings. `update` means dots has enough Installation Metadata and
+  Entry Ownership proof to safely mutate a previously managed target, creating a
+  Backup Set before writing, while preserving the conservative conflict model
+  for unmanaged or incompatible targets.
 - Dependency provider availability is an internal planning check, not a JSON
   contract field. `deps plan` and dependency install previews expose the stable
   outcome (`status`, selected `provider`, executable action, `manual` guidance)

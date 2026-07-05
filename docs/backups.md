@@ -1,6 +1,6 @@
 # `dots backups`
 
-`dots backups` inspects and restores the [Backup Sets](../CONTEXT.md) the Dotfiles CLI records under the state root (default `~/.local/state/dots/backups`). Every time `install` or `update` would overwrite an existing target — a `replace`, or an `adopt` with the symlink strategy — it first copies that target into a timestamped Backup Set and records [Backup Metadata](../CONTEXT.md) describing it. These commands read that history so preserved files can be audited and, in v1.1, returned to disk.
+`dots backups` inspects and restores the [Backup Sets](../CONTEXT.md) the Dotfiles CLI records under the state root (default `~/.local/state/dots/backups`). Every time `install` or `update` would overwrite an existing target — a `replace`, an `update`, or an `adopt` with the symlink strategy — it first copies that target into a timestamped Backup Set and records [Backup Metadata](../CONTEXT.md) describing it. These commands read that history so preserved files can be audited and, in v1.1, returned to disk.
 
 ## `dots backups list`
 

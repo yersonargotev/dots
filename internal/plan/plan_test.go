@@ -29,7 +29,7 @@ func buildOne(t *testing.T, sourceRoot, home string, e manifest.Entry) plan.Acti
 	return buildOneWithMetadata(t, sourceRoot, home, e, state.Metadata{})
 }
 
-func buildOneWithMetadata(t *testing.T, sourceRoot, home string, e manifest.Entry, meta state.Metadata) plan.Action {
+func buildOneWithMetadata(t *testing.T, sourceRoot, home string, e manifest.Entry, meta state.Metadata, extraTags ...string) plan.Action {
 	t.Helper()
 	m := manifest.Manifest{
 		Version:  1,
@@ -42,6 +42,7 @@ func buildOneWithMetadata(t *testing.T, sourceRoot, home string, e manifest.Entr
 		SourceRoot: sourceRoot,
 		Home:       home,
 		Metadata:   meta,
+		ExtraTags:  extraTags,
 	})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -373,6 +374,53 @@ func TestBuildCopyTOMLSubsetOwnership(t *testing.T) {
 				t.Fatalf("Status = %q, want %q", action.Status, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildReportsUpdateForTOMLSubsetSourceOverrideFromCompatibleManagedTarget(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "configs/codex/config.toml", "sandbox_mode = \"danger-full-access\"\napproval_policy = \"never\"\n")
+	writeSource(t, sourceRoot, "configs/codex/config-codegraph.toml", `sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "codegraph init"
+timeout = 120
+`)
+	target := filepath.Join(home, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte("model = \"gpt-5.5\"\nsandbox_mode = \"danger-full-access\"\napproval_policy = \"never\"\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	action := buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/codex/config.toml",
+		SourceOverrides: map[string]string{
+			"codegraph": "configs/codex/config-codegraph.toml",
+		},
+		Target:    "~/.codex/config.toml",
+		Strategy:  "copy",
+		Ownership: "toml-subset",
+		Tags:      []string{"core"},
+	}, state.Metadata{Entries: []state.Record{{
+		Target: target, Source: "configs/codex/config.toml", Strategy: "copy",
+	}}}, "codegraph")
+
+	if action.Status != plan.StatusUpdate {
+		t.Fatalf("Status = %q, want %q", action.Status, plan.StatusUpdate)
+	}
+	if action.Source != "configs/codex/config-codegraph.toml" {
+		t.Fatalf("Source = %q, want CodeGraph override", action.Source)
+	}
+	if action.Ownership != "toml-subset" {
+		t.Fatalf("Ownership = %q, want toml-subset", action.Ownership)
 	}
 }
 
