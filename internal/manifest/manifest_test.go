@@ -1042,6 +1042,43 @@ func TestRepositoryManifestIncludesMattPocockReviewSkillProvisioner(t *testing.T
 	}
 }
 
+func TestRepositoryManifestIncludesDelegationSkillProvisioner(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	var skills *manifest.Provisioner
+	for i := range got.Provisioners {
+		prov := &got.Provisioners[i]
+		if prov.Tool == "skills" && prov.Spec.Package == "yersonargotev/dots/skills/delegation" {
+			skills = prov
+		}
+	}
+
+	if skills == nil {
+		t.Fatal("repository manifest missing skills provisioner for yersonargotev/dots/skills/delegation")
+	}
+	if !hasString(skills.Tags, "agents") {
+		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
+	}
+	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
+	}
+	if !sameStrings(skills.Spec.Skills, []string{"delegation"}) {
+		t.Errorf("skills provisioner skills = %#v, want [delegation]", skills.Spec.Skills)
+	}
+	if !skills.Spec.Global || !skills.Spec.Copy {
+		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
+	}
+	if !hasDependency(skills.Dependencies, "npx") {
+		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
+	}
+}
+
 func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")

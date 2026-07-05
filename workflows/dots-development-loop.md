@@ -51,23 +51,12 @@ or record the closed-list skip reason `tool-level permission required`. This
 resolves the conflict between workflow-level authorization and tool-level
 permission gates without silently skipping delegation.
 
-Every non-trivial task in this workflow requires Delegation Preflight before
-implementation or review work proceeds:
-
-1. Confirm every relevant delegation capability is installed or available; for
-   Codex Spark this means `~/.codex/AGENTS.md` contains
-   `dots:codex-spark-delegation` and both native custom agents exist at
-   `~/.codex/agents/dots-explorer.toml` and
-   `~/.codex/agents/dots-worker.toml`, or the workflow records which overlay or
-   artifact is missing.
-2. Decide whether the task is non-trivial.
-3. Identify at least one safe explorer or worker slice that can run without
-   transferring requirements, decisions, external state, integration, or final
-   verification away from the main agent.
-4. If no subagent is used, choose exactly one closed-list skip reason:
-   `tiny/mechanical`, `no independent slice`, `real user configuration`,
-   `external state mutation`, `overlapping write scopes`, or
-   `tool-level permission required`.
+Every non-trivial task in this workflow requires loading the `delegation` skill
+when available and completing its Delegation Preflight before implementation or
+review work proceeds. For Codex Spark, the workflow must still confirm the
+`dots:codex-spark-delegation` overlay in `~/.codex/AGENTS.md` plus native custom agents at
+`~/.codex/agents/dots-explorer.toml` and
+`~/.codex/agents/dots-worker.toml`, or record the missing artifact.
 
 ## Operating rules
 
@@ -104,29 +93,9 @@ Goal: turn the change intention into a shared, implementable direction.
    docs, source, tests, or command output. Use CodeGraph for source architecture,
    symbols, call flow, and impact analysis; use targeted shell reads for docs,
    manifests, configs, and scripts.
-3. Make an explicit Delegation Decision. Delegate by default for any
-   non-trivial change, then opt out only when a listed exception applies.
-   - Good Spark slices: independent codebase exploration, impact scans,
-     test/log triage, or implementation over disjoint files/modules.
-   - Expected default: for non-trivial work, launch at least one bounded
-     explorer unless every candidate slice is excluded by the opt-out list below.
-   - Allowed skip reasons are only: `tiny/mechanical`, `no independent slice`,
-     `real user configuration`, `external state mutation`,
-     `overlapping write scopes`, or `tool-level permission required`.
-   - Skill-owned subagents are allowed when the selected skill requires them.
-     The skill output is still evidence for the main agent to inspect; it never
-     transfers requirements, integration, or final verification ownership.
-   - Choose the model/tier for the delegated job, not a single default for every
-     subagent. Spark is preferred for bounded exploration, test/log triage, and
-     separable implementation work; review, architecture, security, or other
-     judgment-heavy slices use the strongest appropriate available model, or
-     the model that the selected skill explicitly requires.
-   - Spark may return findings, briefs, or local changes only. It must not open
-     or edit issues, labels, comments, PRs, merges, releases, or any other
-     external project state.
-   - Report the Delegation Decision even when no subagent was used: delegated
-     slice, agent surface, model/tier, accepted/rejected findings or changes,
-     main-agent verification, and closed-list skip reason when skipped.
+3. Make an explicit Delegation Decision using the `delegation` skill: run its
+   preflight, delegate a safe slice when available, and report the decision using
+   the skill checklist even when no subagent was used.
 4. When the direction is aligned, present an Alignment Brief and wait for the
    user to approve moving to triage.
 
@@ -136,9 +105,7 @@ Alignment Brief format:
 - Decisions made and doubts closed.
 - Links to ADRs, docs, issues, or notes created or changed.
 - Risks or open constraints that implementation must respect.
-- Delegation Decision: delegated slice; agent surface; model/tier;
-  accepted/rejected findings or changes; main-agent verification; and, if no
-  subagent was used, the closed-list skip reason.
+- Delegation Decision, using the `delegation` skill report format.
 - Decision requested: approve moving to triage.
 
 ## Phase 2: Triage
