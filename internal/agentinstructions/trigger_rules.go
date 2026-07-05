@@ -47,7 +47,7 @@ Run Delegation Preflight before non-trivial work:
 1. Confirm whether the active instructions include every surface-specific delegation overlay and native artifact needed by the task. For Codex Spark, check both the dots:codex-spark-delegation overlay and the native dots-explorer.toml / dots-worker.toml custom agents.
 2. Decide whether the task is non-trivial.
 3. Identify at least one safe explorer or worker slice, or choose one closed-list skip reason.
-4. If a workflow authorizes delegation but the current tool requires explicit permission, ask once at the start or record tool-level permission required.
+4. If the current user request, workflow, or selected skill asks for delegation but the active tool still requires additional explicit permission, ask once at the start or record tool-level permission required.
 
 Closed-list skip reasons: tiny/mechanical, no independent slice, real user configuration, external state mutation, overlapping write scopes, or tool-level permission required.
 
@@ -69,7 +69,7 @@ Follow the portable delegation policy in the dots:rules block. This Codex-only o
 | Implementation can be split into disjoint files/modules | Spawn a Codex worker on gpt-5.3-codex-spark, assign ownership, and require a changed-file list. |
 | Review, architecture, security, or other high-judgment work is delegated by a selected skill | Use the strongest appropriate available model, or the model that the skill explicitly requires; do not force Spark for judgment-heavy review. |
 
-Starting the dots-development-loop workflow counts as repo-level authorization to delegate safe slices under the portable policy. If the active Codex tool still requires explicit user permission before spawning subagents, ask once at workflow start or record tool-level permission required as the skip reason.
+Installing or selecting the codex-spark-delegation tag is explicit standing user authorization to spawn safe, bounded Codex subagents under the portable policy across repositories; do not limit that authorization to any single repository or workflow. When the active user request, workflow, or selected skill asks for subagents, parallel agents, or delegation, treat that as the direct Codex ask to use the dots explorer/worker agents for suitable slices. If the active Codex tool still requires additional prompt-level permission before spawning subagents, ask once at the start or record tool-level permission required as the skip reason.
 
 For write-heavy work, define non-overlapping ownership and remind workers not to revert others' edits. After results return, inspect/integrate the changes yourself, run the relevant verification, close finished agents, and summarize delegated work, model choice, accepted/rejected findings or changes, main-agent verification, plus any explicit skip reasons.`
 
