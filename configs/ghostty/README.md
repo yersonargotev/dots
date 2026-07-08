@@ -29,7 +29,7 @@ The live `~/.config/ghostty/config` file was classified before adoption:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| **Portable** | font family, font size, Catppuccin Mocha fallback theme, optional `adaptive-theme` native light/dark include, intentional keybindings for terminal workflow and Zellij/tmux forwarding | Managed in `configs/ghostty/config.ghostty`. |
+| **Portable** | font family, font size, Catppuccin Mocha fallback theme, optional `adaptive-theme` native light/dark include, intentional keybindings for terminal workflow and Zellij/tmux/Herdr forwarding | Managed in `configs/ghostty/config.ghostty`. |
 | **Machine-specific** | window dimensions, opacity/blur, window padding ergonomics, explicit shell/command paths, initial working directories, OS integrations, display/GPU/host-dependent behavior | Excluded from the shared file; document deliberate host-specific exceptions in `configs/ghostty/config.local.ghostty.example`. |
 | **Generated** | logs, caches, sessions, backups, temporary files, generated state, local shaders | Never committed. |
 | **Private** | secrets, authenticated state, private paths, hostnames, machine IDs | Excluded. |
