@@ -1,0 +1,75 @@
+{
+  "schema_version": "5",
+  "command": "installed",
+  "status": "ok",
+  "data": {
+    "metadata": {
+      "path": "/home/user/.local/state/dots/installed.json",
+      "version": 2
+    },
+    "provenance": {
+      "source_root": "/src/dots",
+      "source_revision": "abc123",
+      "dots_version": "v0.test",
+      "recorded_at": "2026-07-08T12:00:00Z"
+    },
+    "managed_entries": [
+      {
+        "source": "configs/zsh/zshrc",
+        "target": "/home/user/.zshrc",
+        "strategy": "symlink",
+        "installed_at": "2026-07-08T12:00:00Z",
+        "tags": [
+          "core"
+        ],
+        "tags_source": "recorded",
+        "profiles": [
+          "core"
+        ],
+        "profiles_source": "recorded",
+        "manifest_matched": true
+      }
+    ],
+    "tags": [
+      "core"
+    ],
+    "profiles": [
+      {
+        "name": "core",
+        "source": "recorded+inferred",
+        "state": "complete",
+        "covered_tags": [
+          "core"
+        ],
+        "covered_entries": 1,
+        "total_entries": 1,
+        "recorded_provisioners": 0,
+        "provisioned_provisioners": 0,
+        "total_provisioners": 0
+      }
+    ],
+    "provisioners": [
+      {
+        "tool": "gentle-ai",
+        "executable": "gentle-ai",
+        "args": [
+          "install",
+          "--scope",
+          "global"
+        ],
+        "status": "provisioned",
+        "last_run_at": "2026-07-08T12:00:00Z",
+        "profile": "core",
+        "profiles": [
+          "core"
+        ],
+        "profiles_source": "recorded",
+        "tags": [
+          "core"
+        ],
+        "tags_source": "recorded",
+        "manifest_matched": true
+      }
+    ]
+  }
+}

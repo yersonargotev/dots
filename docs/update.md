@@ -112,6 +112,12 @@ provisioners:
       components: [engram, context7, permissions]
 ```
 
+After installs or updates, use `dots installed` to inspect the read-only
+Installation Metadata inventory: recorded Managed Entries, represented Tags,
+recorded or inferred Profiles, Provisioner runs, and captured Source of Truth
+provenance when available. The command is useful when you need to answer what is
+currently installed without manually reading `~/.local/state/dots/installed.json`.
+
 To keep that requirement discoverable, both `install` and `update` print a one-line hint when the active profile skips provisioners another profile would select on this OS:
 
 ```

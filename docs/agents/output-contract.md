@@ -13,6 +13,7 @@ default, so human output and Golden Output Tests are unchanged.
 
 ```bash
 dots status --output json
+dots installed --output json
 dots doctor --output json
 dots plan   --output json
 dots deps check --output json
@@ -47,7 +48,7 @@ state.
 | Field            | Meaning                                                              |
 |------------------|---------------------------------------------------------------------|
 | `schema_version` | Envelope version, bumped independently of the CLI binary.           |
-| `command`        | The command that ran (`status`, `plan`, `doctor`, `deps check`).    |
+| `command`        | The command that ran (`status`, `installed`, `plan`, `doctor`, `deps check`). |
 | `status`         | Outcome discriminator: `ok` \| `findings` \| `error`.               |
 | `data`           | The command's domain report (present on `ok` / `findings`; selected action-command errors may include a partial report). |
 | `error`          | Structured error string (present only on `status: "error"`).        |
@@ -104,6 +105,13 @@ prose the text surface prints:
   `data.provisioners.items`. Pending or failed Provisioners are findings so
   agents can distinguish aligned Managed Entries from an incomplete full-profile
   setup. Read dependency readiness for those commands from `doctor`.
+
+- `installed` is a read-only inventory over Installation Metadata. It reports
+  recorded Managed Entries, represented Tags, recorded or inferred Profiles
+  (including partial coverage), recorded Provisioner runs, and Source of Truth
+  provenance when the metadata contains it. It is informational rather than an
+  alignment diagnostic, so partial profile coverage remains `status: "ok"`;
+  use `status` or `doctor` when an agent needs drift/dependency findings.
 - `plan`'s `resolved_source` (a per-machine absolute path) and `deps`'s
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the

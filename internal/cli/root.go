@@ -59,6 +59,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newUpdateCommand())
 	root.AddCommand(newUpgradeCommand())
 	root.AddCommand(newStatusCommand())
+	root.AddCommand(newInstalledCommand())
 	root.AddCommand(newBackupsCommand())
 	root.AddCommand(newDepsCommand())
 	root.AddCommand(newDoctorCommand())
