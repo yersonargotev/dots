@@ -3598,15 +3598,27 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 
 	defaultText := string(defaultConfig)
 	for _, want := range []string{
-		`previous_workspace = "cmd+k"`,
-		`next_workspace = "cmd+j"`,
+		`previous_workspace = "ctrl+alt+shift+k"`,
+		`next_workspace = "ctrl+alt+shift+j"`,
+		`previous_tab = ["prefix+p", "ctrl+alt+["]`,
+		`next_tab = ["prefix+n", "ctrl+alt+]"]`,
+		`focus_pane_left = ["prefix+h", "ctrl+alt+h"]`,
+		`focus_pane_down = ["prefix+j", "ctrl+alt+j"]`,
+		`focus_pane_up = ["prefix+k", "ctrl+alt+k"]`,
+		`focus_pane_right = ["prefix+l", "ctrl+alt+l"]`,
 	} {
 		if !strings.Contains(defaultText, want) {
 			t.Fatalf("default Herdr config missing workspace shortcut %q:\n%s", want, defaultText)
 		}
 	}
+	if strings.Contains(defaultText, `cmd+`) {
+		t.Fatalf("default Herdr config contains unreliable Command shortcut:\n%s", defaultText)
+	}
 
 	adaptiveText := string(adaptiveConfig)
+	if strings.Contains(adaptiveText, `cmd+`) {
+		t.Fatalf("adaptive Herdr config contains unreliable Command shortcut:\n%s", adaptiveText)
+	}
 	if got, want := herdrConfigWithoutTheme(t, adaptiveText), herdrConfigWithoutTheme(t, defaultText); got != want {
 		t.Fatalf("adaptive Herdr config non-theme sections drifted from default; got:\n%s\nwant:\n%s", got, want)
 	}
@@ -3632,7 +3644,7 @@ func herdrConfigWithoutTheme(t *testing.T, config string) string {
 	return body[:themeStart] + body[themeEnd:]
 }
 
-func TestRepositoryGhosttyConfigForwardsHerdrWorkspaceShortcuts(t *testing.T) {
+func TestRepositoryGhosttyConfigDoesNotForwardObsoleteHerdrCommandShortcuts(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	configPath := filepath.Join(root, "configs/ghostty/config.ghostty")
 
@@ -3642,16 +3654,9 @@ func TestRepositoryGhosttyConfigForwardsHerdrWorkspaceShortcuts(t *testing.T) {
 	}
 	config := string(configBytes)
 
-	for _, want := range []string{
+	for _, notWant := range []string{
 		`keybind = cmd+j=unbind`,
 		`keybind = cmd+k=unbind`,
-	} {
-		if !strings.Contains(config, want) {
-			t.Fatalf("Ghostty config missing Herdr workspace passthrough %q:\n%s", want, config)
-		}
-	}
-
-	for _, notWant := range []string{
 		`keybind = cmd+j=scroll_to_selection`,
 		`keybind = cmd+k=clear_screen`,
 		`keybind = super+j=scroll_to_selection`,

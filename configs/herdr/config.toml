@@ -46,23 +46,23 @@ goto = "prefix+g"
 new_workspace = "prefix+shift+n"
 rename_workspace = "prefix+shift+w"
 close_workspace = "prefix+alt+d"
-previous_workspace = "cmd+k"
-next_workspace = "cmd+j"
+previous_workspace = "ctrl+alt+shift+k"
+next_workspace = "ctrl+alt+shift+j"
 toggle_sidebar = "prefix+b"
 
 # Tabs: prefix-first tmux-like core plus explicit direct tab navigation.
 new_tab = "prefix+c"
 rename_tab = ["prefix+shift+t", "prefix+comma"]
-previous_tab = ["prefix+p", "ctrl+alt+[", "cmd+h"]
-next_tab = ["prefix+n", "ctrl+alt+]", "cmd+l"]
+previous_tab = ["prefix+p", "ctrl+alt+["]
+next_tab = ["prefix+n", "ctrl+alt+]"]
 switch_tab = "prefix+1..9"
 close_tab = "prefix+shift+x"
 
 # Panes: mirror dots tmux/Zellij intent and add direct pane focus chords.
-focus_pane_left = ["prefix+h", "ctrl+alt+h", "cmd+shift+h"]
-focus_pane_down = ["prefix+j", "ctrl+alt+j", "cmd+shift+j"]
-focus_pane_up = ["prefix+k", "ctrl+alt+k", "cmd+shift+k"]
-focus_pane_right = ["prefix+l", "ctrl+alt+l", "cmd+shift+l"]
+focus_pane_left = ["prefix+h", "ctrl+alt+h"]
+focus_pane_down = ["prefix+j", "ctrl+alt+j"]
+focus_pane_up = ["prefix+k", "ctrl+alt+k"]
+focus_pane_right = ["prefix+l", "ctrl+alt+l"]
 swap_pane_left = "prefix+shift+h"
 swap_pane_down = "prefix+shift+j"
 swap_pane_up = "prefix+shift+k"
