@@ -28,5 +28,7 @@ keybind = super+shift+h=esc:H
 keybind = super+shift+j=esc:J
 keybind = super+shift+k=esc:K
 keybind = super+shift+l=esc:L
-keybind = cmd+k=clear_screen
+# Let terminal multiplexers such as Herdr receive direct workspace navigation.
+keybind = cmd+j=unbind
+keybind = cmd+k=unbind
 keybind = alt+s=write_screen_file:paste

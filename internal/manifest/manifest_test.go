@@ -3597,6 +3597,15 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 	}
 
 	defaultText := string(defaultConfig)
+	for _, want := range []string{
+		`previous_workspace = "cmd+k"`,
+		`next_workspace = "cmd+j"`,
+	} {
+		if !strings.Contains(defaultText, want) {
+			t.Fatalf("default Herdr config missing workspace shortcut %q:\n%s", want, defaultText)
+		}
+	}
+
 	adaptiveText := string(adaptiveConfig)
 	if got, want := herdrConfigWithoutTheme(t, adaptiveText), herdrConfigWithoutTheme(t, defaultText); got != want {
 		t.Fatalf("adaptive Herdr config non-theme sections drifted from default; got:\n%s\nwant:\n%s", got, want)
@@ -3621,6 +3630,37 @@ func herdrConfigWithoutTheme(t *testing.T, config string) string {
 	}
 	themeEnd := themeStart + len("[theme]") + nextSection + 1
 	return body[:themeStart] + body[themeEnd:]
+}
+
+func TestRepositoryGhosttyConfigForwardsHerdrWorkspaceShortcuts(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	configPath := filepath.Join(root, "configs/ghostty/config.ghostty")
+
+	configBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read Ghostty config: %v", err)
+	}
+	config := string(configBytes)
+
+	for _, want := range []string{
+		`keybind = cmd+j=unbind`,
+		`keybind = cmd+k=unbind`,
+	} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("Ghostty config missing Herdr workspace passthrough %q:\n%s", want, config)
+		}
+	}
+
+	for _, notWant := range []string{
+		`keybind = cmd+j=scroll_to_selection`,
+		`keybind = cmd+k=clear_screen`,
+		`keybind = super+j=scroll_to_selection`,
+		`keybind = super+k=clear_screen`,
+	} {
+		if strings.Contains(config, notWant) {
+			t.Fatalf("Ghostty config consumes Herdr workspace shortcut %q:\n%s", notWant, config)
+		}
+	}
 }
 
 func TestAgentStatuslinePalettesUseAdaptiveHelper(t *testing.T) {

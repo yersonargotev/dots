@@ -46,6 +46,8 @@ goto = "prefix+g"
 new_workspace = "prefix+shift+n"
 rename_workspace = "prefix+shift+w"
 close_workspace = "prefix+alt+d"
+previous_workspace = "cmd+k"
+next_workspace = "cmd+j"
 toggle_sidebar = "prefix+b"
 
 # Tabs: prefix-first tmux-like core plus explicit direct tab navigation.
