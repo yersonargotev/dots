@@ -10,6 +10,7 @@ import (
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/version"
 )
 
 // ConflictDecision describes the explicit per-target action selected for a
@@ -89,7 +90,8 @@ func recordMetadata(p plan.Plan, resolvedSources []string, opts Options) error {
 	if err != nil {
 		return err
 	}
-	meta.Version = 1
+	meta.Version = 2
+	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	for i, action := range p.Actions {
@@ -110,6 +112,8 @@ func recordMetadata(p plan.Plan, resolvedSources []string, opts Options) error {
 			Strategy:    action.Strategy,
 			Hash:        hash,
 			InstalledAt: now,
+			Profiles:    append([]string(nil), p.Profiles...),
+			Tags:        append([]string(nil), p.Tags...),
 		})
 	}
 
