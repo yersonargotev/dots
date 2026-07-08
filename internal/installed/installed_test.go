@@ -90,6 +90,26 @@ func TestBuildUsesRecordedProfilesAndTags(t *testing.T) {
 	}
 }
 
+func TestBuildReturnsEmptyListsForEmptyMetadata(t *testing.T) {
+	home := t.TempDir()
+	report, err := inst.Build(inventoryManifest(), state.Metadata{}, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if report.ManagedEntries == nil {
+		t.Fatal("ManagedEntries = nil, want empty list for stable JSON output")
+	}
+	if report.Tags == nil {
+		t.Fatal("Tags = nil, want empty list for stable JSON output")
+	}
+	if report.Profiles == nil {
+		t.Fatal("Profiles = nil, want empty list for stable JSON output")
+	}
+	if report.Provisioners == nil {
+		t.Fatal("Provisioners = nil, want empty list for stable JSON output")
+	}
+}
+
 func inventoryManifest() manifest.Manifest {
 	return manifest.Manifest{
 		Profiles: map[string]manifest.Profile{

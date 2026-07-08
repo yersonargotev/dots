@@ -98,8 +98,12 @@ type Options struct {
 // represented Tags and Profile coverage without touching managed targets.
 func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, error) {
 	report := Report{
-		Metadata:   MetadataSummary{Path: opts.StatePath, Version: meta.Version},
-		Provenance: meta.Provenance,
+		Metadata:       MetadataSummary{Path: opts.StatePath, Version: meta.Version},
+		Provenance:     meta.Provenance,
+		ManagedEntries: []ManagedEntry{},
+		Tags:           []string{},
+		Profiles:       []ProfileCoverage{},
+		Provisioners:   []ProvisionerRun{},
 	}
 
 	matchedEntryKeys := map[string]bool{}
@@ -285,7 +289,7 @@ func profileCoverage(m manifest.Manifest, opts Options, representedTags map[stri
 	}
 	sort.Strings(profileNames)
 
-	var out []ProfileCoverage
+	out := []ProfileCoverage{}
 	for _, name := range profileNames {
 		profile := m.Profiles[name]
 		coveredTags, missingTags := splitTags(profile.Tags, representedTags)
@@ -416,7 +420,9 @@ func (s *orderedSet) add(value string) {
 }
 
 func (s orderedSet) values() []string {
-	return append([]string(nil), s.order...)
+	out := make([]string, len(s.order))
+	copy(out, s.order)
+	return out
 }
 
 func (s orderedSet) set() map[string]bool {
