@@ -79,3 +79,8 @@ dots upgrade \
 
 Use temporary `--home`, `--source-root`, and `--state-root` values when testing
 upgrade behavior so real workstation configuration is never modified.
+
+After an upgrade, `dots installed` provides the official read-only inventory for
+what Installation Metadata currently records, including Profile/Tag coverage,
+Provisioner runs, and Source of Truth provenance captured by recent installs or
+updates.

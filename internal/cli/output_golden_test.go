@@ -8,8 +8,10 @@ import (
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/deps/pkgmgr"
 	"github.com/yersonargotev/dots/internal/doctor"
+	inst "github.com/yersonargotev/dots/internal/installed"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 )
 
@@ -52,6 +54,23 @@ func TestEnvelopeGolden(t *testing.T) {
 				},
 			},
 			golden: "envelope_status.golden",
+		},
+		{
+			name: "installed",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "installed",
+				Status:        statusOK,
+				Data: inst.Report{
+					Metadata:       inst.MetadataSummary{Path: "/home/user/.local/state/dots/installed.json", Version: 2},
+					Provenance:     state.Provenance{SourceRoot: "/src/dots", SourceRevision: "abc123", DotsVersion: "v0.test", RecordedAt: "2026-07-08T12:00:00Z"},
+					ManagedEntries: []inst.ManagedEntry{{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", InstalledAt: "2026-07-08T12:00:00Z", Tags: []string{"core"}, TagsSource: "recorded", Profiles: []string{"core"}, ProfilesSource: "recorded", ManifestMatched: true}},
+					Tags:           []string{"core"},
+					Profiles:       []inst.ProfileCoverage{{Name: "core", Source: "recorded+inferred", State: inst.CoverageComplete, CoveredTags: []string{"core"}, CoveredEntries: 1, TotalEntries: 1}},
+					Provisioners:   []inst.ProvisionerRun{{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global"}, Status: "provisioned", LastRunAt: "2026-07-08T12:00:00Z", Profile: "core", Profiles: []string{"core"}, ProfilesSource: "recorded", Tags: []string{"core"}, TagsSource: "recorded", ManifestMatched: true}},
+				},
+			},
+			golden: "envelope_installed.golden",
 		},
 		{
 			name: "plan",
