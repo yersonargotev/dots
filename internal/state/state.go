@@ -11,31 +11,52 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 // Metadata is the machine-readable record of installed managed targets.
 type Metadata struct {
 	Version      int                 `json:"version"`
+	Provenance   Provenance          `json:"provenance,omitempty"`
 	Entries      []Record            `json:"entries"`
 	Provisioners []ProvisionerRecord `json:"provisioners,omitempty"`
+}
+
+// Provenance records the Source of Truth and dots binary that last updated the
+// Installation Metadata. Fields are optional so older metadata remains valid.
+type Provenance struct {
+	SourceRoot     string `json:"source_root,omitempty"`
+	SourceRevision string `json:"source_revision,omitempty"`
+	DotsVersion    string `json:"dots_version,omitempty"`
+	RecordedAt     string `json:"recorded_at,omitempty"`
+}
+
+func (p Provenance) Empty() bool {
+	return p.SourceRoot == "" && p.SourceRevision == "" && p.DotsVersion == "" && p.RecordedAt == ""
 }
 
 // Record describes a single managed target the CLI installed. Copy-like
 // strategies may record a source content hash; symlink records leave Hash empty
 // because drift is detected from the link destination.
 type Record struct {
-	Target      string `json:"target"`
-	Source      string `json:"source"`
-	Strategy    string `json:"strategy"`
-	Hash        string `json:"hash"`
-	InstalledAt string `json:"installedAt"`
+	Target      string   `json:"target"`
+	Source      string   `json:"source"`
+	Strategy    string   `json:"strategy"`
+	Hash        string   `json:"hash"`
+	InstalledAt string   `json:"installedAt"`
+	Profiles    []string `json:"profiles,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
 // ProvisionerRecord describes the last known result for one selected
 // Provisioner command in a profile.
 type ProvisionerRecord struct {
 	Profile    string   `json:"profile"`
+	Profiles   []string `json:"profiles,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
 	Tool       string   `json:"tool"`
 	Executable string   `json:"executable"`
 	Args       []string `json:"args"`
@@ -47,6 +68,22 @@ type ProvisionerRecord struct {
 // Path returns the location of installed.json under a state root.
 func Path(stateRoot string) string {
 	return filepath.Join(stateRoot, "installed.json")
+}
+
+// CaptureProvenance best-effort captures the current Source of Truth revision
+// and dots binary version without failing the install path when Git metadata is
+// unavailable.
+func CaptureProvenance(sourceRoot, dotsVersion string) Provenance {
+	prov := Provenance{SourceRoot: sourceRoot, DotsVersion: dotsVersion, RecordedAt: time.Now().UTC().Format(time.RFC3339)}
+	if abs, err := filepath.Abs(sourceRoot); err == nil {
+		prov.SourceRoot = filepath.Clean(abs)
+	}
+	cmd := exec.Command("git", "-C", sourceRoot, "rev-parse", "--short", "HEAD")
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := cmd.Output(); err == nil {
+		prov.SourceRevision = strings.TrimSpace(string(out))
+	}
+	return prov
 }
 
 // Load reads Installation Metadata from path. A missing file is not an error:
@@ -138,7 +175,7 @@ func (m Metadata) Remove(targets ...string) Metadata {
 		drop[t] = struct{}{}
 	}
 
-	pruned := Metadata{Version: m.Version}
+	pruned := Metadata{Version: m.Version, Provenance: m.Provenance, Provisioners: append([]ProvisionerRecord(nil), m.Provisioners...)}
 	for _, r := range m.Entries {
 		if _, ok := drop[r.Target]; ok {
 			continue

@@ -3,6 +3,7 @@ package state_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -26,13 +27,26 @@ func TestSaveThenLoadRoundTripsRecords(t *testing.T) {
 	path := state.Path(stateRoot)
 
 	want := state.Metadata{
-		Version: 1,
+		Version:    2,
+		Provenance: state.Provenance{SourceRoot: "/src/dots", SourceRevision: "abc123", DotsVersion: "v0.test", RecordedAt: "2026-06-06T00:00:00Z"},
 		Entries: []state.Record{{
 			Target:      "/home/user/.zshrc",
 			Source:      "configs/zsh/zshrc",
 			Strategy:    "symlink",
 			Hash:        "abc123",
 			InstalledAt: "2026-06-06T00:00:00Z",
+			Profiles:    []string{"core"},
+			Tags:        []string{"core"},
+		}},
+		Provisioners: []state.ProvisionerRecord{{
+			Profile:    "core",
+			Profiles:   []string{"core"},
+			Tags:       []string{"core"},
+			Tool:       "gentle-ai",
+			Executable: "gentle-ai",
+			Args:       []string{"install"},
+			Status:     "provisioned",
+			LastRunAt:  "2026-06-06T00:00:00Z",
 		}},
 	}
 
@@ -47,8 +61,8 @@ func TestSaveThenLoadRoundTripsRecords(t *testing.T) {
 	if len(got.Entries) != 1 {
 		t.Fatalf("Load() entries = %d, want 1", len(got.Entries))
 	}
-	if got.Entries[0] != want.Entries[0] {
-		t.Fatalf("Load() record = %+v, want %+v", got.Entries[0], want.Entries[0])
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Load() metadata = %+v, want %+v", got, want)
 	}
 }
 

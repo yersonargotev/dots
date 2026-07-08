@@ -246,7 +246,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			provResult, err := runProvisioners(cmd, *m, profiles, extraTags, paths.Home, paths.StateRoot)
+			provResult, err := runProvisioners(cmd, *m, profiles, extraTags, paths.Home, paths.StateRoot, paths.SourceRoot)
 			if err != nil {
 				if wantsJSON(cmd) {
 					return installProvisionerError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
@@ -430,7 +430,7 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 // temporary home. Apply stops at the first failing provisioner and returns the
 // error, which the caller surfaces; the tool's own stdout/stderr are streamed
 // through so its progress is visible.
-func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string, extraTags []string, home string, stateRoot string) (provision.Report, error) {
+func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string, extraTags []string, home string, stateRoot string, sourceRoot string) (provision.Report, error) {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -455,7 +455,7 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string,
 	if !wantsJSON(cmd) {
 		renderProvisionReport(cmd.OutOrStdout(), report)
 	}
-	if recordErr := recordProvisionerMetadata(stateRoot, report); recordErr != nil {
+	if recordErr := recordProvisionerMetadata(stateRoot, sourceRoot, report); recordErr != nil {
 		return report, recordErr
 	}
 	if gentleAIProvisionerRan(report) {
@@ -746,7 +746,7 @@ func writeFileForPromptDiff(w interface{ Write([]byte) (int, error) }, path, lab
 	_, _ = w.Write(data)
 }
 
-func recordProvisionerMetadata(stateRoot string, report provision.Report) error {
+func recordProvisionerMetadata(stateRoot, sourceRoot string, report provision.Report) error {
 	if stateRoot == "" || len(report.Items) == 0 {
 		return nil
 	}
@@ -755,13 +755,14 @@ func recordProvisionerMetadata(stateRoot string, report provision.Report) error 
 	if err != nil {
 		return err
 	}
-	if meta.Version == 0 {
-		meta.Version = 1
-	}
+	meta.Version = 2
+	meta.Provenance = state.CaptureProvenance(sourceRoot, version.Value)
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, item := range report.Items {
 		meta.UpsertProvisioner(state.ProvisionerRecord{
 			Profile:    report.Profile,
+			Profiles:   append([]string(nil), report.Profiles...),
+			Tags:       append([]string(nil), report.Tags...),
 			Tool:       item.Tool,
 			Executable: item.Executable,
 			Args:       append([]string(nil), item.Args...),
