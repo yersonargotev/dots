@@ -46,8 +46,12 @@ goto = "prefix+g"
 new_workspace = "prefix+shift+n"
 rename_workspace = "prefix+shift+w"
 close_workspace = "prefix+alt+d"
-previous_workspace = "ctrl+alt+shift+k"
-next_workspace = "ctrl+alt+shift+j"
+# Keep workspace cycling behind prefix: many terminals collapse Ctrl+Alt+Shift+j/k
+# to Ctrl+Alt+j/k, which conflicts with the direct pane-focus bindings below.
+previous_workspace = "prefix+alt+k"
+next_workspace = "prefix+alt+j"
+previous_agent = "prefix+alt+h"
+next_agent = "prefix+alt+l"
 toggle_sidebar = "prefix+b"
 
 # Tabs: prefix-first tmux-like core plus explicit direct tab navigation.

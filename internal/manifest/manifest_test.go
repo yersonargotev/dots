@@ -3598,8 +3598,10 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 
 	defaultText := string(defaultConfig)
 	for _, want := range []string{
-		`previous_workspace = "ctrl+alt+shift+k"`,
-		`next_workspace = "ctrl+alt+shift+j"`,
+		`previous_workspace = "prefix+alt+k"`,
+		`next_workspace = "prefix+alt+j"`,
+		`previous_agent = "prefix+alt+h"`,
+		`next_agent = "prefix+alt+l"`,
 		`previous_tab = ["prefix+p", "ctrl+alt+["]`,
 		`next_tab = ["prefix+n", "ctrl+alt+]"]`,
 		`focus_pane_left = ["prefix+h", "ctrl+alt+h"]`,
