@@ -24,6 +24,7 @@ light_name = "catppuccin-latte"
 [ui]
 confirm_close = true
 prompt_new_tab_name = true
+mouse_capture = true
 pane_borders = true
 pane_gaps = true
 

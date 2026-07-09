@@ -3602,6 +3602,7 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 		`next_workspace = "prefix+alt+j"`,
 		`previous_agent = "prefix+alt+h"`,
 		`next_agent = "prefix+alt+l"`,
+		`mouse_capture = true`,
 		`previous_tab = ["prefix+p", "ctrl+alt+["]`,
 		`next_tab = ["prefix+n", "ctrl+alt+]"]`,
 		`focus_pane_left = ["prefix+h", "ctrl+alt+h"]`,
