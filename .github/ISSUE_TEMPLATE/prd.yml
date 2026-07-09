@@ -1,7 +1,6 @@
 name: PRD / agent-ready work
 description: Define product requirements for implementation by an agent or contributor.
 title: "feat: "
-labels: ["needs-triage"]
 body:
   - type: checkboxes
     id: preflight

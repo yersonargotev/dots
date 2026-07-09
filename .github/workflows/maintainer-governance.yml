@@ -1,0 +1,133 @@
+name: Maintainer governance
+
+on:
+  issues:
+    types:
+      - labeled
+  pull_request_target:
+    types:
+      - labeled
+      - closed
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: maintainer-governance-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  enforce:
+    name: Restrict triage controls
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce maintainer-only labels and PR closing
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const actor = context.actor;
+
+            async function actorCanGovern() {
+              try {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner,
+                  repo,
+                  username: actor,
+                });
+
+                const roleName = String(data.role_name || '').toLowerCase();
+                const permissions = data.user?.permissions || {};
+
+                return roleName === 'admin' ||
+                  roleName === 'maintain' ||
+                  permissions.admin === true ||
+                  permissions.maintain === true;
+              } catch (error) {
+                if (error.status === 404) {
+                  return false;
+                }
+                throw error;
+              }
+            }
+
+            async function comment(issue_number, body) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+            const allowed = await actorCanGovern();
+            if (allowed) {
+              core.info(`${actor} is allowed to manage labels and pull request state.`);
+              return;
+            }
+
+            if (context.eventName === 'issues' && context.payload.action === 'labeled') {
+              const issue = context.payload.issue;
+              const label = context.payload.label?.name;
+
+              if (!label) {
+                core.warning('Issue labeled event did not include a label name.');
+                return;
+              }
+
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: issue.number,
+                name: label,
+              });
+              await comment(
+                issue.number,
+                `Removed label \`${label}\` because only maintainers and admins can label issues in this repository.`
+              );
+              return;
+            }
+
+            if (context.eventName === 'pull_request_target' && context.payload.action === 'labeled') {
+              const pull = context.payload.pull_request;
+              const label = context.payload.label?.name;
+
+              if (!label) {
+                core.warning('Pull request labeled event did not include a label name.');
+                return;
+              }
+
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: pull.number,
+                name: label,
+              });
+              await comment(
+                pull.number,
+                `Removed label \`${label}\` because only maintainers and admins can label pull requests in this repository.`
+              );
+              return;
+            }
+
+            if (context.eventName === 'pull_request_target' && context.payload.action === 'closed') {
+              const pull = context.payload.pull_request;
+
+              if (pull.merged) {
+                core.info('Pull request was merged; merged pull requests cannot be reopened.');
+                return;
+              }
+
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: pull.number,
+                state: 'open',
+              });
+              await comment(
+                pull.number,
+                'Reopened this pull request because only maintainers and admins can close pull requests in this repository.'
+              );
+            }
