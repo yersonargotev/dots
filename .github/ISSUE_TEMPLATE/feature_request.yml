@@ -1,7 +1,6 @@
 name: Feature request
 description: Propose an improvement or new capability.
 title: "feat: "
-labels: ["needs-triage", "enhancement"]
 body:
   - type: checkboxes
     id: preflight
