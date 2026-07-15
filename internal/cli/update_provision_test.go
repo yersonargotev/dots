@@ -127,7 +127,7 @@ func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *
 	if !strings.Contains(string(got), "<!-- dots:rules -->") {
 		t.Fatalf("update with gentle-ai provisioner did not write dots rules block\ncontent:\n%s\noutput:\n%s", got, out)
 	}
-	if strings.Contains(string(got), "<!-- dots:codex-spark-delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.3-codex-spark") {
+	if strings.Contains(string(got), "<!-- dots:delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.3-codex-spark") {
 		t.Fatalf("update without Codex Spark tag wrote delegation guidance\ncontent:\n%s\noutput:\n%s", got, out)
 	}
 	assertNoNativeCodexSparkAgents(t, sandboxHome, "update without Codex Spark tag")
@@ -136,7 +136,7 @@ func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *
 	}
 }
 
-func TestUpdateCodexSparkDelegationTagInstallsGuidance(t *testing.T) {
+func TestUpdateLegacyCodexSparkDelegationTagInstallsGenericGuidance(t *testing.T) {
 	requireGitCLI(t)
 	sandboxHome := t.TempDir()
 	stateRoot := t.TempDir()
@@ -161,7 +161,7 @@ func TestUpdateCodexSparkDelegationTagInstallsGuidance(t *testing.T) {
 		t.Fatalf("update with Codex Spark tag did not write Codex AGENTS.md: %v\noutput:\n%s", err, out)
 	}
 	content := string(got)
-	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:codex-spark-delegation -->", "gpt-5.3-codex-spark"} {
+	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:delegation -->", "gpt-5.3-codex-spark"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("update with Codex Spark tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out)
 		}
@@ -175,7 +175,7 @@ func TestUpdateCodexSparkDelegationTagInstallsGuidance(t *testing.T) {
 	}
 }
 
-func TestUpdateWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgents(t *testing.T) {
+func TestUpdateLegacyWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgents(t *testing.T) {
 	requireGitCLI(t)
 	sandboxHome := t.TempDir()
 	stateRoot := t.TempDir()
@@ -191,7 +191,7 @@ func TestUpdateWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgents(t *t
 	if err := os.MkdirAll(filepath.Dir(codexPath), 0o755); err != nil {
 		t.Fatalf("mkdir Codex dir: %v", err)
 	}
-	preexisting := "before\n\n<!-- dots:codex-spark-delegation -->\ncurrent\n<!-- /dots:codex-spark-delegation -->\n\n<!-- argote:subagent-delegation -->\nlegacy\n<!-- /argote:subagent-delegation -->\n\nafter\n"
+	preexisting := "before\n\n<!-- dots:delegation -->\ncurrent\n<!-- /dots:delegation -->\n\n<!-- argote:subagent-delegation -->\nlegacy\n<!-- /argote:subagent-delegation -->\n\nafter\n"
 	if err := os.WriteFile(codexPath, []byte(preexisting), 0o600); err != nil {
 		t.Fatalf("write preexisting Codex instructions: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestUpdateWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgents(t *t
 		t.Fatalf("read Codex instructions: %v", err)
 	}
 	content := string(got)
-	for _, not := range []string{"<!-- dots:codex-spark-delegation -->", "argote:subagent-delegation", "\ncurrent\n", "\nlegacy\n", "gpt-5.3-codex-spark"} {
+	for _, not := range []string{"<!-- dots:delegation -->", "argote:subagent-delegation", "\ncurrent\n", "\nlegacy\n", "gpt-5.3-codex-spark"} {
 		if strings.Contains(content, not) {
 			t.Fatalf("without Codex Spark tag kept %q\ncontent:\n%s\noutput:\n%s", not, content, out)
 		}

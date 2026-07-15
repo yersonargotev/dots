@@ -53,8 +53,8 @@ permission gates without silently skipping delegation.
 
 Every non-trivial task in this workflow requires loading the `delegation` skill
 when available and completing its Delegation Preflight before implementation or
-review work proceeds. For Codex Spark, the workflow must still confirm the
-`dots:codex-spark-delegation` overlay in `~/.codex/AGENTS.md` plus native custom agents at
+review work proceeds. For Codex, the workflow must still confirm the
+`dots:delegation` overlay in `~/.codex/AGENTS.md` plus native custom agents at
 `~/.codex/agents/dots-explorer.toml` and
 `~/.codex/agents/dots-worker.toml`, or record the missing artifact.
 
@@ -149,22 +149,24 @@ Goal: produce the smallest correct diff for the approved issue scope.
    - forbid reverting unrelated edits;
    - inspect, integrate, and verify the result in the main thread before any
      commit, PR, or external update.
-5. For changes to Codex Spark delegation guidance itself:
-   - keep the capability separately installable/removable through the
-     `codex-spark-delegation` tag rather than coupling it to the default
-     `agents` profile;
-   - use `without-codex-spark-delegation` as the declarative cleanup tag;
+5. For changes to Codex delegation guidance itself:
+   - keep the capability separately installable through the `codex-delegation`
+     profile rather than coupling it to the broader `agents` profile;
+   - use `without-codex-delegation` as the declarative cleanup tag;
    - install Codex-native custom agents at `~/.codex/agents/dots-explorer.toml`
      and `~/.codex/agents/dots-worker.toml` as dots-owned executable delegation
      artifacts, not only persuasive text;
    - remove the
-     `<!-- dots:codex-spark-delegation -->...<!-- /dots:codex-spark-delegation -->`
+     `<!-- dots:delegation -->...<!-- /dots:delegation -->`
      block and the two dots-owned native agent files during cleanup;
    - preserve `dots:rules`, Engram, CodeGraph, Codex config, user-owned custom
      agents, and the rest of the agent baseline;
-   - if both `codex-spark-delegation` and `without-codex-spark-delegation` are
+   - if both `codex-delegation` and `without-codex-delegation` are
      selected, `without-*` wins because explicit exclusion expresses the desired
      final state.
+   - preserve the legacy `codex-spark-delegation` and
+     `without-codex-spark-delegation` tags as compatibility aliases while
+     converging the old Spark-specific marker to the generic overlay.
 
 ## Phase 4: Review
 
