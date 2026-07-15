@@ -19,8 +19,10 @@ const (
 	gentleAIEngramEnd          = "<!-- /gentle-ai:engram-protocol -->"
 	dotsRulesStart             = "<!-- dots:rules -->"
 	dotsRulesEnd               = "<!-- /dots:rules -->"
-	codexDelegationStart       = "<!-- dots:codex-spark-delegation -->"
-	codexDelegationEnd         = "<!-- /dots:codex-spark-delegation -->"
+	codexDelegationStart       = "<!-- dots:delegation -->"
+	codexDelegationEnd         = "<!-- /dots:delegation -->"
+	legacyDotsDelegationStart  = "<!-- dots:codex-spark-delegation -->"
+	legacyDotsDelegationEnd    = "<!-- /dots:codex-spark-delegation -->"
 	legacyCodexDelegationStart = "<!-- argote:subagent-delegation -->"
 	legacyCodexDelegationEnd   = "<!-- /argote:subagent-delegation -->"
 	codexExplorerAgentFile     = "dots-explorer.toml"
@@ -42,7 +44,7 @@ const dotsRulesBlock = `## Dots Agent Rules
 
 For non-trivial work, load the delegation skill when available. Use it for Delegation Preflight, safe slice selection, skip reasons, and final reporting. Keep external project state in the main agent.`
 
-const codexDelegationBlock = `## Codex Spark delegation
+const codexDelegationBlock = `## Codex delegation
 
 Load the ` + "`delegation`" + ` skill when available, then map safe Codex slices to the dots-owned native agents:
 
@@ -52,7 +54,7 @@ Load the ` + "`delegation`" + ` skill when available, then map safe Codex slices
 | Separable implementation over disjoint files/modules | ` + "`dots-worker`" + ` on ` + "`gpt-5.3-codex-spark`" + ` |
 | Review, architecture, security, or other judgment-heavy work | Strongest appropriate available model; do not force Spark. |
 
-Selecting ` + "`codex-spark-delegation`" + ` is standing authorization for safe bounded Codex delegation across repositories when the active prompt, workflow, or selected skill asks for subagents, parallel agents, or delegation. If the active Codex tool still requires prompt-level permission, ask once or record ` + "`tool-level permission required`" + ` as the skip reason.`
+Selecting the ` + "`codex-delegation`" + ` profile is standing authorization for safe bounded Codex delegation across repositories when the active prompt, workflow, or selected skill asks for subagents, parallel agents, or delegation. If the active Codex tool still requires prompt-level permission, ask once or record ` + "`tool-level permission required`" + ` as the skip reason.`
 
 const codexExplorerAgent = `name = "dots-explorer"
 description = "Read-only dots explorer for bounded codebase exploration, impact scans, and test/log triage."
@@ -164,10 +166,10 @@ func SyncCopilotCLIEngramProtocol(home string) error {
 	return nil
 }
 
-// ConvergeCodexSparkDelegation injects the opt-in Codex Spark delegation
-// guidance into Codex instructions only. Legacy argote-owned marker pairs are
-// migrated to the dots-owned marker pair during the upsert.
-func ConvergeCodexSparkDelegation(home string) error {
+// ConvergeCodexDelegation injects opt-in delegation guidance into Codex
+// instructions only. Legacy Spark-specific and argote-owned marker pairs are
+// migrated to the generic dots-owned marker pair during the upsert.
+func ConvergeCodexDelegation(home string) error {
 	return errors.Join(
 		convergeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md")),
 		writeCodexAgentFile(home, codexExplorerAgentFile, codexExplorerAgent),
@@ -175,10 +177,9 @@ func ConvergeCodexSparkDelegation(home string) error {
 	)
 }
 
-// RemoveCodexSparkDelegation removes both current dots-owned and legacy
-// argote-owned Codex Spark delegation blocks without touching the rest of the
-// agent baseline.
-func RemoveCodexSparkDelegation(home string) error {
+// RemoveCodexDelegation removes current and legacy dots-owned delegation blocks
+// plus the legacy argote-owned block without touching the rest of the baseline.
+func RemoveCodexDelegation(home string) error {
 	return errors.Join(
 		removeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md")),
 		removeCodexAgentFile(home, codexExplorerAgentFile),
@@ -317,6 +318,7 @@ func convergeCodexDelegation(path string) error {
 		content,
 		textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd},
 		codexDelegationBlock,
+		textblock.Markers{Start: legacyDotsDelegationStart, End: legacyDotsDelegationEnd},
 		textblock.Markers{Start: legacyCodexDelegationStart, End: legacyCodexDelegationEnd},
 	)
 	if err != nil {
@@ -342,6 +344,7 @@ func removeCodexDelegation(path string) error {
 	updated, err := textblock.Remove(
 		content,
 		textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd},
+		textblock.Markers{Start: legacyDotsDelegationStart, End: legacyDotsDelegationEnd},
 		textblock.Markers{Start: legacyCodexDelegationStart, End: legacyCodexDelegationEnd},
 	)
 	if err != nil {

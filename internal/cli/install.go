@@ -471,12 +471,12 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string,
 		}
 	}
 	selectedTags := report.Tags
-	if containsString(selectedTags, "without-codex-spark-delegation") {
-		if cleanupErr := agentinstructions.RemoveCodexSparkDelegation(home); cleanupErr != nil {
+	if containsString(selectedTags, "without-codex-delegation") || containsString(selectedTags, "without-codex-spark-delegation") {
+		if cleanupErr := agentinstructions.RemoveCodexDelegation(home); cleanupErr != nil {
 			return report, errors.Join(err, cleanupErr)
 		}
-	} else if containsString(selectedTags, "codex-spark-delegation") {
-		if cleanupErr := agentinstructions.ConvergeCodexSparkDelegation(home); cleanupErr != nil {
+	} else if containsString(selectedTags, "codex-delegation") || containsString(selectedTags, "codex-spark-delegation") {
+		if cleanupErr := agentinstructions.ConvergeCodexDelegation(home); cleanupErr != nil {
 			return report, errors.Join(err, cleanupErr)
 		}
 	}

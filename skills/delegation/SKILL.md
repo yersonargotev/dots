@@ -19,7 +19,7 @@ requirements, decisions, external project state, integration, or final verificat
 
 1. Decide whether the task is non-trivial.
 2. Confirm the active surface has the needed delegation capability. For Codex
-   Spark in dots, require the `dots:codex-spark-delegation` overlay plus
+   in dots, require the `dots:delegation` overlay plus
    `~/.codex/agents/dots-explorer.toml` and
    `~/.codex/agents/dots-worker.toml`.
 3. Pick a safe slice or one skip reason: `tiny/mechanical`,

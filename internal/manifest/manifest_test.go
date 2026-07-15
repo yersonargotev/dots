@@ -1042,7 +1042,7 @@ func TestRepositoryManifestIncludesMattPocockReviewSkillProvisioner(t *testing.T
 	}
 }
 
-func TestRepositoryManifestIncludesDelegationSkillProvisioner(t *testing.T) {
+func TestRepositoryManifestScopesDelegationSkillProvisioners(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -1051,31 +1051,61 @@ func TestRepositoryManifestIncludesDelegationSkillProvisioner(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	var skills *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool == "skills" && prov.Spec.Package == "yersonargotev/dots/skills/delegation" {
-			skills = prov
+	selectProvisioners := func(opts provision.Options) []manifest.Provisioner {
+		t.Helper()
+		selected, selectErr := provision.Select(*got, opts)
+		if selectErr != nil {
+			t.Fatalf("provision.Select(%#v) error = %v", opts, selectErr)
 		}
+		return selected
+	}
+	delegationProvisioners := func(selected []manifest.Provisioner) []manifest.Provisioner {
+		t.Helper()
+		var delegation []manifest.Provisioner
+		for _, prov := range selected {
+			if prov.Tool == "skills" && prov.Spec.Package == "yersonargotev/dots/skills/delegation" {
+				delegation = append(delegation, prov)
+			}
+		}
+		return delegation
 	}
 
-	if skills == nil {
-		t.Fatal("repository manifest missing skills provisioner for yersonargotev/dots/skills/delegation")
+	codexSelected := selectProvisioners(provision.Options{Profile: "codex-delegation", OS: "darwin"})
+	if len(codexSelected) != 1 {
+		t.Fatalf("codex-delegation selected %d total provisioners, want only its delegation provisioner", len(codexSelected))
 	}
-	if !hasString(skills.Tags, "agents") {
-		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
+	codexOnly := delegationProvisioners(codexSelected)
+	if len(codexOnly) != 1 {
+		t.Fatalf("codex-delegation selected %d delegation provisioners, want 1", len(codexOnly))
 	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
+	if !sameStrings(codexOnly[0].Spec.Agents, []string{"codex"}) {
+		t.Errorf("codex-delegation agents = %#v, want [codex]", codexOnly[0].Spec.Agents)
 	}
-	if !sameStrings(skills.Spec.Skills, []string{"delegation"}) {
-		t.Errorf("skills provisioner skills = %#v, want [delegation]", skills.Spec.Skills)
+
+	agents := delegationProvisioners(selectProvisioners(provision.Options{Profile: "agents", OS: "darwin"}))
+	if len(agents) != 2 {
+		t.Fatalf("agents selected %d delegation provisioners, want 2 scoped provisioners", len(agents))
 	}
-	if !skills.Spec.Global || !skills.Spec.Copy {
-		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
+	var selectedAgents []string
+	for _, skills := range agents {
+		selectedAgents = append(selectedAgents, skills.Spec.Agents...)
+		if !sameStrings(skills.Spec.Skills, []string{"delegation"}) {
+			t.Errorf("skills provisioner skills = %#v, want [delegation]", skills.Spec.Skills)
+		}
+		if !skills.Spec.Global || !skills.Spec.Copy {
+			t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
+		}
+		if !hasDependency(skills.Dependencies, "npx") {
+			t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
+		}
 	}
-	if !hasDependency(skills.Dependencies, "npx") {
-		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
+	if !sameStrings(selectedAgents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("agents delegation targets = %#v, want [codex claude-code antigravity opencode github-copilot]", selectedAgents)
+	}
+
+	combined := delegationProvisioners(selectProvisioners(provision.Options{Profiles: []string{"agents", "codex-delegation"}, OS: "darwin"}))
+	if len(combined) != 2 {
+		t.Fatalf("agents + codex-delegation selected %d delegation provisioners, want the same 2 without duplicate Codex provisioning", len(combined))
 	}
 }
 

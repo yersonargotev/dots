@@ -34,6 +34,29 @@ provisioners:
       - name: engram
 `
 
+const codexDelegationProfileManifest = `version: 1
+profiles:
+  codex-delegation:
+    tags: [codex-delegation]
+entries:
+  - source: configs/unused
+    target: ~/.unused
+    strategy: copy
+    tags: [unused]
+provisioners:
+  - tool: skills
+    tags: [codex-delegation]
+    spec:
+      package: yersonargotev/dots/skills/delegation
+      agents: [codex]
+      skills: [delegation]
+      global: true
+      copy: true
+    dependencies:
+      - name: npx
+        command: npx
+`
+
 var nativeCodexSparkAgentFiles = []string{"dots-explorer.toml", "dots-worker.toml"}
 
 func writeExecStub(t *testing.T, path, script string) {
@@ -335,16 +358,16 @@ func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t 
 	if !strings.Contains(string(got), "<!-- dots:rules -->") {
 		t.Fatalf("install with gentle-ai provisioner did not write dots rules block\ncontent:\n%s\noutput:\n%s", got, out.String())
 	}
-	if strings.Contains(string(got), "<!-- dots:codex-spark-delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.3-codex-spark") {
-		t.Fatalf("install without Codex Spark tag wrote delegation guidance\ncontent:\n%s\noutput:\n%s", got, out.String())
+	if strings.Contains(string(got), "<!-- dots:delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.3-codex-spark") {
+		t.Fatalf("install without Codex delegation tag wrote delegation guidance\ncontent:\n%s\noutput:\n%s", got, out.String())
 	}
-	assertNoNativeCodexSparkAgents(t, sandboxHome, "install without Codex Spark tag")
+	assertNoNativeCodexSparkAgents(t, sandboxHome, "install without Codex delegation tag")
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
-func TestInstallCodexSparkDelegationTagInstallsGuidance(t *testing.T) {
+func TestInstallCodexDelegationTagInstallsGuidance(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -363,7 +386,7 @@ func TestInstallCodexSparkDelegationTagInstallsGuidance(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-spark-delegation"})
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-delegation"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -371,24 +394,67 @@ func TestInstallCodexSparkDelegationTagInstallsGuidance(t *testing.T) {
 
 	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
 	if err != nil {
-		t.Fatalf("install with Codex Spark tag did not write Codex AGENTS.md: %v\noutput:\n%s", err, out.String())
+		t.Fatalf("install with Codex delegation tag did not write Codex AGENTS.md: %v\noutput:\n%s", err, out.String())
 	}
 	content := string(got)
-	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:codex-spark-delegation -->", "gpt-5.3-codex-spark"} {
+	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:delegation -->", "gpt-5.3-codex-spark"} {
 		if !strings.Contains(content, want) {
-			t.Fatalf("install with Codex Spark tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out.String())
+			t.Fatalf("install with Codex delegation tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out.String())
 		}
 	}
-	assertNativeCodexSparkAgents(t, sandboxHome, "install with Codex Spark tag")
+	assertNativeCodexSparkAgents(t, sandboxHome, "install with Codex delegation tag")
 	if strings.Contains(content, "argote:subagent-delegation") {
-		t.Fatalf("install with Codex Spark tag used legacy markers\ncontent:\n%s", content)
+		t.Fatalf("install with Codex delegation tag used legacy markers\ncontent:\n%s", content)
 	}
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
-func TestInstallWithoutCodexSparkDelegationTagRemovesCurrentAndLegacyGuidance(t *testing.T) {
+func TestInstallCodexDelegationProfileInstallsOnlyCodexDelegation(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	fakeRealHome := t.TempDir()
+	t.Setenv("HOME", fakeRealHome)
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "npx"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	manifestPath := writeCLIManifest(t, sandboxHome, codexDelegationProfileManifest)
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--skip-deps", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--profile", "codex-delegation"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+
+	content, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("codex-delegation profile did not write Codex AGENTS.md: %v\noutput:\n%s", err, out.String())
+	}
+	for _, want := range []string{"<!-- dots:delegation -->", "gpt-5.3-codex-spark"} {
+		if !strings.Contains(string(content), want) {
+			t.Fatalf("codex-delegation profile missing %q\ncontent:\n%s\noutput:\n%s", want, content, out.String())
+		}
+	}
+	if strings.Contains(string(content), "<!-- dots:rules -->") {
+		t.Fatalf("codex-delegation profile installed the broader agent baseline\ncontent:\n%s", content)
+	}
+	if !strings.Contains(out.String(), "--agent codex --skill delegation --global --copy") {
+		t.Fatalf("codex-delegation profile did not select the Codex-only skill provisioner\noutput:\n%s", out.String())
+	}
+	assertNativeCodexSparkAgents(t, sandboxHome, "codex-delegation profile")
+	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	}
+}
+
+func TestInstallWithoutCodexDelegationTagRemovesCurrentAndLegacyGuidance(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -404,7 +470,7 @@ func TestInstallWithoutCodexSparkDelegationTagRemovesCurrentAndLegacyGuidance(t 
 	if err := os.MkdirAll(filepath.Dir(codexPath), 0o755); err != nil {
 		t.Fatalf("mkdir Codex dir: %v", err)
 	}
-	preexisting := "before\n\n<!-- dots:codex-spark-delegation -->\ncurrent\n<!-- /dots:codex-spark-delegation -->\n\n<!-- argote:subagent-delegation -->\nlegacy\n<!-- /argote:subagent-delegation -->\n\nafter\n"
+	preexisting := "before\n\n<!-- dots:delegation -->\ncurrent\n<!-- /dots:delegation -->\n\n<!-- argote:subagent-delegation -->\nlegacy\n<!-- /argote:subagent-delegation -->\n\nafter\n"
 	if err := os.WriteFile(codexPath, []byte(preexisting), 0o600); err != nil {
 		t.Fatalf("write preexisting Codex instructions: %v", err)
 	}
@@ -417,7 +483,7 @@ func TestInstallWithoutCodexSparkDelegationTagRemovesCurrentAndLegacyGuidance(t 
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-spark-delegation", "--tag", "without-codex-spark-delegation"})
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-delegation", "--tag", "without-codex-delegation"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -428,17 +494,17 @@ func TestInstallWithoutCodexSparkDelegationTagRemovesCurrentAndLegacyGuidance(t 
 		t.Fatalf("read Codex instructions: %v", err)
 	}
 	content := string(got)
-	for _, not := range []string{"<!-- dots:codex-spark-delegation -->", "argote:subagent-delegation", "\ncurrent\n", "\nlegacy\n", "gpt-5.3-codex-spark"} {
+	for _, not := range []string{"<!-- dots:delegation -->", "argote:subagent-delegation", "\ncurrent\n", "\nlegacy\n", "gpt-5.3-codex-spark"} {
 		if strings.Contains(content, not) {
-			t.Fatalf("without Codex Spark tag kept %q\ncontent:\n%s\noutput:\n%s", not, content, out.String())
+			t.Fatalf("without Codex delegation tag kept %q\ncontent:\n%s\noutput:\n%s", not, content, out.String())
 		}
 	}
 	for _, want := range []string{"<!-- dots:rules -->", "Keep diffs surgical", "before", "after"} {
 		if !strings.Contains(content, want) {
-			t.Fatalf("without Codex Spark tag removed expected %q\ncontent:\n%s", want, content)
+			t.Fatalf("without Codex delegation tag removed expected %q\ncontent:\n%s", want, content)
 		}
 	}
-	assertRemovedNativeCodexSparkAgents(t, agentsDir, "without Codex Spark tag")
+	assertRemovedNativeCodexSparkAgents(t, agentsDir, "without Codex delegation tag")
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
