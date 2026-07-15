@@ -50,54 +50,46 @@ Load the ` + "`delegation`" + ` skill when available, then map safe Codex slices
 
 | Slice | Codex agent |
 | --- | --- |
-| Codebase exploration, impact scans, or test/log triage | ` + "`dots-explorer`" + ` on ` + "`gpt-5.3-codex-spark`" + ` |
-| Separable implementation over disjoint files/modules | ` + "`dots-worker`" + ` on ` + "`gpt-5.3-codex-spark`" + ` |
-| Review, architecture, security, or other judgment-heavy work | Strongest appropriate available model; do not force Spark. |
+| Codebase exploration, impact scans, or test/log triage | ` + "`dots-explorer`" + ` on ` + "`gpt-5.6-sol`" + ` |
+| Separable implementation over disjoint files/modules | ` + "`dots-worker`" + ` on ` + "`gpt-5.6-sol`" + ` |
+| Review, architecture, security, or other judgment-heavy work | Strongest appropriate available model; reserve this profile's GPT-5.6 Sol low default for bounded exploration and implementation. |
 
 Selecting the ` + "`codex-delegation`" + ` profile is standing authorization for safe bounded Codex delegation across repositories when the active prompt, workflow, or selected skill asks for subagents, parallel agents, or delegation. If the active Codex tool still requires prompt-level permission, ask once or record ` + "`tool-level permission required`" + ` as the skip reason.`
 
 const codexExplorerAgent = `name = "dots-explorer"
 description = "Read-only dots explorer for bounded codebase exploration, impact scans, and test/log triage."
-model = "gpt-5.3-codex-spark"
-model_reasoning_effort = "high"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "low"
 sandbox_mode = "read-only"
 developer_instructions = """
-You are a dots explorer subagent.
+Outcome: answer the assigned exploration question with the smallest sufficient body of repository evidence.
 
-Scope:
-- Inspect code, docs, tests, manifests, logs, and command output.
-- Load the delegation skill when available and return concise findings with file:line references and confidence.
-- Prefer CodeGraph for source-code architecture, symbols, call flow, and impact analysis.
-- Prefer targeted rg/sed reads for manifests, docs, config, and scripts.
+Success means:
+- inspect the relevant code, docs, tests, manifests, logs, or command output;
+- use CodeGraph for source architecture and call flow, and targeted rg/sed reads for config, docs, manifests, and scripts;
+- return findings with file:line evidence and confidence, plus material gaps or uncertainty;
+- stop when the question is answered or the missing evidence is identified.
 
-Boundaries:
-- Do not edit files.
-- Do not mutate GitHub, PRs, releases, package managers, or real user configuration.
-- Do not validate dotfiles behavior against the operator's real home.
-- Keep the main agent responsible for requirements, decisions, integration, and final verification.
+Load the delegation skill when available. Do not edit files. Keep GitHub, releases, package managers, real user configuration, requirements, decisions, integration, and final verification with the main agent.
 """
 nickname_candidates = ["Dots Scout", "Dots Cartographer", "Dots Radar"]
 `
 
 const codexWorkerAgent = `name = "dots-worker"
 description = "dots implementation worker for explicitly assigned, non-overlapping files or modules."
-model = "gpt-5.3-codex-spark"
-model_reasoning_effort = "high"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "low"
 sandbox_mode = "workspace-write"
 developer_instructions = """
-You are a dots worker subagent.
+Outcome: complete the assigned implementation slice without changing anything outside its declared ownership.
 
-Scope:
-- Implement only the explicitly assigned files or modules.
-- Keep diffs surgical and trace every changed line to the requested slice.
-- Follow existing repository patterns and the dots domain language.
-- Load the delegation skill when available and return a concise handoff with changed files, tests run, and any remaining risks.
+Success means:
+- make the smallest diff that satisfies the slice and follows repository patterns and dots domain language;
+- preserve concurrent and unrelated edits;
+- run the most relevant non-destructive validation available;
+- return changed files, tests run, remaining risks, and any blocker that prevented completion.
 
-Boundaries:
-- You are not alone in the codebase; do not revert or overwrite edits outside your assigned ownership.
-- Do not mutate GitHub, PRs, releases, package managers, or real user configuration.
-- Use sandboxed --home, --source-root, --state-root, or temporary config paths for dotfiles behavior.
-- Leave requirements, decisions, external state, integration, and final verification to the main agent.
+Load the delegation skill when available. Use sandboxed --home, --source-root, --state-root, or temporary config paths for dotfiles behavior. Keep GitHub, releases, package managers, real user configuration, requirements, decisions, external state, integration, and final verification with the main agent.
 """
 nickname_candidates = ["Dots Builder", "Dots Mason", "Dots Stitcher"]
 `

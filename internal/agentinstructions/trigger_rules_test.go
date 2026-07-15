@@ -215,10 +215,10 @@ func TestConvergeCodexDelegationIsOptInCodexOnly(t *testing.T) {
 		t.Fatalf("Codex delegation block bounds missing\n%s", codexContent)
 	}
 	codexDelegationContent := codexContent[blockStart:blockEnd]
-	if strings.Count(codexDelegationContent, "gpt-5.3-codex-spark") != 2 {
-		t.Fatalf("Codex delegation block should include Spark role guidance exactly twice\n%s", codexContent)
+	if strings.Count(codexDelegationContent, "gpt-5.6-sol") != 2 {
+		t.Fatalf("Codex delegation block should include GPT-5.6 Sol role guidance exactly twice\n%s", codexContent)
 	}
-	for _, want := range []string{"delegation` skill", "dots-explorer", "dots-worker", "standing authorization", "across repositories", "tool-level permission required", "do not force Spark"} {
+	for _, want := range []string{"delegation` skill", "dots-explorer", "dots-worker", "standing authorization", "across repositories", "tool-level permission required", "reserve this profile's GPT-5.6 Sol low default"} {
 		if !strings.Contains(codexDelegationContent, want) {
 			t.Fatalf("Codex delegation block missing policy phrase %q\n%s", want, codexContent)
 		}
@@ -241,8 +241,8 @@ func TestConvergeCodexDelegationIsOptInCodexOnly(t *testing.T) {
 		name  string
 		wants []string
 	}{
-		{name: codexExplorerAgentFile, wants: []string{`name = "dots-explorer"`, `sandbox_mode = "read-only"`, `model = "gpt-5.3-codex-spark"`, "Load the delegation skill", "Do not edit files."}},
-		{name: codexWorkerAgentFile, wants: []string{`name = "dots-worker"`, `sandbox_mode = "workspace-write"`, `model = "gpt-5.3-codex-spark"`, "Load the delegation skill", "changed files"}},
+		{name: codexExplorerAgentFile, wants: []string{`name = "dots-explorer"`, `sandbox_mode = "read-only"`, `model = "gpt-5.6-sol"`, `model_reasoning_effort = "low"`, "Outcome:", "Success means:", "stop when the question is answered", "Load the delegation skill", "Do not edit files."}},
+		{name: codexWorkerAgentFile, wants: []string{`name = "dots-worker"`, `sandbox_mode = "workspace-write"`, `model = "gpt-5.6-sol"`, `model_reasoning_effort = "low"`, "Outcome:", "Success means:", "most relevant non-destructive validation", "Load the delegation skill", "changed files"}},
 	} {
 		path := filepath.Join(home, ".codex", "agents", tc.name)
 		got, err := os.ReadFile(path)
@@ -272,7 +272,7 @@ func TestConvergeCodexDelegationIsOptInCodexOnly(t *testing.T) {
 				t.Fatalf("%s missing portable delegation policy phrase %q\n%s", path, want, content)
 			}
 		}
-		for _, not := range []string{codexDelegationStart, codexDelegationEnd, "gpt-5.3-codex-spark"} {
+		for _, not := range []string{codexDelegationStart, codexDelegationEnd, "gpt-5.6-sol"} {
 			if strings.Contains(content, not) {
 				t.Fatalf("%s unexpectedly contains Codex delegation guidance %q\n%s", path, not, content)
 			}
