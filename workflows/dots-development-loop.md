@@ -117,7 +117,7 @@ Goal: create or refine agent-ready GitHub issue scope.
 2. Apply the repository triage vocabulary from `docs/agents/triage-labels.md`.
 3. Add enough research, acceptance criteria, and constraints for an implementer
    to proceed without asking follow-up questions.
-4. Keep all GitHub mutation in the main agent. Spark may provide research or
+4. Keep all GitHub mutation in the main agent. Delegation subagents may provide research or
    issue-scope suggestions, but the main agent writes external state.
 5. Present a Triage Brief and wait for the user to approve moving to
    implementation.
@@ -143,7 +143,7 @@ Goal: produce the smallest correct diff for the approved issue scope.
    is materially useful before local review is complete.
 4. Delegate implementation by default when the work can be split into
    disjoint files or modules; otherwise record why the main thread is the only
-   coherent implementation owner. If Spark is used for implementation:
+   coherent implementation owner. When implementation is delegated:
    - assign disjoint files or modules with explicit ownership;
    - require a changed-file list and concise handoff;
    - forbid reverting unrelated edits;
@@ -180,10 +180,9 @@ changes.
    closed.
 4. After the PR exists, rerun `$review` when PR feedback, CI fixes, or meaningful
    follow-up commits change the diff.
-5. `$review` may use its own Standards and Spec subagents because that is the
-   skill's review model. Do not replace `$review` with an ad-hoc Spark review,
-   do not force review subagents onto Spark when a stronger model is available,
-   and keep final finding triage, fixes, and verification in the main thread.
+5. `$review` owns its Standards and Spec subagents and their model choice. Use
+   that review path, while the main thread retains final finding triage, fixes,
+   and verification.
 
 ## Phase 5: PR, merge, and release
 

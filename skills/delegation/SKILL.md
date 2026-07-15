@@ -33,8 +33,8 @@ requirements, decisions, external project state, integration, or final verificat
 
 | Slice | Delegate to |
 | --- | --- |
-| Codebase exploration, impact scans, test/log triage | Fast read-only explorer. In Codex dots, use `dots-explorer` on Spark. |
-| Separable implementation in disjoint files/modules | Worker with explicit file ownership and a changed-file list. In Codex dots, use `dots-worker` on Spark. |
+| Codebase exploration, impact scans, test/log triage | Fast read-only explorer. In Codex dots, use `dots-explorer` on GPT-5.6 Sol with low reasoning. |
+| Separable implementation in disjoint files/modules | Worker with explicit file ownership and a changed-file list. In Codex dots, use `dots-worker` on GPT-5.6 Sol with low reasoning. |
 | Review, architecture, security, or judgment-heavy work | The strongest appropriate model, or the model required by the selected review skill. |
 
 Do not delegate work that mutates GitHub issues, PRs, labels, releases, package
