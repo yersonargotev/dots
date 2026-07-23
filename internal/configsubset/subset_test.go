@@ -7,6 +7,123 @@ import (
 	"testing"
 )
 
+func TestMergeJSONFileAddsMissingValuesAndPreservesTargetState(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.json")
+	target := filepath.Join(dir, "target.json")
+
+	if err := os.WriteFile(source, []byte(`{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": ["Read", "Bash(git *)"]
+  }
+}`), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{
+  "permissions": {
+    "allow": ["Read", "Bash(go test *)"],
+    "deny": ["Bash(rm -rf *)"]
+  },
+  "hooks": {
+    "PostToolUse": []
+  },
+  "runtimeCounter": 9007199254740993
+}`), 0o640); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	if err := MergeJSONFile(target, source); err != nil {
+		t.Fatalf("MergeJSONFile() error = %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	wantJSON := `{
+  "hooks": {
+    "PostToolUse": []
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(go test *)",
+      "Bash(git *)"
+    ],
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Bash(rm -rf *)"
+    ]
+  },
+  "runtimeCounter": 9007199254740993
+}
+`
+	if string(got) != wantJSON {
+		t.Fatalf("merged JSON is not deterministic\ngot:\n%s\nwant:\n%s", got, wantJSON)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("stat target: %v", err)
+	}
+	if gotMode := info.Mode().Perm(); gotMode != 0o640 {
+		t.Fatalf("target mode = %v, want 0640", gotMode)
+	}
+}
+
+func TestMergeJSONFileRejectsIncompatibleValuesWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		target string
+	}{
+		{
+			name:   "changed scalar",
+			source: `{"permissions":{"defaultMode":"bypassPermissions"}}`,
+			target: `{"permissions":{"defaultMode":"default"},"hooks":{}}`,
+		},
+		{
+			name:   "object type mismatch",
+			source: `{"permissions":{"allow":["Read"]}}`,
+			target: `{"permissions":"managed elsewhere","hooks":{}}`,
+		},
+		{
+			name:   "array type mismatch",
+			source: `{"permissions":{"allow":["Read"]}}`,
+			target: `{"permissions":{"allow":"Read"},"hooks":{}}`,
+		},
+		{
+			name:   "distinct large numbers",
+			source: `{"runtimeCounter":9007199254740993}`,
+			target: `{"runtimeCounter":9007199254740992,"hooks":{}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			source := filepath.Join(dir, "source.json")
+			target := filepath.Join(dir, "target.json")
+			if err := os.WriteFile(source, []byte(tt.source), 0o600); err != nil {
+				t.Fatalf("write source: %v", err)
+			}
+			if err := os.WriteFile(target, []byte(tt.target), 0o600); err != nil {
+				t.Fatalf("write target: %v", err)
+			}
+
+			if err := MergeJSONFile(target, source); err == nil {
+				t.Fatal("MergeJSONFile() error = nil, want incompatible-value error")
+			}
+			got, err := os.ReadFile(target)
+			if err != nil {
+				t.Fatalf("read target: %v", err)
+			}
+			if string(got) != tt.target {
+				t.Fatalf("target changed after rejected merge\ngot:  %s\nwant: %s", got, tt.target)
+			}
+		})
+	}
+}
+
 func TestTOMLFileContains(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "source.toml")

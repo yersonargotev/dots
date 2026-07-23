@@ -186,8 +186,8 @@ func validatePlan(p plan.Plan, opts Options) ([]string, error) {
 			if opts.StateRoot == "" {
 				return nil, fmt.Errorf("update for %s requires state root for Backup Set metadata", action.Target)
 			}
-			if action.Strategy != "copy" || action.Ownership != "toml-subset" {
-				return nil, fmt.Errorf("update for %s requires copy strategy with toml-subset ownership", action.Target)
+			if action.Strategy != "copy" || (action.Ownership != "json-subset" && action.Ownership != "toml-subset") {
+				return nil, fmt.Errorf("update for %s requires copy strategy with subset ownership", action.Target)
 			}
 			if err := validateBackupStateRoot(opts.StateRoot, home); err != nil {
 				return nil, err
@@ -421,11 +421,17 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 	if err := createBackupSet(opts, action.Target); err != nil {
 		return err
 	}
-	if action.Ownership != "toml-subset" {
+	switch action.Ownership {
+	case "json-subset":
+		if err := configsubset.MergeJSONFile(action.Target, source); err != nil {
+			return fmt.Errorf("merge JSON update for %s: %w", action.Target, err)
+		}
+	case "toml-subset":
+		if err := configsubset.MergeTOMLFile(action.Target, source); err != nil {
+			return fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
+		}
+	default:
 		return fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)
-	}
-	if err := configsubset.MergeTOMLFile(action.Target, source); err != nil {
-		return fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
 	}
 	return nil
 }

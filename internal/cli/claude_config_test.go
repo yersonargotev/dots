@@ -158,7 +158,8 @@ printf '%s%s' "$block" "$engram" > "$HOME/.config/Code/User/prompts/gentle-ai.in
 		AgentPushNotifEnabled *bool           `json:"agentPushNotifEnabled"`
 		StatusLine            json.RawMessage `json:"statusLine"`
 		Permissions           *struct {
-			Allow []string `json:"allow"`
+			Allow       []string `json:"allow"`
+			DefaultMode *string  `json:"defaultMode"`
 		} `json:"permissions"`
 	}
 	if err := json.Unmarshal(settings, &parsed); err != nil {
@@ -179,6 +180,8 @@ printf '%s%s' "$block" "$engram" > "$HOME/.config/Code/User/prompts/gentle-ai.in
 		t.Fatalf("seeded settings.json missing user-owned key %q\ncontent:\n%s", "statusLine", settings)
 	case parsed.Permissions == nil || len(parsed.Permissions.Allow) == 0:
 		t.Fatalf("seeded settings.json missing user-owned key %q\ncontent:\n%s", "permissions.allow", settings)
+	case parsed.Permissions.DefaultMode == nil || *parsed.Permissions.DefaultMode != "bypassPermissions":
+		t.Fatalf("seeded settings.json permissions.defaultMode = %v, want bypassPermissions\ncontent:\n%s", parsed.Permissions.DefaultMode, settings)
 	}
 
 	// The baseline must not version any gentle-ai-managed or runtime-state key.
@@ -186,8 +189,7 @@ printf '%s%s' "$block" "$engram" > "$HOME/.config/Code/User/prompts/gentle-ai.in
 	// collisions with allowed values (e.g. an MCP tool name containing "hooks").
 	for _, forbidden := range []string{
 		"\"deny\"", "\"hooks\"", "\"outputStyle\"", "\"enabledPlugins\"",
-		"\"extraKnownMarketplaces\"", "\"defaultMode\"",
-		"\"skipDangerousModePermissionPrompt\"",
+		"\"extraKnownMarketplaces\"", "\"skipDangerousModePermissionPrompt\"",
 	} {
 		if strings.Contains(string(settings), forbidden) {
 			t.Fatalf("seeded settings.json must not version %s\ncontent:\n%s", forbidden, settings)
@@ -401,6 +403,7 @@ cat > "$HOME/.claude/settings.json" <<'JSON'
   },
   "model": "opus",
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "mcp__codegraph__codegraph_search",
       "mcp__codegraph__codegraph_context",

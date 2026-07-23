@@ -6,6 +6,7 @@
   },
   "model": "opus",
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "mcp__codegraph__codegraph_search",
       "mcp__codegraph__codegraph_context",

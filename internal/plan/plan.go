@@ -318,12 +318,25 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta sta
 		}
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
 			if isSubsetOwned(entry.Ownership) && metadataMatchesEntry(meta, target, entry.Source, entry.Strategy) {
-				subset, subsetErr := subsetContent(entry.Ownership, target, sourceAbs)
-				if subsetErr != nil {
-					return "", subsetErr
-				}
-				if subset {
-					return StatusUnchanged, nil
+				if entry.Ownership == "json-subset" {
+					relation, relationErr := configsubset.AnalyzeJSONFiles(target, sourceAbs)
+					if relationErr != nil {
+						return "", relationErr
+					}
+					if relation.Contains {
+						return StatusUnchanged, nil
+					}
+					if relation.Mergeable {
+						return StatusUpdate, nil
+					}
+				} else {
+					subset, subsetErr := subsetContent(entry.Ownership, target, sourceAbs)
+					if subsetErr != nil {
+						return "", subsetErr
+					}
+					if subset {
+						return StatusUnchanged, nil
+					}
 				}
 			}
 			if entry.Ownership == "toml-subset" && targetContainsCompatibleRecordedSource(entry, target, sourceRoot, meta, defaultSource) {

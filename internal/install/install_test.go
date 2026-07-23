@@ -441,6 +441,90 @@ func TestApplyLeavesUnchangedActionUntouched(t *testing.T) {
 	}
 }
 
+func TestApplyStatusUpdateMergesJSONSubsetAndRecordsMetadata(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte(`{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": ["Read", "Bash(git *)"]
+  }
+}`), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	target := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{
+  "permissions": {
+    "allow": ["Read"],
+    "deny": ["Bash(rm -rf *)"]
+  },
+  "enabledPlugins": {
+    "chrome-devtools-mcp": true
+  }
+}`), 0o640); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	p := plan.Plan{Profile: "core", Actions: []plan.Action{{
+		Source:    "configs/claude/settings.json",
+		Target:    target,
+		Strategy:  "copy",
+		Status:    plan.StatusUpdate,
+		Ownership: "json-subset",
+	}}}
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	for _, want := range []string{
+		`"defaultMode": "bypassPermissions"`,
+		`"Bash(git *)"`,
+		`"deny"`,
+		`"enabledPlugins"`,
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("target missing %q\ncontent:\n%s", want, got)
+		}
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("stat target: %v", err)
+	}
+	if gotMode := info.Mode().Perm(); gotMode != 0o640 {
+		t.Fatalf("target mode = %v, want 0640", gotMode)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	rec, ok := meta.FindByTarget(target)
+	if !ok {
+		t.Fatalf("metadata missing target %s", target)
+	}
+	if rec.Source != "configs/claude/settings.json" {
+		t.Fatalf("metadata source = %q, want Claude settings source", rec.Source)
+	}
+	backupMeta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Backup Metadata: %v", err)
+	}
+	if len(backupMeta.Sets) != 1 {
+		t.Fatalf("backup sets = %d, want 1", len(backupMeta.Sets))
+	}
+}
+
 func TestApplyStatusUpdateMergesTOMLSubsetAndRecordsMetadata(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()
