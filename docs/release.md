@@ -27,7 +27,8 @@ Use manual dispatch when the tag already exists but the release needs to be rebu
 
 1. Go to **Actions → Release → Run workflow**.
 2. Enter the existing tag, for example `v0.5.1`.
-3. Run the workflow. It checks out that tag, rebuilds the four artifacts, recreates `checksums.txt`, verifies `HOMEBREW_TAP_TOKEN` is present, checks out the Homebrew tap, regenerates and locally commits `Formula/dots.rb` when changed, dry-run pushes that prepared tap state, uploads assets with `--clobber`, and only then pushes the prepared tap commit.
+3. Run the workflow. It checks out that tag, rebuilds the four artifacts, recreates `checksums.txt`, and uploads the GitHub Release assets with `--clobber`.
+4. Approve the pending `homebrew` deployment. The protected job downloads the published checksum manifest, verifies `HOMEBREW_TAP_TOKEN` is present, regenerates and locally commits `Formula/dots.rb` when changed, dry-run proves access, and pushes the prepared tap commit.
 
 ## Checksum Verification contract
 
@@ -83,18 +84,18 @@ brew "yersonargotev/tap/dots", trusted: true
 
 The formula selects the correct Release Artifact for macOS/Linux and amd64/arm64, marks each raw executable URL with `using: :nounzip`, verifies the published SHA-256 checksum from the generated formula, installs the downloaded binary as `dots`, and runs `dots --version` in `brew test`.
 
-The release workflow proves tap write access before it mutates the public GitHub Release, but it does not publish the tap update until the release assets exist:
+The release workflow publishes the GitHub Release first, then gates the separate tap update behind the protected `homebrew` environment:
 
-1. It verifies `HOMEBREW_TAP_TOKEN` is present and checks out `yersonargotev/homebrew-tap`.
-2. It generates `Formula/dots.rb` with `scripts/generate-homebrew-formula.sh`. The script reads `dist/checksums.txt` and requires exactly the four supported artifact entries.
-3. It stages and commits the formula update locally when the tap formula changed.
-4. It dry-run pushes the prepared local tap state before creating or uploading GitHub Release assets.
-5. After the release assets upload succeeds, it pushes the already-prepared tap commit, or no-ops if the formula already matched the tag.
+1. The release job builds and uploads the four binaries plus `checksums.txt`, preserving the checksum manifest as a workflow artifact.
+2. The dependent Homebrew job waits for approval of the `homebrew` environment, then reads its `HOMEBREW_TAP_TOKEN` environment secret and checks out `yersonargotev/homebrew-tap`.
+3. It generates `Formula/dots.rb` with `scripts/generate-homebrew-formula.sh`. The script reads the transferred `dist/checksums.txt` and requires exactly the four supported artifact entries.
+4. It stages and commits the formula update locally when the tap formula changed, dry-run proves that prepared state can be pushed, and then publishes the tap commit.
 
 Maintainer setup:
 
 - Create or maintain the `yersonargotev/homebrew-tap` repository.
-- Store a token with write access to that tap as this repository secret: `HOMEBREW_TAP_TOKEN`.
+- Configure a protected `homebrew` environment that requires maintainer approval and permits `main` plus release tags matching `v0.*`.
+- Store a fine-grained token with write access only to that tap as the environment secret `HOMEBREW_TAP_TOKEN`.
 - Do not use `GITHUB_TOKEN` for the tap push; it is scoped to this repository.
 
 ## Bootstrapper install
@@ -128,12 +129,13 @@ DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 | Artifacts | Raw `dots` binaries named `dots_<version>_<goos>_<goarch>`. |
 | Platforms | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, and `linux/arm64`. |
 | Checksums | One `checksums.txt` file covers every Release Artifact. |
-| Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and `checksums.txt`; the workflow locally prepares the tap commit, dry-run proves that prepared state can be pushed, then pushes it to `yersonargotev/homebrew-tap` with `HOMEBREW_TAP_TOKEN` after release assets upload. Users should prefer formula-level Tap Trust through `brew install yersonargotev/tap/dots`, `brew trust --formula yersonargotev/tap/dots`, or Brewfile `trusted: true`. Homebrew installs only the binary, so first-run package-manager installs must run `dots init` to clone the default Installed Repository before `dots status`, `dots doctor`, or `dots install --profile workstation --dry-run`. |
+| Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and transferred `checksums.txt`; after the GitHub Release assets exist, the environment-protected Homebrew job locally prepares the tap commit, dry-run proves that prepared state can be pushed, then publishes it to `yersonargotev/homebrew-tap` with the environment `HOMEBREW_TAP_TOKEN`. Users should prefer formula-level Tap Trust through `brew install yersonargotev/tap/dots`, `brew trust --formula yersonargotev/tap/dots`, or Brewfile `trusted: true`. Homebrew installs only the binary, so first-run package-manager installs must run `dots init` to clone the default Installed Repository before `dots status`, `dots doctor`, or `dots install --profile workstation --dry-run`. |
 
 ## First v0.x checklist
 
 - [ ] The tag is a v0.x tag, such as `v0.5.1`.
 - [ ] The workflow completed from the tag commit.
+- [ ] The pending `homebrew` deployment was approved by the required reviewer.
 - [ ] All four platform artifacts are attached to the GitHub Release.
 - [ ] `checksums.txt` contains one SHA-256 entry for each artifact.
 - [ ] The Bootstrapper maps its detected `goos/goarch` to the matching artifact name.
@@ -141,4 +143,4 @@ DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 - [ ] A Homebrew-installed binary can run `dots init` and then read the default Installed Repository manifest.
 - [ ] `Formula/dots.rb` in `yersonargotev/homebrew-tap` points at the same tag and checksums.
 - [ ] A Tap Trust install path has been checked with `HOMEBREW_REQUIRE_TAP_TRUST=1` using the fully-qualified formula or formula-level trust.
-- [ ] `HOMEBREW_TAP_TOKEN` is configured before relying on automatic tap updates.
+- [ ] `HOMEBREW_TAP_TOKEN` is configured as an environment secret before relying on automatic tap updates.
