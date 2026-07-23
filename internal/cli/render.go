@@ -7,13 +7,14 @@ import (
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/selection"
 )
 
 // renderPlan writes a human-readable, deterministic preview of an Install Plan.
 // The output is stable for a given Plan so it can be locked with a golden test
 // and read predictably by the user during a dry run.
 func renderPlan(w io.Writer, p plan.Plan) {
-	fmt.Fprintf(w, "Plan for %s\n\n", renderProfileSelection(p.Profile, p.Profiles, p.Tags))
+	fmt.Fprintf(w, "Plan for %s\n\n", renderEffectiveSelection(p.Profile, p.Profiles, p.Tags, p.Selection))
 
 	if len(p.Actions) == 0 {
 		fmt.Fprintln(w, "Nothing to do.")
@@ -89,7 +90,9 @@ func renderSkippedEntryHint(w io.Writer, m manifest.Manifest, profiles []string,
 
 func renderProfileSelection(profile string, profiles []string, tags []string) string {
 	var selection string
-	if len(profiles) == 0 {
+	if len(profiles) == 0 && profile == "" {
+		selection = "tags only"
+	} else if len(profiles) == 0 {
 		selection = fmt.Sprintf("profile %q", profile)
 	} else if len(profiles) == 1 {
 		selection = fmt.Sprintf("profile %q", profiles[0])
@@ -104,6 +107,14 @@ func renderProfileSelection(profile string, profiles []string, tags []string) st
 		return selection
 	}
 	return selection + " (tags: " + strings.Join(tags, ", ") + ")"
+}
+
+func renderEffectiveSelection(profile string, profiles, tags []string, report *selection.Report) string {
+	rendered := renderProfileSelection(profile, profiles, tags)
+	if report == nil {
+		return rendered
+	}
+	return fmt.Sprintf("%s [selection: %s]", rendered, report.Source)
 }
 
 func renderProfileFlags(profiles []string) string {

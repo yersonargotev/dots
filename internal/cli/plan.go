@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/selection"
 )
 
 func newPlanCommand() *cobra.Command {
@@ -40,12 +41,18 @@ func newPlanCommand() *cobra.Command {
 				return err
 			}
 
+			effective, err := selection.ResolveReadOnly(*m, profiles, extraTags, meta.InstalledSelection)
+			if err != nil {
+				return err
+			}
+
 			// TODO: add an --os flag to preview a cross-platform install
 			// (e.g. plan a Linux install from macOS); for now the OS is locked
 			// to the host so the dry-run reflects this machine.
 			p, err := plan.Build(*m, plan.Options{
-				Profiles:   profiles,
-				ExtraTags:  extraTags,
+				Profiles:   effective.Profiles,
+				ExtraTags:  effective.ExtraTags,
+				Selection:  &effective.Selection,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
@@ -54,6 +61,7 @@ func newPlanCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			p.Selection = &effective.Report
 
 			return renderOrEmit(cmd, p, func() error {
 				renderPlan(cmd.OutOrStdout(), p)

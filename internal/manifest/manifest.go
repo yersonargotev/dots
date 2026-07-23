@@ -824,6 +824,17 @@ func SelectedProfileNames(profile string, profiles []string) []string {
 // de-duplicated tag union. Repository manifests without a legacy default Profile
 // require an explicit Profile so install never falls back to an implicit baseline.
 func ResolveSelection(m Manifest, profileNames []string, extraTags []string) (Selection, error) {
+	return resolveSelection(m, profileNames, extraTags, true)
+}
+
+// ResolveReadOnlySelection validates a read-only command selection without
+// inferring a legacy default Profile. Explicit Tags may form the complete
+// selection when no Profile was supplied.
+func ResolveReadOnlySelection(m Manifest, profileNames []string, extraTags []string) (Selection, error) {
+	return resolveSelection(m, profileNames, extraTags, false)
+}
+
+func resolveSelection(m Manifest, profileNames []string, extraTags []string, allowDefault bool) (Selection, error) {
 	profiles := make([]string, 0, len(profileNames))
 	profileSeen := make(map[string]bool, len(profileNames))
 	tags := make([]string, 0, len(extraTags))
@@ -849,7 +860,7 @@ func ResolveSelection(m Manifest, profileNames []string, extraTags []string) (Se
 			addTag(tag)
 		}
 	}
-	if len(profiles) == 0 {
+	if len(profiles) == 0 && allowDefault {
 		if profile, ok := m.Profiles["default"]; ok {
 			profiles = append(profiles, "default")
 			for _, tag := range profile.Tags {

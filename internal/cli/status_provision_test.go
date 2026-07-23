@@ -24,7 +24,7 @@ func TestStatusListsDeclaredProvisioners(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	cmd.SetArgs([]string{"status", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 
 	// The managed entries are not installed in this sandbox, so status reports
 	// them as missing: a finding.

@@ -572,7 +572,7 @@ func TestDepsInstallDryRunClassifiesMissingFNMToolchainLikePlan(t *testing.T) {
 	var planOut bytes.Buffer
 	planCmd.SetOut(&planOut)
 	planCmd.SetErr(&planOut)
-	planCmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "generic"})
+	planCmd.SetArgs([]string{"deps", "plan", "--profile", "default", "--file", manifestPath, "--tier", "generic"})
 	if err := planCmd.Execute(); err == nil {
 		t.Fatalf("deps plan error = nil, want findings exit")
 	}

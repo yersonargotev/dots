@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 func newDepsCommand() *cobra.Command {
@@ -54,14 +56,21 @@ func newDepsCheckCommand(profiles *[]string, extraTags *[]string) *cobra.Command
 				return err
 			}
 
+			effective, err := resolveDepsReadOnlySelection(*m, resolvedHome, *profiles, *extraTags)
+			if err != nil {
+				return err
+			}
+
 			report, err := deps.CheckWithToolProbes(*m, deps.Options{
-				Profiles:  *profiles,
-				ExtraTags: *extraTags,
+				Profiles:  effective.Profiles,
+				ExtraTags: effective.ExtraTags,
+				Selection: &effective.Selection,
 				OS:        runtime.GOOS,
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), commandOutput)
 			if err != nil {
 				return err
 			}
+			report.Selection = &effective.Report
 
 			return renderOrEmit(cmd, report, func() error {
 				renderDepsCheck(cmd.OutOrStdout(), report)
@@ -96,19 +105,26 @@ func newDepsPlanCommand(profiles *[]string, extraTags *[]string) *cobra.Command 
 				return err
 			}
 
+			effective, err := resolveDepsReadOnlySelection(*m, resolvedHome, *profiles, *extraTags)
+			if err != nil {
+				return err
+			}
+
 			resolvedTier, err := resolveTier(tier)
 			if err != nil {
 				return err
 			}
 
 			report, err := deps.Plan(*m, deps.Options{
-				Profiles:  *profiles,
-				ExtraTags: *extraTags,
+				Profiles:  effective.Profiles,
+				ExtraTags: effective.ExtraTags,
+				Selection: &effective.Selection,
 				OS:        runtime.GOOS,
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
 			if err != nil {
 				return err
 			}
+			report.Selection = &effective.Report
 
 			return renderOrEmit(cmd, report, func() error {
 				renderDepsPlan(cmd.OutOrStdout(), report)
@@ -219,6 +235,22 @@ func newDepsInstallCommand(profiles *[]string, extraTags *[]string) *cobra.Comma
 
 func loadDepsManifest(cmd *cobra.Command, file, home string) (*manifest.Manifest, error) {
 	return loadManifestForCommand(cmd, file, defaultSourceRoot(home))
+}
+
+func resolveDepsReadOnlySelection(m manifest.Manifest, home string, profiles, extraTags []string) (selection.Effective, error) {
+	var recorded *state.InstalledSelection
+	if len(profiles) == 0 && len(extraTags) == 0 {
+		paths, err := resolvePaths(home, "", "")
+		if err != nil {
+			return selection.Effective{}, err
+		}
+		meta, err := loadInstallationMetadata(paths, "")
+		if err != nil {
+			return selection.Effective{}, err
+		}
+		recorded = meta.InstalledSelection
+	}
+	return selection.ResolveReadOnly(m, profiles, extraTags, recorded)
 }
 
 func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier) error {

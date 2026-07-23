@@ -1117,7 +1117,7 @@ func TestInstallPersistsFailedProvisionerForStatusResumeGuidance(t *testing.T) {
 	var statusOut bytes.Buffer
 	statusCmd.SetOut(&statusOut)
 	statusCmd.SetErr(&statusOut)
-	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+	statusCmd.SetArgs([]string{"status", "--profile", "default", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
 	requireFindings(t, statusCmd.Execute())
 	got := statusOut.String()
 	for _, want := range []string{

@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/doctor"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 )
 
@@ -51,9 +52,15 @@ func newDoctorCommand() *cobra.Command {
 				return err
 			}
 
+			effective, err := selection.ResolveReadOnly(*m, profiles, extraTags, meta.InstalledSelection)
+			if err != nil {
+				return err
+			}
+
 			report, err := doctor.Build(*m, meta, doctor.Options{
-				Profiles:   profiles,
-				ExtraTags:  extraTags,
+				Profiles:   effective.Profiles,
+				ExtraTags:  effective.ExtraTags,
+				Selection:  &effective.Selection,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
@@ -62,6 +69,7 @@ func newDoctorCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			report.Selection = &effective.Report
 
 			return renderOrEmit(cmd, report, func() error {
 				renderDoctor(cmd.OutOrStdout(), report)

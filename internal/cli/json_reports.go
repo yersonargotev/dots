@@ -8,6 +8,7 @@ import (
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/status"
 	"github.com/yersonargotev/dots/internal/uninstall"
 	"github.com/yersonargotev/dots/internal/upgrade"
@@ -19,6 +20,7 @@ type statusReport struct {
 	Profile      string                 `json:"profile,omitempty"`
 	Profiles     []string               `json:"profiles,omitempty"`
 	Tags         []string               `json:"tags,omitempty"`
+	Selection    *selection.Report      `json:"selection,omitempty"`
 	Entries      []status.Entry         `json:"entries"`
 	Provisioners provision.StatusReport `json:"provisioners"`
 }

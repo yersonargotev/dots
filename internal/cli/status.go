@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 )
@@ -52,9 +53,15 @@ func newStatusCommand() *cobra.Command {
 				return err
 			}
 
+			effective, err := selection.ResolveReadOnly(*m, profiles, extraTags, meta.InstalledSelection)
+			if err != nil {
+				return err
+			}
+
 			report, err := status.Build(*m, meta, status.Options{
-				Profiles:   profiles,
-				ExtraTags:  extraTags,
+				Profiles:   effective.Profiles,
+				ExtraTags:  effective.ExtraTags,
+				Selection:  &effective.Selection,
 				OS:         runtime.GOOS,
 				SourceRoot: paths.SourceRoot,
 				Home:       paths.Home,
@@ -62,8 +69,9 @@ func newStatusCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			report.Selection = &effective.Report
 
-			provPlan, err := provision.Build(*m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS})
+			provPlan, err := provision.Build(*m, provision.Options{Profiles: effective.Profiles, ExtraTags: effective.ExtraTags, Selection: &effective.Selection, OS: runtime.GOOS})
 			if err != nil {
 				return err
 			}
@@ -71,6 +79,7 @@ func newStatusCommand() *cobra.Command {
 				Profile:      report.Profile,
 				Profiles:     report.Profiles,
 				Tags:         report.Tags,
+				Selection:    report.Selection,
 				Entries:      report.Entries,
 				Provisioners: provision.BuildStatus(provPlan, meta),
 			}

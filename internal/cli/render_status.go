@@ -13,7 +13,7 @@ import (
 // The output is stable for a given Report so it can be locked with a golden test
 // and read predictably by the user.
 func renderStatus(w io.Writer, report status.Report) {
-	fmt.Fprintf(w, "Status for %s\n\n", renderProfileSelection(report.Profile, report.Profiles, report.Tags))
+	fmt.Fprintf(w, "Status for %s\n\n", renderEffectiveSelection(report.Profile, report.Profiles, report.Tags, report.Selection))
 
 	if len(report.Entries) == 0 {
 		fmt.Fprintln(w, "No managed entries for this profile.")

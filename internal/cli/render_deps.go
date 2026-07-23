@@ -11,7 +11,7 @@ import (
 // renderDepsCheck writes a deterministic Dependency presence report so it can be
 // locked with a golden test and read predictably by the user.
 func renderDepsCheck(w io.Writer, report deps.CheckReport) {
-	fmt.Fprintf(w, "Dependencies for %s\n\n", renderProfileSelection(report.Profile, report.Profiles, report.Tags))
+	fmt.Fprintf(w, "Dependencies for %s\n\n", renderEffectiveSelection(report.Profile, report.Profiles, report.Tags, report.Selection))
 
 	if len(report.Results) == 0 {
 		fmt.Fprintln(w, "No dependencies declared for this profile.")
@@ -45,7 +45,7 @@ func renderDepsCheck(w io.Writer, report deps.CheckReport) {
 // renderDepsPlan writes a deterministic, advisory Dependency Plan: OS-aware
 // installation guidance for the missing Dependencies under the active Tier.
 func renderDepsPlan(w io.Writer, report deps.PlanReport) {
-	fmt.Fprintf(w, "Dependency plan for %s (%s)\n\n", renderProfileSelection(report.Profile, report.Profiles, report.Tags), report.Tier)
+	fmt.Fprintf(w, "Dependency plan for %s (%s)\n\n", renderEffectiveSelection(report.Profile, report.Profiles, report.Tags, report.Selection), report.Tier)
 
 	if len(report.Items) == 0 {
 		fmt.Fprintln(w, "All declared dependencies are already installed.")

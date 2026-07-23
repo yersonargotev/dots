@@ -14,6 +14,7 @@ import (
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 )
 
@@ -49,10 +50,11 @@ type Entry struct {
 
 // Report is the Dotfiles Status for a Profile, in manifest order.
 type Report struct {
-	Profile  string   `json:"profile,omitempty"`
-	Profiles []string `json:"profiles,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
-	Entries  []Entry  `json:"entries"`
+	Profile   string            `json:"profile,omitempty"`
+	Profiles  []string          `json:"profiles,omitempty"`
+	Tags      []string          `json:"tags,omitempty"`
+	Selection *selection.Report `json:"selection,omitempty"`
+	Entries   []Entry           `json:"entries"`
 }
 
 // HasFindings reports whether the Dotfiles Status contains any entry that
@@ -74,6 +76,7 @@ type Options struct {
 	Profile    string
 	Profiles   []string
 	ExtraTags  []string
+	Selection  *manifest.Selection
 	OS         string
 	SourceRoot string
 	Home       string
@@ -82,13 +85,17 @@ type Options struct {
 // Build evaluates the Dotfiles Status for the selected Profile. It does not
 // mutate the filesystem.
 func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, error) {
-	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
-	if err != nil {
-		return Report{}, err
+	resolved := opts.Selection
+	if resolved == nil {
+		selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+		if err != nil {
+			return Report{}, err
+		}
+		resolved = &selection
 	}
-	tags := selection.Tags
+	tags := resolved.Tags
 
-	report := Report{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
+	report := Report{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue

@@ -3776,6 +3776,23 @@ func TestResolveSelectionComposesProfilesInOrder(t *testing.T) {
 	}
 }
 
+func TestResolveReadOnlySelectionAllowsTagsWithoutInferringDefault(t *testing.T) {
+	m := manifest.Manifest{Profiles: map[string]manifest.Profile{
+		"default": {Tags: []string{"default"}},
+	}}
+
+	got, err := manifest.ResolveReadOnlySelection(m, nil, []string{"web", "web"})
+	if err != nil {
+		t.Fatalf("ResolveReadOnlySelection() error = %v", err)
+	}
+	if got.Profile != "" || len(got.Profiles) != 0 {
+		t.Fatalf("selection = %+v, want no inferred Profile", got)
+	}
+	if want := []string{"web"}; !reflect.DeepEqual(got.Tags, want) {
+		t.Fatalf("Tags = %#v, want %#v", got.Tags, want)
+	}
+}
+
 func TestRepositoryManifestRequiresExplicitProfileSelection(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
