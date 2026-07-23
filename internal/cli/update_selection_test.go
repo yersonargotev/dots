@@ -1,0 +1,286 @@
+package cli_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/state"
+)
+
+func TestUpdateReusesRecordedSelectionAndRefreshesResolvedSnapshot(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core": "core\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+`,
+	})
+	saveInstalledSelection(t, stateRoot, "core", "extra")
+	advanceUpstream(t, origin, "expand core profile", map[string]string{
+		"configs/new": "new\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core, new]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+  - source: configs/new
+    target: ~/.new
+    strategy: symlink
+    tags: [new]
+`,
+	})
+
+	out := runBareUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+
+	if want := "Selection: source=recorded profiles=core extra-tags=extra effective-tags=core,new,extra"; !strings.Contains(out, want) {
+		t.Fatalf("output missing selection report %q:\n%s", want, out)
+	}
+	if _, err := os.Readlink(filepath.Join(home, ".new")); err != nil {
+		t.Fatalf("recorded selection did not apply post-refresh Profile tags: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.Profiles, []string{"core"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Profiles = %#v, want %#v", got, want)
+	}
+	if got, want := meta.InstalledSelection.ExtraTags, []string{"extra"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExtraTags = %#v, want %#v", got, want)
+	}
+	if got, want := meta.InstalledSelection.ResolvedTags, []string{"core", "new", "extra"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResolvedTags = %#v, want %#v", got, want)
+	}
+}
+
+func TestUpdateExplicitSelectionCompletelyOverridesRecordedIntent(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core":  "core\n",
+		"configs/work":  "work\n",
+		"configs/extra": "extra\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+  work:
+    tags: [work]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+  - source: configs/work
+    target: ~/.work
+    strategy: symlink
+    tags: [work]
+  - source: configs/extra
+    target: ~/.extra
+    strategy: symlink
+    tags: [extra]
+`,
+	})
+	saveInstalledSelection(t, stateRoot, "core")
+
+	out := runUpdate(t, "--yes", "--profile", "work", "--tag", "extra",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+
+	if want := "Selection: source=explicit profiles=work extra-tags=extra effective-tags=work,extra"; !strings.Contains(out, want) {
+		t.Fatalf("output missing selection report %q:\n%s", want, out)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".core")); !os.IsNotExist(err) {
+		t.Fatalf("recorded core selection leaked into explicit update: %v", err)
+	}
+	for _, target := range []string{".work", ".extra"} {
+		if _, err := os.Readlink(filepath.Join(home, target)); err != nil {
+			t.Fatalf("explicit selection did not install %s: %v", target, err)
+		}
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.Profiles, []string{"work"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Profiles = %#v, want %#v", got, want)
+	}
+	if got, want := meta.InstalledSelection.ExtraTags, []string{"extra"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExtraTags = %#v, want %#v", got, want)
+	}
+}
+
+func TestUpdateInvalidRecordedSelectionAfterRefreshStopsApplicationAndPreservesIntent(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core": "core\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+`,
+	})
+	previous := state.InstalledSelection{Profiles: []string{"core"}, ResolvedTags: []string{"core"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+	advanceUpstream(t, origin, "remove core profile", map[string]string{
+		"configs/work": "work\n",
+		"dots.yaml": `version: 1
+profiles:
+  work:
+    tags: [work]
+entries:
+  - source: configs/work
+    target: ~/.work
+    strategy: symlink
+    tags: [work]
+`,
+	})
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"update", "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `recorded selection: profile "core" not found`) {
+		t.Fatalf("error = %v, want invalid refreshed selection\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(sourceRoot, "configs/work")); err != nil {
+		t.Fatalf("Source of Truth did not refresh before stale selection was detected: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".work")); !os.IsNotExist(err) {
+		t.Fatalf("Managed Configuration applied after stale selection: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
+		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+}
+
+func TestUpdateProvisionerFailurePreservesPreviousInstalledSelection(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	stubDir := t.TempDir()
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 7\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	previous := state.InstalledSelection{Profiles: []string{"core"}, ResolvedTags: []string{"core"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/git/gitconfig": "managed\n",
+		"dots.yaml":             updateProvisionerManifest,
+	})
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"update", "--yes", "--profile", "default",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := cmd.Execute(); err == nil {
+		t.Fatalf("update error = nil, want provisioner failure\noutput:\n%s", out.String())
+	}
+
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
+		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+}
+
+func TestUpdateJSONReportsRecordedSelection(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core": "core\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+`,
+	})
+	saveInstalledSelection(t, stateRoot, "core", "extra")
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"update", "--dry-run", "--output", "json",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	var env struct {
+		Data struct {
+			Selection struct {
+				Source        string   `json:"source"`
+				Profiles      []string `json:"profiles"`
+				ExtraTags     []string `json:"extra_tags"`
+				EffectiveTags []string `json:"effective_tags"`
+			} `json:"selection"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal JSON: %v\n%s", err, out.String())
+	}
+	if env.Data.Selection.Source != "recorded" ||
+		!reflect.DeepEqual(env.Data.Selection.Profiles, []string{"core"}) ||
+		!reflect.DeepEqual(env.Data.Selection.ExtraTags, []string{"extra"}) ||
+		!reflect.DeepEqual(env.Data.Selection.EffectiveTags, []string{"core", "extra"}) {
+		t.Fatalf("selection = %#v", env.Data.Selection)
+	}
+}

@@ -463,7 +463,7 @@ entries:
 		})
 
 		var out, errOut bytes.Buffer
-		code := cli.Run([]string{"update", "--dry-run", "--output", "json", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot}, &out, &errOut)
+		code := cli.Run([]string{"update", "--profile", "default", "--dry-run", "--output", "json", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot}, &out, &errOut)
 		if code != 0 {
 			t.Fatalf("exit code = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
 		}

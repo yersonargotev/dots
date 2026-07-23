@@ -55,3 +55,28 @@ selection guidance and do not fall back to a manifest `default` or infer intent
 from historical inventory. Human and machine reports identify whether the
 effective selection was `explicit` or `recorded`. This amendment does not change
 install, update, upgrade, migration, selection-delta, or removal policy.
+
+## Update and upgrade reuse amendment
+
+Issue #342 authorizes `update` and `upgrade` to use the same
+explicit-over-recorded selection rule. Both commands resolve authoritative
+intent before mutating the Installed Repository or replacing the binary, then
+resolve that same intent again against the refreshed Install Manifest before
+building or applying Managed Configuration. A Profile or extra Tag removed by a
+Source of Truth refresh therefore stops configuration and Provisioner
+application without falling back to a manifest default.
+
+One resolved selection is threaded through the Install Plan, Managed Entries,
+Provisioners, and text/JSON reports. Binary upgrade continuation carries the
+ordered Profile names, explicit extra Tags, and `explicit` or `recorded` source
+through hidden internal flags; it does not expose recorded intent as
+caller-supplied public flags or persist the stored resolved Tag snapshot as
+intent.
+
+After terminal success, update/upgrade refreshes the Installed Selection,
+including its current resolved Tag snapshot and provenance. A dry run,
+cancellation, invalid refreshed selection, Managed Entry failure, Provisioner
+failure, continuation failure, or metadata-write failure does not replace the
+previous Installed Selection. This amendment does not introduce legacy
+inference, selection-delta or reduction policy, or automatic removal of
+previously selected inventory.

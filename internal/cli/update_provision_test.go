@@ -154,7 +154,7 @@ func TestUpdateLegacyCodexSparkDelegationTagInstallsGenericGuidance(t *testing.T
 	})
 
 	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
-		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-spark-delegation")
+		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--profile", "default", "--tag", "codex-spark-delegation")
 
 	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
 	if err != nil {
@@ -203,7 +203,7 @@ func TestUpdateLegacyWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgent
 	})
 
 	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
-		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-spark-delegation", "--tag", "without-codex-spark-delegation")
+		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--profile", "default", "--tag", "codex-spark-delegation", "--tag", "without-codex-spark-delegation")
 
 	got, err := os.ReadFile(codexPath)
 	if err != nil {
@@ -303,7 +303,7 @@ func TestUpdateCanceledConflictDoesNotRunProvisioners(t *testing.T) {
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetIn(strings.NewReader("q"))
-	cmd.SetArgs([]string{"update", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+	cmd.SetArgs([]string{"update", "--profile", "default", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("update Execute() error = %v\noutput:\n%s", err, out.String())

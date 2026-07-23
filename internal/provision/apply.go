@@ -53,7 +53,7 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 		return Report{}, err
 	}
 
-	selection, _ := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	selection, _ := resolveOptionsSelection(m, opts)
 	report := Report{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)

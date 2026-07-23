@@ -1,0 +1,70 @@
+{
+  "schema_version": "5",
+  "command": "upgrade",
+  "status": "ok",
+  "data": {
+    "dry_run": false,
+    "selection": {
+      "source": "recorded",
+      "profiles": [
+        "core"
+      ],
+      "extra_tags": [
+        "work"
+      ],
+      "effective_tags": [
+        "core",
+        "work"
+      ]
+    },
+    "binary": {
+      "channel": "homebrew",
+      "current_version": "v0.63.0",
+      "latest_version": "v0.64.0",
+      "action": "homebrew-upgrade",
+      "executable": "/opt/homebrew/bin/dots"
+    },
+    "update": {
+      "old_rev": "abc123",
+      "new_rev": "def456",
+      "incoming": [
+        "def456 update managed config"
+      ]
+    },
+    "plan": {
+      "profile": "core",
+      "profiles": [
+        "core"
+      ],
+      "tags": [
+        "core",
+        "work"
+      ],
+      "selection": {
+        "source": "recorded",
+        "profiles": [
+          "core"
+        ],
+        "extra_tags": [
+          "work"
+        ],
+        "effective_tags": [
+          "core",
+          "work"
+        ]
+      },
+      "actions": []
+    },
+    "provisioners": {
+      "profile": "core",
+      "profiles": [
+        "core"
+      ],
+      "tags": [
+        "core",
+        "work"
+      ],
+      "steps": []
+    }
+  }
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"upgrade", "--dry-run", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"upgrade", "--profile", "default", "--dry-run", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("upgrade --dry-run error = %v\noutput:\n%s", err, out.String())
 	}
@@ -115,6 +116,7 @@ entries:
     tags: [core]
 `,
 	})
+	saveInstalledSelection(t, stateRoot, "default")
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -124,6 +126,9 @@ entries:
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("upgrade --continue error = %v\noutput:\n%s", err, out.String())
 	}
+	if want := "Selection: source=recorded profiles=default extra-tags=(none) effective-tags=core"; !strings.Contains(out.String(), want) {
+		t.Fatalf("upgrade continuation output missing selection report %q:\n%s", want, out.String())
+	}
 	if _, err := os.Readlink(filepath.Join(home, ".tmux.conf")); err != nil {
 		t.Fatalf("continuation did not install updated Managed Entry: %v", err)
 	}
@@ -132,6 +137,7 @@ entries:
 func TestUpgradeContinueJSONEmitsUpgradeReportWithBinaryPhase(t *testing.T) {
 	requireGitCLI(t)
 	home := t.TempDir()
+	stateRoot := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	_, sourceRoot := newInstalledRepo(t, map[string]string{
 		"configs/zsh/zshrc": "export A=1\n",
@@ -146,6 +152,7 @@ entries:
     tags: [core]
 `,
 	})
+	saveInstalledSelection(t, stateRoot, "default")
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -153,8 +160,10 @@ entries:
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{
 		"upgrade", "--continue", "--yes", "--output", "json",
+		"--selection-source", "recorded", "--selection-profile", "default",
 		"--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot,
+		"--state-root", stateRoot,
 		"--binary-channel", "homebrew",
 		"--binary-current-version", "v0.18.0",
 		"--binary-latest-version", "v0.19.0",
@@ -168,7 +177,11 @@ entries:
 		Command string `json:"command"`
 		Status  string `json:"status"`
 		Data    struct {
-			DryRun bool `json:"dry_run"`
+			DryRun    bool `json:"dry_run"`
+			Selection struct {
+				Source   string   `json:"source"`
+				Profiles []string `json:"profiles"`
+			} `json:"selection"`
 			Binary struct {
 				Channel        string `json:"channel"`
 				CurrentVersion string `json:"current_version"`
@@ -188,6 +201,9 @@ entries:
 	}
 	if env.Data.Binary.Channel != "homebrew" || env.Data.Binary.CurrentVersion != "v0.18.0" || env.Data.Binary.LatestVersion != "v0.19.0" || env.Data.Binary.Action != "homebrew-upgrade" {
 		t.Fatalf("binary report = %+v, want preserved binary phase", env.Data.Binary)
+	}
+	if env.Data.Selection.Source != "recorded" || !reflect.DeepEqual(env.Data.Selection.Profiles, []string{"default"}) {
+		t.Fatalf("selection report = %+v, want recorded default intent", env.Data.Selection)
 	}
 	if env.Data.Update.OldRev == "" {
 		t.Fatalf("upgrade JSON lost Source of Truth update report: %+v", env.Data.Update)
@@ -216,7 +232,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"upgrade", "--dry-run", "--output", "json", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"upgrade", "--profile", "default", "--dry-run", "--output", "json", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("upgrade --dry-run --output json error = %v\noutput:\n%s", err, out.String())
 	}

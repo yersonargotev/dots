@@ -28,7 +28,9 @@ Repository or workstation home files.
 
 After a successful binary change, `dots upgrade` execs the new binary through a
 hidden continuation phase so the Source of Truth phase runs with the updated
-code.
+code. The continuation carries the authoritative Profile and explicit extra Tag
+intent together with its `explicit` or `recorded` source, so recorded intent is
+not reinterpreted as caller-supplied flags.
 
 ## Previewing changes
 
@@ -38,8 +40,10 @@ dots upgrade --profile workstation --dry-run
 
 Dry-run mode previews both phases without replacing the binary, updating the
 Installed Repository, writing Installation Metadata, or changing home files.
-There is no implicit Profile for the Source of Truth phase: repeat `--profile`
-to compose selections. `workstation` covers `core + desktop + agents`; `web` and
+There is no implicit Profile for the Source of Truth phase. When selection flags
+are absent, upgrade reuses the Installed Selection; otherwise the supplied
+Profiles and extra Tags form the complete selection. Repeat `--profile` to
+compose selections. `workstation` covers `core + desktop + agents`; `web` and
 `mobile` remain opt-in Profiles.
 
 ## Machine output
@@ -54,12 +58,18 @@ dots upgrade --profile workstation --yes --output json
 A real non-dry-run JSON upgrade requires `--yes` so Machine Output Mode never
 prompts on stdout.
 
-For an unattended workstation upgrade, keep the explicit Profile selection and
-add `--yes`:
+After a successful explicit install, an unattended workstation upgrade can
+reuse the Installed Selection:
 
 ```bash
-dots upgrade --profile workstation --yes
+dots upgrade --yes
 ```
+
+Selection is validated before binary replacement and re-resolved against the
+refreshed manifest before Managed Configuration is applied. Missing or invalid
+intent stops the mutating phase without an implicit default. Only terminal
+success refreshes Installed Selection metadata; binary, update, Provisioner, or
+continuation failures preserve the previous selection.
 
 ## Source of Truth flags
 

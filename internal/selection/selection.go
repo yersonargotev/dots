@@ -10,7 +10,7 @@ import (
 	"github.com/yersonargotev/dots/internal/state"
 )
 
-// Source identifies where a read-only command obtained its selection.
+// Source identifies where a selection-aware command obtained its intent.
 type Source string
 
 const (
@@ -19,11 +19,11 @@ const (
 )
 
 // ErrSelectionRequired means that neither invocation arguments nor Installation
-// Metadata supplied a selection. Read-only commands must not silently use a
+// Metadata supplied a selection. Selection-aware commands must not silently use a
 // manifest's default Profile in this case.
 var ErrSelectionRequired = errors.New("selection required: provide --profile or --tag, or run dots install to record an Installed Selection")
 
-// Report is the stable, read-only description of the selection used by a
+// Report is the stable, portable description of the selection used by a
 // command.
 type Report struct {
 	Source        Source   `json:"source"`
@@ -41,31 +41,51 @@ type Effective struct {
 	Report    Report
 }
 
-// ResolveReadOnly chooses and validates the selection for a read-only command.
-// Any explicit Profile or tag wins over the recorded Installed Selection.
-func ResolveReadOnly(m manifest.Manifest, explicitProfiles, explicitTags []string, recorded *state.InstalledSelection) (Effective, error) {
-	source := SourceExplicit
-	profiles := explicitProfiles
-	extraTags := explicitTags
+// Intent is the authoritative Profile and explicit extra Tag input together
+// with its provenance. It is safe to carry across process boundaries because it
+// excludes the resolved Tag snapshot, which is audit data rather than intent.
+type Intent struct {
+	Source    Source
+	Profiles  []string
+	ExtraTags []string
+}
+
+// ResolveEffective chooses and validates the selection for a command. Any
+// explicit Profile or Tag wins over the recorded Installed Selection.
+func ResolveEffective(m manifest.Manifest, explicitProfiles, explicitTags []string, recorded *state.InstalledSelection) (Effective, error) {
+	intent := Intent{Source: SourceExplicit, Profiles: explicitProfiles, ExtraTags: explicitTags}
 	if len(explicitProfiles) == 0 && len(explicitTags) == 0 {
 		if recorded == nil {
 			return Effective{}, ErrSelectionRequired
 		}
-		source = SourceRecorded
-		profiles = recorded.Profiles
-		extraTags = recorded.ExtraTags
+		intent = Intent{Source: SourceRecorded, Profiles: recorded.Profiles, ExtraTags: recorded.ExtraTags}
 	}
-	if err := validateIntent(source, profiles, extraTags); err != nil {
+	return ResolveIntent(m, intent)
+}
+
+// ResolveReadOnly chooses and validates the selection for a read-only command.
+// Any explicit Profile or tag wins over the recorded Installed Selection.
+func ResolveReadOnly(m manifest.Manifest, explicitProfiles, explicitTags []string, recorded *state.InstalledSelection) (Effective, error) {
+	return ResolveEffective(m, explicitProfiles, explicitTags, recorded)
+}
+
+// ResolveIntent re-resolves authoritative intent against the current Install
+// Manifest without changing whether its source was explicit or recorded.
+func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
+	if intent.Source != SourceExplicit && intent.Source != SourceRecorded {
+		return Effective{}, fmt.Errorf("selection source %q is invalid", intent.Source)
+	}
+	if err := validateIntent(intent.Source, intent.Profiles, intent.ExtraTags); err != nil {
 		return Effective{}, err
 	}
 
-	resolved, err := manifest.ResolveReadOnlySelection(m, profiles, extraTags)
+	resolved, err := manifest.ResolveReadOnlySelection(m, intent.Profiles, intent.ExtraTags)
 	if err != nil {
-		return Effective{}, fmt.Errorf("%s selection: %w", source, err)
+		return Effective{}, fmt.Errorf("%s selection: %w", intent.Source, err)
 	}
 
 	orderedProfiles := cloneStrings(resolved.Profiles)
-	orderedExtraTags := orderedUnique(extraTags)
+	orderedExtraTags := orderedUnique(intent.ExtraTags)
 	effectiveTags := cloneStrings(resolved.Tags)
 	return Effective{
 		Profiles:  cloneStrings(orderedProfiles),
@@ -76,12 +96,21 @@ func ResolveReadOnly(m manifest.Manifest, explicitProfiles, explicitTags []strin
 			Tags:     cloneStrings(effectiveTags),
 		},
 		Report: Report{
-			Source:        source,
+			Source:        intent.Source,
 			Profiles:      orderedProfiles,
 			ExtraTags:     orderedExtraTags,
 			EffectiveTags: effectiveTags,
 		},
 	}, nil
+}
+
+// Intent returns a detached copy of the authoritative inputs used to build e.
+func (e Effective) Intent() Intent {
+	return Intent{
+		Source:    e.Report.Source,
+		Profiles:  cloneStrings(e.Profiles),
+		ExtraTags: cloneStrings(e.ExtraTags),
+	}
 }
 
 func validateIntent(source Source, profiles, extraTags []string) error {
@@ -108,11 +137,23 @@ func Resolve(m manifest.Manifest, profiles, extraTags []string) (state.Installed
 	if err != nil {
 		return state.InstalledSelection{}, err
 	}
+	return installedSelection(resolved.Profiles, extraTags, resolved.Tags), nil
+}
+
+// InstalledSelection converts effective command selection into the
+// authoritative metadata shape committed at terminal success.
+func (e Effective) InstalledSelection(provenance state.Provenance) state.InstalledSelection {
+	installed := installedSelection(e.Profiles, e.ExtraTags, e.Selection.Tags)
+	installed.Provenance = provenance
+	return installed
+}
+
+func installedSelection(profiles, extraTags, resolvedTags []string) state.InstalledSelection {
 	return state.InstalledSelection{
-		Profiles:     append([]string(nil), resolved.Profiles...),
+		Profiles:     cloneStrings(profiles),
 		ExtraTags:    orderedUnique(extraTags),
-		ResolvedTags: append([]string(nil), resolved.Tags...),
-	}, nil
+		ResolvedTags: cloneStrings(resolvedTags),
+	}
 }
 
 // Record reloads the latest Installation Metadata and commits only the

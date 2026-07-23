@@ -51,12 +51,12 @@ or incompatible targets still remain Conflicts.
 
 ## Flags
 
-`update` accepts the same path, explicit profile composition, and safety flags as `install`:
+`update` accepts the same path, selection, and safety flags as `install`:
 
 | Flag | Purpose |
 |------|---------|
 | `--dry-run` | Fetch and report the available fast-forward and the Install Plan without fast-forwarding the working tree or installing files. |
-| `--file`, `--profile`, `--tag` | Select the manifest, one or more Profiles, and optional capability tags to install after updating. Repeat `--profile` to compose Profiles and repeat `--tag` for opt-in tags. |
+| `--file`, `--profile`, `--tag` | Select the manifest, one or more Profiles, and optional capability tags to install after updating. Repeat `--profile` to compose Profiles and repeat `--tag` for opt-in tags. If neither selection flag is present, reuse the Installed Selection. |
 | `--source-root` | Installed Repository to update (default `~/.local/share/dots`). |
 | `--home` | Target home directory; use a sandbox path to avoid touching real config. |
 | `--state-root` | State directory for Installation Metadata and Backup Sets. |
@@ -76,15 +76,25 @@ Installed Repository can fast-forward a1b2c3d -> e4f5a6b:
 
 Because no fast-forward is applied in a dry run, the rendered plan reflects the **current** Source of Truth, not the post-update state. Run `update` without `--dry-run` to apply the fast-forward and compute the plan against the updated repository.
 
-For unattended updates, keep the explicit Profile selection and add `--yes`:
+After a successful explicit install, an unattended update can reuse the
+Installed Selection:
 
 ```bash
-dots update --profile workstation --yes
+dots update --yes
 ```
+
+Any supplied `--profile` or `--tag` makes the complete explicit selection win
+for that invocation; dots never merges it with recorded intent. The selection
+is validated before the Installed Repository changes and resolved again against
+the refreshed manifest before Managed Configuration is applied. Missing or
+invalid recorded intent stops application with remediation instead of choosing
+an implicit default. Only terminal success refreshes the Installed Selection,
+so dry runs, cancellations, and failed Managed Entry or Provisioner work
+preserve the previous intent.
 
 ## Profiles and provisioners
 
-Provisioners are scoped by selected tags, exactly like file entries. There is no implicit default Profile; choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai memory/context setup and cleanup provisioners for Codex, Claude Code, OpenCode, Antigravity, and VS Code Copilot, plus agent settings baselines, shared engineering skills, the dots-owned `delegation` skill, and compact dots-owned global agent rules; Codex-only delegation is available through `--profile codex-delegation`, which installs the dots-owned `delegation` skill only for Codex, a model-neutral overlay, and native Codex custom agents at `~/.codex/agents/dots-explorer.toml` and `~/.codex/agents/dots-worker.toml`; the overlay and native agents are removable with `--tag without-codex-delegation`. gentle-ai persona prompt Regenerated Content is cleaned up rather than installed by this repository; SDD remains optional with `--tag sdd`. CodeGraph is independent and selected with `--tag codegraph`; CodeGraph's installer owns generated MCP/instruction setup, while dots owns the scoped `<!-- dots:codegraph-mode -->` routing and verification policy overlay plus a Codex SessionStart hook that runs `codegraph init` only when the current Git repository lacks `.codegraph`. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills plus the Dart and Flutter MCP server for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
+Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai memory/context setup and cleanup provisioners for Codex, Claude Code, OpenCode, Antigravity, and VS Code Copilot, plus agent settings baselines, shared engineering skills, the dots-owned `delegation` skill, and compact dots-owned global agent rules; Codex-only delegation is available through `--profile codex-delegation`, which installs the dots-owned `delegation` skill only for Codex, a model-neutral overlay, and native Codex custom agents at `~/.codex/agents/dots-explorer.toml` and `~/.codex/agents/dots-worker.toml`; the overlay and native agents are removable with `--tag without-codex-delegation`. gentle-ai persona prompt Regenerated Content is cleaned up rather than installed by this repository; SDD remains optional with `--tag sdd`. CodeGraph is independent and selected with `--tag codegraph`; CodeGraph's installer owns generated MCP/instruction setup, while dots owns the scoped `<!-- dots:codegraph-mode -->` routing and verification policy overlay plus a Codex SessionStart hook that runs `codegraph init` only when the current Git repository lacks `.codegraph`. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills plus the Dart and Flutter MCP server for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
 
 Use `--profile codex-delegation` when only Codex delegation is desired. It installs the dots-owned `delegation` skill for Codex, the model-neutral `<!-- dots:delegation -->` overlay, and native `dots-explorer`/`dots-worker` agents without the broader agent baseline. Remove the overlay and native agents with `--profile codex-delegation --tag without-codex-delegation`. The legacy Spark-named install and cleanup tags remain compatibility aliases. See [`docs/agents/delegation.md`](agents/delegation.md) for the portable task-fit delegation policy and the current inventory of native delegation artifacts by supported agent surface.
 

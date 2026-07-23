@@ -231,7 +231,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"update", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+	cmd.SetArgs([]string{"update", "--profile", "default", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot})
 	if err := cmd.Execute(); err == nil {
 		t.Fatalf("update Execute() error = nil, want divergence error\noutput:\n%s", out.String())
@@ -310,7 +310,7 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetIn(strings.NewReader("r\n"))
-	cmd.SetArgs([]string{"update", "--no-tui", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+	cmd.SetArgs([]string{"update", "--profile", "default", "--no-tui", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("update Execute() error = %v\noutput:\n%s", err, out.String())
@@ -342,6 +342,21 @@ func requireGitCLI(t *testing.T) {
 }
 
 func runUpdate(t *testing.T, args ...string) string {
+	t.Helper()
+	hasSelection := false
+	for _, arg := range args {
+		if arg == "--profile" || arg == "-p" || arg == "--tag" {
+			hasSelection = true
+			break
+		}
+	}
+	if !hasSelection {
+		args = append([]string{"--profile", "default"}, args...)
+	}
+	return runBareUpdate(t, args...)
+}
+
+func runBareUpdate(t *testing.T, args ...string) string {
 	t.Helper()
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -428,7 +443,7 @@ func runGitOutput(t *testing.T, dir string, args ...string) string {
 	return ""
 }
 
-func TestUpdateRequiresProfileBeforeFastForward(t *testing.T) {
+func TestUpdateRequiresSelectionBeforeFastForward(t *testing.T) {
 	requireGitCLI(t)
 	home := t.TempDir()
 	stateRoot := t.TempDir()
@@ -456,8 +471,8 @@ entries:
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"update", "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "at least one --profile is required") {
-		t.Fatalf("update error = %v, want explicit profile error\noutput:\n%s", err, out.String())
+	if err == nil || !strings.Contains(err.Error(), "selection required") {
+		t.Fatalf("update error = %v, want selection remediation\noutput:\n%s", err, out.String())
 	}
 	if got := strings.TrimSpace(runGitOutput(t, sourceRoot, "rev-parse", "HEAD")); got != oldHead {
 		t.Fatalf("update fast-forwarded before profile validation: HEAD = %s, want %s", got, oldHead)
