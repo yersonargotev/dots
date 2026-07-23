@@ -40,3 +40,18 @@ remain historical inventory and ownership evidence. This ADR does not authorize
 other commands to reuse the Installed Selection, migrate legacy metadata,
 interpret future Profile changes, report selection deltas, or remove items that
 are no longer selected.
+
+## Read-only reuse amendment
+
+Issue #341 authorizes `status`, `doctor`, `plan`, `deps check`, and `deps plan`
+to reuse the Installed Selection when the invocation supplies neither
+`--profile` nor `--tag`. Any explicit selection is complete for that invocation,
+wins over recorded intent, and never rewrites Installation Metadata. Recorded
+Profile names and explicit extra Tags are resolved again against the current
+Install Manifest; the stored resolved Tag snapshot remains audit-only.
+
+If neither explicit nor recorded intent exists, these commands return consistent
+selection guidance and do not fall back to a manifest `default` or infer intent
+from historical inventory. Human and machine reports identify whether the
+effective selection was `explicit` or `recorded`. This amendment does not change
+install, update, upgrade, migration, selection-delta, or removal policy.

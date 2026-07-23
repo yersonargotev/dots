@@ -1,0 +1,82 @@
+[
+  {
+    "scenario": "recorded",
+    "exit_code": 2,
+    "selection": {
+      "effective_tags": [
+        "core",
+        "extra"
+      ],
+      "extra_tags": [
+        "extra"
+      ],
+      "profiles": [
+        "default"
+      ],
+      "source": "recorded"
+    }
+  },
+  {
+    "scenario": "explicit",
+    "exit_code": 0,
+    "selection": {
+      "effective_tags": [
+        "alternate"
+      ],
+      "extra_tags": [],
+      "profiles": [
+        "alternate"
+      ],
+      "source": "explicit"
+    }
+  },
+  {
+    "scenario": "tag-only explicit",
+    "exit_code": 0,
+    "selection": {
+      "effective_tags": [
+        "alternate"
+      ],
+      "extra_tags": [
+        "alternate"
+      ],
+      "profiles": [],
+      "source": "explicit"
+    }
+  },
+  {
+    "scenario": "missing",
+    "exit_code": 1,
+    "error": "selection required: provide --profile or --tag, or run dots install to record an Installed Selection"
+  },
+  {
+    "scenario": "invalid recorded",
+    "exit_code": 1,
+    "error": "recorded selection: profile \"removed-profile\" not found"
+  },
+  {
+    "scenario": "invalid explicit",
+    "exit_code": 1,
+    "error": "explicit selection: profile \"removed-profile\" not found"
+  },
+  {
+    "scenario": "empty recorded",
+    "exit_code": 1,
+    "error": "recorded selection: at least one Profile or extra Tag is required"
+  },
+  {
+    "scenario": "empty explicit",
+    "exit_code": 1,
+    "error": "explicit selection: profile names must not be empty"
+  },
+  {
+    "scenario": "whitespace recorded",
+    "exit_code": 1,
+    "error": "recorded selection: tags must not be empty"
+  },
+  {
+    "scenario": "whitespace explicit",
+    "exit_code": 1,
+    "error": "explicit selection: tags must not be empty"
+  }
+]

@@ -61,7 +61,7 @@ func TestRunReturnsZeroWhenAligned(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	code := cli.Run([]string{
-		"status", "--file", manifestPath,
+		"status", "--profile", "default", "--file", manifestPath,
 		"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
 	}, &out, &errOut)
 
@@ -79,7 +79,7 @@ func TestRunReturnsTwoOnFindings(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	code := cli.Run([]string{
-		"status", "--file", manifestPath,
+		"status", "--profile", "default", "--file", manifestPath,
 		"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
 	}, &out, &errOut)
 
@@ -90,7 +90,7 @@ func TestRunReturnsTwoOnFindings(t *testing.T) {
 
 func TestRunReturnsOneOnError(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := cli.Run([]string{"status", "--file", filepath.Join(t.TempDir(), "missing.yaml")}, &out, &errOut)
+	code := cli.Run([]string{"status", "--profile", "default", "--file", filepath.Join(t.TempDir(), "missing.yaml")}, &out, &errOut)
 
 	if code != 1 {
 		t.Fatalf("status with bad manifest exit code = %d, want 1", code)

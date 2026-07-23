@@ -12,6 +12,7 @@ type Options struct {
 	Profile   string
 	Profiles  []string
 	ExtraTags []string
+	Selection *manifest.Selection
 	OS        string
 }
 
@@ -39,10 +40,11 @@ type Plan struct {
 // intersect the Profile's tags) and pass the OS filter, preserving manifest
 // order. It mirrors the Entry selection used by deps, plan, and status.
 func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
-	indices, err := selectedIndices(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.OS, opts.ExtraTags)
+	selection, err := resolveOptionsSelection(m, opts)
 	if err != nil {
 		return nil, err
 	}
+	indices := selectedIndicesForSelection(m, selection, opts.OS)
 
 	var selected []manifest.Provisioner
 	for i, prov := range m.Provisioners {
@@ -63,15 +65,17 @@ func selectedIndices(m manifest.Manifest, profileNames []string, os string, extr
 	if err != nil {
 		return nil, err
 	}
-	tags := selection.Tags
+	return selectedIndicesForSelection(m, selection, os), nil
+}
 
+func selectedIndicesForSelection(m manifest.Manifest, selection manifest.Selection, os string) map[int]bool {
 	indices := make(map[int]bool)
 	for i, prov := range m.Provisioners {
-		if manifest.SharesTag(prov.Tags, tags) && manifest.MatchesOS(prov.OS, os) {
+		if manifest.SharesTag(prov.Tags, selection.Tags) && manifest.MatchesOS(prov.OS, os) {
 			indices[i] = true
 		}
 	}
-	return indices, nil
+	return indices
 }
 
 // SkippedProvisioners reports whether the active profile omits provisioners that
@@ -101,7 +105,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		return Plan{}, err
 	}
 
-	selection, _ := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	selection, _ := resolveOptionsSelection(m, opts)
 	plan := Plan{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
@@ -114,6 +118,13 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		})
 	}
 	return plan, nil
+}
+
+func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Selection, error) {
+	if opts.Selection != nil {
+		return *opts.Selection, nil
+	}
+	return manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
 }
 
 // managedRoots returns the well-known HOME-relative roots an allowlisted tool

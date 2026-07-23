@@ -4,6 +4,19 @@
   "status": "findings",
   "data": {
     "profile": "default",
+    "selection": {
+      "source": "explicit",
+      "profiles": [
+        "default"
+      ],
+      "extra_tags": [
+        "work"
+      ],
+      "effective_tags": [
+        "core",
+        "work"
+      ]
+    },
     "results": [
       {
         "name": "git",

@@ -10,6 +10,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 )
 
@@ -40,10 +41,11 @@ type Action struct {
 
 // Plan is the preview of changes the installer would apply for a Profile.
 type Plan struct {
-	Profile  string   `json:"profile,omitempty"`
-	Profiles []string `json:"profiles,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
-	Actions  []Action `json:"actions"`
+	Profile   string            `json:"profile,omitempty"`
+	Profiles  []string          `json:"profiles,omitempty"`
+	Tags      []string          `json:"tags,omitempty"`
+	Selection *selection.Report `json:"selection,omitempty"`
+	Actions   []Action          `json:"actions"`
 }
 
 // HasFindings reports whether the Install Plan contains an action the caller
@@ -64,6 +66,7 @@ type Options struct {
 	Profile    string
 	Profiles   []string
 	ExtraTags  []string
+	Selection  *manifest.Selection
 	OS         string
 	SourceRoot string
 	Home       string
@@ -75,13 +78,17 @@ type Options struct {
 // Profile's tags and that pass the OS filter, then determines each target's
 // status against the current workstation state.
 func Build(m manifest.Manifest, opts Options) (Plan, error) {
-	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
-	if err != nil {
-		return Plan{}, err
+	resolved := opts.Selection
+	if resolved == nil {
+		selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+		if err != nil {
+			return Plan{}, err
+		}
+		resolved = &selection
 	}
-	tags := selection.Tags
+	tags := resolved.Tags
 
-	plan := Plan{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
+	plan := Plan{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue

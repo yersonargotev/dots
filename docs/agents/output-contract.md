@@ -105,6 +105,15 @@ prose the text surface prints:
   `data.provisioners.items`. Pending or failed Provisioners are findings so
   agents can distinguish aligned Managed Entries from an incomplete full-profile
   setup. Read dependency readiness for those commands from `doctor`.
+- `status`, `doctor`, `plan`, `deps check`, and `deps plan` include
+  `data.selection` with `source` (`explicit` or `recorded`), ordered `profiles`,
+  explicit `extra_tags`, and recomputed `effective_tags`. When no selection
+  flags are supplied, these commands resolve the recorded Profile names and
+  extra Tags against the current Install Manifest; the stored `resolved_tags`
+  remains audit-only. Any explicit Profile or Tag selection wins completely for
+  that invocation and is never merged into or persisted over recorded intent.
+  If neither source exists, the command returns an execution error (`1`) with
+  selection guidance rather than falling back to a manifest `default`.
 
 - `installed` is a read-only report over Installation Metadata. Its optional
   `data.installed_selection` is the authoritative machine-level intent recorded
@@ -162,11 +171,10 @@ prose the text surface prints:
   `data.backup_sets` lists the Backup Sets created by that run, including each
   set ID, target list, and state-root path.
 
-Profile-aware reports expose both the compatibility `profile` label and the
-first-class composed selection: `profiles` is the ordered list supplied with
-repeatable `--profile`, and `tags` is the resolved, de-duplicated tag union after
-explicit `--tag` values are applied. Agents should prefer `profiles` and `tags`
-when branching on composed selections.
+Profile-aware reports retain the compatibility `profile`, `profiles`, and
+`tags` fields. For read-only selection-aware commands, agents should prefer the
+portable `selection` object because it distinguishes invocation intent from
+recorded machine intent and separates explicit extra Tags from effective Tags.
 
 The domain reports' `json:` field names are part of the public contract.
 Renaming, removing, or changing the meaning of an existing field is a

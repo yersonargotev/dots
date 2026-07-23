@@ -86,6 +86,13 @@ dots status
 dots doctor
 ```
 
+After a successful explicit install, `status`, `doctor`, `plan`, `deps check`,
+and `deps plan` reuse the recorded Installed Selection when no `--profile` or
+`--tag` is supplied. Supplying either flag makes that invocation's complete
+explicit selection win without changing Installation Metadata. A machine with
+no recorded selection must pass an explicit `--profile` or `--tag`; read-only
+commands never invent an implicit Profile.
+
 ### Machine-readable output
 
 Scripts and agents can request a stable JSON envelope from result-producing
@@ -111,7 +118,9 @@ dots deps install --yes  # execute installable actions without prompting
 
 `dots deps install` executes package managers with direct argv only after confirmation. It does not bypass `sudo`, does not run manual-only guidance, and does not promise rollback, version constraints, reinstall, or upgrade behavior.
 
-For honest fresh-machine validation, `deps check` and `deps plan` accept `--home` to root font detection at a sandbox instead of your real home:
+For honest fresh-machine validation, `deps check` and `deps plan` accept
+`--home` to root font detection and Installed Selection lookup at a sandbox
+instead of your real home:
 
 ```bash
 tmp=$(mktemp -d); mkdir -p "$tmp/home"
@@ -119,7 +128,10 @@ dots deps check --file dots.yaml --home "$tmp/home"
 dots deps plan  --file dots.yaml --home "$tmp/home"
 ```
 
-Unlike `doctor`/`install`, deps commands manage system-global tools rather than `$HOME` files, so they intentionally do not offer `--source-root`/`--state-root` (inert and misleading here), and `deps install` takes no `--home` (it would only relabel font detection while the real install still touches the system).
+Unlike `doctor`/`install`, deps commands manage system-global tools rather than
+`$HOME` files, so read-only deps commands derive both the Installed Repository
+and Installation Metadata locations from `--home` instead of offering separate
+`--source-root`/`--state-root` flags.
 
 List Backup Metadata created by safe installs or restores:
 

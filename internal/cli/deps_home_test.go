@@ -61,7 +61,7 @@ func TestDepsCheckHomeFlagDetectsSandboxFont(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath, "--home", sandbox})
+	cmd.SetArgs([]string{"deps", "check", "--profile", "default", "--file", manifestPath, "--home", sandbox})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -90,7 +90,7 @@ func TestDepsCheckHomeFlagIgnoresRealHomeFont(t *testing.T) {
 
 	// A missing dependency is a finding, so deps check exits with code 2.
 	var out, errOut bytes.Buffer
-	code := cli.Run([]string{"deps", "check", "--file", manifestPath, "--home", sandbox}, &out, &errOut)
+	code := cli.Run([]string{"deps", "check", "--profile", "default", "--file", manifestPath, "--home", sandbox}, &out, &errOut)
 	if code != 2 {
 		t.Fatalf("exit code = %d, want 2 (findings)\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
 	}
@@ -118,7 +118,7 @@ func TestDepsPlanHomeFlagDetectsSandboxFont(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--home", sandbox, "--tier", "homebrew"})
+	cmd.SetArgs([]string{"deps", "plan", "--profile", "default", "--file", manifestPath, "--home", sandbox, "--tier", "homebrew"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())

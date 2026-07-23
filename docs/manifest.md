@@ -29,11 +29,14 @@ Unknown YAML fields are rejected during manifest loading.
 
 ## Profiles
 
-A Profile is selected explicitly by commands such as `dots plan`, `dots install`,
-`dots status`, and `dots deps check`. Repeat `--profile` to compose multiple
-Profiles by the ordered union of their tags. Commands that expose `--tag` can add
-optional capability tags on top of the selected Profile set without creating another
-Profile. For example, `--tag adaptive-theme` installs the opt-in marker and
+A Profile is selected explicitly during install. Read-only selection-aware
+commands (`status`, `doctor`, `plan`, `deps check`, and `deps plan`) reuse the
+authoritative Installed Selection when both `--profile` and `--tag` are omitted.
+Any explicit selection flag makes the current invocation's complete selection
+win without rewriting Installation Metadata. Repeat `--profile` to compose
+multiple Profiles by the ordered union of their tags. Commands that expose
+`--tag` can add optional capability tags on top of the selected Profile set
+without creating another Profile. For example, `--tag adaptive-theme` installs the opt-in marker and
 app-specific fragments used by managed configs to follow macOS light appearance
 where the app has a safe seam.
 

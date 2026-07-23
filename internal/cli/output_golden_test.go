@@ -11,6 +11,7 @@ import (
 	inst "github.com/yersonargotev/dots/internal/installed"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 )
@@ -40,6 +41,9 @@ func TestEnvelopeGolden(t *testing.T) {
 				Status:        statusFindings,
 				Data: statusReport{
 					Profile: "default",
+					Selection: &selection.Report{
+						Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
+					},
 					Entries: []status.Entry{
 						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", State: status.StateOK},
 						{Source: "configs/git/config", Target: "/home/user/.gitconfig", Strategy: "copy", State: status.StateMissing},
@@ -84,7 +88,9 @@ func TestEnvelopeGolden(t *testing.T) {
 				SchemaVersion: schemaVersion,
 				Command:       "plan",
 				Status:        statusFindings,
-				Data: plan.Plan{Profile: "default", Actions: []plan.Action{
+				Data: plan.Plan{Profile: "default", Selection: &selection.Report{
+					Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
+				}, Actions: []plan.Action{
 					{Source: "configs/zsh/zshrc", ResolvedSource: "/abs/machine/local/path/MUST/NOT/APPEAR", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
 					{Source: "configs/git/config", ResolvedSource: "/abs/x", Target: "/home/user/.gitconfig", Strategy: "copy", Status: plan.StatusConflict},
 				}},
@@ -98,7 +104,10 @@ func TestEnvelopeGolden(t *testing.T) {
 				Command:       "doctor",
 				Status:        statusFindings,
 				Data: doctor.Report{
-					Profile:  "default",
+					Profile: "default",
+					Selection: &selection.Report{
+						Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
+					},
 					OS:       "darwin",
 					Platform: doctor.Platform{Supported: true, OS: "darwin"},
 					Dependencies: deps.CheckReport{Profile: "default", Results: []deps.Result{
@@ -124,7 +133,9 @@ func TestEnvelopeGolden(t *testing.T) {
 				SchemaVersion: schemaVersion,
 				Command:       "deps check",
 				Status:        statusFindings,
-				Data: deps.CheckReport{Profile: "default", Results: []deps.Result{
+				Data: deps.CheckReport{Profile: "default", Selection: &selection.Report{
+					Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
+				}, Results: []deps.Result{
 					{Name: "git", Requirement: "required", Command: "git", Present: true, ProbeDetail: "MUST NOT APPEAR", Hint: "MUST NOT APPEAR"},
 					{Name: "rg", Requirement: "optional", Command: "rg", Present: false},
 				}},
@@ -139,7 +150,10 @@ func TestEnvelopeGolden(t *testing.T) {
 				Status:        statusFindings,
 				Data: deps.PlanReport{
 					Profile: "default",
-					Tier:    deps.Tier("debian"),
+					Selection: &selection.Report{
+						Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
+					},
+					Tier: deps.Tier("debian"),
 					Actions: []deps.InstallAction{
 						{Dependency: "rg", Requirement: "optional", Status: deps.InstallActionStatusInstallable, Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "-y", "ripgrep"}, Candidates: []deps.ProviderCandidate{{Provider: deps.TierDebian, Package: "ripgrep", Executable: "apt-get", Args: []string{"install", "ripgrep"}}}},
 					},

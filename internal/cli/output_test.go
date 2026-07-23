@@ -159,7 +159,7 @@ func TestStatusJSONEnvelopeAligned(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	code := cli.Run([]string{
-		"status", "--output", "json", "--file", manifestPath,
+		"status", "--profile", "default", "--output", "json", "--file", manifestPath,
 		"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
 	}, &out, &errOut)
 
@@ -181,7 +181,7 @@ func TestStatusJSONEnvelopeFindings(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	code := cli.Run([]string{
-		"status", "--output", "json", "--file", manifestPath,
+		"status", "--profile", "default", "--output", "json", "--file", manifestPath,
 		"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
 	}, &out, &errOut)
 
@@ -202,7 +202,7 @@ func TestStatusJSONEnvelopeFindings(t *testing.T) {
 func TestJSONErrorEnvelopeOnStdout(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := cli.Run([]string{
-		"status", "--output", "json", "--file", filepath.Join(t.TempDir(), "missing.yaml"),
+		"status", "--profile", "default", "--output", "json", "--file", filepath.Join(t.TempDir(), "missing.yaml"),
 	}, &out, &errOut)
 
 	if code != 1 {
@@ -242,7 +242,7 @@ func TestTextModeRemainsDefault(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	cli.Run([]string{
-		"status", "--file", manifestPath,
+		"status", "--profile", "default", "--file", manifestPath,
 		"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
 	}, &out, &errOut)
 

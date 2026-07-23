@@ -16,6 +16,7 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 )
@@ -25,6 +26,7 @@ type Options struct {
 	Profile    string
 	Profiles   []string
 	ExtraTags  []string
+	Selection  *manifest.Selection
 	OS         string
 	SourceRoot string
 	Home       string
@@ -36,6 +38,7 @@ type Report struct {
 	Profile       string                `json:"profile,omitempty"`
 	Profiles      []string              `json:"profiles,omitempty"`
 	Tags          []string              `json:"tags,omitempty"`
+	Selection     *selection.Report     `json:"selection,omitempty"`
 	OS            string                `json:"os"`
 	Platform      Platform              `json:"platform"`
 	Dependencies  deps.CheckReport      `json:"dependencies"`
@@ -87,19 +90,23 @@ var secretPatterns = []secretPattern{
 
 // Build runs all doctor diagnostics without mutating the filesystem.
 func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Lookup, fontLook deps.FontLookup) (Report, error) {
-	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
-	if err != nil {
-		return Report{}, err
+	resolved := opts.Selection
+	if resolved == nil {
+		selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+		if err != nil {
+			return Report{}, err
+		}
+		resolved = &selection
 	}
 	report := Report{
-		Profile:  selection.Profile,
-		Profiles: selection.Profiles,
-		Tags:     selection.Tags,
+		Profile:  resolved.Profile,
+		Profiles: resolved.Profiles,
+		Tags:     resolved.Tags,
 		OS:       opts.OS,
 		Platform: Platform{Supported: supportedOS(opts.OS), OS: opts.OS},
 	}
 
-	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, OS: opts.OS}, look, fontLook, opts.ToolRunner)
+	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, Selection: resolved, OS: opts.OS}, look, fontLook, opts.ToolRunner)
 	if err != nil {
 		return Report{}, err
 	}
@@ -109,6 +116,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 		Profile:    opts.Profile,
 		Profiles:   opts.Profiles,
 		ExtraTags:  opts.ExtraTags,
+		Selection:  resolved,
 		OS:         opts.OS,
 		SourceRoot: opts.SourceRoot,
 		Home:       opts.Home,
@@ -118,7 +126,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 	}
 	report.Configuration = statusReport
 
-	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, OS: opts.OS}, look, fontLook)
+	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, Selection: resolved, OS: opts.OS}, look, fontLook)
 	if err != nil {
 		return Report{}, err
 	}
@@ -136,11 +144,15 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 // ScanSecrets scans selected repository-managed source files for obvious secret
 // patterns. It is intentionally conservative scope-wise and advisory in meaning.
 func ScanSecrets(m manifest.Manifest, opts Options) (SecretReport, error) {
-	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
-	if err != nil {
-		return SecretReport{}, err
+	resolved := opts.Selection
+	if resolved == nil {
+		selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+		if err != nil {
+			return SecretReport{}, err
+		}
+		resolved = &selection
 	}
-	tags := selection.Tags
+	tags := resolved.Tags
 
 	var report SecretReport
 	seen := map[string]bool{}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/selection"
 )
 
 // ProviderCandidate is one ordered installation provider considered for a
@@ -76,12 +77,13 @@ type Guidance struct {
 // PlanReport is the Dependency Plan for a Profile: OS-aware guidance for the
 // missing Dependencies under the active Tier. It is advisory only.
 type PlanReport struct {
-	Profile  string          `json:"profile,omitempty"`
-	Profiles []string        `json:"profiles,omitempty"`
-	Tags     []string        `json:"tags,omitempty"`
-	Tier     Tier            `json:"tier"`
-	Actions  []InstallAction `json:"actions"`
-	Items    []Guidance      `json:"items"`
+	Profile   string            `json:"profile,omitempty"`
+	Profiles  []string          `json:"profiles,omitempty"`
+	Tags      []string          `json:"tags,omitempty"`
+	Selection *selection.Report `json:"selection,omitempty"`
+	Tier      Tier              `json:"tier"`
+	Actions   []InstallAction   `json:"actions"`
+	Items     []Guidance        `json:"items"`
 }
 
 // HasFindings reports whether the Dependency Plan lists any missing Dependency.
@@ -94,7 +96,7 @@ func (r PlanReport) HasFindings() bool {
 // Plan computes advisory installation guidance for the Dependencies that the
 // Profile needs but the workstation is missing, tailored to the active Tier.
 func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, tier Tier) (PlanReport, error) {
-	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	selection, err := resolveOptionsSelection(m, opts)
 	if err != nil {
 		return PlanReport{}, err
 	}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/selection"
 )
 
 // Lookup reports whether a command is available on the workstation. It is the
@@ -28,6 +29,7 @@ type Options struct {
 	Profile   string
 	Profiles  []string
 	ExtraTags []string
+	Selection *manifest.Selection
 	OS        string
 	Arch      string
 	Home      string
@@ -51,10 +53,11 @@ type Result struct {
 
 // CheckReport is the Dependency presence report for a Profile.
 type CheckReport struct {
-	Profile  string   `json:"profile,omitempty"`
-	Profiles []string `json:"profiles,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
-	Results  []Result `json:"results"`
+	Profile   string            `json:"profile,omitempty"`
+	Profiles  []string          `json:"profiles,omitempty"`
+	Tags      []string          `json:"tags,omitempty"`
+	Selection *selection.Report `json:"selection,omitempty"`
+	Results   []Result          `json:"results"`
 }
 
 // HasFindings reports whether any declared Dependency is absent from the
@@ -84,7 +87,7 @@ func CheckWithToolProbes(m manifest.Manifest, opts Options, look Lookup, fontLoo
 		return CheckReport{}, err
 	}
 
-	selection, _ := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	selection, _ := resolveOptionsSelection(m, opts)
 	report := CheckReport{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, dep := range selected {
 		result := checkResult(dep, look, fontLook)
@@ -223,7 +226,7 @@ func fontProbeLabel(matches []string) string {
 // first-declared order.
 
 func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependency, error) {
-	selection, err := manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	selection, err := resolveOptionsSelection(m, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -283,4 +286,11 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 		addDependencies(prov.Dependencies)
 	}
 	return selected, nil
+}
+
+func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Selection, error) {
+	if opts.Selection != nil {
+		return *opts.Selection, nil
+	}
+	return manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
 }

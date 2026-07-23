@@ -99,7 +99,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"plan", "--file", manifestPath, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"plan", "--profile", "default", "--file", manifestPath, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -155,7 +155,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"plan", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"plan", "--profile", "default", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -197,7 +197,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"plan", "--file", manifestPath})
+	cmd.SetArgs([]string{"plan", "--profile", "default", "--file", manifestPath})
 
 	// A declared source the Installed Repository does not provide is a finding.
 	requireFindings(t, cmd.Execute())
@@ -243,7 +243,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"doctor", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"doctor", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -299,7 +299,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"doctor", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"doctor", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	// doctor surfaces warning diagnostics (a missing dependency), so it now
 	// returns findings.
@@ -382,7 +382,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"doctor", "--file", manifestPath, "--profile", "desktop", "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"doctor", "--profile", "desktop", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
 	}
@@ -965,7 +965,7 @@ entries:
 	var out bytes.Buffer
 	statusCmd.SetOut(&out)
 	statusCmd.SetErr(&out)
-	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	statusCmd.SetArgs([]string{"status", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 	if err := statusCmd.Execute(); err != nil {
 		t.Fatalf("status Execute() error = %v", err)
 	}
@@ -1128,7 +1128,7 @@ entries:
 	var out bytes.Buffer
 	statusCmd.SetOut(&out)
 	statusCmd.SetErr(&out)
-	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	statusCmd.SetArgs([]string{"status", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 	// The foreign target is a Conflict, so status now returns findings.
 	requireFindings(t, statusCmd.Execute())
 
@@ -1170,7 +1170,7 @@ entries:
 	var out bytes.Buffer
 	statusCmd.SetOut(&out)
 	statusCmd.SetErr(&out)
-	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	statusCmd.SetArgs([]string{"status", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 	if err := statusCmd.Execute(); err == nil {
 		t.Fatal("status Execute() error = nil, want default state-root symlink escape error")
 	}
@@ -1210,7 +1210,7 @@ entries:
 	var out bytes.Buffer
 	statusCmd.SetOut(&out)
 	statusCmd.SetErr(&out)
-	statusCmd.SetArgs([]string{"status", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	statusCmd.SetArgs([]string{"status", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 	if err := statusCmd.Execute(); err == nil {
 		t.Fatal("status Execute() error = nil, want metadata leaf symlink escape error")
 	}
@@ -1268,7 +1268,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
+	cmd.SetArgs([]string{"deps", "check", "--profile", "default", "--file", manifestPath})
 	// A missing Dependency is a finding.
 	requireFindings(t, cmd.Execute())
 
@@ -1311,7 +1311,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
+	cmd.SetArgs([]string{"deps", "check", "--profile", "default", "--file", manifestPath})
 	// A missing Dependency is a finding.
 	requireFindings(t, cmd.Execute())
 
@@ -1365,7 +1365,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"deps", "check", "--file", manifestPath})
+	cmd.SetArgs([]string{"deps", "check", "--profile", "default", "--file", manifestPath})
 	// The fallback font is present, so every Dependency is satisfied: no findings.
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -1415,13 +1415,13 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	// --tier makes the guidance deterministic regardless of the test host.
-	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "debian"})
+	cmd.SetArgs([]string{"deps", "plan", "--profile", "default", "--file", manifestPath, "--tier", "debian"})
 	// The plan lists missing Dependencies, which is a finding.
 	requireFindings(t, cmd.Execute())
 
 	got := out.String()
 	for _, want := range []string{
-		`Dependency plan for profile "default" (tags: core) (debian)`,
+		`Dependency plan for profile "default" (tags: core) [selection: explicit] (debian)`,
 		"starship",
 		"sudo apt-get install starship",
 		"Summary: 1 dependency to install",
@@ -1458,7 +1458,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "Debian"})
+	cmd.SetArgs([]string{"deps", "plan", "--profile", "default", "--file", manifestPath, "--tier", "Debian"})
 	// The plan lists missing Dependencies, which is a finding.
 	requireFindings(t, cmd.Execute())
 
@@ -1486,7 +1486,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"deps", "plan", "--file", manifestPath, "--tier", "windows"})
+	cmd.SetArgs([]string{"deps", "plan", "--profile", "default", "--file", manifestPath, "--tier", "windows"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("Execute() error = nil, want error for unknown tier")
 	}
@@ -1772,7 +1772,7 @@ entries:
 	}{
 		{
 			name: "plan",
-			args: []string{"plan", "--home", home},
+			args: []string{"plan", "--profile", "default", "--home", home},
 			want: "Summary: 1 create, 0 conflict, 0 unchanged, 0 missing-source",
 		},
 		{
@@ -1782,13 +1782,13 @@ entries:
 		},
 		{
 			name:         "status",
-			args:         []string{"status", "--home", home},
+			args:         []string{"status", "--profile", "default", "--home", home},
 			want:         "missing",
 			wantFindings: true,
 		},
 		{
 			name:         "doctor",
-			args:         []string{"doctor", "--home", home},
+			args:         []string{"doctor", "--profile", "default", "--home", home},
 			want:         `Doctor for profile "default" (tags: core)`,
 			wantFindings: true,
 		},
@@ -1840,12 +1840,12 @@ entries:
 	}{
 		{
 			name: "check",
-			args: []string{"deps", "check", "--home", home},
+			args: []string{"deps", "check", "--profile", "default", "--home", home},
 			want: "missing  absenttool",
 		},
 		{
 			name: "plan",
-			args: []string{"deps", "plan", "--home", home},
+			args: []string{"deps", "plan", "--profile", "default", "--home", home},
 			want: "absenttool",
 		},
 	} {
