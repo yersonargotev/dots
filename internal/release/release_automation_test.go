@@ -83,36 +83,77 @@ func TestReleaseWorkflowCreatesReleaseWithGeneratedNotes(t *testing.T) {
 	}
 }
 
-func TestReleaseWorkflowProvesTapAccessBeforePublishingReleaseAssets(t *testing.T) {
+func TestReleaseWorkflowGatesHomebrewPublishingBehindEnvironment(t *testing.T) {
 	root := repoRoot(t)
 	workflow := readWorkflow(t, filepath.Join(root, ".github", "workflows", "release.yml"))
-	steps := workflowSteps(t, workflow)
+	releaseJob := workflowJob(t, workflow, "release")
+	homebrewJob := workflowJob(t, workflow, "publish-homebrew-formula")
+	releaseSteps := workflowJobSteps(t, releaseJob, "release")
+	homebrewSteps := workflowJobSteps(t, homebrewJob, "publish-homebrew-formula")
 
-	buildIndex := workflowStepIndex(t, steps, "build release artifacts and checksums", func(step map[string]any) bool {
+	if environment := fmt.Sprint(releaseJob["environment"]); environment != "<nil>" {
+		t.Fatalf("release artifact job must not use the protected Homebrew environment; got %q", environment)
+	}
+	if environment := fmt.Sprint(homebrewJob["environment"]); environment != "homebrew" {
+		t.Fatalf("Homebrew publication job should use environment homebrew; got %q", environment)
+	}
+	if needs := fmt.Sprint(homebrewJob["needs"]); needs != "release" {
+		t.Fatalf("Homebrew publication should wait for the release job; got needs %q", needs)
+	}
+	if output := fmt.Sprint(mapAt(t, releaseJob, "outputs")["tag"]); !strings.Contains(output, "steps.release.outputs.tag") {
+		t.Fatalf("release job should expose the resolved tag to Homebrew publication; got %q", output)
+	}
+
+	buildIndex := workflowStepIndex(t, releaseSteps, "build release artifacts and checksums", func(step map[string]any) bool {
 		run := stepRun(step)
 		return strings.Contains(run, "scripts/build-release-artifacts.sh") &&
 			strings.Contains(run, "--out-dir dist")
 	})
-	requireTapTokenIndex := workflowStepIndex(t, steps, "required Homebrew tap token guard", func(step map[string]any) bool {
+	uploadChecksumsIndex := workflowStepIndex(t, releaseSteps, "release checksum workflow artifact upload", func(step map[string]any) bool {
+		with := stepWith(step)
+		return stepUses(step) == "actions/upload-artifact@v4" &&
+			with["name"] == "release-checksums" &&
+			with["path"] == "dist/checksums.txt"
+	})
+	createReleaseIndex := workflowStepIndex(t, releaseSteps, "GitHub Release creation", func(step map[string]any) bool {
+		run := stepRun(step)
+		return strings.Contains(run, "gh release create") &&
+			strings.Contains(fmt.Sprint(stepEnv(step)["GH_TOKEN"]), "github.token")
+	})
+	uploadIndex := workflowStepIndex(t, releaseSteps, "GitHub Release asset upload", func(step map[string]any) bool {
+		run := stepRun(step)
+		return strings.Contains(run, "gh release upload") &&
+			strings.Contains(run, "dist/*") &&
+			strings.Contains(run, "--clobber")
+	})
+
+	downloadChecksumsIndex := workflowStepIndex(t, homebrewSteps, "release checksum workflow artifact download", func(step map[string]any) bool {
+		with := stepWith(step)
+		return stepUses(step) == "actions/download-artifact@v4" &&
+			with["name"] == "release-checksums" &&
+			with["path"] == "dist"
+	})
+	requireTapTokenIndex := workflowStepIndex(t, homebrewSteps, "required Homebrew tap token guard", func(step map[string]any) bool {
 		run := stepRun(step)
 		return strings.Contains(fmt.Sprint(stepEnv(step)["HOMEBREW_TAP_TOKEN"]), "HOMEBREW_TAP_TOKEN") &&
 			strings.Contains(run, "HOMEBREW_TAP_TOKEN is required") &&
 			strings.Contains(run, "yersonargotev/homebrew-tap")
 	})
-	tapCheckoutIndex := workflowStepIndex(t, steps, "token-backed Homebrew tap checkout", func(step map[string]any) bool {
+	tapCheckoutIndex := workflowStepIndex(t, homebrewSteps, "token-backed Homebrew tap checkout", func(step map[string]any) bool {
 		with := stepWith(step)
 		return stepUses(step) == "actions/checkout@v5" &&
 			with["repository"] == "yersonargotev/homebrew-tap" &&
 			with["path"] == "homebrew-tap" &&
 			strings.Contains(fmt.Sprint(with["token"]), "HOMEBREW_TAP_TOKEN")
 	})
-	formulaIndex := workflowStepIndex(t, steps, "Homebrew formula generation from release checksums", func(step map[string]any) bool {
+	formulaIndex := workflowStepIndex(t, homebrewSteps, "Homebrew formula generation from release checksums", func(step map[string]any) bool {
 		run := stepRun(step)
 		return strings.Contains(run, "scripts/generate-homebrew-formula.sh") &&
+			strings.Contains(run, "needs.release.outputs.tag") &&
 			strings.Contains(run, "--checksums dist/checksums.txt") &&
 			strings.Contains(run, "--out homebrew-tap/Formula/dots.rb")
 	})
-	prepareTapIndex := workflowStepIndex(t, steps, "local Homebrew tap formula commit preparation", func(step map[string]any) bool {
+	prepareTapIndex := workflowStepIndex(t, homebrewSteps, "local Homebrew tap formula commit preparation", func(step map[string]any) bool {
 		run := stepRun(step)
 		return stepWorkingDirectory(step) == "homebrew-tap" &&
 			strings.Contains(run, `git config user.name "github-actions[bot]"`) &&
@@ -123,25 +164,14 @@ func TestReleaseWorkflowProvesTapAccessBeforePublishingReleaseAssets(t *testing.
 			strings.Contains(run, `echo "changed=true" >> "$GITHUB_OUTPUT"`) &&
 			strings.Contains(run, `git commit -m "feat: update dots formula to ${RELEASE_TAG}"`)
 	})
-	tapPushAccessProofIndex := workflowStepIndex(t, steps, "non-mutating Homebrew tap push permission proof against prepared local state", func(step map[string]any) bool {
+	tapPushAccessProofIndex := workflowStepIndex(t, homebrewSteps, "non-mutating Homebrew tap push permission proof against prepared local state", func(step map[string]any) bool {
 		run := stepRun(step)
 		return stepWorkingDirectory(step) == "homebrew-tap" &&
 			strings.Contains(run, "git push --dry-run origin HEAD:main") &&
 			!strings.Contains(run, "git commit") &&
 			!strings.Contains(run, "git add Formula/dots.rb")
 	})
-	createReleaseIndex := workflowStepIndex(t, steps, "GitHub Release creation", func(step map[string]any) bool {
-		run := stepRun(step)
-		return strings.Contains(run, "gh release create") &&
-			strings.Contains(fmt.Sprint(stepEnv(step)["GH_TOKEN"]), "github.token")
-	})
-	uploadIndex := workflowStepIndex(t, steps, "GitHub Release asset upload", func(step map[string]any) bool {
-		run := stepRun(step)
-		return strings.Contains(run, "gh release upload") &&
-			strings.Contains(run, "dist/*") &&
-			strings.Contains(run, "--clobber")
-	})
-	pushTapIndex := workflowStepIndex(t, steps, "final Homebrew tap formula push", func(step map[string]any) bool {
+	pushTapIndex := workflowStepIndex(t, homebrewSteps, "final Homebrew tap formula push", func(step map[string]any) bool {
 		run := stepRun(step)
 		return stepWorkingDirectory(step) == "homebrew-tap" &&
 			strings.Contains(fmt.Sprint(stepEnv(step)["TAP_UPDATE_CHANGED"]), "prepare_tap.outputs.changed") &&
@@ -151,18 +181,16 @@ func TestReleaseWorkflowProvesTapAccessBeforePublishingReleaseAssets(t *testing.
 			!strings.Contains(run, "git commit")
 	})
 
-	assertStepBefore(t, steps, buildIndex, formulaIndex, "formula generation must consume freshly built artifacts and dist/checksums.txt")
-	assertStepBefore(t, steps, requireTapTokenIndex, tapCheckoutIndex, "the workflow must reject a missing HOMEBREW_TAP_TOKEN before falling back to anonymous tap checkout")
-	assertStepBefore(t, steps, requireTapTokenIndex, createReleaseIndex, "a missing HOMEBREW_TAP_TOKEN must fail before creating a GitHub Release")
-	assertStepBefore(t, steps, requireTapTokenIndex, uploadIndex, "a missing HOMEBREW_TAP_TOKEN must fail before re-uploading release assets")
-	assertStepBefore(t, steps, tapCheckoutIndex, formulaIndex, "the tap checkout must exist before writing Formula/dots.rb into it")
-	assertStepBefore(t, steps, formulaIndex, prepareTapIndex, "the generated formula must be staged before preparing a local tap commit")
-	assertStepBefore(t, steps, prepareTapIndex, tapPushAccessProofIndex, "the workflow must dry-run push the already-prepared local tap state, not the untouched checkout")
-	assertStepBefore(t, steps, tapPushAccessProofIndex, createReleaseIndex, "token-backed tap push permission must be proven before creating a GitHub Release")
-	assertStepBefore(t, steps, tapPushAccessProofIndex, uploadIndex, "token-backed tap push permission must be proven before re-uploading release assets")
-	assertStepBefore(t, steps, uploadIndex, pushTapIndex, "the tap update must not be published until release assets exist")
-	assertStepBefore(t, steps, tapPushAccessProofIndex, pushTapIndex, "token-backed tap push permission must be proven before the mutating tap push")
-	assertStepBefore(t, steps, prepareTapIndex, pushTapIndex, "the final tap push must publish the already-prepared commit instead of creating a new commit after assets upload")
+	assertStepBefore(t, releaseSteps, buildIndex, uploadChecksumsIndex, "fresh checksums must be transferred to the dependent Homebrew job")
+	assertStepBefore(t, releaseSteps, buildIndex, createReleaseIndex, "release artifacts must be built before creating the GitHub Release")
+	assertStepBefore(t, releaseSteps, createReleaseIndex, uploadIndex, "the GitHub Release must exist before its assets are uploaded")
+	assertStepBefore(t, homebrewSteps, downloadChecksumsIndex, formulaIndex, "formula generation must consume checksums transferred from the release job")
+	assertStepBefore(t, homebrewSteps, requireTapTokenIndex, tapCheckoutIndex, "the workflow must reject a missing HOMEBREW_TAP_TOKEN before falling back to anonymous tap checkout")
+	assertStepBefore(t, homebrewSteps, tapCheckoutIndex, formulaIndex, "the tap checkout must exist before writing Formula/dots.rb into it")
+	assertStepBefore(t, homebrewSteps, formulaIndex, prepareTapIndex, "the generated formula must be staged before preparing a local tap commit")
+	assertStepBefore(t, homebrewSteps, prepareTapIndex, tapPushAccessProofIndex, "the workflow must dry-run push the already-prepared local tap state, not the untouched checkout")
+	assertStepBefore(t, homebrewSteps, tapPushAccessProofIndex, pushTapIndex, "token-backed tap push permission must be proven before the mutating tap push")
+	assertStepBefore(t, homebrewSteps, prepareTapIndex, pushTapIndex, "the final tap push must publish the already-prepared commit")
 }
 
 func TestBuildReleaseArtifactsCreatesChecksummedSupportedPlatforms(t *testing.T) {
@@ -486,22 +514,30 @@ func readWorkflow(t *testing.T, path string) map[string]any {
 
 func workflowSteps(t *testing.T, workflow map[string]any) []map[string]any {
 	t.Helper()
-	jobs := mapAt(t, workflow, "jobs")
-	release := mapAt(t, jobs, "release")
-	value, ok := release["steps"]
+	return workflowJobSteps(t, workflowJob(t, workflow, "release"), "release")
+}
+
+func workflowJob(t *testing.T, workflow map[string]any, name string) map[string]any {
+	t.Helper()
+	return mapAt(t, mapAt(t, workflow, "jobs"), name)
+}
+
+func workflowJobSteps(t *testing.T, job map[string]any, name string) []map[string]any {
+	t.Helper()
+	value, ok := job["steps"]
 	if !ok {
-		t.Fatal("release job should define steps")
+		t.Fatalf("%s job should define steps", name)
 	}
 	items, ok := value.([]any)
 	if !ok {
-		t.Fatalf("release steps should be a list, got %T", value)
+		t.Fatalf("%s steps should be a list, got %T", name, value)
 	}
 
 	steps := make([]map[string]any, 0, len(items))
 	for index, item := range items {
 		step, ok := item.(map[string]any)
 		if !ok {
-			t.Fatalf("release step %d should be a map, got %T", index, item)
+			t.Fatalf("%s step %d should be a map, got %T", name, index, item)
 		}
 		steps = append(steps, step)
 	}
