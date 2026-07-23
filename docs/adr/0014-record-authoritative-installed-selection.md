@@ -77,6 +77,27 @@ After terminal success, update/upgrade refreshes the Installed Selection,
 including its current resolved Tag snapshot and provenance. A dry run,
 cancellation, invalid refreshed selection, Managed Entry failure, Provisioner
 failure, continuation failure, or metadata-write failure does not replace the
-previous Installed Selection. This amendment does not introduce legacy
-inference, selection-delta or reduction policy, or automatic removal of
-previously selected inventory.
+previous Installed Selection.
+
+## Selection evolution amendment
+
+Issue #343 authorizes update and upgrade to compare the selection resolved
+before Source of Truth refresh with the same authoritative Profile and explicit
+extra Tag intent resolved afterward. The deterministic delta reports previous
+and current intent and effective Tags, plus added and removed Managed Entries,
+Dependencies, and Provisioners. Binary continuation preserves the intent and
+recomputes the pre-refresh comparison basis before advancing the Installed
+Repository.
+
+A saved Profile missing from the refreshed Install Manifest, or an explicit
+extra Tag no longer declared by any Managed Entry, Dependency Set, or
+Provisioner, blocks Managed Configuration and Provisioner application. The
+structured error retains the delta and the stale intent; dots does not silently
+rewrite it. Successful text and JSON output expose the same delta before
+application.
+
+Removed surfaces are informational. Selection evolution does not authorize
+dots to unlink targets, delete ownership or Dependency metadata, uninstall
+Provisioners or capabilities, or otherwise prune historical inventory.
+Explicit selection replacement, reduction acknowledgement, legacy inference,
+and automatic removal remain separate policy.

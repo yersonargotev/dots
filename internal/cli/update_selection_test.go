@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 )
 
@@ -29,7 +30,7 @@ entries:
   - source: configs/core
     target: ~/.core
     strategy: symlink
-    tags: [core]
+    tags: [core, extra]
 `,
 	})
 	saveInstalledSelection(t, stateRoot, "core", "extra")
@@ -43,7 +44,7 @@ entries:
   - source: configs/core
     target: ~/.core
     strategy: symlink
-    tags: [core]
+    tags: [core, extra]
   - source: configs/new
     target: ~/.new
     strategy: symlink
@@ -56,6 +57,16 @@ entries:
 
 	if want := "Selection: source=recorded profiles=core extra-tags=extra effective-tags=core,new,extra"; !strings.Contains(out, want) {
 		t.Fatalf("output missing selection report %q:\n%s", want, out)
+	}
+	for _, want := range []string{
+		"Selection evolution:",
+		"Previous: profiles=core extra-tags=extra effective-tags=core,extra",
+		"Current: profiles=core extra-tags=extra effective-tags=core,new,extra",
+		"Added: effective-tags=new managed-entries=~/.new dependencies=(none) provisioners=(none)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing evolution report %q:\n%s", want, out)
+		}
 	}
 	if _, err := os.Readlink(filepath.Join(home, ".new")); err != nil {
 		t.Fatalf("recorded selection did not apply post-refresh Profile tags: %v", err)
@@ -151,7 +162,7 @@ entries:
   - source: configs/core
     target: ~/.core
     strategy: symlink
-    tags: [core]
+    tags: [core, extra]
 `,
 	})
 	previous := state.InstalledSelection{Profiles: []string{"core"}, ResolvedTags: []string{"core"}}
@@ -237,6 +248,82 @@ func TestUpdateProvisionerFailurePreservesPreviousInstalledSelection(t *testing.
 	}
 }
 
+func TestUpdateStaleExtraTagReturnsStructuredDeltaAndPreservesIntent(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/retired": "retired\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/retired
+    target: ~/.retired
+    strategy: symlink
+    tags: [retired]
+`,
+	})
+	previous := state.InstalledSelection{
+		Profiles: []string{"core"}, ExtraTags: []string{"retired"}, ResolvedTags: []string{"core", "retired"},
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+	advanceUpstream(t, origin, "retire optional surface", map[string]string{
+		"configs/core": "core\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+`,
+	})
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"update", "--yes", "--output", "json",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot}, &out, &errOut)
+	if code != cli.ExitError {
+		t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitError, out.String(), errOut.String())
+	}
+	var env struct {
+		Data struct {
+			SelectionDelta selection.Delta `json:"selection_delta"`
+		} `json:"data"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal JSON: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(env.Error, `recorded selection: extra Tag "retired" is no longer declared`) {
+		t.Fatalf("error = %q", env.Error)
+	}
+	if got, want := env.Data.SelectionDelta.StaleExtraTags, []string{"retired"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("stale_extra_tags = %#v, want %#v", got, want)
+	}
+	if got, want := env.Data.SelectionDelta.Removed.ManagedEntries, []string{"~/.retired"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("removed managed_entries = %#v, want %#v", got, want)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".core")); !os.IsNotExist(err) {
+		t.Fatalf("Managed Configuration applied after stale extra Tag: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
+		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+}
+
 func TestUpdateJSONReportsRecordedSelection(t *testing.T) {
 	requireGitCLI(t)
 	home := t.TempDir()
@@ -252,7 +339,7 @@ entries:
   - source: configs/core
     target: ~/.core
     strategy: symlink
-    tags: [core]
+    tags: [core, extra]
 `,
 	})
 	saveInstalledSelection(t, stateRoot, "core", "extra")
@@ -267,10 +354,11 @@ entries:
 	var env struct {
 		Data struct {
 			Selection struct {
-				Source        string   `json:"source"`
-				Profiles      []string `json:"profiles"`
-				ExtraTags     []string `json:"extra_tags"`
-				EffectiveTags []string `json:"effective_tags"`
+				Source        string           `json:"source"`
+				Profiles      []string         `json:"profiles"`
+				ExtraTags     []string         `json:"extra_tags"`
+				EffectiveTags []string         `json:"effective_tags"`
+				Delta         *selection.Delta `json:"delta"`
 			} `json:"selection"`
 		} `json:"data"`
 	}
@@ -282,5 +370,14 @@ entries:
 		!reflect.DeepEqual(env.Data.Selection.ExtraTags, []string{"extra"}) ||
 		!reflect.DeepEqual(env.Data.Selection.EffectiveTags, []string{"core", "extra"}) {
 		t.Fatalf("selection = %#v", env.Data.Selection)
+	}
+	if env.Data.Selection.Delta == nil {
+		t.Fatalf("selection delta = nil\n%s", out.String())
+	}
+	if env.Data.Selection.Delta.Added.EffectiveTags == nil ||
+		env.Data.Selection.Delta.Removed.ManagedEntries == nil ||
+		env.Data.Selection.Delta.MissingProfiles == nil ||
+		env.Data.Selection.Delta.StaleExtraTags == nil {
+		t.Fatalf("selection delta omitted required empty arrays: %#v", env.Data.Selection.Delta)
 	}
 }

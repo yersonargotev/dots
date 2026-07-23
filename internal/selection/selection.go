@@ -30,6 +30,49 @@ type Report struct {
 	Profiles      []string `json:"profiles"`
 	ExtraTags     []string `json:"extra_tags"`
 	EffectiveTags []string `json:"effective_tags"`
+	Delta         *Delta   `json:"delta,omitempty"`
+}
+
+// Snapshot is the portable selection state on one side of an evolution.
+type Snapshot struct {
+	Profiles      []string `json:"profiles"`
+	ExtraTags     []string `json:"extra_tags"`
+	EffectiveTags []string `json:"effective_tags"`
+}
+
+// Changes describes an ordered change to the selected manifest surface.
+type Changes struct {
+	EffectiveTags  []string `json:"effective_tags"`
+	ManagedEntries []string `json:"managed_entries"`
+	Dependencies   []string `json:"dependencies"`
+	Provisioners   []string `json:"provisioners"`
+}
+
+// Delta describes how the same selection intent evolves between Install
+// Manifest revisions.
+type Delta struct {
+	Previous        Snapshot `json:"previous"`
+	Current         Snapshot `json:"current"`
+	Added           Changes  `json:"added"`
+	Removed         Changes  `json:"removed"`
+	MissingProfiles []string `json:"missing_profiles"`
+	StaleExtraTags  []string `json:"stale_extra_tags"`
+}
+
+// EvolutionError is an actionable, machine-readable blocking validation error.
+type EvolutionError struct {
+	Message        string `json:"message"`
+	SelectionDelta Delta  `json:"selection_delta"`
+}
+
+func (e *EvolutionError) Error() string { return e.Message }
+
+// JSONErrorData supplies the stable machine-readable payload used by the CLI
+// error envelope.
+func (e *EvolutionError) JSONErrorData() any {
+	return struct {
+		SelectionDelta Delta `json:"selection_delta"`
+	}{SelectionDelta: e.SelectionDelta}
 }
 
 // Effective contains the validated inputs for downstream command builders and
@@ -111,6 +154,192 @@ func (e Effective) Intent() Intent {
 		Profiles:  cloneStrings(e.Profiles),
 		ExtraTags: cloneStrings(e.ExtraTags),
 	}
+}
+
+// CompareEvolution re-resolves the same authoritative intent against a newer
+// Install Manifest and reports deterministic changes to its selected surface.
+// It is pure: it performs no filesystem or state mutation.
+func CompareEvolution(previousManifest, currentManifest manifest.Manifest, previous Effective, osName string) (Effective, error) {
+	intent := previous.Intent()
+	delta := emptyDelta(snapshot(previous), Snapshot{
+		Profiles:      cloneStrings(intent.Profiles),
+		ExtraTags:     cloneStrings(intent.ExtraTags),
+		EffectiveTags: make([]string, 0),
+	})
+	delta.MissingProfiles = missingProfiles(currentManifest, intent.Profiles)
+	delta.StaleExtraTags = staleExtraTags(currentManifest, intent.ExtraTags)
+	if len(delta.MissingProfiles) == 0 {
+		current, err := ResolveIntent(currentManifest, intent)
+		if err != nil {
+			return Effective{}, err
+		}
+		delta.Current = snapshot(current)
+		previousSurface := selectedSurface(previousManifest, previous.Selection, osName)
+		currentSurface := selectedSurface(currentManifest, current.Selection, osName)
+		delta.Added = surfaceDifference(currentSurface, previousSurface)
+		delta.Removed = surfaceDifference(previousSurface, currentSurface)
+		if len(delta.StaleExtraTags) == 0 {
+			current.Report.Delta = &delta
+			return current, nil
+		}
+	}
+
+	var problems []string
+	for _, profile := range delta.MissingProfiles {
+		problems = append(problems, fmt.Sprintf(`%s selection: profile %q not found`, intent.Source, profile))
+	}
+	for _, tag := range delta.StaleExtraTags {
+		problems = append(problems, fmt.Sprintf(`%s selection: extra Tag %q is no longer declared`, intent.Source, tag))
+	}
+	return Effective{}, &EvolutionError{
+		Message:        strings.Join(problems, "; ") + "; update the selection before refreshing",
+		SelectionDelta: delta,
+	}
+}
+
+func snapshot(e Effective) Snapshot {
+	return Snapshot{
+		Profiles:      cloneStrings(e.Profiles),
+		ExtraTags:     cloneStrings(e.ExtraTags),
+		EffectiveTags: cloneStrings(e.Selection.Tags),
+	}
+}
+
+func emptyDelta(previous, current Snapshot) Delta {
+	return Delta{
+		Previous: previous,
+		Current:  current,
+		Added: Changes{
+			EffectiveTags:  make([]string, 0),
+			ManagedEntries: make([]string, 0),
+			Dependencies:   make([]string, 0),
+			Provisioners:   make([]string, 0),
+		},
+		Removed: Changes{
+			EffectiveTags:  make([]string, 0),
+			ManagedEntries: make([]string, 0),
+			Dependencies:   make([]string, 0),
+			Provisioners:   make([]string, 0),
+		},
+		MissingProfiles: make([]string, 0),
+		StaleExtraTags:  make([]string, 0),
+	}
+}
+
+func missingProfiles(m manifest.Manifest, profiles []string) []string {
+	var missing []string
+	for _, name := range orderedUnique(profiles) {
+		if _, ok := m.Profiles[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	return cloneStrings(missing)
+}
+
+func staleExtraTags(m manifest.Manifest, extraTags []string) []string {
+	declared := make(map[string]bool)
+	for _, entry := range m.Entries {
+		for _, tag := range entry.Tags {
+			declared[tag] = true
+		}
+	}
+	for _, set := range m.Dependencies {
+		for _, tag := range set.Tags {
+			declared[tag] = true
+		}
+	}
+	for _, provisioner := range m.Provisioners {
+		for _, tag := range provisioner.Tags {
+			declared[tag] = true
+		}
+	}
+	var stale []string
+	for _, tag := range orderedUnique(extraTags) {
+		if !declared[tag] && !supportedSelectionModifier(tag) {
+			stale = append(stale, tag)
+		}
+	}
+	return cloneStrings(stale)
+}
+
+func supportedSelectionModifier(tag string) bool {
+	switch tag {
+	case "codex-delegation", "without-codex-delegation",
+		"codex-spark-delegation", "without-codex-spark-delegation":
+		return true
+	default:
+		return false
+	}
+}
+
+func selectedSurface(m manifest.Manifest, selected manifest.Selection, osName string) Changes {
+	result := Changes{
+		EffectiveTags:  cloneStrings(selected.Tags),
+		ManagedEntries: make([]string, 0),
+		Dependencies:   make([]string, 0),
+		Provisioners:   make([]string, 0),
+	}
+	seenEntries := make(map[string]bool)
+	seenDependencies := make(map[string]bool)
+	seenProvisioners := make(map[string]bool)
+	addDependencies := func(dependencies []manifest.Dependency) {
+		for _, dependency := range dependencies {
+			if !seenDependencies[dependency.Name] {
+				seenDependencies[dependency.Name] = true
+				result.Dependencies = append(result.Dependencies, dependency.Name)
+			}
+		}
+	}
+	for _, profileName := range selected.Profiles {
+		addDependencies(m.Profiles[profileName].Dependencies)
+	}
+	for _, set := range m.Dependencies {
+		if manifest.SharesTag(set.Tags, selected.Tags) && manifest.MatchesOS(set.OS, osName) {
+			addDependencies(set.Dependencies)
+		}
+	}
+	for _, entry := range m.Entries {
+		if manifest.SharesTag(entry.Tags, selected.Tags) && manifest.MatchesOS(entry.OS, osName) {
+			if !seenEntries[entry.Target] {
+				seenEntries[entry.Target] = true
+				result.ManagedEntries = append(result.ManagedEntries, entry.Target)
+			}
+			addDependencies(entry.Dependencies)
+		}
+	}
+	for _, provisioner := range m.Provisioners {
+		if manifest.SharesTag(provisioner.Tags, selected.Tags) && manifest.MatchesOS(provisioner.OS, osName) {
+			if !seenProvisioners[provisioner.Tool] {
+				seenProvisioners[provisioner.Tool] = true
+				result.Provisioners = append(result.Provisioners, provisioner.Tool)
+			}
+			addDependencies(provisioner.Dependencies)
+		}
+	}
+	return result
+}
+
+func surfaceDifference(left, right Changes) Changes {
+	return Changes{
+		EffectiveTags:  difference(left.EffectiveTags, right.EffectiveTags),
+		ManagedEntries: difference(left.ManagedEntries, right.ManagedEntries),
+		Dependencies:   difference(left.Dependencies, right.Dependencies),
+		Provisioners:   difference(left.Provisioners, right.Provisioners),
+	}
+}
+
+func difference(left, right []string) []string {
+	excluded := make(map[string]bool, len(right))
+	for _, value := range right {
+		excluded[value] = true
+	}
+	result := make([]string, 0)
+	for _, value := range left {
+		if !excluded[value] {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func validateIntent(source Source, profiles, extraTags []string) error {

@@ -120,6 +120,21 @@ func renderEffectiveSelection(profile string, profiles, tags []string, report *s
 func renderSelectionReport(w io.Writer, report selection.Report) {
 	fmt.Fprintf(w, "Selection: source=%s profiles=%s extra-tags=%s effective-tags=%s\n\n",
 		report.Source, renderSelectionValues(report.Profiles), renderSelectionValues(report.ExtraTags), renderSelectionValues(report.EffectiveTags))
+	if report.Delta == nil {
+		return
+	}
+	delta := report.Delta
+	fmt.Fprintln(w, "Selection evolution:")
+	fmt.Fprintf(w, "  Previous: profiles=%s extra-tags=%s effective-tags=%s\n",
+		renderSelectionValues(delta.Previous.Profiles), renderSelectionValues(delta.Previous.ExtraTags), renderSelectionValues(delta.Previous.EffectiveTags))
+	fmt.Fprintf(w, "  Current: profiles=%s extra-tags=%s effective-tags=%s\n",
+		renderSelectionValues(delta.Current.Profiles), renderSelectionValues(delta.Current.ExtraTags), renderSelectionValues(delta.Current.EffectiveTags))
+	fmt.Fprintf(w, "  Added: effective-tags=%s managed-entries=%s dependencies=%s provisioners=%s\n",
+		renderSelectionValues(delta.Added.EffectiveTags), renderSelectionValues(delta.Added.ManagedEntries),
+		renderSelectionValues(delta.Added.Dependencies), renderSelectionValues(delta.Added.Provisioners))
+	fmt.Fprintf(w, "  Removed: effective-tags=%s managed-entries=%s dependencies=%s provisioners=%s\n\n",
+		renderSelectionValues(delta.Removed.EffectiveTags), renderSelectionValues(delta.Removed.ManagedEntries),
+		renderSelectionValues(delta.Removed.Dependencies), renderSelectionValues(delta.Removed.Provisioners))
 }
 
 func renderSelectionValues(values []string) string {

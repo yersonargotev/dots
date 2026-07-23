@@ -30,6 +30,22 @@ func TestEnvelopeGolden(t *testing.T) {
 	installResult := deps.InstallReport{Profile: "default", Tier: deps.TierHomebrew, Items: []deps.InstallItem{
 		{Dependency: "starship", Requirement: "required", Status: deps.InstallStatusInstalled, Provider: deps.TierHomebrew, Package: "starship", Executable: "brew", Args: []string{"install", "starship"}},
 	}}
+	selectionDelta := selection.Delta{
+		Previous: selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"}},
+		Current:  selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "desktop", "work"}},
+		Added: selection.Changes{
+			EffectiveTags: []string{"desktop"}, ManagedEntries: []string{"~/.config/ghostty/config"}, Dependencies: []string{}, Provisioners: []string{},
+		},
+		Removed: selection.Changes{
+			EffectiveTags: []string{}, ManagedEntries: []string{}, Dependencies: []string{}, Provisioners: []string{},
+		},
+		MissingProfiles: []string{},
+		StaleExtraTags:  []string{},
+	}
+	evolvedSelection := selection.Report{
+		Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"},
+		EffectiveTags: []string{"core", "desktop", "work"}, Delta: &selectionDelta,
+	}
 	tests := []struct {
 		name   string
 		env    envelope
@@ -213,12 +229,12 @@ func TestEnvelopeGolden(t *testing.T) {
 				Status:        statusOK,
 				Data: updateReport{
 					DryRun:    false,
-					Selection: selection.Report{Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"}},
+					Selection: evolvedSelection,
 					Update:    gitrepo.Update{OldRev: "abc123", NewRev: "def456", Incoming: []string{"def456 update managed config"}},
-					Plan: plan.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "work"}, Selection: &selection.Report{
-						Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
-					}, Actions: []plan.Action{}},
-					Provisioners: provision.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "work"}, Steps: []provision.Step{}},
+					Plan:      plan.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "desktop", "work"}, Selection: &evolvedSelection, Actions: []plan.Action{}},
+					Provisioners: provision.Plan{
+						Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "desktop", "work"}, Steps: []provision.Step{},
+					},
 				},
 			},
 			golden: "envelope_update.golden",
@@ -231,13 +247,13 @@ func TestEnvelopeGolden(t *testing.T) {
 				Status:        statusOK,
 				Data: upgradeReport{
 					DryRun:    false,
-					Selection: selection.Report{Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"}},
+					Selection: evolvedSelection,
 					Binary:    upgrade.Plan{Channel: upgrade.ChannelHomebrew, CurrentVersion: "v0.63.0", LatestVersion: "v0.64.0", Action: upgrade.ActionHomebrewUpgrade, Executable: "/opt/homebrew/bin/dots"},
 					Update:    gitrepo.Update{OldRev: "abc123", NewRev: "def456", Incoming: []string{"def456 update managed config"}},
-					Plan: plan.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "work"}, Selection: &selection.Report{
-						Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
-					}, Actions: []plan.Action{}},
-					Provisioners: provision.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "work"}, Steps: []provision.Step{}},
+					Plan:      plan.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "desktop", "work"}, Selection: &evolvedSelection, Actions: []plan.Action{}},
+					Provisioners: provision.Plan{
+						Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "desktop", "work"}, Steps: []provision.Step{},
+					},
 				},
 			},
 			golden: "envelope_upgrade.golden",

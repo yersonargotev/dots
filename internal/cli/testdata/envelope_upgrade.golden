@@ -14,8 +14,54 @@
       ],
       "effective_tags": [
         "core",
+        "desktop",
         "work"
-      ]
+      ],
+      "delta": {
+        "previous": {
+          "profiles": [
+            "core"
+          ],
+          "extra_tags": [
+            "work"
+          ],
+          "effective_tags": [
+            "core",
+            "work"
+          ]
+        },
+        "current": {
+          "profiles": [
+            "core"
+          ],
+          "extra_tags": [
+            "work"
+          ],
+          "effective_tags": [
+            "core",
+            "desktop",
+            "work"
+          ]
+        },
+        "added": {
+          "effective_tags": [
+            "desktop"
+          ],
+          "managed_entries": [
+            "~/.config/ghostty/config"
+          ],
+          "dependencies": [],
+          "provisioners": []
+        },
+        "removed": {
+          "effective_tags": [],
+          "managed_entries": [],
+          "dependencies": [],
+          "provisioners": []
+        },
+        "missing_profiles": [],
+        "stale_extra_tags": []
+      }
     },
     "binary": {
       "channel": "homebrew",
@@ -38,6 +84,7 @@
       ],
       "tags": [
         "core",
+        "desktop",
         "work"
       ],
       "selection": {
@@ -50,8 +97,54 @@
         ],
         "effective_tags": [
           "core",
+          "desktop",
           "work"
-        ]
+        ],
+        "delta": {
+          "previous": {
+            "profiles": [
+              "core"
+            ],
+            "extra_tags": [
+              "work"
+            ],
+            "effective_tags": [
+              "core",
+              "work"
+            ]
+          },
+          "current": {
+            "profiles": [
+              "core"
+            ],
+            "extra_tags": [
+              "work"
+            ],
+            "effective_tags": [
+              "core",
+              "desktop",
+              "work"
+            ]
+          },
+          "added": {
+            "effective_tags": [
+              "desktop"
+            ],
+            "managed_entries": [
+              "~/.config/ghostty/config"
+            ],
+            "dependencies": [],
+            "provisioners": []
+          },
+          "removed": {
+            "effective_tags": [],
+            "managed_entries": [],
+            "dependencies": [],
+            "provisioners": []
+          },
+          "missing_profiles": [],
+          "stale_extra_tags": []
+        }
       },
       "actions": []
     },
@@ -62,6 +155,7 @@
       ],
       "tags": [
         "core",
+        "desktop",
         "work"
       ],
       "steps": []

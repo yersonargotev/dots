@@ -131,19 +131,21 @@ func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
 	fmt.Fprintln(out)
 }
 
-func resolveUpdateSelection(manifestPath string, paths resolvedPaths, opts updateOptions) (selection.Effective, error) {
+func resolveUpdateSelection(manifestPath string, paths resolvedPaths, opts updateOptions) (*manifest.Manifest, selection.Effective, error) {
 	m, err := manifest.LoadFile(manifestPath)
 	if err != nil {
-		return selection.Effective{}, err
+		return nil, selection.Effective{}, err
 	}
 	if opts.selectionIntent != nil {
-		return selection.ResolveIntent(*m, *opts.selectionIntent)
+		effective, err := selection.ResolveIntent(*m, *opts.selectionIntent)
+		return m, effective, err
 	}
 	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
 	if err != nil {
-		return selection.Effective{}, err
+		return nil, selection.Effective{}, err
 	}
-	return selection.ResolveEffective(*m, opts.profiles, opts.extraTags, meta.InstalledSelection)
+	effective, err := selection.ResolveEffective(*m, opts.profiles, opts.extraTags, meta.InstalledSelection)
+	return m, effective, err
 }
 
 func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updateReport, error) {
@@ -158,7 +160,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if !cmd.Flags().Changed("file") {
 		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
 	}
-	effective, err := resolveUpdateSelection(manifestPath, paths, opts)
+	previousManifest, effective, err := resolveUpdateSelection(manifestPath, paths, opts)
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -191,7 +193,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	effective, err = selection.ResolveIntent(*m, effective.Intent())
+	effective, err = selection.CompareEvolution(*previousManifest, *m, effective, runtime.GOOS)
 	if err != nil {
 		return updateReport{}, err
 	}
