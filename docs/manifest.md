@@ -430,6 +430,17 @@ would leave agents pointing at commands that may not exist.
 5. If `os` is set, the item only matches the current OS (`darwin` or `linux`).
 6. Selected Managed Entries are installed before selected Provisioners run.
 
+During `dots update` and `dots upgrade`, dots resolves the same authoritative
+Profile and explicit extra Tag intent before and after Source of Truth refresh.
+It reports effective Tag and selected Managed Entry, Dependency, and Provisioner
+additions and removals before application. A saved Profile that no longer
+exists, or an explicit extra Tag no longer declared by any Managed Entry,
+Dependency Set, or Provisioner, blocks application without rewriting the
+Installed Selection. Dots-owned selection modifiers and their documented legacy
+aliases remain valid even though they affect installation behavior rather than
+selecting a manifest surface. Removed surfaces are reported only; they are not
+automatically deleted or uninstalled.
+
 ## Related docs
 
 - [`CONTEXT.md`](../CONTEXT.md) defines the domain vocabulary.

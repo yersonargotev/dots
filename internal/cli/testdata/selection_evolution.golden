@@ -1,0 +1,6 @@
+Selection evolution:
+  Previous: profiles=core extra-tags=(none) effective-tags=core,retired
+  Current: profiles=core extra-tags=(none) effective-tags=core,desktop
+  Added: effective-tags=desktop managed-entries=~/.config/ghostty/config dependencies=ghostty provisioners=(none)
+  Removed: effective-tags=retired managed-entries=~/.retired dependencies=(none) provisioners=gentle-ai
+

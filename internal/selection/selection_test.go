@@ -1,6 +1,7 @@
 package selection_test
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -10,6 +11,186 @@ import (
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 )
+
+func TestCompareEvolutionReportsSelectedSurfaceChangesInManifestOrder(t *testing.T) {
+	oldManifest := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{
+			"core": {
+				Tags:         []string{"core"},
+				Dependencies: []manifest.Dependency{{Name: "profile-old"}, {Name: "shared"}},
+			},
+		},
+		Entries: []manifest.Entry{
+			{Target: ".old", Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "entry-old"}}},
+			{Target: ".shared", Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "shared"}}},
+		},
+		Provisioners: []manifest.Provisioner{{Tool: "old-tool", Tags: []string{"core"}}},
+	}
+	newManifest := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{
+			"core": {
+				Tags:         []string{"core", "new"},
+				Dependencies: []manifest.Dependency{{Name: "shared"}, {Name: "profile-new"}},
+			},
+		},
+		Dependencies: []manifest.DependencySet{{
+			Tags: []string{"new"}, Dependencies: []manifest.Dependency{{Name: "set-new"}, {Name: "shared"}},
+		}},
+		Entries: []manifest.Entry{
+			{Target: ".shared", Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "shared"}}},
+			{Target: ".new", Tags: []string{"new"}, Dependencies: []manifest.Dependency{{Name: "entry-new"}}},
+		},
+		Provisioners: []manifest.Provisioner{{
+			Tool: "new-tool", Tags: []string{"new"}, Dependencies: []manifest.Dependency{{Name: "provisioner-new"}},
+		}},
+	}
+	previous, err := selection.ResolveIntent(oldManifest, selection.Intent{
+		Source: selection.SourceRecorded, Profiles: []string{"core"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+
+	got, err := selection.CompareEvolution(oldManifest, newManifest, previous, "darwin")
+	if err != nil {
+		t.Fatalf("CompareEvolution() error = %v", err)
+	}
+	delta := got.Report.Delta
+	if delta == nil {
+		t.Fatal("SelectionDelta = nil")
+	}
+	if want := []string{"new"}; !reflect.DeepEqual(delta.Added.EffectiveTags, want) {
+		t.Fatalf("added effective Tags = %#v, want %#v", delta.Added.EffectiveTags, want)
+	}
+	if want := []string{".new"}; !reflect.DeepEqual(delta.Added.ManagedEntries, want) {
+		t.Fatalf("added Managed Entries = %#v, want %#v", delta.Added.ManagedEntries, want)
+	}
+	if want := []string{"profile-new", "set-new", "entry-new", "provisioner-new"}; !reflect.DeepEqual(delta.Added.Dependencies, want) {
+		t.Fatalf("added Dependencies = %#v, want %#v", delta.Added.Dependencies, want)
+	}
+	if want := []string{"new-tool"}; !reflect.DeepEqual(delta.Added.Provisioners, want) {
+		t.Fatalf("added Provisioners = %#v, want %#v", delta.Added.Provisioners, want)
+	}
+	if want := []string{".old"}; !reflect.DeepEqual(delta.Removed.ManagedEntries, want) {
+		t.Fatalf("removed Managed Entries = %#v, want %#v", delta.Removed.ManagedEntries, want)
+	}
+	if want := []string{"profile-old", "entry-old"}; !reflect.DeepEqual(delta.Removed.Dependencies, want) {
+		t.Fatalf("removed Dependencies = %#v, want %#v", delta.Removed.Dependencies, want)
+	}
+	if want := []string{"old-tool"}; !reflect.DeepEqual(delta.Removed.Provisioners, want) {
+		t.Fatalf("removed Provisioners = %#v, want %#v", delta.Removed.Provisioners, want)
+	}
+}
+
+func TestCompareEvolutionRejectsMissingProfileWithStructuredDelta(t *testing.T) {
+	oldManifest := manifest.Manifest{Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}}}
+	previous, err := selection.ResolveIntent(oldManifest, selection.Intent{
+		Source: selection.SourceRecorded, Profiles: []string{"core"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+
+	_, err = selection.CompareEvolution(oldManifest, manifest.Manifest{}, previous, "linux")
+	var evolutionErr *selection.EvolutionError
+	if !errors.As(err, &evolutionErr) {
+		t.Fatalf("CompareEvolution() error = %T %v, want *EvolutionError", err, err)
+	}
+	if want := []string{"core"}; !reflect.DeepEqual(evolutionErr.SelectionDelta.MissingProfiles, want) {
+		t.Fatalf("missing Profiles = %#v, want %#v", evolutionErr.SelectionDelta.MissingProfiles, want)
+	}
+	if !strings.Contains(err.Error(), "update the selection") {
+		t.Fatalf("error = %q, want actionable guidance", err)
+	}
+}
+
+func TestCompareEvolutionRejectsStaleExplicitExtraTag(t *testing.T) {
+	oldManifest := manifest.Manifest{
+		Entries: []manifest.Entry{{Target: ".old", Tags: []string{"retired"}}},
+	}
+	previous, err := selection.ResolveIntent(oldManifest, selection.Intent{
+		Source: selection.SourceExplicit, ExtraTags: []string{"retired"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+
+	_, err = selection.CompareEvolution(oldManifest, manifest.Manifest{
+		Entries: []manifest.Entry{{Target: ".new", Tags: []string{"current"}}},
+	}, previous, "linux")
+	var evolutionErr *selection.EvolutionError
+	if !errors.As(err, &evolutionErr) {
+		t.Fatalf("CompareEvolution() error = %T %v, want *EvolutionError", err, err)
+	}
+	if want := []string{"retired"}; !reflect.DeepEqual(evolutionErr.SelectionDelta.StaleExtraTags, want) {
+		t.Fatalf("stale extra Tags = %#v, want %#v", evolutionErr.SelectionDelta.StaleExtraTags, want)
+	}
+	if want := []string{".old"}; !reflect.DeepEqual(evolutionErr.SelectionDelta.Removed.ManagedEntries, want) {
+		t.Fatalf("removed Managed Entries = %#v, want %#v", evolutionErr.SelectionDelta.Removed.ManagedEntries, want)
+	}
+	if !strings.Contains(err.Error(), `explicit selection: extra Tag "retired" is no longer declared`) {
+		t.Fatalf("error = %q, want source and actionable stale Tag", err)
+	}
+	data, marshalErr := json.Marshal(evolutionErr.JSONErrorData())
+	if marshalErr != nil || !strings.Contains(string(data), `"selection_delta"`) {
+		t.Fatalf("JSONErrorData() = %s, %v; want selection_delta", data, marshalErr)
+	}
+}
+
+func TestCompareEvolutionPreservesSupportedSelectionModifiers(t *testing.T) {
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{{Target: "~/.core", Tags: []string{"core"}}},
+	}
+	for _, tag := range []string{
+		"codex-delegation",
+		"without-codex-delegation",
+		"codex-spark-delegation",
+		"without-codex-spark-delegation",
+	} {
+		t.Run(tag, func(t *testing.T) {
+			previous, err := selection.ResolveIntent(m, selection.Intent{
+				Source: selection.SourceExplicit, Profiles: []string{"core"}, ExtraTags: []string{tag},
+			})
+			if err != nil {
+				t.Fatalf("resolve previous: %v", err)
+			}
+			if _, err := selection.CompareEvolution(m, m, previous, "linux"); err != nil {
+				t.Fatalf("CompareEvolution() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestCompareEvolutionDeltaJSONUsesDeterministicEmptyArrays(t *testing.T) {
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{{Target: ".shared", Tags: []string{"core"}}},
+	}
+	previous, err := selection.ResolveIntent(m, selection.Intent{
+		Source: selection.SourceRecorded, Profiles: []string{"core"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+	got, err := selection.CompareEvolution(m, m, previous, "darwin")
+	if err != nil {
+		t.Fatalf("CompareEvolution() error = %v", err)
+	}
+
+	data, err := json.Marshal(got.Report)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	for _, want := range []string{
+		`"effective_tags":[]`, `"managed_entries":[]`, `"dependencies":[]`,
+		`"provisioners":[]`, `"missing_profiles":[]`, `"stale_extra_tags":[]`,
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("JSON = %s, want %s", data, want)
+		}
+	}
+}
 
 func TestResolveReadOnlyExplicitSelectionWinsCompletely(t *testing.T) {
 	m := manifest.Manifest{Profiles: map[string]manifest.Profile{

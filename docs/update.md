@@ -86,11 +86,15 @@ dots update --yes
 Any supplied `--profile` or `--tag` makes the complete explicit selection win
 for that invocation; dots never merges it with recorded intent. The selection
 is validated before the Installed Repository changes and resolved again against
-the refreshed manifest before Managed Configuration is applied. Missing or
-invalid recorded intent stops application with remediation instead of choosing
-an implicit default. Only terminal success refreshes the Installed Selection,
-so dry runs, cancellations, and failed Managed Entry or Provisioner work
-preserve the previous intent.
+the refreshed manifest before Managed Configuration is applied. Update reports
+the resulting effective Tag and selected Managed Entry, Dependency, and
+Provisioner additions and removals before application. A missing saved Profile
+or explicit extra Tag no longer declared by any selectable manifest surface
+stops application with remediation and structured delta data instead of
+choosing an implicit default or silently rewriting intent. Removed surfaces are
+informational and are never automatically deleted or uninstalled. Only terminal
+success refreshes the Installed Selection, so dry runs, cancellations, and
+failed Managed Entry or Provisioner work preserve the previous intent.
 
 ## Profiles and provisioners
 

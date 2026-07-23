@@ -112,6 +112,12 @@ prose the text surface prints:
   extra Tags against the current Install Manifest; the stored `resolved_tags`
   remains audit-only. Update and upgrade resolve the same intent again after
   Source of Truth refresh and preserve its source across binary continuation.
+  Their selection report also includes `delta` with deterministic `previous`
+  and `current` snapshots; `added` and `removed` effective Tags, Managed
+  Entries, Dependencies, and Provisioners; and ordered `missing_profiles` and
+  `stale_extra_tags` arrays. Empty arrays remain present whenever `delta` is
+  emitted. A blocking evolution error returns the same delta as
+  `data.selection_delta`.
   Any explicit Profile or Tag selection wins completely for that invocation and
   is never merged with recorded intent.
   If neither source exists, the command returns an execution error (`1`) with

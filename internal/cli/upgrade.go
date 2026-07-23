@@ -170,7 +170,8 @@ func resolveUpgradeSelection(cmd *cobra.Command, opts updateOptions) (selection.
 	if !cmd.Flags().Changed("file") {
 		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
 	}
-	return resolveUpdateSelection(manifestPath, paths, opts)
+	_, effective, err := resolveUpdateSelection(manifestPath, paths, opts)
+	return effective, err
 }
 
 func upgradeContinuationArgs(file string, fileChanged bool, intent selection.Intent, sourceRoot, home, stateRoot string, yes, noTUI, json bool, binPlan upgrade.Plan) []string {

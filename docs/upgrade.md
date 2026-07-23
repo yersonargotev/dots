@@ -66,10 +66,14 @@ dots upgrade --yes
 ```
 
 Selection is validated before binary replacement and re-resolved against the
-refreshed manifest before Managed Configuration is applied. Missing or invalid
-intent stops the mutating phase without an implicit default. Only terminal
-success refreshes Installed Selection metadata; binary, update, Provisioner, or
-continuation failures preserve the previous selection.
+refreshed manifest before Managed Configuration is applied. Upgrade reports
+effective Tag and selected Managed Entry, Dependency, and Provisioner additions
+and removals before application. Missing Profiles and explicit extra Tags no
+longer declared by selectable manifest surfaces stop the mutating phase without
+an implicit default or automatic intent rewrite. Removed surfaces are never
+automatically deleted or uninstalled. Only terminal success refreshes Installed
+Selection metadata; binary, update, Provisioner, or continuation failures
+preserve the previous selection.
 
 ## Source of Truth flags
 

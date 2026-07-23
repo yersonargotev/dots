@@ -1,0 +1,52 @@
+{
+  "schema_version": "5",
+  "command": "update",
+  "status": "error",
+  "data": {
+    "selection_delta": {
+      "previous": {
+        "profiles": [
+          "core"
+        ],
+        "extra_tags": [
+          "retired"
+        ],
+        "effective_tags": [
+          "core",
+          "retired"
+        ]
+      },
+      "current": {
+        "profiles": [
+          "core"
+        ],
+        "extra_tags": [
+          "retired"
+        ],
+        "effective_tags": [
+          "core",
+          "retired"
+        ]
+      },
+      "added": {
+        "effective_tags": [],
+        "managed_entries": [],
+        "dependencies": [],
+        "provisioners": []
+      },
+      "removed": {
+        "effective_tags": [],
+        "managed_entries": [
+          "~/.retired"
+        ],
+        "dependencies": [],
+        "provisioners": []
+      },
+      "missing_profiles": [],
+      "stale_extra_tags": [
+        "retired"
+      ]
+    }
+  },
+  "error": "recorded selection: extra Tag \"retired\" is no longer declared; update the selection before refreshing"
+}
