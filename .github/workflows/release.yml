@@ -18,6 +18,8 @@ jobs:
   release:
     name: Build and publish release artifacts
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -51,56 +53,12 @@ jobs:
       - name: Build release artifacts and checksums.txt
         run: scripts/build-release-artifacts.sh --version "${{ steps.release.outputs.tag }}" --out-dir dist
 
-      - name: Require Homebrew tap token
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
-            echo "HOMEBREW_TAP_TOKEN is required to update yersonargotev/homebrew-tap before publishing release assets" >&2
-            exit 1
-          fi
-
-      - name: Check out Homebrew tap
-        uses: actions/checkout@v5
+      - name: Preserve release checksums for Homebrew publication
+        uses: actions/upload-artifact@v4
         with:
-          repository: yersonargotev/homebrew-tap
-          path: homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-
-      - name: Generate Homebrew formula from release checksums
-        run: |
-          scripts/generate-homebrew-formula.sh \
-            --version "${{ steps.release.outputs.tag }}" \
-            --checksums dist/checksums.txt \
-            --out homebrew-tap/Formula/dots.rb \
-            --repo yersonargotev/dots \
-            --homepage https://github.com/yersonargotev/dots \
-            --desc "Safe dotfiles installer"
-
-      - name: Prepare Homebrew tap formula update
-        id: prepare_tap
-        working-directory: homebrew-tap
-        env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/dots.rb
-          if git diff --cached --quiet; then
-            echo "Homebrew formula already matches $RELEASE_TAG"
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git commit -m "feat: update dots formula to ${RELEASE_TAG}"
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Prove Homebrew tap push permission
-        working-directory: homebrew-tap
-        run: |
-          set -euo pipefail
-          git push --dry-run origin HEAD:main
+          name: release-checksums
+          path: dist/checksums.txt
+          if-no-files-found: error
 
       - name: Create GitHub Release if needed
         env:
@@ -122,10 +80,78 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: gh release upload "$RELEASE_TAG" dist/* --clobber
 
+  publish-homebrew-formula:
+    name: Publish Homebrew formula
+    needs: release
+    environment: homebrew
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository at release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Download release checksums
+        uses: actions/download-artifact@v4
+        with:
+          name: release-checksums
+          path: dist
+
+      - name: Require Homebrew tap token
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is required to update yersonargotev/homebrew-tap before publishing release assets" >&2
+            exit 1
+          fi
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v5
+        with:
+          repository: yersonargotev/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Generate Homebrew formula from release checksums
+        run: |
+          scripts/generate-homebrew-formula.sh \
+            --version "${{ needs.release.outputs.tag }}" \
+            --checksums dist/checksums.txt \
+            --out homebrew-tap/Formula/dots.rb \
+            --repo yersonargotev/dots \
+            --homepage https://github.com/yersonargotev/dots \
+            --desc "Safe dotfiles installer"
+
+      - name: Prepare Homebrew tap formula update
+        id: prepare_tap
+        working-directory: homebrew-tap
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/dots.rb
+          if git diff --cached --quiet; then
+            echo "Homebrew formula already matches $RELEASE_TAG"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "feat: update dots formula to ${RELEASE_TAG}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Prove Homebrew tap push permission
+        working-directory: homebrew-tap
+        run: |
+          set -euo pipefail
+          git push --dry-run origin HEAD:main
+
       - name: Push prepared Homebrew tap formula update
         working-directory: homebrew-tap
         env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
           TAP_UPDATE_CHANGED: ${{ steps.prepare_tap.outputs.changed }}
         run: |
           set -euo pipefail
