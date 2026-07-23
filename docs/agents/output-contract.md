@@ -106,12 +106,23 @@ prose the text surface prints:
   agents can distinguish aligned Managed Entries from an incomplete full-profile
   setup. Read dependency readiness for those commands from `doctor`.
 
-- `installed` is a read-only inventory over Installation Metadata. It reports
-  recorded Managed Entries, represented Tags, recorded or inferred Profiles
-  (including partial coverage), recorded Provisioner runs, and Source of Truth
-  provenance when the metadata contains it. It is informational rather than an
-  alignment diagnostic, so partial profile coverage remains `status: "ok"`;
-  use `status` or `doctor` when an agent needs drift/dependency findings.
+- `installed` is a read-only report over Installation Metadata. Its optional
+  `data.installed_selection` is the authoritative machine-level intent recorded
+  by the last successful explicit install: ordered `profiles`, ordered
+  `extra_tags`, the ordered `resolved_tags` snapshot, Source of Truth
+  `provenance`, and the selection recording time in
+  `provenance.recorded_at`. The text surface renders the same information in a
+  distinct **Installed Selection** section.
+- The existing top-level `data.tags`, `data.profiles`, `data.managed_entries`,
+  and `data.provisioners` remain historical inventory evidence. In particular,
+  represented Tags and recorded or inferred Profile coverage are not an
+  authoritative selection. When v1/v2 or other legacy Installation Metadata has
+  no Installed Selection, JSON omits `data.installed_selection` and text says
+  that no authoritative Installed Selection is recorded; dots does not promote
+  inventory inference. The command is informational rather than an alignment
+  diagnostic, so an absent Installed Selection or partial Profile coverage
+  remains `status: "ok"`; use `status` or `doctor` when an agent needs
+  drift/dependency findings.
 - `plan`'s `resolved_source` (a per-machine absolute path) and `deps`'s
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the

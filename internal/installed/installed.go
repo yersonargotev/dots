@@ -76,13 +76,14 @@ type ProvisionerRun struct {
 // Report is the official installed inventory. It is a read-only informational
 // report, so HasFindings always returns false.
 type Report struct {
-	Metadata       MetadataSummary   `json:"metadata"`
-	Provenance     state.Provenance  `json:"provenance,omitempty"`
-	ManagedEntries []ManagedEntry    `json:"managed_entries"`
-	Tags           []string          `json:"tags"`
-	Profiles       []ProfileCoverage `json:"profiles"`
-	Provisioners   []ProvisionerRun  `json:"provisioners"`
-	Notes          []string          `json:"notes,omitempty"`
+	Metadata           MetadataSummary           `json:"metadata"`
+	Provenance         state.Provenance          `json:"provenance,omitempty"`
+	InstalledSelection *state.InstalledSelection `json:"installed_selection,omitempty"`
+	ManagedEntries     []ManagedEntry            `json:"managed_entries"`
+	Tags               []string                  `json:"tags"`
+	Profiles           []ProfileCoverage         `json:"profiles"`
+	Provisioners       []ProvisionerRun          `json:"provisioners"`
+	Notes              []string                  `json:"notes,omitempty"`
 }
 
 func (r Report) HasFindings() bool { return false }
@@ -98,12 +99,13 @@ type Options struct {
 // represented Tags and Profile coverage without touching managed targets.
 func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, error) {
 	report := Report{
-		Metadata:       MetadataSummary{Path: opts.StatePath, Version: meta.Version},
-		Provenance:     meta.Provenance,
-		ManagedEntries: []ManagedEntry{},
-		Tags:           []string{},
-		Profiles:       []ProfileCoverage{},
-		Provisioners:   []ProvisionerRun{},
+		Metadata:           MetadataSummary{Path: opts.StatePath, Version: meta.Version},
+		Provenance:         meta.Provenance,
+		InstalledSelection: meta.InstalledSelection,
+		ManagedEntries:     []ManagedEntry{},
+		Tags:               []string{},
+		Profiles:           []ProfileCoverage{},
+		Provisioners:       []ProvisionerRun{},
 	}
 
 	matchedEntryKeys := map[string]bool{}

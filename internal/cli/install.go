@@ -23,6 +23,7 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/tui"
 	"github.com/yersonargotev/dots/internal/version"
@@ -33,6 +34,7 @@ var (
 	installHostArch                         = runtime.GOARCH
 	packageManagerDetector                  = pkgmgr.Detector{}
 	packageManagerSetupRunner pkgmgr.Runner = pkgmgr.ExecRunner{}
+	recordInstalledSelection                = selection.Record
 )
 
 func newInstallCommand() *cobra.Command {
@@ -84,7 +86,8 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := manifest.ResolveSelection(*m, profiles, extraTags); err != nil {
+			installedSelection, err := selection.Resolve(*m, profiles, extraTags)
+			if err != nil {
 				return err
 			}
 
@@ -251,6 +254,10 @@ func newInstallCommand() *cobra.Command {
 				if wantsJSON(cmd) {
 					return installProvisionerError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
 				}
+				return err
+			}
+			installedSelection.Provenance = state.CaptureProvenance(paths.SourceRoot, version.Value)
+			if err := recordInstalledSelection(state.Path(paths.StateRoot), installedSelection); err != nil {
 				return err
 			}
 			if wantsJSON(cmd) {
@@ -755,7 +762,9 @@ func recordProvisionerMetadata(stateRoot, sourceRoot string, report provision.Re
 	if err != nil {
 		return err
 	}
-	meta.Version = 2
+	if meta.Version < 2 {
+		meta.Version = 2
+	}
 	meta.Provenance = state.CaptureProvenance(sourceRoot, version.Value)
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, item := range report.Items {

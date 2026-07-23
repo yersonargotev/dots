@@ -117,8 +117,12 @@ The current alignment between a workstation and the repository-owned Source of T
 _Avoid_: health, sync state, installed state
 
 **Installation Metadata**:
-The state file stored under `~/.local/state/dots/installed.json` that records what the Dotfiles CLI installed, including managed entries, strategies, hashes, and timestamps. It lets the CLI detect drift for copied and templated targets.
+The state file stored under `~/.local/state/dots/installed.json` that records what the Dotfiles CLI installed, including Managed Entries, Provisioners, strategies, hashes, timestamps, and an optional Installed Selection. It lets the CLI detect Drift for copied and templated targets while preserving machine-level selection intent separately from historical inventory.
 _Avoid_: install log, state file, tracking file
+
+**Installed Selection**:
+The authoritative machine-level installation intent recorded after a successful explicit install. It preserves the ordered Profiles and explicit extra Tags selected by the operator, the ordered resolved Tag snapshot, Source of Truth provenance, and recording time. Profiles and explicit extra Tags are intent; resolved Tags are an audit snapshot. Per-Managed-Entry and per-Provisioner Profiles and Tags remain historical inventory and ownership evidence, not a substitute for an Installed Selection.
+_Avoid_: inferred selection, installed profile, tag inventory
 
 **Dependency Installation Metadata**:
 The state record of Dependencies the Dotfiles CLI installed through executable providers, including the dependency name, provider, installed path, artifact version or checksum when applicable, and timestamp. It is separate from Installation Metadata because dependency tools are external workstation capabilities, not Managed Entries.

@@ -90,7 +90,9 @@ func recordMetadata(p plan.Plan, resolvedSources []string, opts Options) error {
 	if err != nil {
 		return err
 	}
-	meta.Version = 2
+	if meta.Version < 2 {
+		meta.Version = 2
+	}
 	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
 
 	now := time.Now().UTC().Format(time.RFC3339)

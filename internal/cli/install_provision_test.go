@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -1001,6 +1002,19 @@ func TestInstallTUICancelDoesNotRunProvisioners(t *testing.T) {
 	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
+	previousSelection := state.InstalledSelection{
+		Profiles:     []string{"old"},
+		ResolvedTags: []string{"old"},
+		Provenance:   state.Provenance{RecordedAt: "2026-01-02T03:04:05Z"},
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{
+		Version:            state.CurrentVersion,
+		Entries:            []state.Record{},
+		InstalledSelection: &previousSelection,
+	}); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+
 	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
 	if err := os.WriteFile(filepath.Join(sandboxHome, ".gitconfig"), []byte("local\n"), 0o600); err != nil {
 		t.Fatalf("write local target: %v", err)
@@ -1031,7 +1045,7 @@ provisioners:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetIn(strings.NewReader("q"))
-	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+	cmd.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -1052,6 +1066,13 @@ provisioners:
 	}
 	if !strings.Contains(out.String(), "Conflict resolution canceled; no changes applied.") {
 		t.Fatalf("cancel output missing abort message\noutput:\n%s", out.String())
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previousSelection) {
+		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previousSelection)
 	}
 }
 

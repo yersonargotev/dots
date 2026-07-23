@@ -5,13 +5,33 @@
   "data": {
     "metadata": {
       "path": "/home/user/.local/state/dots/installed.json",
-      "version": 2
+      "version": 3
     },
     "provenance": {
       "source_root": "/src/dots",
       "source_revision": "abc123",
       "dots_version": "v0.test",
       "recorded_at": "2026-07-08T12:00:00Z"
+    },
+    "installed_selection": {
+      "profiles": [
+        "core",
+        "agents"
+      ],
+      "extra_tags": [
+        "work"
+      ],
+      "resolved_tags": [
+        "core",
+        "agents",
+        "work"
+      ],
+      "provenance": {
+        "source_root": "/src/dots",
+        "source_revision": "abc123",
+        "dots_version": "v0.test",
+        "recorded_at": "2026-07-08T12:00:00Z"
+      }
     },
     "managed_entries": [
       {

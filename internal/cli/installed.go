@@ -72,25 +72,26 @@ func renderInstalled(w io.Writer, report inst.Report) {
 	}
 	fmt.Fprintln(w)
 	if !report.Provenance.Empty() {
-		parts := []string{}
-		if report.Provenance.SourceRoot != "" {
-			parts = append(parts, "source="+report.Provenance.SourceRoot)
-		}
-		if report.Provenance.SourceRevision != "" {
-			parts = append(parts, "commit="+report.Provenance.SourceRevision)
-		}
-		if report.Provenance.DotsVersion != "" {
-			parts = append(parts, "dots="+report.Provenance.DotsVersion)
-		}
-		if report.Provenance.RecordedAt != "" {
-			parts = append(parts, "recorded="+report.Provenance.RecordedAt)
-		}
-		fmt.Fprintf(w, "Provenance: %s\n", strings.Join(parts, ", "))
+		fmt.Fprintf(w, "Provenance: %s\n", renderProvenance(report.Provenance, true))
 	} else {
 		fmt.Fprintln(w, "Provenance: unknown (metadata predates provenance capture)")
 	}
 
 	fmt.Fprintln(w)
+	if report.InstalledSelection == nil {
+		fmt.Fprintln(w, "Installed Selection: none recorded (historical inventory below is non-authoritative)")
+	} else {
+		selection := report.InstalledSelection
+		fmt.Fprintln(w, "Installed Selection (authoritative)")
+		fmt.Fprintf(w, "  Profiles: %s\n", renderListOrNone(selection.Profiles))
+		fmt.Fprintf(w, "  Extra Tags: %s\n", renderListOrNone(selection.ExtraTags))
+		fmt.Fprintf(w, "  Resolved Tags: %s\n", renderListOrNone(selection.ResolvedTags))
+		fmt.Fprintf(w, "  Source of Truth: %s\n", renderProvenance(selection.Provenance, false))
+		fmt.Fprintf(w, "  Recorded At: %s\n", renderValueOrUnknown(selection.Provenance.RecordedAt))
+	}
+
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Historical inventory (non-authoritative)")
 	if len(report.ManagedEntries) == 0 {
 		fmt.Fprintln(w, "Managed Entries: none recorded")
 	} else {
@@ -170,4 +171,31 @@ func renderListOrNone(values []string) string {
 		return "none"
 	}
 	return strings.Join(values, ", ")
+}
+
+func renderProvenance(provenance state.Provenance, includeRecordedAt bool) string {
+	parts := []string{}
+	if provenance.SourceRoot != "" {
+		parts = append(parts, "source="+provenance.SourceRoot)
+	}
+	if provenance.SourceRevision != "" {
+		parts = append(parts, "commit="+provenance.SourceRevision)
+	}
+	if provenance.DotsVersion != "" {
+		parts = append(parts, "dots="+provenance.DotsVersion)
+	}
+	if includeRecordedAt && provenance.RecordedAt != "" {
+		parts = append(parts, "recorded="+provenance.RecordedAt)
+	}
+	if len(parts) == 0 {
+		return "unknown"
+	}
+	return strings.Join(parts, ", ")
+}
+
+func renderValueOrUnknown(value string) string {
+	if value == "" {
+		return "unknown"
+	}
+	return value
 }
