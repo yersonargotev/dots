@@ -33,6 +33,19 @@
         "core",
         "work"
       ],
+      "selection": {
+        "source": "recorded",
+        "profiles": [
+          "core"
+        ],
+        "extra_tags": [
+          "work"
+        ],
+        "effective_tags": [
+          "core",
+          "work"
+        ]
+      },
       "actions": []
     },
     "provisioners": {
