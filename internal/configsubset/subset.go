@@ -3,38 +3,114 @@
 package configsubset
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
 )
 
+func decodeJSON(data []byte, value *any) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+// JSONFileRelation describes how a target relates to a source-owned JSON
+// subset. At most one field can be true.
+type JSONFileRelation struct {
+	Contains  bool
+	Mergeable bool
+}
+
+// AnalyzeJSONFiles compares target with source in one read and parse pass.
+// Invalid target JSON is incompatible; invalid source JSON is an error because
+// source belongs to the repository-owned baseline.
+func AnalyzeJSONFiles(target, source string) (JSONFileRelation, error) {
+	sourceData, err := os.ReadFile(source)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return JSONFileRelation{}, nil
+		}
+		return JSONFileRelation{}, fmt.Errorf("read %s: %w", source, err)
+	}
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		return JSONFileRelation{}, fmt.Errorf("read %s: %w", target, err)
+	}
+
+	var sourceValue, targetValue any
+	if err := decodeJSON(sourceData, &sourceValue); err != nil {
+		return JSONFileRelation{}, fmt.Errorf("parse source JSON %s: %w", source, err)
+	}
+	if err := decodeJSON(targetData, &targetValue); err != nil {
+		return JSONFileRelation{}, nil
+	}
+	result := mergeJSONValue(targetValue, sourceValue)
+	return JSONFileRelation{
+		Contains:  result.compatible && !result.changed,
+		Mergeable: result.compatible && result.changed,
+	}, nil
+}
+
 // JSONFileContains reports whether target contains every value present in
 // source. Object keys are subset-owned and array items may be a subset of the
 // target array.
 func JSONFileContains(target, source string) (bool, error) {
+	relation, err := AnalyzeJSONFiles(target, source)
+	return relation.Contains, err
+}
+
+// MergeJSONFile adds source-owned values that are missing from target while
+// preserving target-only object keys and array elements. Existing incompatible
+// values are left untouched and reported as a conflict.
+func MergeJSONFile(target, source string) error {
 	sourceData, err := os.ReadFile(source)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("read %s: %w", source, err)
+		return fmt.Errorf("read %s: %w", source, err)
 	}
 	targetData, err := os.ReadFile(target)
 	if err != nil {
-		return false, fmt.Errorf("read %s: %w", target, err)
+		return fmt.Errorf("read %s: %w", target, err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", target, err)
 	}
 
 	var sourceValue, targetValue any
-	if err := json.Unmarshal(sourceData, &sourceValue); err != nil {
-		return false, fmt.Errorf("parse source JSON %s: %w", source, err)
+	if err := decodeJSON(sourceData, &sourceValue); err != nil {
+		return fmt.Errorf("parse source JSON %s: %w", source, err)
 	}
-	if err := json.Unmarshal(targetData, &targetValue); err != nil {
-		return false, nil
+	if err := decodeJSON(targetData, &targetValue); err != nil {
+		return fmt.Errorf("parse target JSON %s: %w", target, err)
 	}
-	return jsonContains(targetValue, sourceValue), nil
+	result := mergeJSONValue(targetValue, sourceValue)
+	if !result.compatible {
+		return fmt.Errorf("source-owned JSON differences cannot be merged safely")
+	}
+	data, err := json.MarshalIndent(result.value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode merged JSON: %w", err)
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(target, data, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("write %s: %w", target, err)
+	}
+	return nil
 }
 
 // TOMLFileContains reports whether target contains every scalar/array setting
@@ -126,40 +202,68 @@ func MergeTOMLFile(target, source string) error {
 	return nil
 }
 
-func jsonContains(target, source any) bool {
+type jsonMergeResult struct {
+	value      any
+	changed    bool
+	compatible bool
+}
+
+func mergeJSONValue(target, source any) jsonMergeResult {
 	switch sourceTyped := source.(type) {
 	case map[string]any:
 		targetTyped, ok := target.(map[string]any)
 		if !ok {
-			return false
+			return jsonMergeResult{value: target}
 		}
+		merged := make(map[string]any, len(targetTyped)+len(sourceTyped))
+		for key, value := range targetTyped {
+			merged[key] = value
+		}
+		changed := false
 		for key, sourceChild := range sourceTyped {
-			targetChild, ok := targetTyped[key]
-			if !ok || !jsonContains(targetChild, sourceChild) {
-				return false
+			targetChild, exists := targetTyped[key]
+			if !exists {
+				merged[key] = sourceChild
+				changed = true
+				continue
+			}
+			child := mergeJSONValue(targetChild, sourceChild)
+			if !child.compatible {
+				return jsonMergeResult{value: target}
+			}
+			if child.changed {
+				merged[key] = child.value
+				changed = true
 			}
 		}
-		return true
+		return jsonMergeResult{value: merged, changed: changed, compatible: true}
 	case []any:
 		targetTyped, ok := target.([]any)
 		if !ok {
-			return false
+			return jsonMergeResult{value: target}
 		}
+		merged := append([]any(nil), targetTyped...)
+		changed := false
 		for _, sourceItem := range sourceTyped {
 			found := false
-			for _, targetItem := range targetTyped {
-				if jsonContains(targetItem, sourceItem) {
+			for _, targetItem := range merged {
+				relation := mergeJSONValue(targetItem, sourceItem)
+				if relation.compatible && !relation.changed {
 					found = true
 					break
 				}
 			}
 			if !found {
-				return false
+				merged = append(merged, sourceItem)
+				changed = true
 			}
 		}
-		return true
+		return jsonMergeResult{value: merged, changed: changed, compatible: true}
 	default:
-		return reflect.DeepEqual(target, source)
+		return jsonMergeResult{
+			value:      target,
+			compatible: reflect.DeepEqual(target, source),
+		}
 	}
 }
 

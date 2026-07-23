@@ -237,10 +237,11 @@ func TestBuildCopyJSONSubsetOwnership(t *testing.T) {
 			want: plan.StatusConflict,
 		},
 		{
-			name:      "missing dots-owned JSON value is conflict even with metadata",
+			name:      "trusted compatible target missing dots-owned JSON values is update",
 			ownership: "json-subset",
 			sourceContent: `{
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Bash(git status:*)",
       "Bash(go test:*)"
@@ -250,6 +251,27 @@ func TestBuildCopyJSONSubsetOwnership(t *testing.T) {
 			targetContent: `{
   "permissions": {
     "allow": ["Bash(git status:*)"]
+  },
+  "hooks": {
+    "PostToolUse": []
+  }
+}`,
+			metadata: func(target string) state.Metadata {
+				return state.Metadata{Entries: []state.Record{{Target: target, Source: "configs/claude/settings.json", Strategy: "copy"}}}
+			},
+			want: plan.StatusUpdate,
+		},
+		{
+			name:      "changed dots-owned JSON scalar is conflict even with metadata",
+			ownership: "json-subset",
+			sourceContent: `{
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
+}`,
+			targetContent: `{
+  "permissions": {
+    "defaultMode": "default"
   }
 }`,
 			metadata: func(target string) state.Metadata {
@@ -258,7 +280,7 @@ func TestBuildCopyJSONSubsetOwnership(t *testing.T) {
 			want: plan.StatusConflict,
 		},
 		{
-			name:      "changed dots-owned JSON value is conflict even with metadata",
+			name:      "trusted target missing dots-owned JSON array element is update",
 			ownership: "json-subset",
 			sourceContent: `{
   "permissions": {
@@ -273,7 +295,7 @@ func TestBuildCopyJSONSubsetOwnership(t *testing.T) {
 			metadata: func(target string) state.Metadata {
 				return state.Metadata{Entries: []state.Record{{Target: target, Source: "configs/claude/settings.json", Strategy: "copy"}}}
 			},
-			want: plan.StatusConflict,
+			want: plan.StatusUpdate,
 		},
 	}
 

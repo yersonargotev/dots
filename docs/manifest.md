@@ -124,6 +124,12 @@ home directory.
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `dependencies` | No | Entry-level Dependencies. |
 
+For a `json-subset` target already trusted by matching Installation Metadata,
+missing source-owned object keys and array elements are applied as a conservative
+update: target-only values are preserved, a Backup Set is created, and existing
+incompatible scalar or object/array values remain a Conflict. A compatible
+pre-existing target without matching metadata is still a Conflict.
+
 Current Managed Entries:
 
 | Source | Target | Strategy | Tags | OS | Dependencies |
