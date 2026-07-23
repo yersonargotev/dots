@@ -195,6 +195,10 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	}
 	effective, err = selection.CompareEvolution(*previousManifest, *m, effective, runtime.GOOS)
 	if err != nil {
+		var evolutionErr *selection.EvolutionError
+		if !wantsJSON(cmd) && errors.As(err, &evolutionErr) {
+			renderSelectionEvolution(out, evolutionErr.SelectionDelta)
+		}
 		return updateReport{}, err
 	}
 	meta, err := loadInstallationMetadata(paths, opts.stateRoot)

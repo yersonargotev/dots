@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/selection"
 )
 
 var update = flag.Bool("update", false, "update golden files")
@@ -63,6 +64,54 @@ func TestRenderPlanGolden(t *testing.T) {
 			if got := out.Bytes(); !bytes.Equal(got, want) {
 				t.Fatalf("golden mismatch for %s\n got:\n%s\nwant:\n%s", tt.golden, got, want)
 			}
+		})
+	}
+}
+
+func TestRenderSelectionEvolutionGolden(t *testing.T) {
+	tests := []struct {
+		name   string
+		delta  selection.Delta
+		golden string
+	}{
+		{
+			name: "changes",
+			delta: selection.Delta{
+				Previous: selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{}, EffectiveTags: []string{"core", "retired"}},
+				Current:  selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{}, EffectiveTags: []string{"core", "desktop"}},
+				Added: selection.Changes{
+					EffectiveTags: []string{"desktop"}, ManagedEntries: []string{"~/.config/ghostty/config"}, Dependencies: []string{"ghostty"}, Provisioners: []string{},
+				},
+				Removed: selection.Changes{
+					EffectiveTags: []string{"retired"}, ManagedEntries: []string{"~/.retired"}, Dependencies: []string{}, Provisioners: []string{"gentle-ai"},
+				},
+				MissingProfiles: []string{},
+				StaleExtraTags:  []string{},
+			},
+			golden: "selection_evolution.golden",
+		},
+		{
+			name: "blocking validation",
+			delta: selection.Delta{
+				Previous: selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"retired"}, EffectiveTags: []string{"core", "retired"}},
+				Current:  selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"retired"}, EffectiveTags: []string{"core", "retired"}},
+				Added: selection.Changes{
+					EffectiveTags: []string{}, ManagedEntries: []string{}, Dependencies: []string{}, Provisioners: []string{},
+				},
+				Removed: selection.Changes{
+					EffectiveTags: []string{}, ManagedEntries: []string{"~/.retired"}, Dependencies: []string{}, Provisioners: []string{},
+				},
+				MissingProfiles: []string{},
+				StaleExtraTags:  []string{"retired"},
+			},
+			golden: "selection_evolution_blocking.golden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			renderSelectionEvolution(&out, tt.delta)
+			assertGolden(t, tt.golden, out.Bytes())
 		})
 	}
 }

@@ -46,6 +46,18 @@ func TestEnvelopeGolden(t *testing.T) {
 		Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"},
 		EffectiveTags: []string{"core", "desktop", "work"}, Delta: &selectionDelta,
 	}
+	blockingDelta := selection.Delta{
+		Previous: selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"retired"}, EffectiveTags: []string{"core", "retired"}},
+		Current:  selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"retired"}, EffectiveTags: []string{"core", "retired"}},
+		Added: selection.Changes{
+			EffectiveTags: []string{}, ManagedEntries: []string{}, Dependencies: []string{}, Provisioners: []string{},
+		},
+		Removed: selection.Changes{
+			EffectiveTags: []string{}, ManagedEntries: []string{"~/.retired"}, Dependencies: []string{}, Provisioners: []string{},
+		},
+		MissingProfiles: []string{},
+		StaleExtraTags:  []string{"retired"},
+	}
 	tests := []struct {
 		name   string
 		env    envelope
@@ -238,6 +250,19 @@ func TestEnvelopeGolden(t *testing.T) {
 				},
 			},
 			golden: "envelope_update.golden",
+		},
+		{
+			name: "update blocking selection evolution",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "update",
+				Status:        statusError,
+				Data: struct {
+					SelectionDelta selection.Delta `json:"selection_delta"`
+				}{SelectionDelta: blockingDelta},
+				Error: `recorded selection: extra Tag "retired" is no longer declared; update the selection before refreshing`,
+			},
+			golden: "envelope_update_selection_error.golden",
 		},
 		{
 			name: "upgrade",

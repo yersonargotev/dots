@@ -193,6 +193,14 @@ entries:
 	if err == nil || !strings.Contains(err.Error(), `recorded selection: profile "core" not found`) {
 		t.Fatalf("error = %v, want invalid refreshed selection\noutput:\n%s", err, out.String())
 	}
+	for _, want := range []string{
+		"Selection evolution:",
+		"Blocking validation: missing-profiles=core stale-extra-tags=(none)",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output missing %q:\n%s", want, out.String())
+		}
+	}
 	if _, err := os.Stat(filepath.Join(sourceRoot, "configs/work")); err != nil {
 		t.Fatalf("Source of Truth did not refresh before stale selection was detected: %v", err)
 	}
@@ -205,6 +213,83 @@ entries:
 	}
 	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
 		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+}
+
+func TestUpdateReportsProfileTagRemovalsWithoutDeletingRetiredSurfaces(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core":    "core\n",
+		"configs/retired": "retired\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core, retired]
+dependencies:
+  - tags: [retired]
+    dependencies:
+      - name: retired-tool
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+  - source: configs/retired
+    target: ~/.retired
+    strategy: symlink
+    tags: [retired]
+provisioners:
+  - tool: gentle-ai
+    tags: [retired]
+    spec:
+      scope: global
+      agents: [codex]
+`,
+	})
+	previous := state.InstalledSelection{Profiles: []string{"core"}, ResolvedTags: []string{"core", "retired"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+	retiredTarget := filepath.Join(home, ".retired")
+	if err := os.WriteFile(retiredTarget, []byte("keep me\n"), 0o600); err != nil {
+		t.Fatalf("write retired target: %v", err)
+	}
+	advanceUpstream(t, origin, "remove retired profile tag", map[string]string{
+		"configs/core": "core\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+`,
+	})
+
+	out := runBareUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	if want := "Removed: effective-tags=retired managed-entries=~/.retired dependencies=retired-tool provisioners=gentle-ai"; !strings.Contains(out, want) {
+		t.Fatalf("output missing retired surfaces %q:\n%s", want, out)
+	}
+	got, err := os.ReadFile(retiredTarget)
+	if err != nil {
+		t.Fatalf("retired target was deleted: %v", err)
+	}
+	if string(got) != "keep me\n" {
+		t.Fatalf("retired target changed to %q", got)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.ResolvedTags, []string{"core"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResolvedTags = %#v, want %#v", got, want)
 	}
 }
 
@@ -250,13 +335,14 @@ func TestUpdateProvisionerFailurePreservesPreviousInstalledSelection(t *testing.
 
 func TestUpdateStaleExtraTagReturnsStructuredDeltaAndPreservesIntent(t *testing.T) {
 	requireGitCLI(t)
-	home := t.TempDir()
-	stateRoot := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 
-	origin, sourceRoot := newInstalledRepo(t, map[string]string{
-		"configs/retired": "retired\n",
-		"dots.yaml": `version: 1
+	setup := func() (home, stateRoot, sourceRoot string, previous state.InstalledSelection) {
+		home = t.TempDir()
+		stateRoot = t.TempDir()
+		origin, sourceRoot := newInstalledRepo(t, map[string]string{
+			"configs/retired": "retired\n",
+			"dots.yaml": `version: 1
 profiles:
   core:
     tags: [core]
@@ -266,16 +352,16 @@ entries:
     strategy: symlink
     tags: [retired]
 `,
-	})
-	previous := state.InstalledSelection{
-		Profiles: []string{"core"}, ExtraTags: []string{"retired"}, ResolvedTags: []string{"core", "retired"},
-	}
-	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
-		t.Fatalf("save metadata: %v", err)
-	}
-	advanceUpstream(t, origin, "retire optional surface", map[string]string{
-		"configs/core": "core\n",
-		"dots.yaml": `version: 1
+		})
+		previous = state.InstalledSelection{
+			Profiles: []string{"core"}, ExtraTags: []string{"retired"}, ResolvedTags: []string{"core", "retired"},
+		}
+		if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+			t.Fatalf("save metadata: %v", err)
+		}
+		advanceUpstream(t, origin, "retire optional surface", map[string]string{
+			"configs/core": "core\n",
+			"dots.yaml": `version: 1
 profiles:
   core:
     tags: [core]
@@ -285,8 +371,32 @@ entries:
     strategy: symlink
     tags: [core]
 `,
-	})
+		})
+		return home, stateRoot, sourceRoot, previous
+	}
 
+	home, stateRoot, sourceRoot, _ := setup()
+	textCmd := cli.NewRootCommand()
+	var textOut bytes.Buffer
+	textCmd.SetOut(&textOut)
+	textCmd.SetErr(&textOut)
+	textCmd.SetArgs([]string{"update", "--yes",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := textCmd.Execute(); err == nil {
+		t.Fatalf("text update error = nil, want stale extra Tag\noutput:\n%s", textOut.String())
+	}
+	for _, want := range []string{
+		"Selection evolution:",
+		"Removed: effective-tags=(none) managed-entries=~/.retired dependencies=(none) provisioners=(none)",
+		"Blocking validation: missing-profiles=(none) stale-extra-tags=retired",
+	} {
+		if !strings.Contains(textOut.String(), want) {
+			t.Fatalf("text output missing %q:\n%s", want, textOut.String())
+		}
+	}
+
+	home, stateRoot, sourceRoot, previous := setup()
 	var out, errOut bytes.Buffer
 	code := cli.Run([]string{"update", "--yes", "--output", "json",
 		"--file", filepath.Join(sourceRoot, "dots.yaml"),

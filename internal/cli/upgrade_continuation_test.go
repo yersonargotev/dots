@@ -33,7 +33,7 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 		t.Run(tt.name, func(t *testing.T) {
 			home := t.TempDir()
 			stateRoot := t.TempDir()
-			sourceRoot := newContinuationRepo(t)
+			origin, sourceRoot := newContinuationRepo(t)
 			t.Setenv("HOME", t.TempDir())
 
 			previous := state.InstalledSelection{
@@ -92,6 +92,7 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 			if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
 				t.Fatalf("exec failure changed InstalledSelection = %#v, want %#v", meta.InstalledSelection, previous)
 			}
+			advanceContinuationRepo(t, origin)
 
 			continued := NewRootCommand()
 			var continuedOut bytes.Buffer
@@ -101,7 +102,7 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 			if err := continued.Execute(); err != nil {
 				t.Fatalf("continued upgrade error = %v\noutput:\n%s", err, continuedOut.String())
 			}
-			for _, target := range []string{".core", ".extra"} {
+			for _, target := range []string{".core", ".extra", ".new"} {
 				if _, err := os.Readlink(filepath.Join(home, target)); err != nil {
 					t.Fatalf("continuation did not apply %s: %v", target, err)
 				}
@@ -117,8 +118,13 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 			if env.Data.Selection.Source != selection.SourceRecorded ||
 				!reflect.DeepEqual(env.Data.Selection.Profiles, previous.Profiles) ||
 				!reflect.DeepEqual(env.Data.Selection.ExtraTags, previous.ExtraTags) ||
-				!reflect.DeepEqual(env.Data.Selection.EffectiveTags, previous.ResolvedTags) {
+				!reflect.DeepEqual(env.Data.Selection.EffectiveTags, []string{"core", "new", "extra"}) {
 				t.Fatalf("continuation selection = %#v, want recorded intent %#v", env.Data.Selection, previous)
+			}
+			if env.Data.Selection.Delta == nil ||
+				!reflect.DeepEqual(env.Data.Selection.Delta.Added.EffectiveTags, []string{"new"}) ||
+				!reflect.DeepEqual(env.Data.Selection.Delta.Added.ManagedEntries, []string{"~/.new"}) {
+				t.Fatalf("continuation selection delta = %#v", env.Data.Selection.Delta)
 			}
 		})
 	}
@@ -141,7 +147,7 @@ func assertContinuationSelectionArgs(t *testing.T, args []string) {
 	}
 }
 
-func newContinuationRepo(t *testing.T) string {
+func newContinuationRepo(t *testing.T) (string, string) {
 	t.Helper()
 	origin := t.TempDir()
 	runContinuationGit(t, origin, "init", "-b", "main")
@@ -180,7 +186,37 @@ entries:
 	runContinuationGit(t, "", "clone", origin, clone)
 	runContinuationGit(t, clone, "config", "user.email", "tests@example.com")
 	runContinuationGit(t, clone, "config", "user.name", "dots tests")
-	return clone
+	return origin, clone
+}
+
+func advanceContinuationRepo(t *testing.T, origin string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(origin, "configs", "new"), []byte("new\n"), 0o600); err != nil {
+		t.Fatalf("write new continuation config: %v", err)
+	}
+	manifest := `version: 1
+profiles:
+  core:
+    tags: [core, new]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+  - source: configs/new
+    target: ~/.new
+    strategy: symlink
+    tags: [new]
+  - source: configs/extra
+    target: ~/.extra
+    strategy: symlink
+    tags: [extra]
+`
+	if err := os.WriteFile(filepath.Join(origin, "dots.yaml"), []byte(manifest), 0o600); err != nil {
+		t.Fatalf("write continuation manifest: %v", err)
+	}
+	runContinuationGit(t, origin, "add", "-A")
+	runContinuationGit(t, origin, "commit", "-m", "expand core selection")
 }
 
 func runContinuationGit(t *testing.T, dir string, args ...string) {

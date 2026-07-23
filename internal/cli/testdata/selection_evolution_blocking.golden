@@ -1,0 +1,7 @@
+Selection evolution:
+  Previous: profiles=core extra-tags=retired effective-tags=core,retired
+  Current: profiles=core extra-tags=retired effective-tags=core,retired
+  Added: effective-tags=(none) managed-entries=(none) dependencies=(none) provisioners=(none)
+  Removed: effective-tags=(none) managed-entries=~/.retired dependencies=(none) provisioners=(none)
+  Blocking validation: missing-profiles=(none) stale-extra-tags=retired
+
