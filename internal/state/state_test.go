@@ -1,6 +1,7 @@
 package state_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -63,6 +64,99 @@ func TestSaveThenLoadRoundTripsRecords(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Load() metadata = %+v, want %+v", got, want)
+	}
+}
+
+func TestSaveThenLoadRoundTripsInstalledSelectionV3(t *testing.T) {
+	path := state.Path(t.TempDir())
+	want := state.Metadata{
+		Version: 3,
+		InstalledSelection: &state.InstalledSelection{
+			Profiles:     []string{"core", "agents"},
+			ExtraTags:    []string{"agents", "web"},
+			ResolvedTags: []string{"core", "agents", "web"},
+			Provenance: state.Provenance{
+				SourceRoot:     "/src/dots",
+				SourceRevision: "abc123",
+				DotsVersion:    "v0.test",
+				RecordedAt:     "2026-07-23T12:00:00Z",
+			},
+		},
+		Entries: []state.Record{{Target: "/home/user/.zshrc"}},
+	}
+
+	if err := state.Save(path, want); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, err := state.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Load() metadata = %+v, want %+v", got, want)
+	}
+}
+
+func TestLoadLegacyMetadataHasNoInstalledSelection(t *testing.T) {
+	for _, version := range []int{1, 2} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			path := state.Path(t.TempDir())
+			data := fmt.Sprintf("{\"version\":%d,\"entries\":[]}\n", version)
+			if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+				t.Fatalf("write legacy metadata: %v", err)
+			}
+			got, err := state.Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got.InstalledSelection != nil {
+				t.Fatalf("Load() selection = %+v, want nil", got.InstalledSelection)
+			}
+		})
+	}
+}
+
+func TestSaveFailurePreservesPreviousMetadata(t *testing.T) {
+	dir := t.TempDir()
+	path := state.Path(dir)
+	previous := []byte("{\"version\":2,\"entries\":[]}\n")
+	if err := os.WriteFile(path, previous, 0o600); err != nil {
+		t.Fatalf("write previous metadata: %v", err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("make state directory read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	if err := state.Save(path, state.Metadata{Version: 3}); err == nil {
+		t.Skip("filesystem permits writes to a read-only directory")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read previous metadata: %v", err)
+	}
+	if !reflect.DeepEqual(got, previous) {
+		t.Fatalf("metadata after failed Save() = %q, want previous %q", got, previous)
+	}
+}
+
+func TestRemovePreservesIndependentInstalledSelection(t *testing.T) {
+	original := state.Metadata{
+		Entries: []state.Record{{Target: "/drop"}, {Target: "/keep"}},
+		InstalledSelection: &state.InstalledSelection{
+			Profiles:     []string{"core"},
+			ExtraTags:    []string{"web"},
+			ResolvedTags: []string{"core", "web"},
+		},
+	}
+
+	pruned := original.Remove("/drop")
+	if pruned.InstalledSelection == nil || !reflect.DeepEqual(pruned.InstalledSelection, original.InstalledSelection) {
+		t.Fatalf("Remove() selection = %+v, want %+v", pruned.InstalledSelection, original.InstalledSelection)
+	}
+	pruned.InstalledSelection.Profiles[0] = "changed"
+	if original.InstalledSelection.Profiles[0] != "core" {
+		t.Fatal("Remove() selection aliases the original metadata")
 	}
 }
 

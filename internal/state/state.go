@@ -17,12 +17,25 @@ import (
 	"time"
 )
 
+// CurrentVersion is the current Installation Metadata schema version.
+const CurrentVersion = 3
+
 // Metadata is the machine-readable record of installed managed targets.
 type Metadata struct {
-	Version      int                 `json:"version"`
-	Provenance   Provenance          `json:"provenance,omitempty"`
-	Entries      []Record            `json:"entries"`
-	Provisioners []ProvisionerRecord `json:"provisioners,omitempty"`
+	Version            int                 `json:"version"`
+	Provenance         Provenance          `json:"provenance,omitempty"`
+	Entries            []Record            `json:"entries"`
+	Provisioners       []ProvisionerRecord `json:"provisioners,omitempty"`
+	InstalledSelection *InstalledSelection `json:"installed_selection,omitempty"`
+}
+
+// InstalledSelection is the authoritative machine-level install intent. It is
+// separate from the historical Profile and Tag evidence on inventory records.
+type InstalledSelection struct {
+	Profiles     []string   `json:"profiles"`
+	ExtraTags    []string   `json:"extra_tags,omitempty"`
+	ResolvedTags []string   `json:"resolved_tags"`
+	Provenance   Provenance `json:"provenance"`
 }
 
 // Provenance records the Source of Truth and dots binary that last updated the
@@ -105,18 +118,36 @@ func Load(path string) (Metadata, error) {
 	return meta, nil
 }
 
-// Save writes Installation Metadata to path, creating the state directory if
-// needed.
+// Save atomically writes Installation Metadata to path, creating the state
+// directory if needed. A failed write leaves any prior metadata file intact.
 func Save(path string, meta Metadata) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create state directory: %w", err)
-	}
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode installation metadata: %w", err)
 	}
 	data = append(data, '\n')
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create state directory: %w", err)
+	}
+	temp, err := os.CreateTemp(dir, ".installed-*.tmp")
+	if err != nil {
+		return fmt.Errorf("write installation metadata: %w", err)
+	}
+	tempPath := temp.Name()
+	defer os.Remove(tempPath)
+	if err := temp.Chmod(0o600); err != nil {
+		temp.Close()
+		return fmt.Errorf("write installation metadata: %w", err)
+	}
+	if _, err := temp.Write(data); err != nil {
+		temp.Close()
+		return fmt.Errorf("write installation metadata: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("write installation metadata: %w", err)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
 		return fmt.Errorf("write installation metadata: %w", err)
 	}
 	return nil
@@ -175,7 +206,12 @@ func (m Metadata) Remove(targets ...string) Metadata {
 		drop[t] = struct{}{}
 	}
 
-	pruned := Metadata{Version: m.Version, Provenance: m.Provenance, Provisioners: append([]ProvisionerRecord(nil), m.Provisioners...)}
+	pruned := Metadata{
+		Version:            m.Version,
+		Provenance:         m.Provenance,
+		Provisioners:       append([]ProvisionerRecord(nil), m.Provisioners...),
+		InstalledSelection: cloneInstalledSelection(m.InstalledSelection),
+	}
 	for _, r := range m.Entries {
 		if _, ok := drop[r.Target]; ok {
 			continue
@@ -183,6 +219,17 @@ func (m Metadata) Remove(targets ...string) Metadata {
 		pruned.Entries = append(pruned.Entries, r)
 	}
 	return pruned
+}
+
+func cloneInstalledSelection(installed *InstalledSelection) *InstalledSelection {
+	if installed == nil {
+		return nil
+	}
+	cloned := *installed
+	cloned.Profiles = append([]string(nil), installed.Profiles...)
+	cloned.ExtraTags = append([]string(nil), installed.ExtraTags...)
+	cloned.ResolvedTags = append([]string(nil), installed.ResolvedTags...)
+	return &cloned
 }
 
 // HashFile returns the hex-encoded SHA-256 of a regular file's content.

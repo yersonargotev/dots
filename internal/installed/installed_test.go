@@ -90,6 +90,62 @@ func TestBuildUsesRecordedProfilesAndTags(t *testing.T) {
 	}
 }
 
+func TestBuildExposesAuthoritativeInstalledSelectionSeparatelyFromInventory(t *testing.T) {
+	home := t.TempDir()
+	selection := &state.InstalledSelection{
+		Profiles:     []string{"core", "agents"},
+		ExtraTags:    []string{"work"},
+		ResolvedTags: []string{"core", "agents", "work"},
+		Provenance: state.Provenance{
+			SourceRoot:     "/src",
+			SourceRevision: "abc123",
+			DotsVersion:    "v0.test",
+			RecordedAt:     "2026-07-23T12:00:00Z",
+		},
+	}
+	meta := state.Metadata{
+		Version:            3,
+		InstalledSelection: selection,
+		Entries: []state.Record{{
+			Target:   filepath.Join(home, ".zshrc"),
+			Source:   "configs/zsh/zshrc",
+			Strategy: "symlink",
+			Profiles: []string{"core"},
+			Tags:     []string{"core"},
+		}},
+	}
+
+	report, err := inst.Build(inventoryManifest(), meta, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if report.InstalledSelection != selection {
+		t.Fatalf("InstalledSelection = %#v, want authoritative metadata selection %#v", report.InstalledSelection, selection)
+	}
+	if got, want := report.Tags, []string{"core"}; !sameStrings(got, want) {
+		t.Fatalf("inventory Tags = %v, want %v; resolved Installed Selection Tags must remain separate", got, want)
+	}
+}
+
+func TestBuildDoesNotPromoteLegacyInventoryToInstalledSelection(t *testing.T) {
+	home := t.TempDir()
+	meta := state.Metadata{Version: 2, Entries: []state.Record{{
+		Target:   filepath.Join(home, ".zshrc"),
+		Source:   "configs/zsh/zshrc",
+		Strategy: "symlink",
+		Profiles: []string{"core"},
+		Tags:     []string{"core"},
+	}}}
+
+	report, err := inst.Build(inventoryManifest(), meta, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if report.InstalledSelection != nil {
+		t.Fatalf("InstalledSelection = %#v, want nil for legacy metadata", report.InstalledSelection)
+	}
+}
+
 func TestBuildReturnsEmptyListsForEmptyMetadata(t *testing.T) {
 	home := t.TempDir()
 	report, err := inst.Build(inventoryManifest(), state.Metadata{}, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
