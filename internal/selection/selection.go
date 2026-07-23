@@ -137,11 +137,23 @@ func Resolve(m manifest.Manifest, profiles, extraTags []string) (state.Installed
 	if err != nil {
 		return state.InstalledSelection{}, err
 	}
+	return installedSelection(resolved.Profiles, extraTags, resolved.Tags), nil
+}
+
+// InstalledSelection converts effective command selection into the
+// authoritative metadata shape committed at terminal success.
+func (e Effective) InstalledSelection(provenance state.Provenance) state.InstalledSelection {
+	installed := installedSelection(e.Profiles, e.ExtraTags, e.Selection.Tags)
+	installed.Provenance = provenance
+	return installed
+}
+
+func installedSelection(profiles, extraTags, resolvedTags []string) state.InstalledSelection {
 	return state.InstalledSelection{
-		Profiles:     append([]string(nil), resolved.Profiles...),
+		Profiles:     cloneStrings(profiles),
 		ExtraTags:    orderedUnique(extraTags),
-		ResolvedTags: append([]string(nil), resolved.Tags...),
-	}, nil
+		ResolvedTags: cloneStrings(resolvedTags),
+	}
 }
 
 // Record reloads the latest Installation Metadata and commits only the

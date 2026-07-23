@@ -215,6 +215,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 			return report, emitOK(cmd, report)
 		}
 	} else {
+		renderSelectionReport(out, effective.Report)
 		renderPlan(out, p)
 		if len(effective.Profiles) > 0 {
 			if err := renderSkippedEntryHint(out, *m, effective.Profiles, runtime.GOOS); err != nil {
@@ -239,12 +240,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		if _, err := runProvisionersWithOptions(cmd, *m, provisionOpts, paths.Home, paths.StateRoot, paths.SourceRoot); err != nil {
 			return updateReport{}, err
 		}
-		installedSelection := state.InstalledSelection{
-			Profiles:     append([]string(nil), effective.Profiles...),
-			ExtraTags:    append([]string(nil), effective.ExtraTags...),
-			ResolvedTags: append([]string(nil), effective.Selection.Tags...),
-			Provenance:   state.CaptureProvenance(paths.SourceRoot, version.Value),
-		}
+		installedSelection := effective.InstalledSelection(state.CaptureProvenance(paths.SourceRoot, version.Value))
 		if err := recordInstalledSelection(state.Path(paths.StateRoot), installedSelection); err != nil {
 			return updateReport{}, err
 		}

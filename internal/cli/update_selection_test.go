@@ -54,8 +54,8 @@ entries:
 	out := runBareUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
 
-	if !strings.Contains(out, "[selection: recorded]") {
-		t.Fatalf("output missing recorded source:\n%s", out)
+	if want := "Selection: source=recorded profiles=core extra-tags=extra effective-tags=core,new,extra"; !strings.Contains(out, want) {
+		t.Fatalf("output missing selection report %q:\n%s", want, out)
 	}
 	if _, err := os.Readlink(filepath.Join(home, ".new")); err != nil {
 		t.Fatalf("recorded selection did not apply post-refresh Profile tags: %v", err)
@@ -112,8 +112,8 @@ entries:
 		"--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
 
-	if !strings.Contains(out, "[selection: explicit]") {
-		t.Fatalf("output missing explicit source:\n%s", out)
+	if want := "Selection: source=explicit profiles=work extra-tags=extra effective-tags=work,extra"; !strings.Contains(out, want) {
+		t.Fatalf("output missing selection report %q:\n%s", want, out)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".core")); !os.IsNotExist(err) {
 		t.Fatalf("recorded core selection leaked into explicit update: %v", err)

@@ -15,6 +15,8 @@ import (
 var (
 	currentExecutable = os.Executable
 	execBinary        = syscall.Exec
+	previewUpgrade    = upgrade.Preview
+	executeUpgrade    = upgrade.Execute
 )
 
 func newUpgradeCommand() *cobra.Command {
@@ -74,7 +76,7 @@ func newUpgradeCommand() *cobra.Command {
 			}
 			binOpts := upgrade.Options{CurrentVersion: version.Value, Executable: exe}
 			if dryRun {
-				binPlan, err := upgrade.Preview(cmd.Context(), binOpts)
+				binPlan, err := previewUpgrade(cmd.Context(), binOpts)
 				if err != nil {
 					return err
 				}
@@ -91,12 +93,12 @@ func newUpgradeCommand() *cobra.Command {
 				return nil
 			}
 
-			preflightPlan, err := upgrade.Preview(cmd.Context(), binOpts)
+			preflightPlan, err := previewUpgrade(cmd.Context(), binOpts)
 			if err != nil {
 				return err
 			}
 			if preflightPlan.Action == upgrade.ActionManualRebuild {
-				_, err := upgrade.Execute(cmd.Context(), binOpts)
+				_, err := executeUpgrade(cmd.Context(), binOpts)
 				return err
 			}
 			effective, err := resolveUpgradeSelection(cmd, opts)
@@ -105,7 +107,7 @@ func newUpgradeCommand() *cobra.Command {
 			}
 			intent := effective.Intent()
 			opts.selectionIntent = &intent
-			binPlan, err := upgrade.Execute(cmd.Context(), binOpts)
+			binPlan, err := executeUpgrade(cmd.Context(), binOpts)
 			if err != nil {
 				return err
 			}

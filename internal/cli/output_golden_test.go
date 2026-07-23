@@ -8,12 +8,14 @@ import (
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/deps/pkgmgr"
 	"github.com/yersonargotev/dots/internal/doctor"
+	"github.com/yersonargotev/dots/internal/gitrepo"
 	inst "github.com/yersonargotev/dots/internal/installed"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
+	"github.com/yersonargotev/dots/internal/upgrade"
 )
 
 // TestEnvelopeGolden locks the full JSON shape of the Agent Output Contract.
@@ -202,6 +204,39 @@ func TestEnvelopeGolden(t *testing.T) {
 				},
 			},
 			golden: "envelope_install.golden",
+		},
+		{
+			name: "update",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "update",
+				Status:        statusOK,
+				Data: updateReport{
+					DryRun:       false,
+					Selection:    selection.Report{Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"}},
+					Update:       gitrepo.Update{OldRev: "abc123", NewRev: "def456", Incoming: []string{"def456 update managed config"}},
+					Plan:         plan.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "work"}, Actions: []plan.Action{}},
+					Provisioners: provision.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "work"}, Steps: []provision.Step{}},
+				},
+			},
+			golden: "envelope_update.golden",
+		},
+		{
+			name: "upgrade",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "upgrade",
+				Status:        statusOK,
+				Data: upgradeReport{
+					DryRun:       false,
+					Selection:    selection.Report{Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"}},
+					Binary:       upgrade.Plan{Channel: upgrade.ChannelHomebrew, CurrentVersion: "v0.63.0", LatestVersion: "v0.64.0", Action: upgrade.ActionHomebrewUpgrade, Executable: "/opt/homebrew/bin/dots"},
+					Update:       gitrepo.Update{OldRev: "abc123", NewRev: "def456", Incoming: []string{"def456 update managed config"}},
+					Plan:         plan.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "work"}, Actions: []plan.Action{}},
+					Provisioners: provision.Plan{Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "work"}, Steps: []provision.Step{}},
+				},
+			},
+			golden: "envelope_upgrade.golden",
 		},
 	}
 

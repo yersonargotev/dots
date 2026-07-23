@@ -1,0 +1,50 @@
+{
+  "schema_version": "5",
+  "command": "update",
+  "status": "ok",
+  "data": {
+    "dry_run": false,
+    "selection": {
+      "source": "recorded",
+      "profiles": [
+        "core"
+      ],
+      "extra_tags": [
+        "work"
+      ],
+      "effective_tags": [
+        "core",
+        "work"
+      ]
+    },
+    "update": {
+      "old_rev": "abc123",
+      "new_rev": "def456",
+      "incoming": [
+        "def456 update managed config"
+      ]
+    },
+    "plan": {
+      "profile": "core",
+      "profiles": [
+        "core"
+      ],
+      "tags": [
+        "core",
+        "work"
+      ],
+      "actions": []
+    },
+    "provisioners": {
+      "profile": "core",
+      "profiles": [
+        "core"
+      ],
+      "tags": [
+        "core",
+        "work"
+      ],
+      "steps": []
+    }
+  }
+}

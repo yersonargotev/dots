@@ -117,6 +117,18 @@ func renderEffectiveSelection(profile string, profiles, tags []string, report *s
 	return fmt.Sprintf("%s [selection: %s]", rendered, report.Source)
 }
 
+func renderSelectionReport(w io.Writer, report selection.Report) {
+	fmt.Fprintf(w, "Selection: source=%s profiles=%s extra-tags=%s effective-tags=%s\n\n",
+		report.Source, renderSelectionValues(report.Profiles), renderSelectionValues(report.ExtraTags), renderSelectionValues(report.EffectiveTags))
+}
+
+func renderSelectionValues(values []string) string {
+	if len(values) == 0 {
+		return "(none)"
+	}
+	return strings.Join(values, ",")
+}
+
 func renderProfileFlags(profiles []string) string {
 	if len(profiles) == 0 {
 		return "--profile"

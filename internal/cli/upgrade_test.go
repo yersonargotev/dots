@@ -126,6 +126,9 @@ entries:
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("upgrade --continue error = %v\noutput:\n%s", err, out.String())
 	}
+	if want := "Selection: source=recorded profiles=default extra-tags=(none) effective-tags=core"; !strings.Contains(out.String(), want) {
+		t.Fatalf("upgrade continuation output missing selection report %q:\n%s", want, out.String())
+	}
 	if _, err := os.Readlink(filepath.Join(home, ".tmux.conf")); err != nil {
 		t.Fatalf("continuation did not install updated Managed Entry: %v", err)
 	}
