@@ -12,18 +12,22 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/version"
 )
 
 type updateOptions struct {
-	file       string
-	profiles   []string
-	extraTags  []string
-	sourceRoot string
-	home       string
-	stateRoot  string
-	dryRun     bool
-	yes        bool
-	noTUI      bool
+	file            string
+	profiles        []string
+	extraTags       []string
+	sourceRoot      string
+	home            string
+	stateRoot       string
+	dryRun          bool
+	yes             bool
+	noTUI           bool
+	selectionIntent *selection.Intent
 }
 
 func newUpdateCommand() *cobra.Command {
@@ -127,13 +131,19 @@ func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
 	fmt.Fprintln(out)
 }
 
-func validateProfileSelectionFile(manifestPath string, profiles []string, extraTags []string) error {
+func resolveUpdateSelection(manifestPath string, paths resolvedPaths, opts updateOptions) (selection.Effective, error) {
 	m, err := manifest.LoadFile(manifestPath)
 	if err != nil {
-		return err
+		return selection.Effective{}, err
 	}
-	_, err = manifest.ResolveSelection(*m, profiles, extraTags)
-	return err
+	if opts.selectionIntent != nil {
+		return selection.ResolveIntent(*m, *opts.selectionIntent)
+	}
+	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
+	if err != nil {
+		return selection.Effective{}, err
+	}
+	return selection.ResolveEffective(*m, opts.profiles, opts.extraTags, meta.InstalledSelection)
 }
 
 func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updateReport, error) {
@@ -148,7 +158,8 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if !cmd.Flags().Changed("file") {
 		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
 	}
-	if err := validateProfileSelectionFile(manifestPath, opts.profiles, opts.extraTags); err != nil {
+	effective, err := resolveUpdateSelection(manifestPath, paths, opts)
+	if err != nil {
 		return updateReport{}, err
 	}
 
@@ -180,31 +191,41 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
+	effective, err = selection.ResolveIntent(*m, effective.Intent())
+	if err != nil {
+		return updateReport{}, err
+	}
 	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
 	if err != nil {
 		return updateReport{}, err
 	}
-	p, err := plan.Build(*m, plan.Options{Profiles: opts.profiles, ExtraTags: opts.extraTags, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, Home: paths.Home, Metadata: meta})
+	p, err := plan.Build(*m, plan.Options{Selection: &effective.Selection, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, Home: paths.Home, Metadata: meta})
 	if err != nil {
 		return updateReport{}, err
 	}
-	provPlan, err := provision.Build(*m, provision.Options{Profiles: opts.profiles, ExtraTags: opts.extraTags, OS: runtime.GOOS})
+	p.Selection = &effective.Report
+	provisionOpts := provision.Options{Selection: &effective.Selection, OS: runtime.GOOS}
+	provPlan, err := provision.Build(*m, provisionOpts)
 	if err != nil {
 		return updateReport{}, err
 	}
-	report := updateReport{DryRun: opts.dryRun, Update: update, Plan: p, Provisioners: provPlan}
+	report := updateReport{DryRun: opts.dryRun, Selection: effective.Report, Update: update, Plan: p, Provisioners: provPlan}
 	if wantsJSON(cmd) {
 		if opts.dryRun && emit {
 			return report, emitOK(cmd, report)
 		}
 	} else {
 		renderPlan(out, p)
-		if err := renderSkippedEntryHint(out, *m, opts.profiles, runtime.GOOS); err != nil {
-			return updateReport{}, err
+		if len(effective.Profiles) > 0 {
+			if err := renderSkippedEntryHint(out, *m, effective.Profiles, runtime.GOOS); err != nil {
+				return updateReport{}, err
+			}
 		}
 		renderProvisionPlan(out, provPlan)
-		if err := renderSkippedProvisionerHint(out, *m, opts.profiles, runtime.GOOS); err != nil {
-			return updateReport{}, err
+		if len(effective.Profiles) > 0 {
+			if err := renderSkippedProvisionerHint(out, *m, effective.Profiles, runtime.GOOS); err != nil {
+				return updateReport{}, err
+			}
 		}
 	}
 	if opts.dryRun {
@@ -215,7 +236,16 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		return updateReport{}, err
 	}
 	if applied {
-		if _, err := runProvisioners(cmd, *m, opts.profiles, opts.extraTags, paths.Home, paths.StateRoot, paths.SourceRoot); err != nil {
+		if _, err := runProvisionersWithOptions(cmd, *m, provisionOpts, paths.Home, paths.StateRoot, paths.SourceRoot); err != nil {
+			return updateReport{}, err
+		}
+		installedSelection := state.InstalledSelection{
+			Profiles:     append([]string(nil), effective.Profiles...),
+			ExtraTags:    append([]string(nil), effective.ExtraTags...),
+			ResolvedTags: append([]string(nil), effective.Selection.Tags...),
+			Provenance:   state.CaptureProvenance(paths.SourceRoot, version.Value),
+		}
+		if err := recordInstalledSelection(state.Path(paths.StateRoot), installedSelection); err != nil {
 			return updateReport{}, err
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/upgrade"
 	"github.com/yersonargotev/dots/internal/version"
 )
@@ -36,6 +37,9 @@ func newUpgradeCommand() *cobra.Command {
 		binaryExecutable     string
 		binaryArtifact       string
 		binaryChecksum       string
+		selectionSource      string
+		selectionProfiles    []string
+		selectionTags        []string
 	)
 
 	cmd := &cobra.Command{
@@ -47,13 +51,17 @@ func newUpgradeCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI}
 			if continue_ {
+				if selectionSource != "" {
+					intent := selection.Intent{Source: selection.Source(selectionSource), Profiles: selectionProfiles, ExtraTags: selectionTags}
+					opts.selectionIntent = &intent
+				}
 				updateReport, err := runUpdateWorkflow(cmd, opts, !wantsJSON(cmd))
 				if err != nil {
 					return err
 				}
 				if wantsJSON(cmd) {
 					binPlan := upgrade.Plan{Channel: binaryChannel, CurrentVersion: binaryCurrentVersion, LatestVersion: binaryLatestVersion, Action: binaryAction, Executable: binaryExecutable, Artifact: binaryArtifact, Checksum: binaryChecksum}
-					return emitOK(cmd, upgradeReport{DryRun: false, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
+					return emitOK(cmd, upgradeReport{DryRun: false, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
 				}
 				return nil
 			}
@@ -78,7 +86,7 @@ func newUpgradeCommand() *cobra.Command {
 					return err
 				}
 				if wantsJSON(cmd) {
-					return emitOK(cmd, upgradeReport{DryRun: true, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
+					return emitOK(cmd, upgradeReport{DryRun: true, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
 				}
 				return nil
 			}
@@ -91,9 +99,12 @@ func newUpgradeCommand() *cobra.Command {
 				_, err := upgrade.Execute(cmd.Context(), binOpts)
 				return err
 			}
-			if err := validateUpgradeProfileSelection(cmd, opts); err != nil {
+			effective, err := resolveUpgradeSelection(cmd, opts)
+			if err != nil {
 				return err
 			}
+			intent := effective.Intent()
+			opts.selectionIntent = &intent
 			binPlan, err := upgrade.Execute(cmd.Context(), binOpts)
 			if err != nil {
 				return err
@@ -102,14 +113,14 @@ func newUpgradeCommand() *cobra.Command {
 				renderUpgradeBinary(cmd.OutOrStdout(), binPlan, false)
 			}
 			if binPlan.Action == upgrade.ActionHomebrewUpgrade || binPlan.Action == upgrade.ActionReplaceBinary {
-				return execBinary(exe, upgradeContinuationArgs(file, cmd.Flags().Changed("file"), profiles, extraTags, sourceRoot, home, stateRoot, yes, noTUI, wantsJSON(cmd), binPlan), os.Environ())
+				return execBinary(exe, upgradeContinuationArgs(file, cmd.Flags().Changed("file"), intent, sourceRoot, home, stateRoot, yes, noTUI, wantsJSON(cmd), binPlan), os.Environ())
 			}
 			updateReport, err := runUpdateWorkflow(cmd, opts, false)
 			if err != nil {
 				return err
 			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, upgradeReport{DryRun: false, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
+				return emitOK(cmd, upgradeReport{DryRun: false, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
 			}
 			return nil
 		},
@@ -131,6 +142,9 @@ func newUpgradeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&binaryExecutable, "binary-executable", "", "binary phase executable path preserved across upgrade continuation")
 	cmd.Flags().StringVar(&binaryArtifact, "binary-artifact", "", "binary phase artifact preserved across upgrade continuation")
 	cmd.Flags().StringVar(&binaryChecksum, "binary-checksum", "", "binary phase checksum preserved across upgrade continuation")
+	cmd.Flags().StringVar(&selectionSource, "selection-source", "", "selection source preserved across upgrade continuation")
+	cmd.Flags().StringArrayVar(&selectionProfiles, "selection-profile", nil, "selection Profile preserved across upgrade continuation")
+	cmd.Flags().StringArrayVar(&selectionTags, "selection-tag", nil, "selection extra Tag preserved across upgrade continuation")
 	_ = cmd.Flags().MarkHidden("continue")
 	_ = cmd.Flags().MarkHidden("binary-channel")
 	_ = cmd.Flags().MarkHidden("binary-current-version")
@@ -139,31 +153,35 @@ func newUpgradeCommand() *cobra.Command {
 	_ = cmd.Flags().MarkHidden("binary-executable")
 	_ = cmd.Flags().MarkHidden("binary-artifact")
 	_ = cmd.Flags().MarkHidden("binary-checksum")
+	_ = cmd.Flags().MarkHidden("selection-source")
+	_ = cmd.Flags().MarkHidden("selection-profile")
+	_ = cmd.Flags().MarkHidden("selection-tag")
 	return cmd
 }
 
-func validateUpgradeProfileSelection(cmd *cobra.Command, opts updateOptions) error {
+func resolveUpgradeSelection(cmd *cobra.Command, opts updateOptions) (selection.Effective, error) {
 	paths, err := resolvePaths(opts.home, opts.sourceRoot, opts.stateRoot)
 	if err != nil {
-		return err
+		return selection.Effective{}, err
 	}
 	manifestPath := opts.file
 	if !cmd.Flags().Changed("file") {
 		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
 	}
-	return validateProfileSelectionFile(manifestPath, opts.profiles, opts.extraTags)
+	return resolveUpdateSelection(manifestPath, paths, opts)
 }
 
-func upgradeContinuationArgs(file string, fileChanged bool, profiles []string, extraTags []string, sourceRoot, home, stateRoot string, yes, noTUI, json bool, binPlan upgrade.Plan) []string {
+func upgradeContinuationArgs(file string, fileChanged bool, intent selection.Intent, sourceRoot, home, stateRoot string, yes, noTUI, json bool, binPlan upgrade.Plan) []string {
 	args := []string{"dots", "upgrade", "--continue"}
 	if fileChanged {
 		args = append(args, "--file", file)
 	}
-	for _, profile := range profiles {
-		args = append(args, "--profile", profile)
+	args = append(args, "--selection-source", string(intent.Source))
+	for _, profile := range intent.Profiles {
+		args = append(args, "--selection-profile", profile)
 	}
-	for _, tag := range extraTags {
-		args = append(args, "--tag", tag)
+	for _, tag := range intent.ExtraTags {
+		args = append(args, "--selection-tag", tag)
 	}
 	if sourceRoot != "" {
 		args = append(args, "--source-root", sourceRoot)

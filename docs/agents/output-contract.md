@@ -105,13 +105,15 @@ prose the text surface prints:
   `data.provisioners.items`. Pending or failed Provisioners are findings so
   agents can distinguish aligned Managed Entries from an incomplete full-profile
   setup. Read dependency readiness for those commands from `doctor`.
-- `status`, `doctor`, `plan`, `deps check`, and `deps plan` include
+- `status`, `doctor`, `plan`, `deps check`, `deps plan`, `update`, and `upgrade` include
   `data.selection` with `source` (`explicit` or `recorded`), ordered `profiles`,
   explicit `extra_tags`, and recomputed `effective_tags`. When no selection
   flags are supplied, these commands resolve the recorded Profile names and
   extra Tags against the current Install Manifest; the stored `resolved_tags`
-  remains audit-only. Any explicit Profile or Tag selection wins completely for
-  that invocation and is never merged into or persisted over recorded intent.
+  remains audit-only. Update and upgrade resolve the same intent again after
+  Source of Truth refresh and preserve its source across binary continuation.
+  Any explicit Profile or Tag selection wins completely for that invocation and
+  is never merged with recorded intent.
   If neither source exists, the command returns an execution error (`1`) with
   selection guidance rather than falling back to a manifest `default`.
 
@@ -172,7 +174,7 @@ prose the text surface prints:
   set ID, target list, and state-root path.
 
 Profile-aware reports retain the compatibility `profile`, `profiles`, and
-`tags` fields. For read-only selection-aware commands, agents should prefer the
+`tags` fields. For selection-aware commands, agents should prefer the
 portable `selection` object because it distinguishes invocation intent from
 recorded machine intent and separates explicit extra Tags from effective Tags.
 

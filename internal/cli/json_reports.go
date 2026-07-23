@@ -59,18 +59,20 @@ type installBackupSetReport struct {
 }
 
 type updateReport struct {
-	DryRun       bool           `json:"dry_run"`
-	Update       gitrepo.Update `json:"update"`
-	Plan         plan.Plan      `json:"plan"`
-	Provisioners provision.Plan `json:"provisioners"`
+	DryRun       bool             `json:"dry_run"`
+	Selection    selection.Report `json:"selection"`
+	Update       gitrepo.Update   `json:"update"`
+	Plan         plan.Plan        `json:"plan"`
+	Provisioners provision.Plan   `json:"provisioners"`
 }
 
 type upgradeReport struct {
-	DryRun       bool           `json:"dry_run"`
-	Binary       upgrade.Plan   `json:"binary"`
-	Update       gitrepo.Update `json:"update"`
-	Plan         plan.Plan      `json:"plan"`
-	Provisioners provision.Plan `json:"provisioners"`
+	DryRun       bool             `json:"dry_run"`
+	Selection    selection.Report `json:"selection"`
+	Binary       upgrade.Plan     `json:"binary"`
+	Update       gitrepo.Update   `json:"update"`
+	Plan         plan.Plan        `json:"plan"`
+	Provisioners provision.Plan   `json:"provisioners"`
 }
 
 type uninstallReport struct {

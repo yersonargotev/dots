@@ -438,6 +438,10 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 // error, which the caller surfaces; the tool's own stdout/stderr are streamed
 // through so its progress is visible.
 func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string, extraTags []string, home string, stateRoot string, sourceRoot string) (provision.Report, error) {
+	return runProvisionersWithOptions(cmd, m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS}, home, stateRoot, sourceRoot)
+}
+
+func runProvisionersWithOptions(cmd *cobra.Command, m manifest.Manifest, provisionOpts provision.Options, home string, stateRoot string, sourceRoot string) (provision.Report, error) {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -453,7 +457,6 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string,
 		stdout: stdout,
 		stderr: cmd.ErrOrStderr(),
 	}
-	provisionOpts := provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS}
 	selected, selectErr := provision.Select(m, provisionOpts)
 	if selectErr != nil {
 		return provision.Report{}, selectErr

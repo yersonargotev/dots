@@ -87,11 +87,13 @@ dots doctor
 ```
 
 After a successful explicit install, `status`, `doctor`, `plan`, `deps check`,
-and `deps plan` reuse the recorded Installed Selection when no `--profile` or
-`--tag` is supplied. Supplying either flag makes that invocation's complete
-explicit selection win without changing Installation Metadata. A machine with
-no recorded selection must pass an explicit `--profile` or `--tag`; read-only
-commands never invent an implicit Profile.
+`deps plan`, `update`, and `upgrade` reuse the recorded Installed Selection when
+no `--profile` or `--tag` is supplied. Supplying either flag makes that
+invocation's complete explicit selection win. Read-only commands never change
+Installation Metadata; successful update/upgrade refreshes the selection only
+after Managed Entries and Provisioners finish. A machine with no recorded
+selection must pass an explicit `--profile` or `--tag`; selection-aware commands
+never invent an implicit Profile.
 
 ### Machine-readable output
 
