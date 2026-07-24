@@ -25,6 +25,7 @@ func renderStatus(w io.Writer, report status.Report) {
 	}
 	for _, e := range report.Entries {
 		fmt.Fprintf(w, "  %-12s %-9s %s -> %s\n", e.State, e.Strategy, e.Source, e.Target)
+		renderSourceOverrideSelectionHint(w, e.Reason, e.MatchingTags)
 		switch e.State {
 		case status.StateOK:
 			counts.ok++

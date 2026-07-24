@@ -42,10 +42,12 @@ const (
 
 // Entry is the evaluated alignment of one Managed Entry.
 type Entry struct {
-	Source   string `json:"source"`
-	Target   string `json:"target"`
-	Strategy string `json:"strategy"`
-	State    State  `json:"state"`
+	Source       string   `json:"source"`
+	Target       string   `json:"target"`
+	Strategy     string   `json:"strategy"`
+	State        State    `json:"state"`
+	Reason       string   `json:"reason,omitempty"`
+	MatchingTags []string `json:"matching_tags,omitempty"`
 }
 
 // Report is the Dotfiles Status for a Profile, in manifest order.
@@ -125,6 +127,16 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			return Report{}, err
 		}
 		evaluated.State = st
+		if st == StateConflict {
+			matchingTags, err := plan.MatchingUnselectedSourceOverrideTags(entry, tags, target, opts.SourceRoot)
+			if err != nil {
+				return Report{}, err
+			}
+			if len(matchingTags) > 0 {
+				evaluated.Reason = plan.ConflictReasonSourceOverrideNotSelected
+				evaluated.MatchingTags = matchingTags
+			}
+		}
 		report.Entries = append(report.Entries, evaluated)
 	}
 

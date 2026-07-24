@@ -29,6 +29,16 @@
         "target": "/home/user/.gitconfig",
         "strategy": "copy",
         "state": "missing"
+      },
+      {
+        "source": "configs/zellij/default.kdl",
+        "target": "/home/user/.config/zellij/config.kdl",
+        "strategy": "symlink",
+        "state": "conflict",
+        "reason": "source-override-not-selected",
+        "matching_tags": [
+          "adaptive-theme"
+        ]
       }
     ],
     "provisioners": {

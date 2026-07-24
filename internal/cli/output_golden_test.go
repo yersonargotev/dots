@@ -77,6 +77,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					Entries: []status.Entry{
 						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", State: status.StateOK},
 						{Source: "configs/git/config", Target: "/home/user/.gitconfig", Strategy: "copy", State: status.StateMissing},
+						{Source: "configs/zellij/default.kdl", Target: "/home/user/.config/zellij/config.kdl", Strategy: "symlink", State: status.StateConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme"}},
 					},
 					Provisioners: provision.StatusReport{
 						Profile: "default",
@@ -122,7 +123,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
 				}, Actions: []plan.Action{
 					{Source: "configs/zsh/zshrc", ResolvedSource: "/abs/machine/local/path/MUST/NOT/APPEAR", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
-					{Source: "configs/git/config", ResolvedSource: "/abs/x", Target: "/home/user/.gitconfig", Strategy: "copy", Status: plan.StatusConflict},
+					{Source: "configs/git/config", ResolvedSource: "/abs/x", Target: "/home/user/.gitconfig", Strategy: "copy", Status: plan.StatusConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme"}},
 				}},
 			},
 			golden: "envelope_plan.golden",

@@ -150,6 +150,14 @@ prose the text surface prints:
   Entry Ownership proof to safely mutate a previously managed target, creating a
   Backup Set before writing, while preserving the conservative conflict model
   for unmanaged or incompatible targets.
+- Plan actions and Status Managed Entry items may add the optional reason
+  `source-override-not-selected` and a deterministic `matching_tags` array when
+  a conflicting target exactly matches one or more alternate sources whose
+  `source_overrides` tags were not selected. These fields diagnose the omitted
+  selection without replacing the action's `conflict` status or the Status
+  item's `conflict` state. To recover the intended selection, omit explicit
+  selection flags so dots can reuse an available Installed Selection, or supply
+  each intended exact tag with repeated `--tag <tag>`.
 - Dependency provider availability is an internal planning check, not a JSON
   contract field. `deps plan` and dependency install previews expose the stable
   outcome (`status`, selected `provider`, executable action, `manual` guidance)
