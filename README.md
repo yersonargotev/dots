@@ -92,8 +92,9 @@ no `--profile` or `--tag` is supplied. Supplying either flag makes that
 invocation's complete explicit selection win. Read-only commands never change
 Installation Metadata. Mutating commands show an Installed Selection Change
 before applying a differing explicit selection. Removing a recorded Profile or
-explicit extra Tag requires a distinct interactive confirmation; unattended
-runs require both `--yes` and `--acknowledge-selection-change`. Successful
+explicit extra Tag requires a distinct interactive confirmation; Confirmed
+Install mode requires both `--yes` and
+`--acknowledge-selection-change`. Successful
 install/update/upgrade records the requested selection only after Managed
 Entries and Provisioners finish. A machine with no recorded
 selection must pass an explicit `--profile` or `--tag`; selection-aware commands

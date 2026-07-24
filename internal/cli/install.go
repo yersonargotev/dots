@@ -105,7 +105,9 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, installHostOS)
-			proceed, _, err := guardSelectionChange(cmd, &effective, dryRun, yes, ackSelection, false)
+			proceed, _, err := guardSelectionChange(cmd, &effective, selectionChangePolicy{
+				DryRun: dryRun, Confirmed: yes, Acknowledge: ackSelection,
+			})
 			if err != nil {
 				return err
 			}

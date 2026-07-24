@@ -21,6 +21,13 @@ type selectionChangeAcknowledgementError struct {
 	change selection.Change
 }
 
+type selectionChangePolicy struct {
+	DryRun          bool
+	Confirmed       bool
+	Acknowledge     bool
+	AlreadyAccepted bool
+}
+
 func (e *selectionChangeAcknowledgementError) Error() string {
 	return selectionChangeAcknowledgementRequiredCode +
 		": removing previously selected Profiles or extra Tags requires --yes and --acknowledge-selection-change"
@@ -33,33 +40,33 @@ func (e *selectionChangeAcknowledgementError) JSONErrorData() any {
 	}
 }
 
-func guardSelectionChange(cmd *cobra.Command, effective *selection.Effective, dryRun, yes, acknowledge, alreadyAccepted bool) (bool, bool, error) {
+func guardSelectionChange(cmd *cobra.Command, effective *selection.Effective, policy selectionChangePolicy) (bool, bool, error) {
 	if effective.Report.Change == nil {
-		return true, alreadyAccepted, nil
+		return true, policy.AlreadyAccepted, nil
 	}
 	change := effective.Report.Change
-	if alreadyAccepted {
+	if policy.AlreadyAccepted {
 		change.AcknowledgementAccepted = true
 		return true, true, nil
 	}
 
 	if !change.AcknowledgementRequired {
-		change.AcknowledgementAccepted = !dryRun
+		change.AcknowledgementAccepted = !policy.DryRun
 		if !wantsJSON(cmd) {
 			renderSelectionChange(cmd.OutOrStdout(), *change)
 		}
 		return true, change.AcknowledgementAccepted, nil
 	}
 
-	if dryRun {
+	if policy.DryRun {
 		if !wantsJSON(cmd) {
 			renderSelectionChange(cmd.OutOrStdout(), *change)
 		}
 		return true, false, nil
 	}
 
-	if yes || wantsJSON(cmd) {
-		change.AcknowledgementAccepted = yes && acknowledge
+	if policy.Confirmed || wantsJSON(cmd) {
+		change.AcknowledgementAccepted = policy.Confirmed && policy.Acknowledge
 		if !wantsJSON(cmd) {
 			renderSelectionChange(cmd.OutOrStdout(), *change)
 		}

@@ -181,7 +181,9 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	proceed, accepted, err := guardSelectionChange(cmd, &effective, opts.dryRun, opts.yes, opts.ackSelection, opts.changeAccepted)
+	proceed, accepted, err := guardSelectionChange(cmd, &effective, selectionChangePolicy{
+		DryRun: opts.dryRun, Confirmed: opts.yes, Acknowledge: opts.ackSelection, AlreadyAccepted: opts.changeAccepted,
+	})
 	if err != nil {
 		return updateReport{}, err
 	}

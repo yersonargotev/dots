@@ -215,6 +215,56 @@ entries:
 	}
 }
 
+func TestUpdateAdditiveSelectionChangeAppliesWithoutDedicatedAcknowledgement(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core":  "core\n",
+		"configs/extra": "extra\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+  - source: configs/extra
+    target: ~/.extra
+    strategy: symlink
+    tags: [extra]
+`,
+	})
+	saveInstalledSelection(t, stateRoot, "core")
+
+	out := runUpdate(t,
+		"--yes", "--profile", "core", "--tag", "extra",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	)
+	for _, want := range []string{
+		"Added: profiles=(none) extra-tags=extra effective-tags=extra",
+		"Acknowledgement: required=false accepted=true",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing additive change %q:\n%s", want, out)
+		}
+	}
+	if _, err := os.Readlink(filepath.Join(home, ".extra")); err != nil {
+		t.Fatalf("additive selection did not apply extra Managed Entry: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.ExtraTags, []string{"extra"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Installed Selection extra Tags = %#v, want %#v", got, want)
+	}
+}
+
 func TestUpdateInteractiveSelectionReductionCanBeDeclinedBeforeMutation(t *testing.T) {
 	requireGitCLI(t)
 	home := t.TempDir()
