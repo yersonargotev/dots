@@ -28,7 +28,11 @@
         "source": "configs/git/config",
         "target": "/home/user/.gitconfig",
         "strategy": "copy",
-        "status": "conflict"
+        "status": "conflict",
+        "reason": "source-override-not-selected",
+        "matching_tags": [
+          "adaptive-theme"
+        ]
       }
     ]
   }

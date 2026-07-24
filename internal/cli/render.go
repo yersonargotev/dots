@@ -26,6 +26,7 @@ func renderPlan(w io.Writer, p plan.Plan) {
 	}
 	for _, a := range p.Actions {
 		fmt.Fprintf(w, "  %-15s %-9s %s -> %s\n", a.Status, a.Strategy, a.Source, a.Target)
+		renderSourceOverrideSelectionHint(w, a.Reason, a.MatchingTags)
 		switch a.Status {
 		case plan.StatusCreate:
 			counts.create++
@@ -54,6 +55,18 @@ func renderPlan(w io.Writer, p plan.Plan) {
 	if counts.conflict > 0 {
 		renderConflictResolutionGuidance(w)
 	}
+}
+
+func renderSourceOverrideSelectionHint(w io.Writer, reason string, matchingTags []string) {
+	if reason != plan.ConflictReasonSourceOverrideNotSelected || len(matchingTags) == 0 {
+		return
+	}
+	flags := make([]string, 0, len(matchingTags))
+	for _, tag := range matchingTags {
+		flags = append(flags, "--tag "+tag)
+	}
+	fmt.Fprintf(w, "    source override matches omitted tag(s): %s\n", strings.Join(matchingTags, ", "))
+	fmt.Fprintf(w, "    selection: omit explicit selection flags to reuse Installed Selection when available, or add %s\n", strings.Join(flags, " "))
 }
 
 // renderSkippedEntryHint prints a one-line nudge when the active profile omits

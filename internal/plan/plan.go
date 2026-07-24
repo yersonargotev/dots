@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/configsubset"
@@ -25,6 +26,8 @@ const (
 	StatusMissingSource Status = "missing-source"
 )
 
+const ConflictReasonSourceOverrideNotSelected = "source-override-not-selected"
+
 // Action is a single planned filesystem change for a Managed Entry.
 type Action struct {
 	Source string `json:"source"`
@@ -32,11 +35,13 @@ type Action struct {
 	// of the Agent Output Contract: it differs between machines and install
 	// locations, which would break idempotent envelope comparisons. Agents key on
 	// the portable, manifest-relative Source instead.
-	ResolvedSource string `json:"-"`
-	Target         string `json:"target"`
-	Strategy       string `json:"strategy"`
-	Status         Status `json:"status"`
-	Ownership      string `json:"-"`
+	ResolvedSource string   `json:"-"`
+	Target         string   `json:"target"`
+	Strategy       string   `json:"strategy"`
+	Status         Status   `json:"status"`
+	Reason         string   `json:"reason,omitempty"`
+	MatchingTags   []string `json:"matching_tags,omitempty"`
+	Ownership      string   `json:"-"`
 }
 
 // Plan is the preview of changes the installer would apply for a Profile.
@@ -112,17 +117,100 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		if err != nil {
 			return Plan{}, err
 		}
+		var reason string
+		var matchingTags []string
+		if actionStatus == StatusConflict {
+			matchingTags, err = MatchingUnselectedSourceOverrideTags(entry, tags, target, opts.SourceRoot)
+			if err != nil {
+				return Plan{}, err
+			}
+			if len(matchingTags) > 0 {
+				reason = ConflictReasonSourceOverrideNotSelected
+			}
+		}
 		plan.Actions = append(plan.Actions, Action{
 			Source:         source,
 			ResolvedSource: sourceAbs,
 			Target:         target,
 			Strategy:       entry.Strategy,
 			Status:         actionStatus,
+			Reason:         reason,
+			MatchingTags:   matchingTags,
 			Ownership:      entry.Ownership,
 		})
 	}
 
 	return plan, nil
+}
+
+// MatchingUnselectedSourceOverrideTags returns the deterministic set of
+// unselected Tags whose declared alternate source exactly matches target.
+// Alternate sources receive the same containment and existence checks as a
+// selected Managed Entry source before they can produce remediation guidance.
+func MatchingUnselectedSourceOverrideTags(entry manifest.Entry, selectedTags []string, target, sourceRoot string) ([]string, error) {
+	if len(entry.SourceOverrides) == 0 || (entry.Strategy != "symlink" && entry.Strategy != "copy") {
+		return nil, nil
+	}
+
+	selected := make(map[string]struct{}, len(selectedTags))
+	for _, tag := range selectedTags {
+		selected[tag] = struct{}{}
+	}
+	overrideTags := make([]string, 0, len(entry.SourceOverrides))
+	for tag := range entry.SourceOverrides {
+		if _, ok := selected[tag]; !ok {
+			overrideTags = append(overrideTags, tag)
+		}
+	}
+	sort.Strings(overrideTags)
+
+	matching := make([]string, 0, len(overrideTags))
+	for _, tag := range overrideTags {
+		sourceAbs, err := ResolveSource(entry.SourceOverrides[tag], sourceRoot)
+		if err != nil {
+			return nil, err
+		}
+		exists, err := safeSourceExists(sourceAbs, sourceRoot)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			continue
+		}
+		matches, err := targetMatchesSource(entry.Strategy, target, sourceAbs)
+		if err != nil {
+			return nil, err
+		}
+		if matches {
+			matching = append(matching, tag)
+		}
+	}
+	return matching, nil
+}
+
+func targetMatchesSource(strategy, target, sourceAbs string) (bool, error) {
+	info, err := os.Lstat(target)
+	if err != nil {
+		return false, nil
+	}
+	switch strategy {
+	case "symlink":
+		if info.Mode()&os.ModeSymlink == 0 {
+			return false, nil
+		}
+		dest, err := os.Readlink(target)
+		if err != nil {
+			return false, fmt.Errorf("readlink target %s: %w", target, err)
+		}
+		return dest == sourceAbs, nil
+	case "copy":
+		if !info.Mode().IsRegular() {
+			return false, nil
+		}
+		return sameContent(target, sourceAbs)
+	default:
+		return false, nil
+	}
 }
 
 // ResolveTarget resolves a manifest target inside home. Targets are deliberately

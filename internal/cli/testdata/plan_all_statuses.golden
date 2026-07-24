@@ -2,6 +2,8 @@ Plan for profile "work"
 
   create          symlink   configs/zsh/zshrc -> /home/user/.zshrc
   conflict        symlink   configs/git/gitconfig -> /home/user/.gitconfig
+    source override matches omitted tag(s): adaptive-theme
+    selection: omit explicit selection flags to reuse Installed Selection when available, or add --tag adaptive-theme
   unchanged       copy      configs/starship.toml -> /home/user/.config/starship.toml
   missing-source  template  configs/nvim/init.lua -> /home/user/.config/nvim/init.lua
 

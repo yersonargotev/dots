@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 )
@@ -73,6 +74,64 @@ func TestBuildReportsOKForSymlinkPointingAtSource(t *testing.T) {
 
 	if got := onlyEntry(t, f.build(t, state.Metadata{})).State; got != status.StateOK {
 		t.Fatalf("state = %q, want ok", got)
+	}
+}
+
+func TestBuildDiagnosesUnselectedSourceOverrideAndKeepsSelectedOverrideAligned(t *testing.T) {
+	f := newFixture(manifest.Entry{
+		Source:          "configs/zellij/default.kdl",
+		SourceOverrides: map[string]string{"adaptive-theme": "configs/zellij/adaptive.kdl"},
+		Target:          "~/.config/zellij/config.kdl",
+		Strategy:        "symlink",
+		Tags:            []string{"core"},
+		OS:              []string{"linux"},
+	})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+	writeSource(t, f.sourceRoot, "configs/zellij/default.kdl", "dark\n")
+	adaptive := writeSource(t, f.sourceRoot, "configs/zellij/adaptive.kdl", "adaptive\n")
+	target := filepath.Join(f.home, ".config", "zellij", "config.kdl")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	if err := os.Symlink(adaptive, target); err != nil {
+		t.Fatalf("symlink target: %v", err)
+	}
+
+	entry := onlyEntry(t, f.build(t, state.Metadata{}))
+	if entry.State != status.StateConflict ||
+		entry.Reason != plan.ConflictReasonSourceOverrideNotSelected ||
+		len(entry.MatchingTags) != 1 || entry.MatchingTags[0] != "adaptive-theme" {
+		t.Fatalf("entry = %+v, want diagnosed conflict", entry)
+	}
+
+	report, err := status.Build(f.manifest, state.Metadata{}, status.Options{
+		Profile:    "default",
+		ExtraTags:  []string{"adaptive-theme"},
+		OS:         "linux",
+		SourceRoot: f.sourceRoot,
+		Home:       f.home,
+	})
+	if err != nil {
+		t.Fatalf("Build() selected override error = %v", err)
+	}
+	entry = onlyEntry(t, report)
+	if entry.State != status.StateOK || entry.Reason != "" || len(entry.MatchingTags) != 0 {
+		t.Fatalf("selected override entry = %+v, want ok without diagnostic", entry)
+	}
+
+	report, err = status.Build(f.manifest, state.Metadata{}, status.Options{
+		Profile:    "default",
+		OS:         "darwin",
+		SourceRoot: f.sourceRoot,
+		Home:       f.home,
+	})
+	if err != nil {
+		t.Fatalf("Build() OS-filtered error = %v", err)
+	}
+	entry = onlyEntry(t, report)
+	if entry.State != status.StateSkipped || entry.Reason != "" || len(entry.MatchingTags) != 0 {
+		t.Fatalf("OS-filtered entry = %+v, want skipped without diagnostic", entry)
 	}
 }
 

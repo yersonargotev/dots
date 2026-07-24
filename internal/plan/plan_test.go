@@ -824,6 +824,110 @@ func TestBuildUsesSourceOverrideForSelectedExtraTag(t *testing.T) {
 	}
 }
 
+func TestBuildDiagnosesUnselectedSourceOverrides(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "herdr/default.toml", "dark\n")
+	herdrAdaptive := writeSource(t, sourceRoot, "herdr/adaptive.toml", "adaptive\n")
+	writeSource(t, sourceRoot, "zellij/default.kdl", "dark\n")
+	zellijAdaptive := writeSource(t, sourceRoot, "zellij/adaptive.kdl", "adaptive\n")
+
+	entries := []manifest.Entry{
+		{
+			Source:          "herdr/default.toml",
+			SourceOverrides: map[string]string{"adaptive-theme": "herdr/adaptive.toml"},
+			Target:          "~/.config/herdr/config.toml",
+			Strategy:        "symlink",
+			Tags:            []string{"core"},
+			OS:              []string{"darwin"},
+		},
+		{
+			Source:          "zellij/default.kdl",
+			SourceOverrides: map[string]string{"adaptive-theme": "zellij/adaptive.kdl"},
+			Target:          "~/.config/zellij/config.kdl",
+			Strategy:        "symlink",
+			Tags:            []string{"core"},
+			OS:              []string{"darwin"},
+		},
+	}
+	for target, source := range map[string]string{
+		filepath.Join(home, ".config", "herdr", "config.toml"): herdrAdaptive,
+		filepath.Join(home, ".config", "zellij", "config.kdl"): zellijAdaptive,
+	} {
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			t.Fatalf("mkdir target parent: %v", err)
+		}
+		if err := os.Symlink(source, target); err != nil {
+			t.Fatalf("symlink target: %v", err)
+		}
+	}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries:  entries,
+	}
+
+	withoutTag, err := plan.Build(m, plan.Options{Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() without tag error = %v", err)
+	}
+	for _, action := range withoutTag.Actions {
+		if action.Status != plan.StatusConflict {
+			t.Fatalf("Status = %q, want conflict", action.Status)
+		}
+		if action.Reason != plan.ConflictReasonSourceOverrideNotSelected {
+			t.Fatalf("Reason = %q, want %q", action.Reason, plan.ConflictReasonSourceOverrideNotSelected)
+		}
+		if got, want := action.MatchingTags, []string{"adaptive-theme"}; len(got) != 1 || got[0] != want[0] {
+			t.Fatalf("MatchingTags = %v, want %v", got, want)
+		}
+	}
+
+	withTag, err := plan.Build(m, plan.Options{Profile: "default", ExtraTags: []string{"adaptive-theme"}, OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() with tag error = %v", err)
+	}
+	for _, action := range withTag.Actions {
+		if action.Status != plan.StatusUnchanged || action.Reason != "" || len(action.MatchingTags) != 0 {
+			t.Fatalf("selected override action = %+v, want unchanged without diagnostic", action)
+		}
+	}
+}
+
+func TestBuildSourceOverrideDiagnosisIsDeterministicAndExact(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "default.conf", "default\n")
+	writeSource(t, sourceRoot, "adaptive.conf", "adaptive\n")
+	target := filepath.Join(home, "config")
+	if err := os.WriteFile(target, []byte("adaptive\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	e := manifest.Entry{
+		Source: "default.conf",
+		SourceOverrides: map[string]string{
+			"z-last":  "adaptive.conf",
+			"a-first": "adaptive.conf",
+		},
+		Target:   "~/config",
+		Strategy: "copy",
+		Tags:     []string{"core"},
+	}
+
+	action := buildOne(t, sourceRoot, home, e)
+	if got, want := action.MatchingTags, []string{"a-first", "z-last"}; len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("MatchingTags = %v, want %v", got, want)
+	}
+
+	if err := os.WriteFile(target, []byte("local divergence\n"), 0o600); err != nil {
+		t.Fatalf("rewrite target: %v", err)
+	}
+	action = buildOne(t, sourceRoot, home, e)
+	if action.Status != plan.StatusConflict || action.Reason != "" || len(action.MatchingTags) != 0 {
+		t.Fatalf("ordinary conflict = %+v, want no source-override diagnosis", action)
+	}
+}
+
 func TestBuildRejectsUnknownProfile(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,

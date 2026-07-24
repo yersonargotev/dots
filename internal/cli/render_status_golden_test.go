@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/status"
 )
 
@@ -22,7 +23,7 @@ func TestRenderStatusGolden(t *testing.T) {
 				Entries: []status.Entry{
 					{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", State: status.StateOK},
 					{Source: "configs/git/gitconfig", Target: "/home/user/.gitconfig", Strategy: "copy", State: status.StateMissing},
-					{Source: "configs/tmux/tmux.conf", Target: "/home/user/.tmux.conf", Strategy: "copy", State: status.StateConflict},
+					{Source: "configs/tmux/tmux.conf", Target: "/home/user/.tmux.conf", Strategy: "copy", State: status.StateConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme", "work-theme"}},
 					{Source: "configs/mac/app", Target: "~/.app", Strategy: "copy", State: status.StateSkipped},
 					{Source: "configs/starship.toml", Target: "/home/user/.config/starship.toml", Strategy: "copy", State: status.StateDrifted},
 					{Source: "configs/nvim/init.lua", Target: "/home/user/.config/nvim/init.lua", Strategy: "template", State: status.StateUnsupported},

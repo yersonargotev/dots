@@ -108,6 +108,13 @@ Static apps without a safe optional include seam can use a `source_overrides`
 entry when a whole target must switch sources behind the opt-in. The override
 keeps one Managed Entry/target in the Install Plan while selecting the tagged
 source, so `--tag adaptive-theme` does not create duplicate target actions.
+When none of an entry's override tags is selected, dots uses its base `source`;
+an override does not change the entry's `tags` selection or `os` applicability.
+Override keys match selected tags exactly. When a conflicting target exactly
+matches an alternate source whose tag was not selected, diagnostics retain the
+Conflict and report all such unselected tags in deterministic order. Omit
+explicit `--profile` and `--tag` flags to reuse an available Installed
+Selection, or pass each intended exact tag with repeated `--tag <tag>`.
 Co-owned files are still documented in [`docs/adaptive-theme-audit.md`](adaptive-theme-audit.md)
 when no safe dots-owned source can be selected.
 
@@ -119,7 +126,7 @@ home directory.
 | Field | Required | Supported values |
 |-------|----------|------------------|
 | `source` | Yes | Repository-relative path to Managed Configuration. |
-| `source_overrides` | No | Map of selected tag to alternate repository-relative source for the same target. Used for opt-in variants without duplicate Install Plan targets. |
+| `source_overrides` | No | Map of exact selected tag to alternate repository-relative source for the same target. The base `source` is used when no key matches; overrides do not alter entry tag selection or OS applicability. |
 | `target` | Yes | Home-relative target: `~` or `~/...`. |
 | `strategy` | Yes | `symlink`, `copy`, or `template` in the manifest schema. Current install execution supports `symlink` and `copy`. |
 | `ownership` | No | Empty, `json-subset`, or `toml-subset`. Subset ownership requires `strategy: copy`. |

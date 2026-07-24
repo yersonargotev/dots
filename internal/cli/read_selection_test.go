@@ -181,6 +181,84 @@ func TestReadOnlySelectionTextReportsSource(t *testing.T) {
 	}
 }
 
+func TestReadOnlyCommandsDiagnoseOverrideOmittedByExplicitSelection(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(sourceRoot, "configs", "zellij"), 0o755); err != nil {
+		t.Fatalf("mkdir sources: %v", err)
+	}
+	defaultSource := filepath.Join(sourceRoot, "configs", "zellij", "default.kdl")
+	adaptiveSource := filepath.Join(sourceRoot, "configs", "zellij", "adaptive.kdl")
+	if err := os.WriteFile(defaultSource, []byte("dark\n"), 0o600); err != nil {
+		t.Fatalf("write default source: %v", err)
+	}
+	if err := os.WriteFile(adaptiveSource, []byte("adaptive\n"), 0o600); err != nil {
+		t.Fatalf("write adaptive source: %v", err)
+	}
+	target := filepath.Join(home, ".config", "zellij", "config.kdl")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	if err := os.Symlink(adaptiveSource, target); err != nil {
+		t.Fatalf("symlink target: %v", err)
+	}
+	manifestPath := filepath.Join(sourceRoot, "dots.yaml")
+	if err := os.WriteFile(manifestPath, []byte(`version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/zellij/default.kdl
+    source_overrides:
+      adaptive-theme: configs/zellij/adaptive.kdl
+    target: ~/.config/zellij/config.kdl
+    strategy: symlink
+    tags: [core]
+`), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	saveInstalledSelection(t, stateRoot, "default", "adaptive-theme")
+
+	for _, command := range []struct {
+		name       string
+		args       []string
+		collection string
+		stateKey   string
+		aligned    string
+	}{
+		{name: "plan", args: []string{"plan"}, collection: "actions", stateKey: "status", aligned: "unchanged"},
+		{name: "status", args: []string{"status"}, collection: "entries", stateKey: "state", aligned: "ok"},
+	} {
+		t.Run(command.name, func(t *testing.T) {
+			recordedArgs := selectionCommandArgs(command.args, manifestPath, home, sourceRoot, stateRoot, false)
+			code, data, envelopeError := runSelectionJSON(t, recordedArgs)
+			if code != 0 {
+				t.Fatalf("recorded selection exit code = %d, want 0; error=%q", code, envelopeError)
+			}
+			assertSelectionJSON(t, data, "recorded", []string{"default"}, []string{"adaptive-theme"}, []string{"core", "adaptive-theme"})
+			items := data[command.collection].([]any)
+			if got := items[0].(map[string]any)[command.stateKey]; got != command.aligned {
+				t.Fatalf("recorded %s = %v, want %q", command.stateKey, got, command.aligned)
+			}
+
+			explicitArgs := append(append([]string{}, command.args...), "--profile", "default")
+			explicitArgs = selectionCommandArgs(explicitArgs, manifestPath, home, sourceRoot, stateRoot, false)
+			code, data, envelopeError = runSelectionJSON(t, explicitArgs)
+			if code != 2 {
+				t.Fatalf("explicit selection exit code = %d, want 2; error=%q", code, envelopeError)
+			}
+			items = data[command.collection].([]any)
+			item := items[0].(map[string]any)
+			if item[command.stateKey] != "conflict" ||
+				item["reason"] != "source-override-not-selected" ||
+				mustJSON(t, item["matching_tags"]) != `["adaptive-theme"]` {
+				t.Fatalf("explicit selection item = %#v, want diagnosed conflict", item)
+			}
+		})
+	}
+}
+
 func TestDepsExplicitSelectionWorksWithoutInstallationMetadata(t *testing.T) {
 	home := t.TempDir()
 	manifestPath := writeCLIManifest(t, home, `version: 1
