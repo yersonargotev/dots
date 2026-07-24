@@ -82,6 +82,166 @@ func TestCompareEvolutionReportsSelectedSurfaceChangesInManifestOrder(t *testing
 	}
 }
 
+func TestCompareInstalledNoRecordedSelectionOrEqualSelectionHasNoChange(t *testing.T) {
+	m := replacementManifest()
+	requested, err := selection.ResolveIntent(m, selection.Intent{
+		Source: selection.SourceExplicit, Profiles: []string{"core"}, ExtraTags: []string{"extra"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := selection.CompareInstalled(m, requested, nil, "linux"); got.Report.Change != nil {
+		t.Fatalf("nil recorded Change = %#v, want nil", got.Report.Change)
+	}
+	recorded := &state.InstalledSelection{
+		Profiles: []string{"core"}, ExtraTags: []string{"extra"},
+		ResolvedTags: []string{"core", "extra"},
+	}
+	if got := selection.CompareInstalled(m, requested, recorded, "linux"); got.Report.Change != nil {
+		t.Fatalf("equal Change = %#v, want nil", got.Report.Change)
+	}
+}
+
+func TestCompareInstalledAdditiveChangeDoesNotRequireAcknowledgement(t *testing.T) {
+	m := replacementManifest()
+	requested, err := selection.ResolveIntent(m, selection.Intent{
+		Source: selection.SourceExplicit, Profiles: []string{"core", "work"}, ExtraTags: []string{"extra"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := selection.CompareInstalled(m, requested, &state.InstalledSelection{
+		Profiles: []string{"core"}, ResolvedTags: []string{"core"},
+	}, "linux")
+	change := got.Report.Change
+	if change == nil {
+		t.Fatal("Change = nil")
+	}
+	if change.AcknowledgementRequired || change.AcknowledgementAccepted {
+		t.Fatalf("acknowledgement = required:%t accepted:%t, want false/false",
+			change.AcknowledgementRequired, change.AcknowledgementAccepted)
+	}
+	if want := []string{"work"}; !reflect.DeepEqual(change.Delta.Added.Profiles, want) {
+		t.Fatalf("added Profiles = %#v, want %#v", change.Delta.Added.Profiles, want)
+	}
+	if want := []string{"extra"}; !reflect.DeepEqual(change.Delta.Added.ExtraTags, want) {
+		t.Fatalf("added extra Tags = %#v, want %#v", change.Delta.Added.ExtraTags, want)
+	}
+}
+
+func TestCompareInstalledIntentReductionRequiresAcknowledgement(t *testing.T) {
+	m := replacementManifest()
+	requested, err := selection.ResolveIntent(m, selection.Intent{
+		Source: selection.SourceExplicit, Profiles: []string{"core"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := selection.CompareInstalled(m, requested, &state.InstalledSelection{
+		Profiles: []string{"core", "work"}, ExtraTags: []string{"extra"},
+		ResolvedTags: []string{"core", "work", "extra"},
+	}, "linux")
+	change := got.Report.Change
+	if change == nil || !change.AcknowledgementRequired || change.AcknowledgementAccepted {
+		t.Fatalf("Change = %#v, want required and unaccepted", change)
+	}
+	if want := []string{"work"}; !reflect.DeepEqual(change.Delta.Removed.Profiles, want) {
+		t.Fatalf("removed Profiles = %#v, want %#v", change.Delta.Removed.Profiles, want)
+	}
+	if want := []string{"extra"}; !reflect.DeepEqual(change.Delta.Removed.ExtraTags, want) {
+		t.Fatalf("removed extra Tags = %#v, want %#v", change.Delta.Removed.ExtraTags, want)
+	}
+}
+
+func TestCompareInstalledReportsRecordedAuditSurfaceDifferences(t *testing.T) {
+	m := replacementManifest()
+	requested, err := selection.ResolveIntent(m, selection.Intent{
+		Source: selection.SourceExplicit, Profiles: []string{"work"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := selection.CompareInstalled(m, requested, &state.InstalledSelection{
+		Profiles: []string{"core"}, ResolvedTags: []string{"core", "retired"},
+	}, "linux")
+	delta := got.Report.Change.Delta
+	if want := []string{"work"}; !reflect.DeepEqual(delta.Current.Profiles, want) {
+		t.Fatalf("current Profiles = %#v, want %#v", delta.Current.Profiles, want)
+	}
+	if want := []string{"core", "retired"}; !reflect.DeepEqual(delta.Previous.EffectiveTags, want) {
+		t.Fatalf("previous effective Tags = %#v, want recorded audit snapshot %#v", delta.Previous.EffectiveTags, want)
+	}
+	if want := []string{".work"}; !reflect.DeepEqual(delta.Added.ManagedEntries, want) {
+		t.Fatalf("added Managed Entries = %#v, want %#v", delta.Added.ManagedEntries, want)
+	}
+	if want := []string{".core", ".retired"}; !reflect.DeepEqual(delta.Removed.ManagedEntries, want) {
+		t.Fatalf("removed Managed Entries = %#v, want %#v", delta.Removed.ManagedEntries, want)
+	}
+	if want := []string{"work-dep"}; !reflect.DeepEqual(delta.Added.Dependencies, want) {
+		t.Fatalf("added Dependencies = %#v, want %#v", delta.Added.Dependencies, want)
+	}
+	if want := []string{"core-dep", "retired-dep"}; !reflect.DeepEqual(delta.Removed.Dependencies, want) {
+		t.Fatalf("removed Dependencies = %#v, want %#v", delta.Removed.Dependencies, want)
+	}
+	if want := []string{"work-tool"}; !reflect.DeepEqual(delta.Added.Provisioners, want) {
+		t.Fatalf("added Provisioners = %#v, want %#v", delta.Added.Provisioners, want)
+	}
+	if want := []string{"retired-tool"}; !reflect.DeepEqual(delta.Removed.Provisioners, want) {
+		t.Fatalf("removed Provisioners = %#v, want %#v", delta.Removed.Provisioners, want)
+	}
+}
+
+func TestCompareInstalledChangeJSONHasDeterministicArraysAndEvolutionPreservesChange(t *testing.T) {
+	m := replacementManifest()
+	requested, err := selection.ResolveIntent(m, selection.Intent{
+		Source: selection.SourceExplicit, Profiles: []string{"work"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	compared := selection.CompareInstalled(m, requested, &state.InstalledSelection{
+		Profiles: []string{"core"}, ResolvedTags: []string{"core"},
+	}, "linux")
+	data, err := json.Marshal(compared.Report.Change)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`"extra_tags":[]`, `"provisioners":[]`,
+		`"missing_profiles":[]`, `"stale_extra_tags":[]`,
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("JSON = %s, want %s", data, want)
+		}
+	}
+	evolved, err := selection.CompareEvolution(m, m, compared, "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evolved.Report.Delta == nil || !reflect.DeepEqual(evolved.Report.Change, compared.Report.Change) {
+		t.Fatalf("evolved Report = %#v, want evolution Delta and preserved Change", evolved.Report)
+	}
+}
+
+func replacementManifest() manifest.Manifest {
+	return manifest.Manifest{
+		Profiles: map[string]manifest.Profile{
+			"core": {Tags: []string{"core"}},
+			"work": {Tags: []string{"work"}},
+		},
+		Entries: []manifest.Entry{
+			{Target: ".core", Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "core-dep"}}},
+			{Target: ".retired", Tags: []string{"retired"}, Dependencies: []manifest.Dependency{{Name: "retired-dep"}}},
+			{Target: ".work", Tags: []string{"work"}, Dependencies: []manifest.Dependency{{Name: "work-dep"}}},
+			{Target: ".extra", Tags: []string{"extra"}},
+		},
+		Provisioners: []manifest.Provisioner{
+			{Tool: "retired-tool", Tags: []string{"retired"}},
+			{Tool: "work-tool", Tags: []string{"work"}},
+		},
+	}
+}
+
 func TestCompareEvolutionRejectsMissingProfileWithStructuredDelta(t *testing.T) {
 	oldManifest := manifest.Manifest{Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}}}
 	previous, err := selection.ResolveIntent(oldManifest, selection.Intent{

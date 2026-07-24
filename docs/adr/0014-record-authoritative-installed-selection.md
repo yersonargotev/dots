@@ -135,3 +135,32 @@ Installed Selection, the non-authoritative Selection Migration Candidate, and
 historical inventory. Read-only selection-aware commands likewise do not
 silently consume a migration candidate; until migration succeeds, callers must
 provide an explicit selection.
+
+## Explicit selection replacement amendment
+
+Issue #346 defines any complete explicit Profile/Tag request on `install`,
+`update`, or `upgrade` that differs from Installed Selection as an Installed
+Selection Change. It is not merged with recorded intent. Before applying the
+requested selection to Dependencies, Managed Configuration, or Provisioners,
+dots reports deterministic added and removed Profiles, explicit extra Tags,
+effective Tags, Managed Entries, Dependencies, and Provisioners. Update does so
+before Installed Repository mutation, and upgrade before binary mutation. The
+existing selection-evolution delta remains separate because it compares one
+intent across Install Manifest revisions rather than two intents in one
+manifest.
+
+Removing a recorded Profile or explicit extra Tag is a reduction. Interactive
+operation requires a confirmation distinct from Conflict Resolution.
+Non-interactive operation requires both `--yes` and
+`--acknowledge-selection-change`; `--yes` alone returns the structured
+`selection-change-acknowledgement-required` error before mutation. Consequential
+surface removals are reported but do not authorize deletion or uninstall and do
+not independently require acknowledgement.
+
+Dry runs report whether acknowledgement would be required without accepting or
+persisting the change. Decline, missing acknowledgement, cancellation, or any
+Dependency, Managed Entry, Provisioner, upgrade-continuation, convergence, or
+metadata-write failure preserves the previous Installed Selection. Only
+terminal success records the requested intent. Read-only explicit selection
+remains invocation-scoped and never produces a persistent Installed Selection
+Change.

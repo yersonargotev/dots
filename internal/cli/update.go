@@ -27,20 +27,23 @@ type updateOptions struct {
 	dryRun          bool
 	yes             bool
 	noTUI           bool
+	ackSelection    bool
+	changeAccepted  bool
 	selectionIntent *selection.Intent
 }
 
 func newUpdateCommand() *cobra.Command {
 	var (
-		file       string
-		profiles   []string
-		extraTags  []string
-		sourceRoot string
-		home       string
-		stateRoot  string
-		dryRun     bool
-		yes        bool
-		noTUI      bool
+		file         string
+		profiles     []string
+		extraTags    []string
+		sourceRoot   string
+		home         string
+		stateRoot    string
+		dryRun       bool
+		yes          bool
+		noTUI        bool
+		ackSelection bool
 	)
 
 	cmd := &cobra.Command{
@@ -57,7 +60,7 @@ func newUpdateCommand() *cobra.Command {
 		// conditions, not command misuse, so do not dump the usage block.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := runUpdateWorkflow(cmd, updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI}, true)
+			_, err := runUpdateWorkflow(cmd, updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI, ackSelection: ackSelection}, true)
 			return err
 		},
 	}
@@ -71,6 +74,7 @@ func newUpdateCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "fetch and report the available update and Install Plan without fast-forwarding the working tree or installing files")
 	cmd.Flags().BoolVar(&yes, "yes", false, "apply safe install actions without prompting; conflicts default to skip")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
+	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of previously selected Profiles or extra Tags")
 	return cmd
 }
 
@@ -136,19 +140,28 @@ func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resol
 	if err != nil {
 		return nil, selection.Effective{}, err
 	}
-	if opts.selectionIntent != nil {
-		effective, err := selection.ResolveIntent(*m, *opts.selectionIntent)
-		return m, effective, err
-	}
 	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
 	if err != nil {
 		return nil, selection.Effective{}, err
+	}
+	if opts.selectionIntent != nil {
+		effective, err := selection.ResolveIntent(*m, *opts.selectionIntent)
+		if err != nil {
+			return nil, selection.Effective{}, err
+		}
+		if opts.selectionIntent.Source == selection.SourceExplicit {
+			effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, runtime.GOOS)
+		}
+		return m, effective, nil
 	}
 	if len(opts.profiles) == 0 && len(opts.extraTags) == 0 && meta.InstalledSelection == nil && (meta.Version == 1 || meta.Version == 2) {
 		effective, err := resolveLegacyUpdateSelection(cmd, *m, meta, paths, opts)
 		return m, effective, err
 	}
 	effective, err := selection.ResolveEffective(*m, opts.profiles, opts.extraTags, meta.InstalledSelection)
+	if err == nil && effective.Report.Source == selection.SourceExplicit {
+		effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, runtime.GOOS)
+	}
 	return m, effective, err
 }
 
@@ -168,6 +181,14 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
+	proceed, accepted, err := guardSelectionChange(cmd, &effective, opts.dryRun, opts.yes, opts.ackSelection, opts.changeAccepted)
+	if err != nil {
+		return updateReport{}, err
+	}
+	if !proceed {
+		return updateReport{DryRun: opts.dryRun, Selection: effective.Report}, nil
+	}
+	opts.changeAccepted = accepted
 
 	out := cmd.OutOrStdout()
 	var update gitrepo.Update

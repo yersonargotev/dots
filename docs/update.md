@@ -61,6 +61,7 @@ or incompatible targets still remain Conflicts.
 | `--home` | Target home directory; use a sandbox path to avoid touching real config. |
 | `--state-root` | State directory for Installation Metadata and Backup Sets. |
 | `--yes` | Apply safe actions without prompting; conflicts default to `skip`. |
+| `--acknowledge-selection-change` | With `--yes`, acknowledge removal of recorded Profiles or explicit extra Tags after reviewing the Installed Selection Change. |
 | `--no-tui` | Use text prompts instead of the interactive TUI for conflict resolution. |
 
 ## Dry run
@@ -94,8 +95,15 @@ mutation, with a recommended explicit command when one can be constructed.
 There is no implicit default.
 
 Any supplied `--profile` or `--tag` makes the complete explicit selection win
-for that invocation; dots never merges it with recorded intent. The selection
-is validated before the Installed Repository changes and resolved again against
+for that invocation; dots never merges it with recorded intent. Before the
+Installed Repository changes, update reports the requested selection delta from
+the Installed Selection, including added and removed Profiles, explicit extra
+Tags, effective Tags, Managed Entries, Dependencies, and Provisioners. Removing
+a recorded Profile or explicit extra Tag requires a distinct interactive
+confirmation. Non-interactive execution requires both `--yes` and
+`--acknowledge-selection-change`; `--yes` alone returns
+`selection-change-acknowledgement-required` before mutation. The selection is
+then validated and resolved again against
 the refreshed manifest before Managed Configuration is applied. Update reports
 the resulting effective Tag and selected Managed Entry, Dependency, and
 Provisioner additions and removals before application. A missing saved Profile
@@ -104,7 +112,7 @@ stops application with remediation and structured delta data instead of
 choosing an implicit default or silently rewriting intent. Removed surfaces are
 informational and are never automatically deleted or uninstalled. Only terminal
 success records or refreshes the Installed Selection, so dry runs, declined
-migration confirmation, cancellations, and
+selection-change or migration confirmation, cancellations, and
 failed Managed Entry or Provisioner work preserve the previous intent.
 
 ## Profiles and provisioners

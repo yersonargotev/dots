@@ -90,8 +90,12 @@ After a successful explicit install, `status`, `doctor`, `plan`, `deps check`,
 `deps plan`, `update`, and `upgrade` reuse the recorded Installed Selection when
 no `--profile` or `--tag` is supplied. Supplying either flag makes that
 invocation's complete explicit selection win. Read-only commands never change
-Installation Metadata; successful update/upgrade refreshes the selection only
-after Managed Entries and Provisioners finish. A machine with no recorded
+Installation Metadata. Mutating commands show an Installed Selection Change
+before applying a differing explicit selection. Removing a recorded Profile or
+explicit extra Tag requires a distinct interactive confirmation; unattended
+runs require both `--yes` and `--acknowledge-selection-change`. Successful
+install/update/upgrade records the requested selection only after Managed
+Entries and Provisioners finish. A machine with no recorded
 selection must pass an explicit `--profile` or `--tag`; selection-aware commands
 never invent an implicit Profile.
 
@@ -165,6 +169,10 @@ Non-interactive installs stay conservative: `dots install --profile workstation 
 ```bash
 dots install --profile workstation --yes --backup-and-replace
 ```
+
+When replacing an existing Installed Selection and removing a recorded Profile
+or explicit extra Tag, add `--acknowledge-selection-change` after reviewing the
+reported delta. This acknowledgement is separate from Conflict Resolution.
 
 That mode creates Backup Sets before replacement, reports them in JSON as `data.backup_sets`, and still runs selected Provisioners after Managed Configuration is applied.
 

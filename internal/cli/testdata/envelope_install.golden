@@ -4,6 +4,82 @@
   "status": "ok",
   "data": {
     "dry_run": false,
+    "selection": {
+      "source": "explicit",
+      "profiles": [
+        "default"
+      ],
+      "extra_tags": [],
+      "effective_tags": [
+        "default"
+      ],
+      "change": {
+        "delta": {
+          "previous": {
+            "profiles": [
+              "core",
+              "work"
+            ],
+            "extra_tags": [
+              "adaptive-theme"
+            ],
+            "effective_tags": [
+              "core",
+              "work",
+              "adaptive-theme"
+            ]
+          },
+          "current": {
+            "profiles": [
+              "default"
+            ],
+            "extra_tags": [],
+            "effective_tags": [
+              "default"
+            ]
+          },
+          "added": {
+            "profiles": [
+              "default"
+            ],
+            "extra_tags": [],
+            "effective_tags": [
+              "default"
+            ],
+            "managed_entries": [
+              "~/.zshrc"
+            ],
+            "dependencies": [],
+            "provisioners": []
+          },
+          "removed": {
+            "profiles": [
+              "core",
+              "work"
+            ],
+            "extra_tags": [
+              "adaptive-theme"
+            ],
+            "effective_tags": [
+              "core",
+              "work",
+              "adaptive-theme"
+            ],
+            "managed_entries": [
+              "~/.work"
+            ],
+            "dependencies": [],
+            "provisioners": [
+              "gentle-ai"
+            ]
+          },
+          "missing_profiles": [],
+          "stale_extra_tags": []
+        },
+        "acknowledgement_required": true,
+        "acknowledgement_accepted": true
+      }
+    },
     "package_manager_setup": {
       "manager": "homebrew",
       "status": "installed",
@@ -64,6 +140,82 @@
     },
     "plan": {
       "profile": "default",
+      "selection": {
+        "source": "explicit",
+        "profiles": [
+          "default"
+        ],
+        "extra_tags": [],
+        "effective_tags": [
+          "default"
+        ],
+        "change": {
+          "delta": {
+            "previous": {
+              "profiles": [
+                "core",
+                "work"
+              ],
+              "extra_tags": [
+                "adaptive-theme"
+              ],
+              "effective_tags": [
+                "core",
+                "work",
+                "adaptive-theme"
+              ]
+            },
+            "current": {
+              "profiles": [
+                "default"
+              ],
+              "extra_tags": [],
+              "effective_tags": [
+                "default"
+              ]
+            },
+            "added": {
+              "profiles": [
+                "default"
+              ],
+              "extra_tags": [],
+              "effective_tags": [
+                "default"
+              ],
+              "managed_entries": [
+                "~/.zshrc"
+              ],
+              "dependencies": [],
+              "provisioners": []
+            },
+            "removed": {
+              "profiles": [
+                "core",
+                "work"
+              ],
+              "extra_tags": [
+                "adaptive-theme"
+              ],
+              "effective_tags": [
+                "core",
+                "work",
+                "adaptive-theme"
+              ],
+              "managed_entries": [
+                "~/.work"
+              ],
+              "dependencies": [],
+              "provisioners": [
+                "gentle-ai"
+              ]
+            },
+            "missing_profiles": [],
+            "stale_extra_tags": []
+          },
+          "acknowledgement_required": true,
+          "acknowledgement_accepted": true
+        }
+      },
       "actions": [
         {
           "source": "configs/zsh/zshrc",

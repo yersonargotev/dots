@@ -50,6 +50,7 @@ func newInstallCommand() *cobra.Command {
 		noTUI            bool
 		skipDeps         bool
 		backupAndReplace bool
+		ackSelection     bool
 	)
 
 	cmd := &cobra.Command{
@@ -86,7 +87,15 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			installedSelection, err := selection.Resolve(*m, profiles, extraTags)
+			requestedSelection, err := selection.Resolve(*m, profiles, extraTags)
+			if err != nil {
+				return err
+			}
+			effective, err := selection.ResolveIntent(*m, selection.Intent{
+				Source:    selection.SourceExplicit,
+				Profiles:  requestedSelection.Profiles,
+				ExtraTags: requestedSelection.ExtraTags,
+			})
 			if err != nil {
 				return err
 			}
@@ -95,6 +104,15 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, installHostOS)
+			proceed, _, err := guardSelectionChange(cmd, &effective, dryRun, yes, ackSelection, false)
+			if err != nil {
+				return err
+			}
+			if !proceed {
+				return nil
+			}
+			installedSelection := effective.InstalledSelection(state.Provenance{})
 
 			hostOS := installHostOS
 			hostArch := installHostArch
@@ -142,8 +160,9 @@ func newInstallCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				p.Selection = &effective.Report
 				if wantsJSON(cmd) {
-					return emitOK(cmd, installReport{DryRun: true, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+					return emitOK(cmd, installReport{DryRun: true, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
 				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profiles); err != nil {
 					return err
@@ -162,7 +181,7 @@ func newInstallCommand() *cobra.Command {
 						packageManagerSetup.Status = pkgmgr.StatusUnavailable
 						err := fmt.Errorf("Homebrew Package Manager Setup requires interactive confirmation; rerun without --yes or install Homebrew manually with %s", packageManagerSetup.Command.Display)
 						if wantsJSON(cmd) {
-							return installDependencyGateError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport}}
+							return installDependencyGateError{err: err, report: installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport}}
 						}
 						return err
 					}
@@ -202,13 +221,14 @@ func newInstallCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				p.Selection = &effective.Report
 				installPlanReady = true
 
 				depReport, depsApplied, err := runInstallDependencies(cmd, *m, depOptions, depTier, paths.Home, depPreview, depsConfirmed, depLookup, brewDetection.Path)
 				dependenciesReport.Result = &depReport
 				if err != nil {
 					if wantsJSON(cmd) {
-						return installDependencyGateError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan}}
+						return installDependencyGateError{err: err, report: installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan}}
 					}
 					return err
 				}
@@ -222,6 +242,7 @@ func newInstallCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				p.Selection = &effective.Report
 			}
 
 			if !wantsJSON(cmd) {
@@ -244,7 +265,7 @@ func newInstallCommand() *cobra.Command {
 			}
 			if !applied {
 				if wantsJSON(cmd) {
-					return emitOK(cmd, installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+					return emitOK(cmd, installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
 				return nil
 			}
@@ -252,7 +273,7 @@ func newInstallCommand() *cobra.Command {
 			provResult, err := runProvisioners(cmd, *m, profiles, extraTags, paths.Home, paths.StateRoot, paths.SourceRoot)
 			if err != nil {
 				if wantsJSON(cmd) {
-					return installProvisionerError{err: err, report: installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
+					return installProvisionerError{err: err, report: installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
 				}
 				return err
 			}
@@ -261,7 +282,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, installReport{DryRun: false, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups})
+				return emitOK(cmd, installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups})
 			}
 			return nil
 		},
@@ -278,6 +299,7 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
 	cmd.Flags().BoolVar(&skipDeps, "skip-deps", false, "skip dependency provisioning before applying managed configuration")
 	cmd.Flags().BoolVar(&backupAndReplace, "backup-and-replace", false, "with --yes, replace every conflict after creating Backup Sets")
+	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of previously selected Profiles or extra Tags")
 	return cmd
 }
 

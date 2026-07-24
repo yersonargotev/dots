@@ -124,6 +124,10 @@ _Avoid_: install log, state file, tracking file
 The authoritative machine-level installation intent recorded only after terminal success of an explicit install, update, or upgrade, including an operator-confirmed Selection Migration Candidate. It preserves the ordered Profiles and explicit extra Tags selected by the operator, the ordered resolved Tag snapshot, Source of Truth provenance, and recording time. Profiles and explicit extra Tags are intent; resolved Tags are an audit snapshot. Per-Managed-Entry and per-Provisioner Profiles and Tags remain historical inventory and ownership evidence, not a substitute for an Installed Selection.
 _Avoid_: inferred selection, installed profile, tag inventory
 
+**Installed Selection Change**:
+A complete explicit Profile/Tag request on a mutating command that differs from the authoritative Installed Selection. Its delta reports added and removed Profiles, explicit extra Tags, effective Tags, Managed Entries, Dependencies, and Provisioners before mutation. Removing a recorded Profile or explicit extra Tag is a reduction that requires distinct interactive confirmation or, in Confirmed Install mode, `--acknowledge-selection-change` in addition to `--yes`.
+_Avoid_: implicit selection update, selection merge, automatic retirement
+
 **Selection Migration Candidate**:
 A non-authoritative selection proposed for Installation Metadata v1 or v2 from historical Managed Entry and Provisioner records plus current Install Manifest, target, and Source of Truth evidence. It reports ordered Profiles, explicit extra Tags, effective Tags, confidence, and ambiguity reasons. Only an unambiguous candidate can become an Installed Selection, and only after interactive operator confirmation and terminal success; ambiguous or absent evidence requires an explicit selection.
 _Avoid_: inferred selection, migrated selection, implicit default
@@ -186,7 +190,7 @@ The normal installation mode used when a terminal is available. It shows an Inst
 _Avoid_: normal install, guided install, TUI install
 
 **Confirmed Install**:
-A non-interactive installation mode requested with `--yes`. It applies safe changes without prompting and resolves conflicts with conservative defaults such as `skip`.
+A non-interactive installation mode requested with `--yes`. It applies safe changes without prompting and resolves conflicts with conservative defaults such as `skip`. It does not authorize an Installed Selection reduction; removing a recorded Profile or explicit extra Tag also requires `--acknowledge-selection-change`.
 _Avoid_: auto install, force install, unattended install
 
 **Text Prompt Mode**:

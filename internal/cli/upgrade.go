@@ -21,27 +21,29 @@ var (
 
 func newUpgradeCommand() *cobra.Command {
 	var (
-		file       string
-		profiles   []string
-		extraTags  []string
-		sourceRoot string
-		home       string
-		stateRoot  string
-		dryRun     bool
-		yes        bool
-		noTUI      bool
-		continue_  bool
+		file         string
+		profiles     []string
+		extraTags    []string
+		sourceRoot   string
+		home         string
+		stateRoot    string
+		dryRun       bool
+		yes          bool
+		noTUI        bool
+		ackSelection bool
+		continue_    bool
 
-		binaryChannel        string
-		binaryCurrentVersion string
-		binaryLatestVersion  string
-		binaryAction         string
-		binaryExecutable     string
-		binaryArtifact       string
-		binaryChecksum       string
-		selectionSource      string
-		selectionProfiles    []string
-		selectionTags        []string
+		binaryChannel           string
+		binaryCurrentVersion    string
+		binaryLatestVersion     string
+		binaryAction            string
+		binaryExecutable        string
+		binaryArtifact          string
+		binaryChecksum          string
+		selectionSource         string
+		selectionProfiles       []string
+		selectionTags           []string
+		selectionChangeAccepted bool
 	)
 
 	cmd := &cobra.Command{
@@ -51,7 +53,7 @@ func newUpgradeCommand() *cobra.Command {
 			"Managed Entries, and Provisioners. It never performs a broad system package upgrade.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts := updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI}
+			opts := updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI, ackSelection: ackSelection, changeAccepted: selectionChangeAccepted}
 			if continue_ {
 				if selectionSource != "" {
 					intent := selection.Intent{Source: selection.Source(selectionSource), Profiles: selectionProfiles, ExtraTags: selectionTags}
@@ -105,8 +107,16 @@ func newUpgradeCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			proceed, accepted, err := guardSelectionChange(cmd, &effective, false, yes, ackSelection, false)
+			if err != nil {
+				return err
+			}
+			if !proceed {
+				return nil
+			}
 			intent := effective.Intent()
 			opts.selectionIntent = &intent
+			opts.changeAccepted = accepted
 			binPlan, err := executeUpgrade(cmd.Context(), binOpts)
 			if err != nil {
 				return err
@@ -115,7 +125,7 @@ func newUpgradeCommand() *cobra.Command {
 				renderUpgradeBinary(cmd.OutOrStdout(), binPlan, false)
 			}
 			if binPlan.Action == upgrade.ActionHomebrewUpgrade || binPlan.Action == upgrade.ActionReplaceBinary {
-				return execBinary(exe, upgradeContinuationArgs(file, cmd.Flags().Changed("file"), intent, sourceRoot, home, stateRoot, yes, noTUI, wantsJSON(cmd), binPlan), os.Environ())
+				return execBinary(exe, upgradeContinuationArgs(file, cmd.Flags().Changed("file"), intent, sourceRoot, home, stateRoot, yes, noTUI, ackSelection, accepted, wantsJSON(cmd), binPlan), os.Environ())
 			}
 			updateReport, err := runUpdateWorkflow(cmd, opts, false)
 			if err != nil {
@@ -136,6 +146,7 @@ func newUpgradeCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview the binary upgrade and Source of Truth update without modifying either phase")
 	cmd.Flags().BoolVar(&yes, "yes", false, "apply safe install actions without prompting; conflicts default to skip")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
+	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of previously selected Profiles or extra Tags")
 	cmd.Flags().BoolVar(&continue_, "continue", false, "continue Source of Truth upgrade after binary replacement")
 	cmd.Flags().StringVar(&binaryChannel, "binary-channel", "", "binary phase channel preserved across upgrade continuation")
 	cmd.Flags().StringVar(&binaryCurrentVersion, "binary-current-version", "", "binary phase current version preserved across upgrade continuation")
@@ -147,6 +158,7 @@ func newUpgradeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&selectionSource, "selection-source", "", "selection source preserved across upgrade continuation")
 	cmd.Flags().StringArrayVar(&selectionProfiles, "selection-profile", nil, "selection Profile preserved across upgrade continuation")
 	cmd.Flags().StringArrayVar(&selectionTags, "selection-tag", nil, "selection extra Tag preserved across upgrade continuation")
+	cmd.Flags().BoolVar(&selectionChangeAccepted, "selection-change-accepted", false, "selection change acknowledgement preserved across upgrade continuation")
 	_ = cmd.Flags().MarkHidden("continue")
 	_ = cmd.Flags().MarkHidden("binary-channel")
 	_ = cmd.Flags().MarkHidden("binary-current-version")
@@ -158,6 +170,7 @@ func newUpgradeCommand() *cobra.Command {
 	_ = cmd.Flags().MarkHidden("selection-source")
 	_ = cmd.Flags().MarkHidden("selection-profile")
 	_ = cmd.Flags().MarkHidden("selection-tag")
+	_ = cmd.Flags().MarkHidden("selection-change-accepted")
 	return cmd
 }
 
@@ -174,7 +187,7 @@ func resolveUpgradeSelection(cmd *cobra.Command, opts updateOptions) (selection.
 	return effective, err
 }
 
-func upgradeContinuationArgs(file string, fileChanged bool, intent selection.Intent, sourceRoot, home, stateRoot string, yes, noTUI, json bool, binPlan upgrade.Plan) []string {
+func upgradeContinuationArgs(file string, fileChanged bool, intent selection.Intent, sourceRoot, home, stateRoot string, yes, noTUI, acknowledgeSelectionChange, selectionChangeAccepted, json bool, binPlan upgrade.Plan) []string {
 	args := []string{"dots", "upgrade", "--continue"}
 	if fileChanged {
 		args = append(args, "--file", file)
@@ -200,6 +213,12 @@ func upgradeContinuationArgs(file string, fileChanged bool, intent selection.Int
 	}
 	if noTUI {
 		args = append(args, "--no-tui")
+	}
+	if acknowledgeSelectionChange {
+		args = append(args, "--acknowledge-selection-change")
+	}
+	if selectionChangeAccepted {
+		args = append(args, "--selection-change-accepted")
 	}
 	if json {
 		args = append(args, "--output", "json")

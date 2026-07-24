@@ -44,6 +44,8 @@
           ]
         },
         "added": {
+          "profiles": [],
+          "extra_tags": [],
           "effective_tags": [
             "desktop"
           ],
@@ -54,6 +56,8 @@
           "provisioners": []
         },
         "removed": {
+          "profiles": [],
+          "extra_tags": [],
           "effective_tags": [],
           "managed_entries": [],
           "dependencies": [],
@@ -127,6 +131,8 @@
             ]
           },
           "added": {
+            "profiles": [],
+            "extra_tags": [],
             "effective_tags": [
               "desktop"
             ],
@@ -137,6 +143,8 @@
             "provisioners": []
           },
           "removed": {
+            "profiles": [],
+            "extra_tags": [],
             "effective_tags": [],
             "managed_entries": [],
             "dependencies": [],
