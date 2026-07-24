@@ -23,5 +23,5 @@
       "recommended_command": "dots install --profile core --tag adaptive-theme"
     }
   },
-  "error": "selection-migration-required: Installation Metadata predates authoritative Installed Selection; choose an explicit selection"
+  "error": "selection-migration-required: Installation Metadata predates authoritative Installed Selection; run dots install --profile core --tag adaptive-theme"
 }

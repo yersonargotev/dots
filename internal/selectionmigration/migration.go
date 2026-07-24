@@ -16,18 +16,38 @@ import (
 )
 
 const (
-	ConfidenceHigh   = "high"
-	ConfidenceMedium = "medium"
-	ConfidenceLow    = "low"
+	ConfidenceHigh   Confidence = "high"
+	ConfidenceMedium Confidence = "medium"
+	ConfidenceLow    Confidence = "low"
 )
 
+const (
+	ReasonConflictingRecordedProfiles AmbiguityReason = "conflicting_recorded_profiles"
+	ReasonConflictingRecordedTags     AmbiguityReason = "conflicting_recorded_tags"
+	ReasonMissingRecordedProfiles     AmbiguityReason = "missing_recorded_profiles"
+	ReasonMissingRecordedTags         AmbiguityReason = "missing_recorded_tags"
+	ReasonNoHistoricalEvidence        AmbiguityReason = "no_historical_evidence"
+	ReasonNoCompleteProfileCoverage   AmbiguityReason = "no_complete_profile_coverage"
+	ReasonMultipleCompleteProfiles    AmbiguityReason = "multiple_complete_profiles"
+	ReasonUnknownRecordedProfile      AmbiguityReason = "unknown_recorded_profile"
+	ReasonUnmatchedHistoricalRecord   AmbiguityReason = "unmatched_historical_record"
+	ReasonPartialProfileCoverage      AmbiguityReason = "partial_profile_coverage"
+	ReasonUnusableSelection           AmbiguityReason = "unusable_selection"
+	ReasonMissingTargetSourceEvidence AmbiguityReason = "missing_target_source_evidence"
+	ReasonTargetSourceMismatch        AmbiguityReason = "target_source_mismatch"
+)
+
+type Confidence string
+
+type AmbiguityReason string
+
 type Candidate struct {
-	Profiles           []string `json:"profiles"`
-	ExtraTags          []string `json:"extra_tags"`
-	EffectiveTags      []string `json:"effective_tags"`
-	Confidence         string   `json:"confidence"`
-	AmbiguityReasons   []string `json:"ambiguity_reasons"`
-	RecommendedCommand string   `json:"recommended_command,omitempty"`
+	Profiles           []string          `json:"profiles"`
+	ExtraTags          []string          `json:"extra_tags"`
+	EffectiveTags      []string          `json:"effective_tags"`
+	Confidence         Confidence        `json:"confidence"`
+	AmbiguityReasons   []AmbiguityReason `json:"ambiguity_reasons"`
+	RecommendedCommand string            `json:"recommended_command,omitempty"`
 }
 
 type Analysis struct {
@@ -44,6 +64,14 @@ type Options struct {
 
 func (c Candidate) Unambiguous() bool {
 	return len(c.AmbiguityReasons) == 0 && (len(c.Profiles) > 0 || len(c.ExtraTags) > 0)
+}
+
+func (c Candidate) AmbiguityReasonStrings() []string {
+	out := make([]string, len(c.AmbiguityReasons))
+	for i, reason := range c.AmbiguityReasons {
+		out[i] = string(reason)
+	}
+	return out
 }
 
 func (c Candidate) Effective(m manifest.Manifest) (manifest.Selection, error) {
@@ -69,7 +97,8 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 	represented := representedMatchedTags(report)
 	tagSets := recordedTagSets(meta)
 	candidateTags := represented
-	if len(tagSets) == 1 {
+	missingRecordedTags := len(tagSets) > 0 && hasMissingRecordedTags(meta)
+	if len(tagSets) == 1 && !missingRecordedTags {
 		candidateTags = newStringSet(tagSets[0])
 	}
 	addOverrideEvidence(m, meta, opts.OS, opts.Home, candidateTags)
@@ -81,11 +110,11 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 		profiles = append([]string(nil), profileSets[0]...)
 		confidence = ConfidenceHigh
 		if hasMissingRecordedProfiles(meta) {
-			reasons.add("missing_recorded_profiles")
+			reasons.add(ReasonMissingRecordedProfiles)
 		}
 	} else {
 		if len(profileSets) > 1 {
-			reasons.add("conflicting_recorded_profiles")
+			reasons.add(ReasonConflictingRecordedProfiles)
 		}
 		complete := completeProfiles(report)
 		switch len(complete) {
@@ -94,31 +123,34 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 			confidence = ConfidenceMedium
 		case 0:
 			if len(meta.Entries) == 0 && len(meta.Provisioners) == 0 {
-				reasons.add("no_historical_evidence")
+				reasons.add(ReasonNoHistoricalEvidence)
 			} else {
-				reasons.add("no_complete_profile_coverage")
+				reasons.add(ReasonNoCompleteProfileCoverage)
 			}
 		default:
-			reasons.add("multiple_complete_profiles")
+			reasons.add(ReasonMultipleCompleteProfiles)
 		}
 	}
 	if len(tagSets) > 1 {
-		reasons.add("conflicting_recorded_tags")
+		reasons.add(ReasonConflictingRecordedTags)
+	}
+	if missingRecordedTags {
+		reasons.add(ReasonMissingRecordedTags)
 	}
 
 	for _, p := range profiles {
 		if _, ok := m.Profiles[p]; !ok {
-			reasons.add("unknown_recorded_profile")
+			reasons.add(ReasonUnknownRecordedProfile)
 		}
 	}
 	for _, entry := range report.ManagedEntries {
 		if !entry.ManifestMatched {
-			reasons.add("unmatched_historical_record")
+			reasons.add(ReasonUnmatchedHistoricalRecord)
 		}
 	}
 	for _, prov := range report.Provisioners {
 		if !prov.ManifestMatched {
-			reasons.add("unmatched_historical_record")
+			reasons.add(ReasonUnmatchedHistoricalRecord)
 		}
 	}
 	for _, coverage := range report.Profiles {
@@ -126,7 +158,7 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 			continue
 		}
 		if len(profiles) == 0 || containsString(profiles, coverage.Name) {
-			reasons.add("partial_profile_coverage")
+			reasons.add(ReasonPartialProfileCoverage)
 		}
 	}
 
@@ -144,7 +176,7 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 	candidate := &Candidate{Profiles: profiles, ExtraTags: extra, Confidence: confidence}
 	selection, resolveErr := candidate.Effective(m)
 	if resolveErr != nil {
-		reasons.add("unusable_selection")
+		reasons.add(ReasonUnusableSelection)
 	} else {
 		candidate.EffectiveTags = append([]string{}, selection.Tags...)
 		statusReport, statusErr := status.Build(m, meta, status.Options{
@@ -152,7 +184,7 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 		})
 		if statusErr != nil {
 			if errors.Is(statusErr, os.ErrNotExist) {
-				reasons.add("missing_target_source_evidence")
+				reasons.add(ReasonMissingTargetSourceEvidence)
 			} else {
 				return Analysis{}, statusErr
 			}
@@ -164,13 +196,13 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 				}
 				evaluated++
 				if entry.State == status.StateMissing {
-					reasons.add("missing_target_source_evidence")
+					reasons.add(ReasonMissingTargetSourceEvidence)
 				} else if entry.State != status.StateOK {
-					reasons.add("target_source_mismatch")
+					reasons.add(ReasonTargetSourceMismatch)
 				}
 			}
 			if evaluated == 0 && (len(meta.Entries) > 0 || len(meta.Provisioners) > 0) {
-				reasons.add("missing_target_source_evidence")
+				reasons.add(ReasonMissingTargetSourceEvidence)
 			}
 		}
 	}
@@ -186,48 +218,37 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 }
 
 func recordedProfileSets(meta state.Metadata) [][]string {
-	unique := map[string][]string{}
-	add := func(values []string) {
-		set := newStringSet(values).values()
-		if len(set) == 0 {
-			return
-		}
-		unique[strings.Join(set, "\x00")] = set
-	}
+	values := make([][]string, 0, len(meta.Entries)+len(meta.Provisioners))
 	for _, rec := range meta.Entries {
-		add(rec.Profiles)
+		values = append(values, rec.Profiles)
 	}
 	for _, rec := range meta.Provisioners {
-		values := append([]string(nil), rec.Profiles...)
-		values = append(values, strings.Split(rec.Profile, ",")...)
-		add(values)
+		profiles := append([]string(nil), rec.Profiles...)
+		profiles = append(profiles, strings.Split(rec.Profile, ",")...)
+		values = append(values, profiles)
 	}
-	keys := make([]string, 0, len(unique))
-	for key := range unique {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	out := make([][]string, 0, len(keys))
-	for _, key := range keys {
-		out = append(out, unique[key])
-	}
-	return out
+	return distinctSets(values)
 }
 
 func recordedTagSets(meta state.Metadata) [][]string {
-	unique := map[string][]string{}
-	add := func(values []string) {
-		set := newStringSet(values).values()
-		if len(set) == 0 {
-			return
-		}
-		unique[strings.Join(set, "\x00")] = set
-	}
+	values := make([][]string, 0, len(meta.Entries)+len(meta.Provisioners))
 	for _, rec := range meta.Entries {
-		add(rec.Tags)
+		values = append(values, rec.Tags)
 	}
 	for _, rec := range meta.Provisioners {
-		add(rec.Tags)
+		values = append(values, rec.Tags)
+	}
+	return distinctSets(values)
+}
+
+func distinctSets(values [][]string) [][]string {
+	unique := map[string][]string{}
+	for _, values := range values {
+		set := newStringSet(values).values()
+		if len(set) == 0 {
+			continue
+		}
+		unique[strings.Join(set, "\x00")] = set
 	}
 	keys := make([]string, 0, len(unique))
 	for key := range unique {
@@ -251,6 +272,20 @@ func hasMissingRecordedProfiles(meta state.Metadata) bool {
 		values := append([]string(nil), rec.Profiles...)
 		values = append(values, strings.Split(rec.Profile, ",")...)
 		if len(newStringSet(values)) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMissingRecordedTags(meta state.Metadata) bool {
+	for _, rec := range meta.Entries {
+		if len(newStringSet(rec.Tags)) == 0 {
+			return true
+		}
+	}
+	for _, rec := range meta.Provisioners {
+		if len(newStringSet(rec.Tags)) == 0 {
 			return true
 		}
 	}
@@ -306,15 +341,15 @@ func addOverrideEvidence(m manifest.Manifest, meta state.Metadata, osName, home 
 	}
 }
 
-type reasonSet map[string]bool
+type reasonSet map[AmbiguityReason]bool
 
-func (s reasonSet) add(v string) { s[v] = true }
-func (s reasonSet) values() []string {
-	out := make([]string, 0, len(s))
+func (s reasonSet) add(v AmbiguityReason) { s[v] = true }
+func (s reasonSet) values() []AmbiguityReason {
+	out := make([]AmbiguityReason, 0, len(s))
 	for v := range s {
 		out = append(out, v)
 	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
 }
 

@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/selection"
@@ -12,31 +13,29 @@ import (
 
 const selectionMigrationRequiredCode = "selection-migration-required"
 
-type selectionMigrationCandidate struct {
-	Profiles           []string `json:"profiles"`
-	ExtraTags          []string `json:"extra_tags"`
-	EffectiveTags      []string `json:"effective_tags"`
-	Confidence         string   `json:"confidence"`
-	AmbiguityReasons   []string `json:"ambiguity_reasons"`
-	RecommendedCommand string   `json:"recommended_command,omitempty"`
-}
-
 type selectionMigrationRemediation struct {
 	RecommendedCommand string `json:"recommended_command,omitempty"`
 }
 
 type selectionMigrationErrorData struct {
 	Code        string                        `json:"code"`
-	Candidate   *selectionMigrationCandidate  `json:"candidate"`
+	Candidate   *selectionmigration.Candidate `json:"candidate"`
 	Remediation selectionMigrationRemediation `json:"remediation"`
 }
 
 type selectionMigrationRequiredError struct {
-	candidate *selectionMigrationCandidate
+	candidate *selectionmigration.Candidate
 }
 
 func (e *selectionMigrationRequiredError) Error() string {
-	return fmt.Sprintf("%s: Installation Metadata predates authoritative Installed Selection; choose an explicit selection", selectionMigrationRequiredCode)
+	message := fmt.Sprintf("%s: Installation Metadata predates authoritative Installed Selection", selectionMigrationRequiredCode)
+	if e.candidate != nil && e.candidate.RecommendedCommand != "" {
+		return message + "; run " + e.candidate.RecommendedCommand
+	}
+	if e.candidate != nil && len(e.candidate.AmbiguityReasons) > 0 {
+		message += "; candidate ambiguity: " + strings.Join(e.candidate.AmbiguityReasonStrings(), ", ")
+	}
+	return message + "; inspect `dots installed`, then provide the complete selection with repeated --profile and --tag flags"
 }
 
 func (e *selectionMigrationRequiredError) JSONErrorData() any {
@@ -80,20 +79,6 @@ func resolveReadOnlySelection(m manifest.Manifest, meta state.Metadata, profiles
 		return selection.Effective{}, err
 	}
 	return selection.Effective{}, &selectionMigrationRequiredError{
-		candidate: migrationCandidate(analysis.Candidate),
-	}
-}
-
-func migrationCandidate(candidate *selectionmigration.Candidate) *selectionMigrationCandidate {
-	if candidate == nil {
-		return nil
-	}
-	return &selectionMigrationCandidate{
-		Profiles:           append([]string{}, candidate.Profiles...),
-		ExtraTags:          append([]string{}, candidate.ExtraTags...),
-		EffectiveTags:      append([]string{}, candidate.EffectiveTags...),
-		Confidence:         candidate.Confidence,
-		AmbiguityReasons:   append([]string{}, candidate.AmbiguityReasons...),
-		RecommendedCommand: candidate.RecommendedCommand,
+		candidate: analysis.Candidate,
 	}
 }

@@ -23,7 +23,7 @@ func TestAnalyzeRecordedProfileHighConfidence(t *testing.T) {
 		ExtraTags:          []string{},
 		EffectiveTags:      []string{"core"},
 		Confidence:         ConfidenceHigh,
-		AmbiguityReasons:   []string{},
+		AmbiguityReasons:   []AmbiguityReason{},
 		RecommendedCommand: "dots install --profile core",
 	}
 	if !got.Required || !reflect.DeepEqual(got.Candidate, want) {
@@ -89,11 +89,40 @@ func TestAnalyzeSourceOverrideEvidenceRequiresMatchingTarget(t *testing.T) {
 	}
 }
 
+func TestAnalyzeMixedMissingRecordedTagsIsAmbiguousAndRetainsInferredTag(t *testing.T) {
+	m, meta, opts := fixture(t)
+	workSource := filepath.Join(opts.SourceRoot, "configs", "work")
+	if err := os.WriteFile(workSource, []byte("work\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	workTarget := filepath.Join(opts.Home, ".work")
+	if err := os.Symlink(workSource, workTarget); err != nil {
+		t.Fatal(err)
+	}
+	m.Entries = append(m.Entries, manifest.Entry{
+		Source: "configs/work", Target: "~/.work", Strategy: "symlink", Tags: []string{"work"},
+	})
+	meta.Entries[0].Profiles = []string{"core"}
+	meta.Entries = append(meta.Entries, state.Record{
+		Source: "configs/work", Target: workTarget, Strategy: "symlink", Profiles: []string{"core"},
+	})
+
+	got, err := Analyze(m, meta, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(got.Candidate.AmbiguityReasons, ReasonMissingRecordedTags) ||
+		!contains(got.Candidate.ExtraTags, "work") ||
+		got.Candidate.Unambiguous() {
+		t.Fatalf("candidate = %#v", got.Candidate)
+	}
+}
+
 func TestAnalyzeAmbiguities(t *testing.T) {
 	tests := []struct {
 		name   string
 		change func(*testing.T, *manifest.Manifest, *state.Metadata, Options)
-		reason string
+		reason AmbiguityReason
 	}{
 		{"conflicting history", func(_ *testing.T, m *manifest.Manifest, meta *state.Metadata, _ Options) {
 			m.Profiles["work"] = manifest.Profile{Tags: []string{"core"}}
@@ -207,7 +236,7 @@ func fixture(t *testing.T) (manifest.Manifest, state.Metadata, Options) {
 	return m, meta, Options{OS: "linux", Home: home, SourceRoot: sourceRoot, StatePath: filepath.Join(root, "installed.json")}
 }
 
-func contains(values []string, value string) bool {
+func contains[T ~string](values []T, value T) bool {
 	for _, candidate := range values {
 		if candidate == value {
 			return true

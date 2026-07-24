@@ -24,7 +24,7 @@ func resolveLegacyUpdateSelection(cmd *cobra.Command, m manifest.Manifest, meta 
 	if err != nil {
 		return selection.Effective{}, err
 	}
-	required := &selectionMigrationRequiredError{candidate: migrationCandidate(analysis.Candidate)}
+	required := &selectionMigrationRequiredError{candidate: analysis.Candidate}
 	if analysis.Candidate == nil || !analysis.Candidate.Unambiguous() || opts.yes || opts.dryRun || wantsJSON(cmd) {
 		return selection.Effective{}, required
 	}

@@ -14,7 +14,7 @@ import (
 
 type installedReport struct {
 	inst.Report
-	SelectionMigration *selectionMigrationCandidate `json:"selection_migration,omitempty"`
+	SelectionMigration *selectionmigration.Candidate `json:"selection_migration,omitempty"`
 }
 
 func (r installedReport) HasFindings() bool { return false }
@@ -65,7 +65,7 @@ func newInstalledCommand() *cobra.Command {
 			}
 			fullReport := installedReport{Report: report}
 			if analysis.Required {
-				fullReport.SelectionMigration = migrationCandidate(analysis.Candidate)
+				fullReport.SelectionMigration = analysis.Candidate
 			}
 			return renderOrEmit(cmd, fullReport, func() error {
 				renderInstalled(cmd.OutOrStdout(), report)
@@ -82,7 +82,7 @@ func newInstalledCommand() *cobra.Command {
 	return cmd
 }
 
-func renderSelectionMigration(w io.Writer, candidate *selectionMigrationCandidate) {
+func renderSelectionMigration(w io.Writer, candidate *selectionmigration.Candidate) {
 	if candidate == nil {
 		return
 	}
@@ -92,7 +92,7 @@ func renderSelectionMigration(w io.Writer, candidate *selectionMigrationCandidat
 	fmt.Fprintf(w, "  Extra Tags: %s\n", renderListOrNone(candidate.ExtraTags))
 	fmt.Fprintf(w, "  Effective Tags: %s\n", renderListOrNone(candidate.EffectiveTags))
 	fmt.Fprintf(w, "  Confidence: %s\n", candidate.Confidence)
-	fmt.Fprintf(w, "  Ambiguity Reasons: %s\n", renderListOrNone(candidate.AmbiguityReasons))
+	fmt.Fprintf(w, "  Ambiguity Reasons: %s\n", renderListOrNone(candidate.AmbiguityReasonStrings()))
 	if candidate.RecommendedCommand != "" {
 		fmt.Fprintf(w, "  Recommended Command: %s\n", candidate.RecommendedCommand)
 	}

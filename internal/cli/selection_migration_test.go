@@ -3,7 +3,9 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -70,4 +72,88 @@ func TestLegacyMetadataBlocksReadOnlyCommandsWithMigrationCandidate(t *testing.T
 			}
 		})
 	}
+}
+
+func TestLegacyMigrationAmbiguousAndNoEvidenceStayNonAuthoritative(t *testing.T) {
+	tests := []struct {
+		name       string
+		setup      func(*testing.T, string, string, string) state.Metadata
+		wantReason string
+	}{
+		{
+			name: "ambiguous profile coverage",
+			setup: func(t *testing.T, home, manifestPath, sourceRoot string) state.Metadata {
+				content, err := os.ReadFile(manifestPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				content = []byte(strings.Replace(string(content), "profiles:\n  default:", "profiles:\n  alternate:\n    tags: [core]\n  default:", 1))
+				if err := os.WriteFile(manifestPath, content, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				target := filepath.Join(home, ".zshrc")
+				if err := os.Symlink(filepath.Join(sourceRoot, "configs/zsh/zshrc"), target); err != nil {
+					t.Fatal(err)
+				}
+				return state.Metadata{Version: 2, Entries: []state.Record{{
+					Target: target, Source: "configs/zsh/zshrc", Strategy: "symlink", Tags: []string{"core"},
+				}}}
+			},
+			wantReason: "multiple_complete_profiles",
+		},
+		{
+			name:       "no historical evidence",
+			setup:      func(*testing.T, string, string, string) state.Metadata { return state.Metadata{Version: 2} },
+			wantReason: "no_historical_evidence",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			manifestPath, sourceRoot := writeStatusManifest(t, home, "core")
+			stateRoot := filepath.Join(home, ".local", "state", "dots")
+			before := tt.setup(t, home, manifestPath, sourceRoot)
+			if err := state.Save(state.Path(stateRoot), before); err != nil {
+				t.Fatal(err)
+			}
+
+			var stdout, stderr bytes.Buffer
+			code := cli.Run([]string{
+				"status", "--output", "json", "--file", manifestPath,
+				"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+			}, &stdout, &stderr)
+			if code != cli.ExitError {
+				t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitError, stdout.String(), stderr.String())
+			}
+			env := decodeEnvelopeForCommand(t, stdout.String(), "status")
+			var data struct {
+				Candidate struct {
+					AmbiguityReasons []string `json:"ambiguity_reasons"`
+				} `json:"candidate"`
+			}
+			if err := json.Unmarshal(env.Data, &data); err != nil {
+				t.Fatalf("decode migration data: %v\n%s", err, env.Data)
+			}
+			if !containsString(data.Candidate.AmbiguityReasons, tt.wantReason) {
+				t.Fatalf("ambiguity reasons = %#v, want %q", data.Candidate.AmbiguityReasons, tt.wantReason)
+			}
+			after, err := state.Load(state.Path(stateRoot))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if after.Version != 2 || after.InstalledSelection != nil || !reflect.DeepEqual(after.Entries, before.Entries) {
+				t.Fatalf("read-only migration changed metadata: %#v", after)
+			}
+		})
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
