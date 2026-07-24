@@ -114,6 +114,30 @@ func TestEnvelopeGolden(t *testing.T) {
 			golden: "envelope_installed.golden",
 		},
 		{
+			name: "selection migration required",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "status",
+				Status:        statusError,
+				Data: selectionMigrationErrorData{
+					Code: selectionMigrationRequiredCode,
+					Candidate: &selectionMigrationCandidate{
+						Profiles:           []string{"core"},
+						ExtraTags:          []string{"adaptive-theme"},
+						EffectiveTags:      []string{"core", "adaptive-theme"},
+						Confidence:         "high",
+						AmbiguityReasons:   []string{},
+						RecommendedCommand: "dots install --profile core --tag adaptive-theme",
+					},
+					Remediation: selectionMigrationRemediation{
+						RecommendedCommand: "dots install --profile core --tag adaptive-theme",
+					},
+				},
+				Error: "selection-migration-required: Installation Metadata predates authoritative Installed Selection; choose an explicit selection",
+			},
+			golden: "envelope_selection_migration_required.golden",
+		},
+		{
 			name: "plan",
 			env: envelope{
 				SchemaVersion: schemaVersion,

@@ -238,19 +238,20 @@ func loadDepsManifest(cmd *cobra.Command, file, home string) (*manifest.Manifest
 }
 
 func resolveDepsReadOnlySelection(m manifest.Manifest, home string, profiles, extraTags []string) (selection.Effective, error) {
-	var recorded *state.InstalledSelection
-	if len(profiles) == 0 && len(extraTags) == 0 {
-		paths, err := resolvePaths(home, "", "")
-		if err != nil {
-			return selection.Effective{}, err
-		}
-		meta, err := loadInstallationMetadata(paths, "")
-		if err != nil {
-			return selection.Effective{}, err
-		}
-		recorded = meta.InstalledSelection
+	if len(profiles) > 0 || len(extraTags) > 0 {
+		return selection.ResolveReadOnly(m, profiles, extraTags, nil)
 	}
-	return selection.ResolveReadOnly(m, profiles, extraTags, recorded)
+	paths, err := resolvePaths(home, "", "")
+	if err != nil {
+		return selection.Effective{}, err
+	}
+	meta, err := loadInstallationMetadata(paths, "")
+	if err != nil {
+		return selection.Effective{}, err
+	}
+	return resolveReadOnlySelection(m, meta, profiles, extraTags, readOnlySelectionOptions{
+		Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
+	})
 }
 
 func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier) error {

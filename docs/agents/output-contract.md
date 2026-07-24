@@ -121,7 +121,9 @@ prose the text surface prints:
   Any explicit Profile or Tag selection wins completely for that invocation and
   is never merged with recorded intent.
   If neither source exists, the command returns an execution error (`1`) with
-  selection guidance rather than falling back to a manifest `default`.
+  selection guidance rather than falling back to a manifest `default`. For
+  Installation Metadata v1/v2, historical evidence may be reported as a
+  non-authoritative migration candidate, but is never consumed implicitly.
 
 - `installed` is a read-only report over Installation Metadata. Its optional
   `data.installed_selection` is the authoritative machine-level intent recorded
@@ -140,6 +142,19 @@ prose the text surface prints:
   diagnostic, so an absent Installed Selection or partial Profile coverage
   remains `status: "ok"`; use `status` or `doctor` when an agent needs
   drift/dependency findings.
+- For Installation Metadata v1/v2 without an Installed Selection, `installed`
+  may add `data.selection_migration` alongside (never inside) the historical
+  inventory. It contains stable arrays `profiles`, `extra_tags`,
+  `effective_tags`, and `ambiguity_reasons`, plus `confidence` and, only when
+  available, `recommended_command`. This candidate is non-authoritative and
+  does not change `data.installed_selection`.
+- When selection migration cannot proceed non-interactively, selection-aware
+  commands return exit `1`, `status: "error"`, and error code
+  `selection-migration-required`. Error `data` contains `code`, nullable
+  `candidate`, and `remediation`; candidate arrays remain present even when
+  empty, and `remediation.recommended_command` is included when the evidence
+  supports an explicit command. `--yes` and JSON output never confirm a
+  candidate.
 - `plan`'s `resolved_source` (a per-machine absolute path) and `deps`'s
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the

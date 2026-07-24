@@ -1,0 +1,27 @@
+{
+  "schema_version": "5",
+  "command": "status",
+  "status": "error",
+  "data": {
+    "code": "selection-migration-required",
+    "candidate": {
+      "profiles": [
+        "core"
+      ],
+      "extra_tags": [
+        "adaptive-theme"
+      ],
+      "effective_tags": [
+        "core",
+        "adaptive-theme"
+      ],
+      "confidence": "high",
+      "ambiguity_reasons": [],
+      "recommended_command": "dots install --profile core --tag adaptive-theme"
+    },
+    "remediation": {
+      "recommended_command": "dots install --profile core --tag adaptive-theme"
+    }
+  },
+  "error": "selection-migration-required: Installation Metadata predates authoritative Installed Selection; choose an explicit selection"
+}

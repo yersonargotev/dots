@@ -121,8 +121,12 @@ The state file stored under `~/.local/state/dots/installed.json` that records wh
 _Avoid_: install log, state file, tracking file
 
 **Installed Selection**:
-The authoritative machine-level installation intent recorded after a successful explicit install. It preserves the ordered Profiles and explicit extra Tags selected by the operator, the ordered resolved Tag snapshot, Source of Truth provenance, and recording time. Profiles and explicit extra Tags are intent; resolved Tags are an audit snapshot. Per-Managed-Entry and per-Provisioner Profiles and Tags remain historical inventory and ownership evidence, not a substitute for an Installed Selection.
+The authoritative machine-level installation intent recorded only after terminal success of an explicit install, update, or upgrade, including an operator-confirmed Selection Migration Candidate. It preserves the ordered Profiles and explicit extra Tags selected by the operator, the ordered resolved Tag snapshot, Source of Truth provenance, and recording time. Profiles and explicit extra Tags are intent; resolved Tags are an audit snapshot. Per-Managed-Entry and per-Provisioner Profiles and Tags remain historical inventory and ownership evidence, not a substitute for an Installed Selection.
 _Avoid_: inferred selection, installed profile, tag inventory
+
+**Selection Migration Candidate**:
+A non-authoritative selection proposed for Installation Metadata v1 or v2 from historical Managed Entry and Provisioner records plus current Install Manifest, target, and Source of Truth evidence. It reports ordered Profiles, explicit extra Tags, effective Tags, confidence, and ambiguity reasons. Only an unambiguous candidate can become an Installed Selection, and only after interactive operator confirmation and terminal success; ambiguous or absent evidence requires an explicit selection.
+_Avoid_: inferred selection, migrated selection, implicit default
 
 **Dependency Installation Metadata**:
 The state record of Dependencies the Dotfiles CLI installed through executable providers, including the dependency name, provider, installed path, artifact version or checksum when applicable, and timestamp. It is separate from Installation Metadata because dependency tools are external workstation capabilities, not Managed Entries.

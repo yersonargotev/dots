@@ -40,6 +40,13 @@ without creating another Profile. For example, `--tag adaptive-theme` installs t
 app-specific fragments used by managed configs to follow macOS light appearance
 where the app has a safe seam.
 
+When v1/v2 Installation Metadata has no authoritative Installed Selection,
+these read-only commands return `selection-migration-required` rather than
+silently consuming historical Profile or Tag evidence. Inspect the
+non-authoritative candidate with `dots installed`, then run one complete
+explicit `--profile`/`--tag` selection; an interactive `update` or `upgrade`
+may instead offer an unambiguous candidate for confirmation.
+
 | Field | Required | Supported values |
 |-------|----------|------------------|
 | `tags` | Yes | Non-empty strings. Entries and Provisioners are selected when at least one tag matches. Optional CLI `--tag` values join this set at runtime. |
