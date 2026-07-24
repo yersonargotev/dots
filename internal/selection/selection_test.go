@@ -100,6 +100,10 @@ func TestCompareInstalledNoRecordedSelectionOrEqualSelectionHasNoChange(t *testi
 	if got := selection.CompareInstalled(m, requested, recorded, "linux"); got.Report.Change != nil {
 		t.Fatalf("equal Change = %#v, want nil", got.Report.Change)
 	}
+	recorded.ResolvedTags = []string{"core"}
+	if got := selection.CompareInstalled(m, requested, recorded, "linux"); got.Report.Change != nil {
+		t.Fatalf("equal intent with stale audit snapshot Change = %#v, want nil", got.Report.Change)
+	}
 }
 
 func TestCompareInstalledAdditiveChangeDoesNotRequireAcknowledgement(t *testing.T) {

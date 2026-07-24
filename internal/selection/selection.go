@@ -221,6 +221,10 @@ func CompareInstalled(m manifest.Manifest, requested Effective, recorded *state.
 	if recorded == nil {
 		return requested
 	}
+	if equalStrings(recorded.Profiles, requested.Profiles) &&
+		equalStrings(recorded.ExtraTags, requested.ExtraTags) {
+		return requested
+	}
 
 	previousSelection := manifest.Selection{
 		Profiles: cloneStrings(recorded.Profiles),
@@ -422,6 +426,18 @@ func difference(left, right []string) []string {
 		}
 	}
 	return result
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func validateIntent(source Source, profiles, extraTags []string) error {
