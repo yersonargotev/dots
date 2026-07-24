@@ -1003,8 +1003,8 @@ func TestInstallTUICancelDoesNotRunProvisioners(t *testing.T) {
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	previousSelection := state.InstalledSelection{
-		Profiles:     []string{"old"},
-		ResolvedTags: []string{"old"},
+		Profiles:     []string{"default"},
+		ResolvedTags: []string{"core"},
 		Provenance:   state.Provenance{RecordedAt: "2026-01-02T03:04:05Z"},
 	}
 	if err := state.Save(state.Path(stateRoot), state.Metadata{

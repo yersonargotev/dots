@@ -62,7 +62,7 @@ entries:
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
 	cmd.SetArgs([]string{
-		"--yes", "--skip-deps", "--profile", "core",
+		"--yes", "--acknowledge-selection-change", "--skip-deps", "--profile", "core",
 		"--file", manifestPath,
 		"--home", home,
 		"--source-root", sourceRoot,

@@ -155,6 +155,22 @@ prose the text surface prints:
   empty, and `remediation.recommended_command` is included when the evidence
   supports an explicit command. `--yes` and JSON output never confirm a
   candidate.
+- Mutating `install`, `update`, and `upgrade` reports may add
+  `data.selection.change` when a complete explicit request differs from the
+  authoritative Installed Selection. `change.delta` contains stable
+  `previous`/`current` intent snapshots and `added`/`removed` arrays for
+  `profiles`, `extra_tags`, `effective_tags`, `managed_entries`,
+  `dependencies`, and `provisioners`. The sibling booleans
+  `acknowledgement_required` and `acknowledgement_accepted` let automation
+  distinguish a preview, an accepted change, and a blocked reduction.
+  `install` exposes the same portable `data.selection` object as update and
+  upgrade.
+- A non-interactive explicit request that removes a recorded Profile or extra
+  Tag requires both `--yes` and `--acknowledge-selection-change`. Without both,
+  the command exits `1` before mutation with
+  `selection-change-acknowledgement-required`; error `data` contains `code` and
+  the complete `selection_change`. This acknowledgement is independent from
+  Conflict Resolution and `--backup-and-replace`.
 - `plan`'s `resolved_source` (a per-machine absolute path) and `deps`'s
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the

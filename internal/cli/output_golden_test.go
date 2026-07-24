@@ -35,10 +35,10 @@ func TestEnvelopeGolden(t *testing.T) {
 		Previous: selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"}},
 		Current:  selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "desktop", "work"}},
 		Added: selection.Changes{
-			EffectiveTags: []string{"desktop"}, ManagedEntries: []string{"~/.config/ghostty/config"}, Dependencies: []string{}, Provisioners: []string{},
+			Profiles: []string{}, ExtraTags: []string{}, EffectiveTags: []string{"desktop"}, ManagedEntries: []string{"~/.config/ghostty/config"}, Dependencies: []string{}, Provisioners: []string{},
 		},
 		Removed: selection.Changes{
-			EffectiveTags: []string{}, ManagedEntries: []string{}, Dependencies: []string{}, Provisioners: []string{},
+			Profiles: []string{}, ExtraTags: []string{}, EffectiveTags: []string{}, ManagedEntries: []string{}, Dependencies: []string{}, Provisioners: []string{},
 		},
 		MissingProfiles: []string{},
 		StaleExtraTags:  []string{},
@@ -47,14 +47,33 @@ func TestEnvelopeGolden(t *testing.T) {
 		Source: selection.SourceRecorded, Profiles: []string{"core"}, ExtraTags: []string{"work"},
 		EffectiveTags: []string{"core", "desktop", "work"}, Delta: &selectionDelta,
 	}
+	installSelection := selection.Report{
+		Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{}, EffectiveTags: []string{"default"},
+		Change: &selection.Change{
+			Delta: selection.Delta{
+				Previous: selection.Snapshot{Profiles: []string{"core", "work"}, ExtraTags: []string{"adaptive-theme"}, EffectiveTags: []string{"core", "work", "adaptive-theme"}},
+				Current:  selection.Snapshot{Profiles: []string{"default"}, ExtraTags: []string{}, EffectiveTags: []string{"default"}},
+				Added: selection.Changes{
+					Profiles: []string{"default"}, ExtraTags: []string{}, EffectiveTags: []string{"default"}, ManagedEntries: []string{"~/.zshrc"}, Dependencies: []string{}, Provisioners: []string{},
+				},
+				Removed: selection.Changes{
+					Profiles: []string{"core", "work"}, ExtraTags: []string{"adaptive-theme"}, EffectiveTags: []string{"core", "work", "adaptive-theme"}, ManagedEntries: []string{"~/.work"}, Dependencies: []string{}, Provisioners: []string{"gentle-ai"},
+				},
+				MissingProfiles: []string{},
+				StaleExtraTags:  []string{},
+			},
+			AcknowledgementRequired: true,
+			AcknowledgementAccepted: true,
+		},
+	}
 	blockingDelta := selection.Delta{
 		Previous: selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"retired"}, EffectiveTags: []string{"core", "retired"}},
 		Current:  selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{"retired"}, EffectiveTags: []string{"core", "retired"}},
 		Added: selection.Changes{
-			EffectiveTags: []string{}, ManagedEntries: []string{}, Dependencies: []string{}, Provisioners: []string{},
+			Profiles: []string{}, ExtraTags: []string{}, EffectiveTags: []string{}, ManagedEntries: []string{}, Dependencies: []string{}, Provisioners: []string{},
 		},
 		Removed: selection.Changes{
-			EffectiveTags: []string{}, ManagedEntries: []string{"~/.retired"}, Dependencies: []string{}, Provisioners: []string{},
+			Profiles: []string{}, ExtraTags: []string{}, EffectiveTags: []string{}, ManagedEntries: []string{"~/.retired"}, Dependencies: []string{}, Provisioners: []string{},
 		},
 		MissingProfiles: []string{},
 		StaleExtraTags:  []string{"retired"},
@@ -227,7 +246,8 @@ func TestEnvelopeGolden(t *testing.T) {
 				Command:       "install",
 				Status:        statusOK,
 				Data: installReport{
-					DryRun: false,
+					DryRun:    false,
+					Selection: installSelection,
 					PackageManagerSetup: &pkgmgr.Report{
 						Manager: "homebrew",
 						Status:  pkgmgr.StatusInstalled,
@@ -245,7 +265,7 @@ func TestEnvelopeGolden(t *testing.T) {
 						Preview: &installPreview,
 						Result:  &installResult,
 					},
-					Plan: plan.Plan{Profile: "default", Actions: []plan.Action{
+					Plan: plan.Plan{Profile: "default", Selection: &installSelection, Actions: []plan.Action{
 						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
 					}},
 					Provisioners: provision.Plan{Profile: "default", Steps: []provision.Step{

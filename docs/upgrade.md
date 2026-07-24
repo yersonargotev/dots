@@ -56,7 +56,8 @@ dots upgrade --profile workstation --yes --output json
 ```
 
 A real non-dry-run JSON upgrade requires `--yes` so Machine Output Mode never
-prompts on stdout.
+prompts on stdout. If the complete explicit selection removes a recorded
+Profile or extra Tag, it also requires `--acknowledge-selection-change`.
 
 After a successful explicit install, an unattended workstation upgrade can
 reuse the Installed Selection:
@@ -75,7 +76,14 @@ non-interactive runs fail before binary or repository mutation with the stable
 `selection-migration-required` error and a recommended explicit command when
 possible. Upgrade never chooses an implicit default.
 
-Selection is validated before binary replacement and re-resolved against the
+An explicit selection that differs from Installed Selection is reported before
+binary replacement. The delta contains added and removed Profiles, explicit
+extra Tags, effective Tags, Managed Entries, Dependencies, and Provisioners.
+Removing a recorded Profile or explicit extra Tag requires a distinct
+interactive confirmation; non-interactive execution requires both `--yes` and
+`--acknowledge-selection-change`, otherwise upgrade returns
+`selection-change-acknowledgement-required` before binary or repository
+mutation. Selection is then validated before binary replacement and re-resolved against the
 refreshed manifest before Managed Configuration is applied. Upgrade reports
 effective Tag and selected Managed Entry, Dependency, and Provisioner additions
 and removals before application. Missing Profiles and explicit extra Tags no
@@ -99,6 +107,7 @@ dots upgrade \
   --home "$HOME" \
   --state-root ~/.local/state/dots \
   --yes \
+  --acknowledge-selection-change \
   --no-tui
 ```
 

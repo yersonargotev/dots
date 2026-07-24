@@ -32,6 +32,7 @@ type Report struct {
 	ExtraTags     []string `json:"extra_tags"`
 	EffectiveTags []string `json:"effective_tags"`
 	Delta         *Delta   `json:"delta,omitempty"`
+	Change        *Change  `json:"change,omitempty"`
 }
 
 // Snapshot is the portable selection state on one side of an evolution.
@@ -43,6 +44,8 @@ type Snapshot struct {
 
 // Changes describes an ordered change to the selected manifest surface.
 type Changes struct {
+	Profiles       []string `json:"profiles"`
+	ExtraTags      []string `json:"extra_tags"`
 	EffectiveTags  []string `json:"effective_tags"`
 	ManagedEntries []string `json:"managed_entries"`
 	Dependencies   []string `json:"dependencies"`
@@ -58,6 +61,15 @@ type Delta struct {
 	Removed         Changes  `json:"removed"`
 	MissingProfiles []string `json:"missing_profiles"`
 	StaleExtraTags  []string `json:"stale_extra_tags"`
+}
+
+// Change describes an explicit replacement of the authoritative Installed
+// Selection. Acknowledgement state is intentionally separate from manifest
+// evolution semantics.
+type Change struct {
+	Delta                   Delta `json:"delta"`
+	AcknowledgementRequired bool  `json:"acknowledgement_required"`
+	AcknowledgementAccepted bool  `json:"acknowledgement_accepted"`
 }
 
 // EvolutionError is an actionable, machine-readable blocking validation error.
@@ -182,6 +194,7 @@ func CompareEvolution(previousManifest, currentManifest manifest.Manifest, previ
 		delta.Removed = surfaceDifference(previousSurface, currentSurface)
 		if len(delta.StaleExtraTags) == 0 {
 			current.Report.Delta = &delta
+			current.Report.Change = previous.Report.Change
 			return current, nil
 		}
 	}
@@ -199,6 +212,46 @@ func CompareEvolution(previousManifest, currentManifest manifest.Manifest, previ
 	}
 }
 
+// CompareInstalled compares an explicit effective request with the
+// authoritative Installed Selection recorded for the same Install Manifest.
+// The recorded resolved Tags are retained as the previous audit snapshot
+// rather than being re-resolved.
+func CompareInstalled(m manifest.Manifest, requested Effective, recorded *state.InstalledSelection, osName string) Effective {
+	requested.Report.Change = nil
+	if recorded == nil {
+		return requested
+	}
+	if equalStrings(recorded.Profiles, requested.Profiles) &&
+		equalStrings(recorded.ExtraTags, requested.ExtraTags) {
+		return requested
+	}
+
+	previousSelection := manifest.Selection{
+		Profiles: cloneStrings(recorded.Profiles),
+		Tags:     cloneStrings(recorded.ResolvedTags),
+	}
+	previousSurface := selectedSurface(m, previousSelection, osName)
+	currentSurface := selectedSurface(m, requested.Selection, osName)
+	previous := surfaceSnapshot(recorded.Profiles, recorded.ExtraTags, previousSurface)
+	current := surfaceSnapshot(requested.Profiles, requested.ExtraTags, currentSurface)
+	delta := emptyDelta(previous, current)
+	delta.Added = surfaceDifference(currentSurface, previousSurface)
+	delta.Added.Profiles = difference(current.Profiles, previous.Profiles)
+	delta.Added.ExtraTags = difference(current.ExtraTags, previous.ExtraTags)
+	delta.Removed = surfaceDifference(previousSurface, currentSurface)
+	delta.Removed.Profiles = difference(previous.Profiles, current.Profiles)
+	delta.Removed.ExtraTags = difference(previous.ExtraTags, current.ExtraTags)
+	if deltaIsEmpty(delta) {
+		return requested
+	}
+	requested.Report.Change = &Change{
+		Delta: delta,
+		AcknowledgementRequired: len(delta.Removed.Profiles) > 0 ||
+			len(delta.Removed.ExtraTags) > 0,
+	}
+	return requested
+}
+
 func snapshot(e Effective) Snapshot {
 	return Snapshot{
 		Profiles:      cloneStrings(e.Profiles),
@@ -207,17 +260,29 @@ func snapshot(e Effective) Snapshot {
 	}
 }
 
+func surfaceSnapshot(profiles, extraTags []string, surface Changes) Snapshot {
+	return Snapshot{
+		Profiles:      cloneStrings(profiles),
+		ExtraTags:     cloneStrings(extraTags),
+		EffectiveTags: cloneStrings(surface.EffectiveTags),
+	}
+}
+
 func emptyDelta(previous, current Snapshot) Delta {
 	return Delta{
 		Previous: previous,
 		Current:  current,
 		Added: Changes{
+			Profiles:       make([]string, 0),
+			ExtraTags:      make([]string, 0),
 			EffectiveTags:  make([]string, 0),
 			ManagedEntries: make([]string, 0),
 			Dependencies:   make([]string, 0),
 			Provisioners:   make([]string, 0),
 		},
 		Removed: Changes{
+			Profiles:       make([]string, 0),
+			ExtraTags:      make([]string, 0),
 			EffectiveTags:  make([]string, 0),
 			ManagedEntries: make([]string, 0),
 			Dependencies:   make([]string, 0),
@@ -276,6 +341,8 @@ func supportedSelectionModifier(tag string) bool {
 
 func selectedSurface(m manifest.Manifest, selected manifest.Selection, osName string) Changes {
 	result := Changes{
+		Profiles:       make([]string, 0),
+		ExtraTags:      make([]string, 0),
 		EffectiveTags:  cloneStrings(selected.Tags),
 		ManagedEntries: make([]string, 0),
 		Dependencies:   make([]string, 0),
@@ -323,11 +390,28 @@ func selectedSurface(m manifest.Manifest, selected manifest.Selection, osName st
 
 func surfaceDifference(left, right Changes) Changes {
 	return Changes{
+		Profiles:       make([]string, 0),
+		ExtraTags:      make([]string, 0),
 		EffectiveTags:  difference(left.EffectiveTags, right.EffectiveTags),
 		ManagedEntries: difference(left.ManagedEntries, right.ManagedEntries),
 		Dependencies:   difference(left.Dependencies, right.Dependencies),
 		Provisioners:   difference(left.Provisioners, right.Provisioners),
 	}
+}
+
+func deltaIsEmpty(delta Delta) bool {
+	return len(delta.Added.Profiles) == 0 &&
+		len(delta.Added.ExtraTags) == 0 &&
+		len(delta.Added.EffectiveTags) == 0 &&
+		len(delta.Added.ManagedEntries) == 0 &&
+		len(delta.Added.Dependencies) == 0 &&
+		len(delta.Added.Provisioners) == 0 &&
+		len(delta.Removed.Profiles) == 0 &&
+		len(delta.Removed.ExtraTags) == 0 &&
+		len(delta.Removed.EffectiveTags) == 0 &&
+		len(delta.Removed.ManagedEntries) == 0 &&
+		len(delta.Removed.Dependencies) == 0 &&
+		len(delta.Removed.Provisioners) == 0
 }
 
 func difference(left, right []string) []string {
@@ -342,6 +426,18 @@ func difference(left, right []string) []string {
 		}
 	}
 	return result
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func validateIntent(source Source, profiles, extraTags []string) error {

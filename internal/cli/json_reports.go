@@ -40,6 +40,7 @@ type manifestValidateReport struct {
 
 type installReport struct {
 	DryRun              bool                       `json:"dry_run"`
+	Selection           selection.Report           `json:"selection"`
 	PackageManagerSetup *pkgmgr.Report             `json:"package_manager_setup,omitempty"`
 	Dependencies        *installDependenciesReport `json:"dependencies,omitempty"`
 	Plan                plan.Plan                  `json:"plan"`

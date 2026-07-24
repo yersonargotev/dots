@@ -133,7 +133,7 @@ provisioners:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{
-		"install", "--yes", "--skip-deps", "--profile", "new",
+		"install", "--yes", "--acknowledge-selection-change", "--skip-deps", "--profile", "new",
 		"--file", manifestPath,
 		"--home", home,
 		"--source-root", sourceRoot,
@@ -158,6 +158,58 @@ provisioners:
 	}
 	if len(meta.Provisioners) != 1 || meta.Provisioners[0].Status != "failed" {
 		t.Fatalf("Provisioners = %#v, want failed inventory retained", meta.Provisioners)
+	}
+}
+
+func TestInstallYesSelectionReductionRequiresDedicatedAcknowledgement(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	previous := state.InstalledSelection{
+		Profiles:     []string{"old"},
+		ExtraTags:    []string{"old-extra"},
+		ResolvedTags: []string{"old", "old-extra"},
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{
+		Version:            state.CurrentVersion,
+		InstalledSelection: &previous,
+	}); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+	writeCLISource(t, sourceRoot, "configs/new", "new\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  new:
+    tags: [new]
+entries:
+  - source: configs/new
+    target: ~/.new
+    strategy: symlink
+    tags: [new]
+`)
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"install", "--yes", "--skip-deps", "--output", "json", "--profile", "new",
+		"--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != cli.ExitError {
+		t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitError, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "selection-change-acknowledgement-required") {
+		t.Fatalf("JSON error missing acknowledgement code:\n%s", out.String())
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".new")); !os.IsNotExist(err) {
+		t.Fatalf("selection rejection applied Managed Configuration: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
+		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
 	}
 }
 
@@ -208,7 +260,7 @@ provisioners:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{
-		"install", "--yes", "--skip-deps", "--profile", "new",
+		"install", "--yes", "--acknowledge-selection-change", "--skip-deps", "--profile", "new",
 		"--file", manifestPath,
 		"--home", home,
 		"--source-root", sourceRoot,

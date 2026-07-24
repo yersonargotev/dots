@@ -115,3 +115,26 @@ func TestRenderSelectionEvolutionGolden(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderSelectionChangeGolden(t *testing.T) {
+	change := selection.Change{
+		Delta: selection.Delta{
+			Previous: selection.Snapshot{Profiles: []string{"core", "work"}, ExtraTags: []string{"adaptive-theme"}, EffectiveTags: []string{"core", "work", "adaptive-theme"}},
+			Current:  selection.Snapshot{Profiles: []string{"core"}, ExtraTags: []string{}, EffectiveTags: []string{"core"}},
+			Added: selection.Changes{
+				Profiles: []string{}, ExtraTags: []string{}, EffectiveTags: []string{}, ManagedEntries: []string{}, Dependencies: []string{}, Provisioners: []string{},
+			},
+			Removed: selection.Changes{
+				Profiles: []string{"work"}, ExtraTags: []string{"adaptive-theme"}, EffectiveTags: []string{"work", "adaptive-theme"},
+				ManagedEntries: []string{"~/.work"}, Dependencies: []string{"work-tool"}, Provisioners: []string{"gentle-ai"},
+			},
+			MissingProfiles: []string{},
+			StaleExtraTags:  []string{},
+		},
+		AcknowledgementRequired: true,
+		AcknowledgementAccepted: true,
+	}
+	var out bytes.Buffer
+	renderSelectionChange(&out, change)
+	assertGolden(t, "selection_change.golden", out.Bytes())
+}

@@ -29,12 +29,16 @@
         ]
       },
       "added": {
+        "profiles": [],
+        "extra_tags": [],
         "effective_tags": [],
         "managed_entries": [],
         "dependencies": [],
         "provisioners": []
       },
       "removed": {
+        "profiles": [],
+        "extra_tags": [],
         "effective_tags": [],
         "managed_entries": [
           "~/.retired"

@@ -119,12 +119,15 @@ entries:
 	})
 	saveInstalledSelection(t, stateRoot, "core")
 
-	out := runUpdate(t, "--yes", "--profile", "work", "--tag", "extra",
+	out := runUpdate(t, "--yes", "--acknowledge-selection-change", "--profile", "work", "--tag", "extra",
 		"--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
 
 	if want := "Selection: source=explicit profiles=work extra-tags=extra effective-tags=work,extra"; !strings.Contains(out, want) {
 		t.Fatalf("output missing selection report %q:\n%s", want, out)
+	}
+	if want := "Acknowledgement: required=true accepted=true"; !strings.Contains(out, want) {
+		t.Fatalf("output missing accepted selection change %q:\n%s", want, out)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".core")); !os.IsNotExist(err) {
 		t.Fatalf("recorded core selection leaked into explicit update: %v", err)
@@ -143,6 +146,170 @@ entries:
 	}
 	if got, want := meta.InstalledSelection.ExtraTags, []string{"extra"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("ExtraTags = %#v, want %#v", got, want)
+	}
+}
+
+func TestUpdateYesSelectionReductionRequiresDedicatedAcknowledgement(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core": "core\n",
+		"configs/work": "work\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+  work:
+    tags: [work]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+  - source: configs/work
+    target: ~/.work
+    strategy: symlink
+    tags: [work]
+`,
+	})
+	saveInstalledSelection(t, stateRoot, "core")
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"update", "--yes", "--output", "json", "--profile", "work",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != cli.ExitError {
+		t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitError, out.String(), errOut.String())
+	}
+	var env struct {
+		Data struct {
+			Code   string           `json:"code"`
+			Change selection.Change `json:"selection_change"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal JSON: %v\n%s", err, out.String())
+	}
+	if env.Data.Code != "selection-change-acknowledgement-required" ||
+		!env.Data.Change.AcknowledgementRequired ||
+		env.Data.Change.AcknowledgementAccepted {
+		t.Fatalf("selection change error data = %#v", env.Data)
+	}
+	if got, want := env.Data.Change.Delta.Removed.Profiles, []string{"core"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("removed Profiles = %#v, want %#v", got, want)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".work")); !os.IsNotExist(err) {
+		t.Fatalf("selection rejection applied Managed Configuration: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.Profiles, []string{"core"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Installed Selection Profiles = %#v, want %#v", got, want)
+	}
+}
+
+func TestUpdateAdditiveSelectionChangeAppliesWithoutDedicatedAcknowledgement(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core":  "core\n",
+		"configs/extra": "extra\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+  - source: configs/extra
+    target: ~/.extra
+    strategy: symlink
+    tags: [extra]
+`,
+	})
+	saveInstalledSelection(t, stateRoot, "core")
+
+	out := runUpdate(t,
+		"--yes", "--profile", "core", "--tag", "extra",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	)
+	for _, want := range []string{
+		"Added: profiles=(none) extra-tags=extra effective-tags=extra",
+		"Acknowledgement: required=false accepted=true",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing additive change %q:\n%s", want, out)
+		}
+	}
+	if _, err := os.Readlink(filepath.Join(home, ".extra")); err != nil {
+		t.Fatalf("additive selection did not apply extra Managed Entry: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.ExtraTags, []string{"extra"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Installed Selection extra Tags = %#v, want %#v", got, want)
+	}
+}
+
+func TestUpdateInteractiveSelectionReductionCanBeDeclinedBeforeMutation(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/core": "core\n",
+		"configs/work": "work\n",
+		"dots.yaml": `version: 1
+profiles:
+  core:
+    tags: [core]
+  work:
+    tags: [work]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+  - source: configs/work
+    target: ~/.work
+    strategy: symlink
+    tags: [work]
+`,
+	})
+	saveInstalledSelection(t, stateRoot, "core")
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("n\n"))
+	cmd.SetArgs([]string{
+		"update", "--profile", "work", "--no-tui",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "Installed Selection change declined; operation canceled before mutation.") {
+		t.Fatalf("output missing decline confirmation:\n%s", out.String())
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".work")); !os.IsNotExist(err) {
+		t.Fatalf("declined selection change applied Managed Configuration: %v", err)
 	}
 }
 
