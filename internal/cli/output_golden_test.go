@@ -13,6 +13,7 @@ import (
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/selectionmigration"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 	"github.com/yersonargotev/dots/internal/upgrade"
@@ -112,6 +113,30 @@ func TestEnvelopeGolden(t *testing.T) {
 				},
 			},
 			golden: "envelope_installed.golden",
+		},
+		{
+			name: "selection migration required",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "status",
+				Status:        statusError,
+				Data: selectionMigrationErrorData{
+					Code: selectionMigrationRequiredCode,
+					Candidate: &selectionmigration.Candidate{
+						Profiles:           []string{"core"},
+						ExtraTags:          []string{"adaptive-theme"},
+						EffectiveTags:      []string{"core", "adaptive-theme"},
+						Confidence:         selectionmigration.ConfidenceHigh,
+						AmbiguityReasons:   []selectionmigration.AmbiguityReason{},
+						RecommendedCommand: "dots install --profile core --tag adaptive-theme",
+					},
+					Remediation: selectionMigrationRemediation{
+						RecommendedCommand: "dots install --profile core --tag adaptive-theme",
+					},
+				},
+				Error: "selection-migration-required: Installation Metadata predates authoritative Installed Selection; run dots install --profile core --tag adaptive-theme",
+			},
+			golden: "envelope_selection_migration_required.golden",
 		},
 		{
 			name: "plan",

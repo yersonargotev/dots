@@ -8,8 +8,16 @@ import (
 
 	"github.com/spf13/cobra"
 	inst "github.com/yersonargotev/dots/internal/installed"
+	"github.com/yersonargotev/dots/internal/selectionmigration"
 	"github.com/yersonargotev/dots/internal/state"
 )
+
+type installedReport struct {
+	inst.Report
+	SelectionMigration *selectionmigration.Candidate `json:"selection_migration,omitempty"`
+}
+
+func (r installedReport) HasFindings() bool { return false }
 
 func newInstalledCommand() *cobra.Command {
 	var (
@@ -49,8 +57,19 @@ func newInstalledCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return renderOrEmit(cmd, report, func() error {
+			analysis, err := selectionmigration.Analyze(*m, meta, selectionmigration.Options{
+				OS: runtime.GOOS, Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
+			})
+			if err != nil {
+				return err
+			}
+			fullReport := installedReport{Report: report}
+			if analysis.Required {
+				fullReport.SelectionMigration = analysis.Candidate
+			}
+			return renderOrEmit(cmd, fullReport, func() error {
 				renderInstalled(cmd.OutOrStdout(), report)
+				renderSelectionMigration(cmd.OutOrStdout(), fullReport.SelectionMigration)
 				return nil
 			})
 		},
@@ -61,6 +80,22 @@ func newInstalledCommand() *cobra.Command {
 	cmd.Flags().StringVar(&home, "home", "", "home directory for resolving manifest targets (default: the current user's home); use a sandbox path for validation")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")
 	return cmd
+}
+
+func renderSelectionMigration(w io.Writer, candidate *selectionmigration.Candidate) {
+	if candidate == nil {
+		return
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Selection migration candidate (non-authoritative)")
+	fmt.Fprintf(w, "  Profiles: %s\n", renderListOrNone(candidate.Profiles))
+	fmt.Fprintf(w, "  Extra Tags: %s\n", renderListOrNone(candidate.ExtraTags))
+	fmt.Fprintf(w, "  Effective Tags: %s\n", renderListOrNone(candidate.EffectiveTags))
+	fmt.Fprintf(w, "  Confidence: %s\n", candidate.Confidence)
+	fmt.Fprintf(w, "  Ambiguity Reasons: %s\n", renderListOrNone(candidate.AmbiguityReasonStrings()))
+	if candidate.RecommendedCommand != "" {
+		fmt.Fprintf(w, "  Recommended Command: %s\n", candidate.RecommendedCommand)
+	}
 }
 
 func renderInstalled(w io.Writer, report inst.Report) {

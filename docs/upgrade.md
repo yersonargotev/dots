@@ -65,15 +65,26 @@ reuse the Installed Selection:
 dots upgrade --yes
 ```
 
+For Installation Metadata v1/v2 without an Installed Selection, upgrade derives
+a non-authoritative Selection Migration Candidate from historical Managed Entry
+and Provisioner records plus current manifest, target, and Source of Truth
+evidence. Only an unambiguous candidate can be confirmed interactively.
+Ambiguous or absent evidence requires repeated `--profile` and `--tag` flags
+that state the complete selection. `--yes`, JSON output, and other
+non-interactive runs fail before binary or repository mutation with the stable
+`selection-migration-required` error and a recommended explicit command when
+possible. Upgrade never chooses an implicit default.
+
 Selection is validated before binary replacement and re-resolved against the
 refreshed manifest before Managed Configuration is applied. Upgrade reports
 effective Tag and selected Managed Entry, Dependency, and Provisioner additions
 and removals before application. Missing Profiles and explicit extra Tags no
 longer declared by selectable manifest surfaces stop the mutating phase without
 an implicit default or automatic intent rewrite. Removed surfaces are never
-automatically deleted or uninstalled. Only terminal success refreshes Installed
-Selection metadata; binary, update, Provisioner, or continuation failures
-preserve the previous selection.
+automatically deleted or uninstalled. Only terminal success records or refreshes
+Installed Selection metadata; declined migration confirmation, binary, update,
+Provisioner, or continuation failures preserve the previous state and legacy
+ownership records.
 
 ## Source of Truth flags
 
@@ -94,7 +105,8 @@ dots upgrade \
 Use temporary `--home`, `--source-root`, and `--state-root` values when testing
 upgrade behavior so real workstation configuration is never modified.
 
-After an upgrade, `dots installed` provides the official read-only inventory for
-what Installation Metadata currently records, including Profile/Tag coverage,
-Provisioner runs, and Source of Truth provenance captured by recent installs or
-updates.
+After an upgrade, `dots installed` provides the official read-only report for
+what Installation Metadata currently records. It keeps the authoritative
+Installed Selection, any non-authoritative Selection Migration Candidate, and
+historical Profile/Tag coverage, Managed Entries, Provisioner runs, and Source
+of Truth provenance separate.

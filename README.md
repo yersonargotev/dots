@@ -95,6 +95,18 @@ after Managed Entries and Provisioners finish. A machine with no recorded
 selection must pass an explicit `--profile` or `--tag`; selection-aware commands
 never invent an implicit Profile.
 
+Machines with Installation Metadata v1/v2 may receive a non-authoritative
+Selection Migration Candidate derived from historical Managed Entry and
+Provisioner records plus current manifest, target, and Source of Truth evidence.
+Only an unambiguous candidate can be confirmed during an interactive `update` or
+`upgrade`. Ambiguous or absent evidence requires repeated `--profile`/`--tag`
+flags for the complete selection. `--yes` and JSON/non-interactive runs instead
+return `selection-migration-required`, with a recommended explicit command when
+possible. The Installed Selection is recorded only after terminal success;
+legacy ownership inventory is preserved, and no implicit default is chosen.
+Use `dots installed` to inspect the authoritative selection, migration
+candidate, and historical inventory as separate sections.
+
 ### Machine-readable output
 
 Scripts and agents can request a stable JSON envelope from result-producing

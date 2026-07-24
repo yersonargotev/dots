@@ -39,7 +39,7 @@ func TestInstalledJSONEnvelope(t *testing.T) {
 		t.Fatalf("status = %q, want ok", env.Status)
 	}
 	data := string(env.Data)
-	for _, want := range []string{`"managed_entries"`, `"tags"`, `"profiles"`, `"provenance"`, `"source_revision": "abc123"`, `"profiles_source": "recorded"`} {
+	for _, want := range []string{`"managed_entries"`, `"tags"`, `"profiles"`, `"provenance"`, `"source_revision": "abc123"`, `"profiles_source": "recorded"`, `"selection_migration"`, `"ambiguity_reasons"`} {
 		if !strings.Contains(data, want) {
 			t.Fatalf("installed JSON missing %s\ndata:\n%s", want, data)
 		}
@@ -70,7 +70,7 @@ func TestInstalledTextExplainsPartialProfile(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
 	}
-	for _, want := range []string{"Installed inventory", "Installed Selection: none recorded", "Historical inventory (non-authoritative)", "Managed Entries (1)", "Tags represented: core", "Profiles", "Notes", "inferred-from-manifest"} {
+	for _, want := range []string{"Installed inventory", "Installed Selection: none recorded", "Historical inventory (non-authoritative)", "Managed Entries (1)", "Tags represented: core", "Profiles", "Notes", "inferred-from-manifest", "Selection migration candidate (non-authoritative)", "Confidence:"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("text output missing %q\noutput:\n%s", want, out.String())
 		}

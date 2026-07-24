@@ -147,6 +147,68 @@ func assertContinuationSelectionArgs(t *testing.T, args []string) {
 	}
 }
 
+func TestUpgradeRequiresExplicitLegacyMigrationBeforeBinaryMutation(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available on PATH")
+	}
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	_, sourceRoot := newContinuationRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	target := filepath.Join(home, ".core")
+	if err := os.Symlink(filepath.Join(sourceRoot, "configs/core"), target); err != nil {
+		t.Fatalf("seed managed target: %v", err)
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{
+		Version: 2,
+		Entries: []state.Record{{
+			Target: target, Source: "configs/core", Strategy: "symlink",
+			Profiles: []string{"core"}, Tags: []string{"core"},
+		}},
+	}); err != nil {
+		t.Fatalf("save legacy metadata: %v", err)
+	}
+
+	originalExecutable := currentExecutable
+	originalPreview := previewUpgrade
+	originalExecute := executeUpgrade
+	t.Cleanup(func() {
+		currentExecutable = originalExecutable
+		previewUpgrade = originalPreview
+		executeUpgrade = originalExecute
+	})
+	currentExecutable = func() (string, error) { return "/tmp/fake-dots", nil }
+	plan := upgrade.Plan{Channel: upgrade.ChannelRelease, Action: upgrade.ActionReplaceBinary}
+	previewUpgrade = func(_ context.Context, _ upgrade.Options) (upgrade.Plan, error) { return plan, nil }
+	executed := false
+	executeUpgrade = func(_ context.Context, _ upgrade.Options) (upgrade.Plan, error) {
+		executed = true
+		return plan, nil
+	}
+
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"upgrade", "--yes",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), selectionMigrationRequiredCode) {
+		t.Fatalf("upgrade error = %v, want migration-required\n%s", err, out.String())
+	}
+	if executed {
+		t.Fatal("upgrade mutated the binary before explicit legacy migration")
+	}
+	meta, loadErr := state.Load(state.Path(stateRoot))
+	if loadErr != nil {
+		t.Fatalf("load metadata: %v", loadErr)
+	}
+	if meta.Version != 2 || meta.InstalledSelection != nil {
+		t.Fatalf("upgrade mutated legacy metadata: %#v", meta)
+	}
+}
+
 func newContinuationRepo(t *testing.T) (string, string) {
 	t.Helper()
 	origin := t.TempDir()

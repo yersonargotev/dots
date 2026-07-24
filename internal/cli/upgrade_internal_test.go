@@ -26,3 +26,21 @@ func TestUpgradeContinuationArgsDoNotMarkDefaultFileChanged(t *testing.T) {
 		}
 	}
 }
+
+func TestUpgradeContinuationArgsPreserveConfirmedMigrationSource(t *testing.T) {
+	intent := selection.Intent{
+		Source:    selection.SourceMigration,
+		Profiles:  []string{"core"},
+		ExtraTags: []string{"adaptive-theme"},
+	}
+	got := upgradeContinuationArgs("dots.yaml", false, intent, "/src", "/home", "/state", false, false, false, upgrade.Plan{})
+	wantPrefix := []string{
+		"dots", "upgrade", "--continue",
+		"--selection-source", "migration",
+		"--selection-profile", "core",
+		"--selection-tag", "adaptive-theme",
+	}
+	if len(got) < len(wantPrefix) || !reflect.DeepEqual(got[:len(wantPrefix)], wantPrefix) {
+		t.Fatalf("args prefix = %#v, want %#v", got, wantPrefix)
+	}
+}

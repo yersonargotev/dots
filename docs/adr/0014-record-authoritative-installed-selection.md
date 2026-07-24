@@ -101,3 +101,37 @@ dots to unlink targets, delete ownership or Dependency metadata, uninstall
 Provisioners or capabilities, or otherwise prune historical inventory.
 Explicit selection replacement, reduction acknowledgement, legacy inference,
 and automatic removal remain separate policy.
+
+## Legacy selection migration amendment
+
+Issue #345 authorizes a conservative migration path for Installation Metadata
+v1 and v2. Historical Managed Entry and Provisioner records are combined with
+the current Install Manifest and current target/Source of Truth evidence to
+produce a non-authoritative Selection Migration Candidate. The candidate
+reports ordered Profiles, explicit extra Tags, effective Tags, confidence, and
+deterministic ambiguity reasons. Historical inventory remains evidence only:
+the analysis does not promote its union to authoritative intent, delete legacy
+ownership records, or choose an implicit manifest default.
+
+Only an unambiguous candidate may be offered for interactive confirmation by
+`update` or `upgrade`. Confirmation authorizes that candidate for the current
+run; it does not record an Installed Selection immediately. The selection is
+recorded only after terminal success, under the same commit rule as an explicit
+selection. Declining confirmation, cancellation, dry run, Managed Entry or
+Provisioner failure, continuation failure, or metadata-write failure leaves
+legacy metadata and any previous Installed Selection unchanged.
+
+Ambiguous candidates and metadata with no usable evidence require the operator
+to repeat `--profile` and `--tag` as needed to state the complete selection.
+`--yes`, JSON output, and any other non-interactive execution never confirm a
+candidate. They fail before mutation with the stable
+`selection-migration-required` structured error and include a recommended
+explicit command when the evidence supports one. Explicit selection always
+wins and, after terminal success, records the Installed Selection without
+pruning the historical Managed Entry or Provisioner inventory.
+
+`dots installed` keeps three concerns visibly separate: the authoritative
+Installed Selection, the non-authoritative Selection Migration Candidate, and
+historical inventory. Read-only selection-aware commands likewise do not
+silently consume a migration candidate; until migration succeeds, callers must
+provide an explicit selection.

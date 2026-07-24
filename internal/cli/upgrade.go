@@ -170,7 +170,7 @@ func resolveUpgradeSelection(cmd *cobra.Command, opts updateOptions) (selection.
 	if !cmd.Flags().Changed("file") {
 		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
 	}
-	_, effective, err := resolveUpdateSelection(manifestPath, paths, opts)
+	_, effective, err := resolveUpdateSelection(cmd, manifestPath, paths, opts)
 	return effective, err
 }
 

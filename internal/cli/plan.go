@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/plan"
-	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 func newPlanCommand() *cobra.Command {
@@ -41,7 +41,9 @@ func newPlanCommand() *cobra.Command {
 				return err
 			}
 
-			effective, err := selection.ResolveReadOnly(*m, profiles, extraTags, meta.InstalledSelection)
+			effective, err := resolveReadOnlySelection(*m, meta, profiles, extraTags, readOnlySelectionOptions{
+				Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
+			})
 			if err != nil {
 				return err
 			}

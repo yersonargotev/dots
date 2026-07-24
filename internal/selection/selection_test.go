@@ -361,6 +361,25 @@ func TestResolveReadOnlyClonesSlices(t *testing.T) {
 	}
 }
 
+func TestResolveIntentAcceptsConfirmedMigrationSource(t *testing.T) {
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{
+			"core": {Tags: []string{"core"}},
+		},
+	}
+
+	effective, err := selection.ResolveIntent(m, selection.Intent{Source: selection.SourceMigration, Profiles: []string{"core"}, ExtraTags: []string{"extra"}})
+	if err != nil {
+		t.Fatalf("ResolveIntent: %v", err)
+	}
+	if got, want := effective.Report.Source, selection.SourceMigration; got != want {
+		t.Fatalf("Source = %q, want %q", got, want)
+	}
+	if got, want := effective.Report.EffectiveTags, []string{"core", "extra"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("EffectiveTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestResolvePreservesExplicitSelectionIntent(t *testing.T) {
 	m := manifest.Manifest{Profiles: map[string]manifest.Profile{
 		"core":   {Tags: []string{"core", "shared"}},

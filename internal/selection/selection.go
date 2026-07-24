@@ -14,8 +14,9 @@ import (
 type Source string
 
 const (
-	SourceExplicit Source = "explicit"
-	SourceRecorded Source = "recorded"
+	SourceExplicit  Source = "explicit"
+	SourceRecorded  Source = "recorded"
+	SourceMigration Source = "migration"
 )
 
 // ErrSelectionRequired means that neither invocation arguments nor Installation
@@ -113,9 +114,10 @@ func ResolveReadOnly(m manifest.Manifest, explicitProfiles, explicitTags []strin
 }
 
 // ResolveIntent re-resolves authoritative intent against the current Install
-// Manifest without changing whether its source was explicit or recorded.
+// Manifest without changing whether its source was explicit, recorded, or an
+// interactively confirmed migration candidate.
 func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
-	if intent.Source != SourceExplicit && intent.Source != SourceRecorded {
+	if intent.Source != SourceExplicit && intent.Source != SourceRecorded && intent.Source != SourceMigration {
 		return Effective{}, fmt.Errorf("selection source %q is invalid", intent.Source)
 	}
 	if err := validateIntent(intent.Source, intent.Profiles, intent.ExtraTags); err != nil {

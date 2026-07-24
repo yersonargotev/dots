@@ -83,6 +83,16 @@ Installed Selection:
 dots update --yes
 ```
 
+For Installation Metadata v1/v2 without an Installed Selection, update first
+builds a non-authoritative Selection Migration Candidate from historical
+Managed Entry and Provisioner records plus the current manifest, target, and
+Source of Truth evidence. An interactive update may confirm only an
+unambiguous candidate. Ambiguous or absent evidence requires the complete
+selection to be repeated with `--profile` and `--tag`. `--yes`, JSON output,
+and other non-interactive runs return `selection-migration-required` before
+mutation, with a recommended explicit command when one can be constructed.
+There is no implicit default.
+
 Any supplied `--profile` or `--tag` makes the complete explicit selection win
 for that invocation; dots never merges it with recorded intent. The selection
 is validated before the Installed Repository changes and resolved again against
@@ -93,7 +103,8 @@ or explicit extra Tag no longer declared by any selectable manifest surface
 stops application with remediation and structured delta data instead of
 choosing an implicit default or silently rewriting intent. Removed surfaces are
 informational and are never automatically deleted or uninstalled. Only terminal
-success refreshes the Installed Selection, so dry runs, cancellations, and
+success records or refreshes the Installed Selection, so dry runs, declined
+migration confirmation, cancellations, and
 failed Managed Entry or Provisioner work preserve the previous intent.
 
 ## Profiles and provisioners
@@ -127,10 +138,11 @@ provisioners:
 ```
 
 After installs or updates, use `dots installed` to inspect the read-only
-Installation Metadata inventory: recorded Managed Entries, represented Tags,
-recorded or inferred Profiles, Provisioner runs, and captured Source of Truth
-provenance when available. The command is useful when you need to answer what is
-currently installed without manually reading `~/.local/state/dots/installed.json`.
+Installation Metadata inventory: the authoritative Installed Selection, any
+non-authoritative Selection Migration Candidate, and historical recorded
+Managed Entries, represented Tags, Profile coverage, Provisioner runs, and
+captured Source of Truth provenance. These sections remain separate; inspecting
+a candidate never records it or deletes legacy ownership records.
 
 To keep that requirement discoverable, both `install` and `update` print a one-line hint when the active profile skips provisioners another profile would select on this OS:
 

@@ -1,0 +1,6 @@
+Legacy Installation Metadata requires an authoritative Installed Selection.
+Migration candidate: profiles=core extra-tags=adaptive-theme effective-tags=core,adaptive-theme confidence=high
+Explicit alternative: dots install --profile core --tag adaptive-theme
+Confirm this migration candidate before update/upgrade? [y/N] 
+Non-interactive error:
+Error: selection-migration-required: Installation Metadata predates authoritative Installed Selection; run dots install --profile core --tag adaptive-theme
