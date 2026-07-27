@@ -765,7 +765,7 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 		if strings.Contains(dep.ManualDebian, "snap install ghostty --classic") && strings.Contains(dep.ManualDebian, "requires sudo") {
 			ghosttyManualFound = true
 		}
-		if dep.DarwinApp == "Ghostty.app" {
+		if dep.DarwinApp == "Ghostty.app" && dep.BrewCask == "ghostty" && dep.Brew == "" {
 			ghosttyDarwinAppFound = true
 		}
 	}

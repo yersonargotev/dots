@@ -63,6 +63,9 @@ func TestInstallYesAcceptsDarwinAppAfterCaskInstall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Install() error = %v", err)
 	}
+	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0].args, []string{"install", "--cask", "ghostty"}) {
+		t.Fatalf("runner calls = %#v, want explicit Ghostty cask install", runner.calls)
+	}
 	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusInstalled {
 		t.Fatalf("report items = %#v, want Ghostty installed via app-bundle recheck", report.Items)
 	}
