@@ -174,7 +174,7 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		return StateOK, nil
 	}
 
-	if isSubsetOwned(entry.Ownership) && metadataMatchesEntry(meta, target, entry.Source, entry.Strategy) {
+	if isSubsetOwned(entry.Ownership) && meta.MatchesEntry(target, entry.Source, entry.Strategy) {
 		subset, err := subsetContent(entry.Ownership, target, sourceAbs)
 		if err != nil {
 			return "", err
@@ -190,15 +190,10 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 	// The target diverges from the Source of Truth. Installation Metadata is the
 	// discriminator: if dots installed this target, the divergence is Drift; if
 	// not, it is a Conflict with a file dots never managed.
-	if metadataMatchesEntry(meta, target, entry.Source, entry.Strategy) {
+	if meta.MatchesEntry(target, entry.Source, entry.Strategy) {
 		return StateDrifted, nil
 	}
 	return StateConflict, nil
-}
-
-func metadataMatchesEntry(meta state.Metadata, target, source, strategy string) bool {
-	rec, ok := meta.FindByTarget(target)
-	return ok && rec.HasSource(source) && rec.Strategy == strategy
 }
 
 func targetContainsCompatibleRecordedSource(entry manifest.Entry, target, sourceRoot string, meta state.Metadata, defaultSource string) bool {

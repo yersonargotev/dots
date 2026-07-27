@@ -92,8 +92,8 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 	if err != nil {
 		return err
 	}
-	if meta.Version < state.CurrentVersion {
-		meta.Version = state.CurrentVersion
+	if meta.Version < 2 {
+		meta.Version = 2
 	}
 	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
 

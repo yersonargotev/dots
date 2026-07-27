@@ -81,6 +81,83 @@ func TestWorkstationAndMobileComposeAntigravitySettingsInSandbox(t *testing.T) {
 	}
 }
 
+func TestWorkstationAndMobileExpandLegacyAntigravityMetadataInSandbox(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	t.Setenv("HOME", t.TempDir())
+	stubGentleAIProvisionerTools(t)
+
+	source := filepath.Join(repoRoot, "configs", "antigravity", "settings.json")
+	baseline, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatalf("read baseline: %v", err)
+	}
+	var targetJSON map[string]any
+	if err := json.Unmarshal(baseline, &targetJSON); err != nil {
+		t.Fatalf("parse baseline: %v", err)
+	}
+	targetJSON["runtimeOnly"] = "keep"
+	targetData, err := json.Marshal(targetJSON)
+	if err != nil {
+		t.Fatalf("encode legacy target: %v", err)
+	}
+	target := filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, targetData, 0o600); err != nil {
+		t.Fatalf("write legacy target: %v", err)
+	}
+	hash, err := state.HashFile(source)
+	if err != nil {
+		t.Fatalf("hash baseline: %v", err)
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: 2, Entries: []state.Record{{
+		Target: target, Source: "configs/antigravity/settings.json", Strategy: "copy", Hash: hash,
+		Profiles: []string{"workstation"}, Tags: []string{"agents"},
+	}}}); err != nil {
+		t.Fatalf("save legacy metadata: %v", err)
+	}
+
+	install := cli.NewRootCommand()
+	var out bytes.Buffer
+	install.SetOut(&out)
+	install.SetErr(&out)
+	install.SetArgs([]string{
+		"install", "--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "workstation", "--profile", "mobile", "--skip-deps",
+		"--source-root", repoRoot, "--home", home, "--state-root", stateRoot, "--yes",
+	})
+	if err := install.Execute(); err != nil {
+		t.Fatalf("legacy expansion install failed: %v\noutput:\n%s", err, out.String())
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read expanded target: %v", err)
+	}
+	for _, want := range []string{`"runtimeOnly": "keep"`, `"dart-mcp-server"`} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("expanded target missing %s:\n%s", want, got)
+		}
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load migrated metadata: %v", err)
+	}
+	rec, ok := meta.FindByTarget(target)
+	if !ok || !rec.HasSource("configs/antigravity/mobile-mcp-settings.json") {
+		t.Fatalf("migrated target record = %+v, want mobile contributor", rec)
+	}
+	if meta.Version != state.CurrentVersion || meta.InstalledSelection == nil ||
+		!reflect.DeepEqual(meta.InstalledSelection.Profiles, []string{"workstation", "mobile"}) {
+		t.Fatalf("migrated metadata = %+v, want terminal v%d selection", meta, state.CurrentVersion)
+	}
+}
+
 // TestAntigravityAgentsProfileSeedsUserBaselineInSandbox proves that dots seeds the
 // user-owned Antigravity settings baseline with a copy strategy (regular files, not symlinks)
 // before the gentle-ai provisioner runs, that the settings contain the expected baseline keys,

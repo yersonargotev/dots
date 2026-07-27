@@ -173,6 +173,29 @@ func TestEnvelopeGolden(t *testing.T) {
 			golden: "envelope_plan.golden",
 		},
 		{
+			name: "uninstall",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "uninstall",
+				Status:        statusOK,
+				Data: uninstallReport{
+					DryRun:    true,
+					StateRoot: "/home/user/.local/state/dots",
+					Plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{
+						Source: "configs/antigravity/settings.json",
+						Sources: []string{
+							"configs/antigravity/settings.json",
+							"configs/antigravity/mobile-mcp-settings.json",
+						},
+						Target:   "/home/user/.gemini/antigravity-cli/settings.json",
+						Strategy: "copy",
+						Status:   plan.UninstallRemove,
+					}}},
+				},
+			},
+			golden: "envelope_uninstall.golden",
+		},
+		{
 			name: "doctor",
 			env: envelope{
 				SchemaVersion: schemaVersion,

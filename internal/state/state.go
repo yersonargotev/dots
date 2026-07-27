@@ -187,6 +187,13 @@ func (m Metadata) FindByTarget(target string) (Record, bool) {
 	return Record{}, false
 }
 
+// MatchesEntry reports whether Installation Metadata proves that source and
+// strategy contribute to the managed target.
+func (m Metadata) MatchesEntry(target, source, strategy string) bool {
+	rec, ok := m.FindByTarget(target)
+	return ok && rec.Strategy == strategy && rec.HasSource(source)
+}
+
 // FindProvisioner returns the last result for a selected Provisioner command.
 func (m Metadata) FindProvisioner(profile, tool, executable string, args []string) (ProvisionerRecord, bool) {
 	for _, r := range m.Provisioners {

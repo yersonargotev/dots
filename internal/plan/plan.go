@@ -197,9 +197,15 @@ func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
 		return StatusUnchanged, nil
 	}
 	rec, ok := meta.FindByTarget(action.Target)
-	trusted := ok && rec.Strategy == action.Strategy
+	recordedSources := rec.SourceList()
+	trusted := ok && rec.Strategy == action.Strategy && len(recordedSources) > 0
+	selectedSources := make(map[string]struct{}, len(action.Sources))
 	for _, source := range action.Sources {
-		trusted = trusted && rec.HasSource(source)
+		selectedSources[source] = struct{}{}
+	}
+	for _, source := range recordedSources {
+		_, selected := selectedSources[source]
+		trusted = trusted && selected
 	}
 	if !trusted {
 		return StatusConflict, nil
@@ -487,7 +493,7 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta sta
 			return StatusConflict, nil
 		}
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
-			if isSubsetOwned(entry.Ownership) && metadataMatchesEntry(meta, target, entry.Source, entry.Strategy) {
+			if isSubsetOwned(entry.Ownership) && meta.MatchesEntry(target, entry.Source, entry.Strategy) {
 				if entry.Ownership == "json-subset" {
 					relation, relationErr := configsubset.AnalyzeJSONFiles(target, sourceAbs)
 					if relationErr != nil {
@@ -518,11 +524,6 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta sta
 	default:
 		return StatusConflict, nil
 	}
-}
-
-func metadataMatchesEntry(meta state.Metadata, target, source, strategy string) bool {
-	rec, ok := meta.FindByTarget(target)
-	return ok && rec.HasSource(source) && rec.Strategy == strategy
 }
 
 func targetContainsCompatibleRecordedSource(entry manifest.Entry, target, sourceRoot string, meta state.Metadata, defaultSource string) bool {

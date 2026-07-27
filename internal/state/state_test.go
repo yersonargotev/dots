@@ -198,6 +198,15 @@ func TestRecordSourceListPreservesLegacyAndCompositeContributors(t *testing.T) {
 	if !composite.HasSource("configs/mobile.json") {
 		t.Fatal("composite HasSource() = false, want contributor match")
 	}
+	meta := state.Metadata{Entries: []state.Record{{
+		Target: "/home/user/.config/shared.json", Source: composite.Source, Sources: composite.Sources, Strategy: "copy",
+	}}}
+	if !meta.MatchesEntry("/home/user/.config/shared.json", "configs/mobile.json", "copy") {
+		t.Fatal("MatchesEntry() = false, want composite contributor ownership proof")
+	}
+	if meta.MatchesEntry("/home/user/.config/shared.json", "configs/mobile.json", "symlink") {
+		t.Fatal("MatchesEntry() = true for wrong strategy")
+	}
 }
 
 func TestHashFileIsStableAndContentSensitive(t *testing.T) {

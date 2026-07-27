@@ -1,0 +1,27 @@
+{
+  "schema_version": "5",
+  "command": "uninstall",
+  "status": "ok",
+  "data": {
+    "dry_run": true,
+    "state_root": "/home/user/.local/state/dots",
+    "plan": {
+      "actions": [
+        {
+          "target": "/home/user/.gemini/antigravity-cli/settings.json",
+          "source": "configs/antigravity/settings.json",
+          "sources": [
+            "configs/antigravity/settings.json",
+            "configs/antigravity/mobile-mcp-settings.json"
+          ],
+          "strategy": "copy",
+          "status": "remove"
+        }
+      ]
+    },
+    "result": {
+      "removed": null,
+      "restored_sets": null
+    }
+  }
+}

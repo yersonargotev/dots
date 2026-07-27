@@ -133,6 +133,41 @@ func TestBuildRejectsIncompatibleSharedJSONSubsetBeforeApply(t *testing.T) {
 	}
 }
 
+func TestBuildExpandsTrustedSingleContributorIntoCompatibleSharedTarget(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "configs/base.json", `{"editor":{"theme":"dark"}}`)
+	writeSource(t, sourceRoot, "configs/mobile.json", `{"mobile":true}`)
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"editor":{"theme":"dark"},"userOnly":"keep"}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"base", "mobile"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"base"}},
+			{Source: "configs/mobile.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"mobile"}},
+		},
+	}
+	meta := state.Metadata{Version: 2, Entries: []state.Record{{
+		Target: target, Source: "configs/base.json", Strategy: "copy",
+	}}}
+
+	got, err := plan.Build(m, plan.Options{
+		Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home, Metadata: meta,
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(got.Actions) != 1 || got.Actions[0].Status != plan.StatusUpdate {
+		t.Fatalf("Actions = %+v, want one trusted expansion update", got.Actions)
+	}
+}
+
 func TestBuildRejectsUnsupportedDuplicateTargetDuringPlanning(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()
