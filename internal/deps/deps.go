@@ -118,10 +118,10 @@ func checkResult(dep manifest.Dependency, opts Options, look Lookup, fontLook Fo
 		// by scanning the workstation font directories for any compatible file
 		// pattern, starting with the primary match.
 		matches := dep.FontMatches()
-		return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: fontProbeLabel(matches), Present: fontPresent(matches, fontLook)}
+		return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: fontProbeLabel(matches), Present: DependencyPresent(dep, opts, look, fontLook)}
 	}
 	probes := dep.Probes()
-	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: commandsPresent(probes, look) || darwinAppPresent(dep.DarwinApp, opts)}
+	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: DependencyPresent(dep, opts, look, fontLook)}
 }
 
 func darwinAppPresent(app string, opts Options) bool {
