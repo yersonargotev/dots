@@ -26,6 +26,10 @@
       },
       {
         "source": "configs/git/config",
+        "sources": [
+          "configs/git/config",
+          "configs/git/work.json"
+        ],
         "target": "/home/user/.gitconfig",
         "strategy": "copy",
         "status": "conflict",
