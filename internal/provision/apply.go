@@ -58,7 +58,7 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
 
-		if missing := missingDependencies(prov, look, fontLook); len(missing) > 0 {
+		if missing := missingDependencies(prov, opts, look, fontLook); len(missing) > 0 {
 			report.Items = append(report.Items, RunItem{
 				Tool:       prov.Tool,
 				Executable: executable,
@@ -91,31 +91,20 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 
 // missingDependencies returns the probes of the Provisioner's declared
 // dependencies that are absent on the workstation, in declared order.
-func missingDependencies(prov manifest.Provisioner, look deps.Lookup, fontLook deps.FontLookup) []string {
+func missingDependencies(prov manifest.Provisioner, opts Options, look deps.Lookup, fontLook deps.FontLookup) []string {
 	var missing []string
 	for _, dep := range prov.Dependencies {
-		if dep.IsFont() {
-			matches := dep.FontMatches()
-			if !fontDependencyPresent(matches, fontLook) {
-				missing = append(missing, fontDependencyLabel(matches))
-			}
+		if deps.DependencyPresent(dep, deps.Options{OS: opts.OS, AppLookup: opts.AppLookup}, look, fontLook) {
 			continue
 		}
-		probe := dep.Probe()
-		if !look(probe) {
-			missing = append(missing, probe)
+		if dep.IsFont() {
+			matches := dep.FontMatches()
+			missing = append(missing, fontDependencyLabel(matches))
+			continue
 		}
+		missing = append(missing, dep.Probe())
 	}
 	return missing
-}
-
-func fontDependencyPresent(matches []string, fontLook deps.FontLookup) bool {
-	for _, match := range matches {
-		if fontLook(match) {
-			return true
-		}
-	}
-	return false
 }
 
 func fontDependencyLabel(matches []string) string {

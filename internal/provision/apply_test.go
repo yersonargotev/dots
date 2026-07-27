@@ -42,6 +42,14 @@ func fontLookupWith(present ...string) deps.FontLookup {
 	return func(match string) bool { return set[match] }
 }
 
+func appLookupWith(present ...string) deps.AppLookup {
+	set := make(map[string]bool, len(present))
+	for _, p := range present {
+		set[p] = true
+	}
+	return func(app string) bool { return set[app] }
+}
+
 func gentleAIProvisioner(agent string) manifest.Provisioner {
 	return manifest.Provisioner{
 		Tool: "gentle-ai",

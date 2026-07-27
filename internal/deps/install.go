@@ -216,7 +216,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			}
 			return report, fmt.Errorf("bootstrap %q: %w", action.Dependency, err)
 		}
-		if !actionPresent(action, look, fontLook) {
+		if !actionPresent(action, opts, look, fontLook) {
 			manual := unresolvedToolchainRemediation(action, look)
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
@@ -321,7 +321,7 @@ func runBootstrap(action InstallAction, runner Runner) error {
 	return nil
 }
 
-func actionPresent(action InstallAction, look Lookup, fontLook FontLookup) bool {
+func actionPresent(action InstallAction, opts Options, look Lookup, fontLook FontLookup) bool {
 	matches := action.FontMatches
 	if len(matches) == 0 && action.FontMatch != "" {
 		matches = []string{action.FontMatch}
@@ -333,7 +333,7 @@ func actionPresent(action InstallAction, look Lookup, fontLook FontLookup) bool 
 	if len(probes) == 0 && action.Probe != "" {
 		probes = []string{action.Probe}
 	}
-	return commandsPresent(probes, look)
+	return commandsPresent(probes, look) || darwinAppPresent(action.DarwinApp, opts)
 }
 
 func installArgsWithConfirmation(action InstallAction) []string {

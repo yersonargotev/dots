@@ -205,6 +205,7 @@ Tag-scoped Dependency Sets use:
 | `name` | Yes | Human-readable dependency name. Also used as the executable probe when `command` is omitted. |
 | `requirement` | No | `required` or `optional`. Omitted means `required`. Required Dependencies gate integrated install; optional Dependencies are reported but do not block Managed Configuration. |
 | `command` | No | Single executable name to probe on `PATH`. |
+| `darwin_app` | No | macOS `.app` bundle name that can satisfy the Dependency when its command is absent from `PATH`. Dots checks the selected user's `~/Applications` and the system `/Applications`; the value must be a bundle name such as `Ghostty.app`, not a path. Ignored outside macOS. |
 | `manual` | No | Dependency-specific remediation for manual-only tools. Use it when generic package-manager guidance would hide required user choices, privileges, or verification steps. |
 | `manual_debian` | No | Debian/Ubuntu-specific manual remediation. Prefer this over `manual` when instructions mention Debian/Ubuntu-only packages, commands, privileges, or verification. |
 | `commands` | No | Multiple executable names that must all be present. Use this for manager-owned toolchains where both the manager and runtime commands matter. |
@@ -254,7 +255,7 @@ Current dependency package coverage:
 | `fd` | `fd` | `fd` | Linuxbrew opt-in/manual | `fd-find` | `fd` |
 | `GitHub CLI` | `gh` | `gh` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `Playwright CLI` | `playwright-cli` | `playwright-cli` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
-| `ghostty` | `ghostty` | `ghostty` | Manual; Ubuntu guidance includes Ghostty upstream binary docs, the community `.deb` installer command, and notes `snap install ghostty --classic` requires sudo/password interactivity | Manual | Manual |
+| `ghostty` | `ghostty` or macOS `Ghostty.app` | `brew install --cask ghostty` | Manual; Ubuntu guidance includes Ghostty upstream binary docs, the community `.deb` installer command, and notes `snap install ghostty --classic` requires sudo/password interactivity | Manual | Manual |
 | `Warp` | `warp-terminal` | Manual | Manual | Manual | Manual |
 | `atuin` | `atuin` | `atuin` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `bat` | `bat` | `bat` | User-local / Linuxbrew opt-in/manual | `bat` | `bat` |

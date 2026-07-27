@@ -68,6 +68,43 @@ func TestPlanProducesStructuredInstallActionsForMappedPackages(t *testing.T) {
 	}
 }
 
+func TestPlanUsesDarwinAppAsAlternativeToCommandProbe(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/ghostty/config.ghostty", Target: "~/.config/ghostty/config.ghostty", Strategy: "symlink", Tags: []string{"desktop"},
+			Dependencies: []manifest.Dependency{{
+				Name: "ghostty", Command: "ghostty", DarwinApp: "Ghostty.app", BrewCask: "ghostty",
+			}},
+		}},
+	}
+	tests := []struct {
+		name        string
+		os          string
+		apps        deps.AppLookup
+		wantActions int
+	}{
+		{name: "installed Darwin app", os: "darwin", apps: appLookupSet("Ghostty.app"), wantActions: 0},
+		{name: "missing Darwin app", os: "darwin", apps: appLookupSet(), wantActions: 1},
+		{name: "Linux ignores Darwin app", os: "linux", apps: appLookupSet("Ghostty.app"), wantActions: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report, err := deps.Plan(m, deps.Options{
+				Profile: "default", OS: tt.os, AppLookup: tt.apps,
+			}, lookupSet(), fontLookupSet(), deps.TierHomebrew)
+			if err != nil {
+				t.Fatalf("Plan() error = %v", err)
+			}
+			if len(report.Actions) != tt.wantActions {
+				t.Fatalf("Actions = %#v, want len %d", report.Actions, tt.wantActions)
+			}
+		})
+	}
+}
+
 func TestPlanUsesAtuinUserLocalProviderOnLinuxWhenDistroProviderUnavailable(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,

@@ -3,6 +3,7 @@ package provision
 import (
 	"strings"
 
+	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/profilesel"
 )
@@ -14,6 +15,7 @@ type Options struct {
 	ExtraTags []string
 	Selection *manifest.Selection
 	OS        string
+	AppLookup deps.AppLookup
 }
 
 // Step is a single planned Provisioner invocation: the exact resolved command

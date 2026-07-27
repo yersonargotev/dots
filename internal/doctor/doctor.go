@@ -31,6 +31,7 @@ type Options struct {
 	SourceRoot string
 	Home       string
 	ToolRunner deps.CommandRunner
+	AppLookup  deps.AppLookup
 }
 
 // Report is the consolidated doctor diagnostic output for a profile.
@@ -106,7 +107,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 		Platform: Platform{Supported: supportedOS(opts.OS), OS: opts.OS},
 	}
 
-	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, Selection: resolved, OS: opts.OS}, look, fontLook, opts.ToolRunner)
+	depReport, err := deps.CheckWithToolProbes(m, deps.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, Selection: resolved, OS: opts.OS, AppLookup: opts.AppLookup}, look, fontLook, opts.ToolRunner)
 	if err != nil {
 		return Report{}, err
 	}
@@ -126,7 +127,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 	}
 	report.Configuration = statusReport
 
-	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, Selection: resolved, OS: opts.OS}, look, fontLook)
+	provReport, err := provision.Check(m, provision.Options{Profile: opts.Profile, Profiles: opts.Profiles, ExtraTags: opts.ExtraTags, Selection: resolved, OS: opts.OS, AppLookup: opts.AppLookup}, look, fontLook)
 	if err != nil {
 		return Report{}, err
 	}

@@ -10,7 +10,9 @@ outside version control.
 
 ## Prerequisites
 
-- **`ghostty`** — declared as an advisory dependency for the desktop profile.
+- **`ghostty`** — declared for the desktop profile; macOS detection accepts
+  either the `ghostty` command or `Ghostty.app`, installed through the
+  `ghostty` Homebrew cask.
 - **Desktop Nerd Font** — declared on the `desktop` profile as shared desktop
   infrastructure. Ghostty consumes this shared requirement for the managed
   `font-family` baseline (`Cascadia Code NF`). The primary macOS package is the

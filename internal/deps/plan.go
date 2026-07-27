@@ -49,6 +49,7 @@ type InstallAction struct {
 	Probes       []string            `json:"probes,omitempty"`
 	FontMatch    string              `json:"font_match,omitempty"`
 	FontMatches  []string            `json:"font_matches,omitempty"`
+	DarwinApp    string              `json:"-"`
 	Toolchain    string              `json:"toolchain,omitempty"`
 	Provider     Tier                `json:"provider,omitempty"`
 	Package      string              `json:"package,omitempty"`
@@ -107,7 +108,7 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 
 	report := PlanReport{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags, Tier: tier}
 	for _, dep := range selected {
-		if dependencyPresent(dep, look, fontLook) {
+		if DependencyPresent(dep, opts, look, fontLook) {
 			continue
 		}
 		action, err := actionFor(dep, opts, tier, look)
@@ -130,7 +131,7 @@ func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) (I
 		fontMatch = fontMatches[0]
 	}
 	probes := dep.Probes()
-	action := InstallAction{Dependency: dep.Name, Requirement: dep.RequirementValue(), Status: InstallActionStatusManual, Probe: dep.Probe(), Probes: probes, FontMatch: fontMatch, FontMatches: fontMatches, Toolchain: strings.TrimSpace(dep.Toolchain), Bootstrap: bootstrapCommands(dep)}
+	action := InstallAction{Dependency: dep.Name, Requirement: dep.RequirementValue(), Status: InstallActionStatusManual, Probe: dep.Probe(), Probes: probes, FontMatch: fontMatch, FontMatches: fontMatches, DarwinApp: strings.TrimSpace(dep.DarwinApp), Toolchain: strings.TrimSpace(dep.Toolchain), Bootstrap: bootstrapCommands(dep)}
 
 	if officialRustupInstallerRunnable(action, opts, look) {
 		action.Status = InstallActionStatusInstallable

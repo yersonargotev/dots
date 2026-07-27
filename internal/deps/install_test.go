@@ -38,6 +38,39 @@ func TestInstallYesExecutesInstallableActionsThroughRunner(t *testing.T) {
 	}
 }
 
+func TestInstallYesAcceptsDarwinAppAfterCaskInstall(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/ghostty/config.ghostty", Target: "~/.config/ghostty/config.ghostty", Strategy: "symlink", Tags: []string{"desktop"},
+			Dependencies: []manifest.Dependency{{
+				Name: "ghostty", Command: "ghostty", DarwinApp: "Ghostty.app", BrewCask: "ghostty",
+			}},
+		}},
+	}
+	appInstalled := false
+	runner := &recordingRunner{afterRun: func() { appInstalled = true }}
+	opts := deps.Options{
+		Profile: "default",
+		OS:      "darwin",
+		AppLookup: func(app string) bool {
+			return app == "Ghostty.app" && appInstalled
+		},
+	}
+
+	report, err := deps.Install(m, opts, lookupSet(), fontLookupSet(), deps.TierHomebrew, runner)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0].args, []string{"install", "--cask", "ghostty"}) {
+		t.Fatalf("runner calls = %#v, want explicit Ghostty cask install", runner.calls)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusInstalled {
+		t.Fatalf("report items = %#v, want Ghostty installed via app-bundle recheck", report.Items)
+	}
+}
+
 func TestInstallYesUsesPackageManagerConfirmationArgs(t *testing.T) {
 	tests := []struct {
 		name       string

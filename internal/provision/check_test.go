@@ -68,6 +68,24 @@ func TestCheckAcceptsProvisionerFontFallbackDependency(t *testing.T) {
 	}
 }
 
+func TestCheckAcceptsProvisionerDarwinAppDependency(t *testing.T) {
+	prov := gentleAIProvisioner("codex")
+	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{
+		Name: "ghostty", Command: "ghostty", DarwinApp: " Ghostty.app ",
+	})
+	m := manifestWithProvisioners(prov)
+
+	report, err := provision.Check(m, provision.Options{
+		Profile: "default", OS: "darwin", AppLookup: appLookupWith("Ghostty.app"),
+	}, lookupWith("gentle-ai", "engram"), fontLookupWith())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if len(report.Items) != 1 || len(report.Items[0].Missing) != 0 {
+		t.Fatalf("readiness = %#v, want no missing deps when Darwin app is installed", report.Items)
+	}
+}
+
 func TestCheckUsesFontLookupForProvisionerFontDependencies(t *testing.T) {
 	prov := gentleAIProvisioner("codex")
 	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{

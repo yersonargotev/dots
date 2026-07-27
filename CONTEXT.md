@@ -77,7 +77,7 @@ A safety check that looks for known credential and private-key patterns in repos
 _Avoid_: security audit, secret validation, token check
 
 **Dependency**:
-An external tool, package, or font required for a managed configuration to work correctly, such as Neovim, Starship, ripgrep, tmux, or a Nerd Font. The Dotfiles CLI declares and checks Dependencies; their presence is detected either as an executable command on the search path or, for non-executable assets such as fonts, by the presence of their installed files.
+An external tool, application, package, or font required for a managed configuration to work correctly, such as Neovim, Ghostty, Starship, ripgrep, tmux, or a Nerd Font. The Dotfiles CLI declares and checks Dependencies; their presence is detected as an executable command on the search path, a declared macOS application bundle, or, for non-executable assets such as fonts, by the presence of their installed files.
 _Avoid_: package, app, required tool
 
 **Dependency Plan**:

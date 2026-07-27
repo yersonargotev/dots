@@ -54,7 +54,7 @@ func Check(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 			Tool:       prov.Tool,
 			Executable: executable,
 			Args:       args,
-			Missing:    missingDependencies(prov, look, fontLook),
+			Missing:    missingDependencies(prov, opts, look, fontLook),
 		})
 	}
 	return report, nil
