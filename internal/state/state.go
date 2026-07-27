@@ -57,11 +57,35 @@ func (p Provenance) Empty() bool {
 type Record struct {
 	Target      string   `json:"target"`
 	Source      string   `json:"source"`
+	Sources     []string `json:"sources,omitempty"`
 	Strategy    string   `json:"strategy"`
 	Hash        string   `json:"hash"`
 	InstalledAt string   `json:"installedAt"`
 	Profiles    []string `json:"profiles,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+}
+
+// SourceList returns every Source of Truth contribution for the managed target.
+// Legacy metadata records only Source; composed subset targets additionally
+// record Sources in deterministic manifest order.
+func (r Record) SourceList() []string {
+	if len(r.Sources) > 0 {
+		return append([]string(nil), r.Sources...)
+	}
+	if r.Source == "" {
+		return nil
+	}
+	return []string{r.Source}
+}
+
+// HasSource reports whether source contributed to this managed target.
+func (r Record) HasSource(source string) bool {
+	for _, candidate := range r.SourceList() {
+		if candidate == source {
+			return true
+		}
+	}
+	return false
 }
 
 // ProvisionerRecord describes the last known result for one selected
@@ -163,6 +187,13 @@ func (m Metadata) FindByTarget(target string) (Record, bool) {
 	return Record{}, false
 }
 
+// MatchesEntry reports whether Installation Metadata proves that source and
+// strategy contribute to the managed target.
+func (m Metadata) MatchesEntry(target, source, strategy string) bool {
+	rec, ok := m.FindByTarget(target)
+	return ok && rec.Strategy == strategy && rec.HasSource(source)
+}
+
 // FindProvisioner returns the last result for a selected Provisioner command.
 func (m Metadata) FindProvisioner(profile, tool, executable string, args []string) (ProvisionerRecord, bool) {
 	for _, r := range m.Provisioners {
@@ -253,4 +284,11 @@ func HashFile(path string) (string, error) {
 		return "", fmt.Errorf("hash source %s: %w", path, err)
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// HashBytes returns the same content digest used by HashFile without requiring
+// a temporary file.
+func HashBytes(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }

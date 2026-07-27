@@ -36,6 +36,82 @@ type JSONFileRelation struct {
 	Mergeable bool
 }
 
+// ComposeJSONFiles reads source-owned JSON fragments and composes them in
+// manifest order. Compatible object and array values are merged using the same
+// subset semantics as MergeJSONFile. The returned JSON is deterministic and
+// suitable for a later plan or apply step; no source file is modified.
+func ComposeJSONFiles(sources []string) ([]byte, error) {
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("compose JSON: no sources")
+	}
+
+	var composed any
+	for index, source := range sources {
+		data, err := os.ReadFile(source)
+		if err != nil {
+			return nil, fmt.Errorf("read source JSON %s: %w", source, err)
+		}
+		var sourceValue any
+		if err := decodeJSON(data, &sourceValue); err != nil {
+			return nil, fmt.Errorf("parse source JSON %s: %w", source, err)
+		}
+		if index == 0 {
+			composed = sourceValue
+			continue
+		}
+		result := mergeJSONValue(composed, sourceValue)
+		if !result.compatible {
+			return nil, fmt.Errorf("compose source JSON %s: incompatible overlap", source)
+		}
+		composed = result.value
+	}
+
+	data, err := json.MarshalIndent(composed, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode composed JSON: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// AnalyzeJSON compares target JSON content with a source-owned JSON subset.
+// Invalid target JSON is incompatible; invalid source JSON is returned as an
+// error because source content belongs to the repository-owned baseline.
+func AnalyzeJSON(targetData, sourceData []byte) (JSONFileRelation, error) {
+	var sourceValue, targetValue any
+	if err := decodeJSON(sourceData, &sourceValue); err != nil {
+		return JSONFileRelation{}, fmt.Errorf("parse source JSON: %w", err)
+	}
+	if err := decodeJSON(targetData, &targetValue); err != nil {
+		return JSONFileRelation{}, nil
+	}
+	result := mergeJSONValue(targetValue, sourceValue)
+	return JSONFileRelation{
+		Contains:  result.compatible && !result.changed,
+		Mergeable: result.compatible && result.changed,
+	}, nil
+}
+
+// MergeJSON adds source-owned values missing from target JSON content. It
+// returns deterministic indented JSON without mutating either input.
+func MergeJSON(targetData, sourceData []byte) ([]byte, error) {
+	var sourceValue, targetValue any
+	if err := decodeJSON(sourceData, &sourceValue); err != nil {
+		return nil, fmt.Errorf("parse source JSON: %w", err)
+	}
+	if err := decodeJSON(targetData, &targetValue); err != nil {
+		return nil, fmt.Errorf("parse target JSON: %w", err)
+	}
+	result := mergeJSONValue(targetValue, sourceValue)
+	if !result.compatible {
+		return nil, fmt.Errorf("source-owned JSON differences cannot be merged safely")
+	}
+	data, err := json.MarshalIndent(result.value, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode merged JSON: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
 // AnalyzeJSONFiles compares target with source in one read and parse pass.
 // Invalid target JSON is incompatible; invalid source JSON is an error because
 // source belongs to the repository-owned baseline.
@@ -52,18 +128,11 @@ func AnalyzeJSONFiles(target, source string) (JSONFileRelation, error) {
 		return JSONFileRelation{}, fmt.Errorf("read %s: %w", target, err)
 	}
 
-	var sourceValue, targetValue any
-	if err := decodeJSON(sourceData, &sourceValue); err != nil {
-		return JSONFileRelation{}, fmt.Errorf("parse source JSON %s: %w", source, err)
+	relation, err := AnalyzeJSON(targetData, sourceData)
+	if err != nil {
+		return JSONFileRelation{}, fmt.Errorf("analyze source JSON %s: %w", source, err)
 	}
-	if err := decodeJSON(targetData, &targetValue); err != nil {
-		return JSONFileRelation{}, nil
-	}
-	result := mergeJSONValue(targetValue, sourceValue)
-	return JSONFileRelation{
-		Contains:  result.compatible && !result.changed,
-		Mergeable: result.compatible && result.changed,
-	}, nil
+	return relation, nil
 }
 
 // JSONFileContains reports whether target contains every value present in
@@ -91,22 +160,10 @@ func MergeJSONFile(target, source string) error {
 		return fmt.Errorf("stat %s: %w", target, err)
 	}
 
-	var sourceValue, targetValue any
-	if err := decodeJSON(sourceData, &sourceValue); err != nil {
-		return fmt.Errorf("parse source JSON %s: %w", source, err)
-	}
-	if err := decodeJSON(targetData, &targetValue); err != nil {
-		return fmt.Errorf("parse target JSON %s: %w", target, err)
-	}
-	result := mergeJSONValue(targetValue, sourceValue)
-	if !result.compatible {
-		return fmt.Errorf("source-owned JSON differences cannot be merged safely")
-	}
-	data, err := json.MarshalIndent(result.value, "", "  ")
+	data, err := MergeJSON(targetData, sourceData)
 	if err != nil {
-		return fmt.Errorf("encode merged JSON: %w", err)
+		return fmt.Errorf("merge target JSON %s with source JSON %s: %w", target, source, err)
 	}
-	data = append(data, '\n')
 	if err := os.WriteFile(target, data, info.Mode().Perm()); err != nil {
 		return fmt.Errorf("write %s: %w", target, err)
 	}

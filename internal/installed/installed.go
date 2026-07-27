@@ -115,7 +115,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 	legacyProfilesInferred := false
 	unmatchedEntries := false
 
-	for _, rec := range meta.Entries {
+	for _, rec := range expandedRecords(meta.Entries) {
 		entry, matched, err := matchEntry(m, rec, opts)
 		if err != nil {
 			return Report{}, err
@@ -226,6 +226,24 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 		report.Notes = append(report.Notes, "metadata does not record Source of Truth provenance; run a future install/update to capture source revision and dots version")
 	}
 	return report, nil
+}
+
+func expandedRecords(records []state.Record) []state.Record {
+	expanded := make([]state.Record, 0, len(records))
+	for _, rec := range records {
+		sources := rec.SourceList()
+		if len(sources) == 0 {
+			expanded = append(expanded, rec)
+			continue
+		}
+		for _, source := range sources {
+			contributor := rec
+			contributor.Source = source
+			contributor.Sources = nil
+			expanded = append(expanded, contributor)
+		}
+	}
+	return expanded
 }
 
 func matchEntry(m manifest.Manifest, rec state.Record, opts Options) (manifest.Entry, bool, error) {

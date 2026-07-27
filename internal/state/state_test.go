@@ -179,6 +179,36 @@ func TestFindByTargetReturnsRecordWhenPresent(t *testing.T) {
 	}
 }
 
+func TestRecordSourceListPreservesLegacyAndCompositeContributors(t *testing.T) {
+	legacy := state.Record{Source: "configs/base.json"}
+	if got := legacy.SourceList(); !reflect.DeepEqual(got, []string{"configs/base.json"}) {
+		t.Fatalf("legacy SourceList() = %#v, want singular source", got)
+	}
+	if !legacy.HasSource("configs/base.json") {
+		t.Fatal("legacy HasSource() = false, want singular source match")
+	}
+
+	composite := state.Record{
+		Source:  "configs/base.json",
+		Sources: []string{"configs/base.json", "configs/mobile.json"},
+	}
+	if got := composite.SourceList(); !reflect.DeepEqual(got, composite.Sources) {
+		t.Fatalf("composite SourceList() = %#v, want %#v", got, composite.Sources)
+	}
+	if !composite.HasSource("configs/mobile.json") {
+		t.Fatal("composite HasSource() = false, want contributor match")
+	}
+	meta := state.Metadata{Entries: []state.Record{{
+		Target: "/home/user/.config/shared.json", Source: composite.Source, Sources: composite.Sources, Strategy: "copy",
+	}}}
+	if !meta.MatchesEntry("/home/user/.config/shared.json", "configs/mobile.json", "copy") {
+		t.Fatal("MatchesEntry() = false, want composite contributor ownership proof")
+	}
+	if meta.MatchesEntry("/home/user/.config/shared.json", "configs/mobile.json", "symlink") {
+		t.Fatal("MatchesEntry() = true for wrong strategy")
+	}
+}
+
 func TestHashFileIsStableAndContentSensitive(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a")

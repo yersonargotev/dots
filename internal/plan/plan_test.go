@@ -3,6 +3,8 @@ package plan_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -69,6 +71,125 @@ func sources(p plan.Plan) []string {
 		out = append(out, a.Source)
 	}
 	return out
+}
+
+func TestBuildComposesCompatibleJSONSubsetEntriesForSharedTarget(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "configs/base.json", `{"editor":{"theme":"dark"},"servers":["one"]}`)
+	writeSource(t, sourceRoot, "configs/mobile.json", `{"editor":{"theme":"dark","fontSize":14},"servers":["two"]}`)
+
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"base", "mobile"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"base"}},
+			{Source: "configs/mobile.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"mobile"}},
+		},
+	}
+
+	got, err := plan.Build(m, plan.Options{Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(got.Actions) != 1 {
+		t.Fatalf("len(Actions) = %d, want one coherent target operation", len(got.Actions))
+	}
+	action := got.Actions[0]
+	if !reflect.DeepEqual(action.Sources, []string{"configs/base.json", "configs/mobile.json"}) {
+		t.Fatalf("Sources = %#v, want manifest-order contributors", action.Sources)
+	}
+	if action.Status != plan.StatusCreate {
+		t.Fatalf("Status = %q, want %q", action.Status, plan.StatusCreate)
+	}
+	for _, want := range []string{`"theme": "dark"`, `"fontSize": 14`, `"one"`, `"two"`} {
+		if !strings.Contains(string(action.Content), want) {
+			t.Fatalf("composed content missing %s:\n%s", want, action.Content)
+		}
+	}
+}
+
+func TestBuildRejectsIncompatibleSharedJSONSubsetBeforeApply(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "configs/base.json", `{"editor":{"theme":"dark"}}`)
+	writeSource(t, sourceRoot, "configs/mobile.json", `{"editor":{"theme":"light"}}`)
+
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"base", "mobile"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"base"}},
+			{Source: "configs/mobile.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"mobile"}},
+		},
+	}
+
+	_, err := plan.Build(m, plan.Options{Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err == nil {
+		t.Fatal("Build() error = nil, want incompatible shared-target error")
+	}
+	if !strings.Contains(err.Error(), "shared target") || !strings.Contains(err.Error(), "incompatible") {
+		t.Fatalf("Build() error = %q, want clear shared-target incompatibility", err)
+	}
+}
+
+func TestBuildExpandsTrustedSingleContributorIntoCompatibleSharedTarget(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "configs/base.json", `{"editor":{"theme":"dark"}}`)
+	writeSource(t, sourceRoot, "configs/mobile.json", `{"mobile":true}`)
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"editor":{"theme":"dark"},"userOnly":"keep"}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"base", "mobile"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"base"}},
+			{Source: "configs/mobile.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"mobile"}},
+		},
+	}
+	meta := state.Metadata{Version: 2, Entries: []state.Record{{
+		Target: target, Source: "configs/base.json", Strategy: "copy",
+	}}}
+
+	got, err := plan.Build(m, plan.Options{
+		Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home, Metadata: meta,
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(got.Actions) != 1 || got.Actions[0].Status != plan.StatusUpdate {
+		t.Fatalf("Actions = %+v, want one trusted expansion update", got.Actions)
+	}
+}
+
+func TestBuildRejectsUnsupportedDuplicateTargetDuringPlanning(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "configs/first", "first\n")
+	writeSource(t, sourceRoot, "configs/second", "second\n")
+
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/first", Target: "~/.shared", Strategy: "copy", Tags: []string{"core"}},
+			{Source: "configs/second", Target: "~/.shared", Strategy: "copy", Tags: []string{"core"}},
+		},
+	}
+
+	_, err := plan.Build(m, plan.Options{Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err == nil {
+		t.Fatal("Build() error = nil, want unsupported duplicate-target error")
+	}
+	if !strings.Contains(err.Error(), "duplicate target") {
+		t.Fatalf("Build() error = %q, want duplicate-target planning error", err)
+	}
 }
 
 func TestBuildSymlinkPointingToSourceIsUnchanged(t *testing.T) {

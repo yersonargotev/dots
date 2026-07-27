@@ -34,6 +34,7 @@ const (
 type UninstallAction struct {
 	Target   string          `json:"target"`
 	Source   string          `json:"source"`
+	Sources  []string        `json:"sources,omitempty"`
 	Strategy string          `json:"strategy"`
 	Status   UninstallStatus `json:"status"`
 }
@@ -90,6 +91,9 @@ func BuildUninstall(meta state.Metadata, opts UninstallOptions) (UninstallPlan, 
 			Strategy: rec.Strategy,
 			Status:   status,
 		})
+		if len(rec.Sources) > 0 {
+			plan.Actions[len(plan.Actions)-1].Sources = rec.SourceList()
+		}
 	}
 	return plan, nil
 }

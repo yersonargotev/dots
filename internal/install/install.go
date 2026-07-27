@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,15 +45,16 @@ func Apply(p plan.Plan, opts Options) error {
 	}
 
 	for i, action := range p.Actions {
+		source := resolvedSources[i][0]
 		switch action.Status {
 		case plan.StatusUnchanged:
 			continue
 		case plan.StatusCreate:
-			if err := applyCreate(action, resolvedSources[i]); err != nil {
+			if err := applyCreate(action, source); err != nil {
 				return err
 			}
 		case plan.StatusUpdate:
-			if err := applyUpdate(action, resolvedSources[i], opts); err != nil {
+			if err := applyUpdate(action, source, opts); err != nil {
 				return err
 			}
 		case plan.StatusConflict:
@@ -62,11 +64,11 @@ func Apply(p plan.Plan, opts Options) error {
 				// existing workstation target, but continue applying safe actions.
 				continue
 			case DecisionReplace:
-				if err := applyReplace(action, resolvedSources[i], opts); err != nil {
+				if err := applyReplace(action, source, opts); err != nil {
 					return err
 				}
 			case DecisionAdopt:
-				if err := applyAdopt(action, resolvedSources[i], opts); err != nil {
+				if err := applyAdopt(action, source, opts); err != nil {
 					return err
 				}
 			}
@@ -80,7 +82,7 @@ func Apply(p plan.Plan, opts Options) error {
 // installed or confirmed unchanged, so dots status has an authoritative record
 // of what dots owns. Copy-like records include a Source of Truth hash; symlink
 // records leave Hash empty because status compares the link destination.
-func recordMetadata(p plan.Plan, resolvedSources []string, opts Options) error {
+func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error {
 	if opts.StateRoot == "" {
 		return nil
 	}
@@ -102,15 +104,20 @@ func recordMetadata(p plan.Plan, resolvedSources []string, opts Options) error {
 		}
 		hash := ""
 		if action.Strategy != "symlink" {
-			var err error
-			hash, err = state.HashFile(resolvedSources[i])
-			if err != nil {
-				return err
+			if len(action.Sources) > 0 {
+				hash = state.HashBytes(action.Content)
+			} else {
+				var err error
+				hash, err = state.HashFile(resolvedSources[i][0])
+				if err != nil {
+					return err
+				}
 			}
 		}
 		upsertRecord(&meta, state.Record{
 			Target:      action.Target,
 			Source:      action.Source,
+			Sources:     append([]string(nil), action.Sources...),
 			Strategy:    action.Strategy,
 			Hash:        hash,
 			InstalledAt: now,
@@ -132,7 +139,7 @@ func upsertRecord(meta *state.Metadata, rec state.Record) {
 	meta.Entries = append(meta.Entries, rec)
 }
 
-func validatePlan(p plan.Plan, opts Options) ([]string, error) {
+func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 	if opts.Home == "" {
 		return nil, fmt.Errorf("install home is required")
 	}
@@ -152,7 +159,7 @@ func validatePlan(p plan.Plan, opts Options) ([]string, error) {
 	}
 
 	seenTargets := map[string]struct{}{}
-	resolvedSources := make([]string, len(p.Actions))
+	resolvedSources := make([][]string, len(p.Actions))
 	for i, action := range p.Actions {
 		if err := plan.ValidateResolvedTarget(action.Target, home); err != nil {
 			return nil, err
@@ -165,14 +172,40 @@ func validatePlan(p plan.Plan, opts Options) ([]string, error) {
 			return nil, fmt.Errorf("install plan contains duplicate target %s", targetKey)
 		}
 		seenTargets[targetKey] = struct{}{}
-		source, err := plan.ResolveSource(action.Source, sourceRoot)
-		if err != nil {
-			return nil, err
+		sources := []string{action.Source}
+		declaredResolved := []string{action.ResolvedSource}
+		if len(action.Sources) > 0 {
+			sources = action.Sources
+			declaredResolved = action.ResolvedSources
+			if action.Strategy != "copy" || action.Ownership != "json-subset" || len(sources) < 2 {
+				return nil, fmt.Errorf("composed target %s requires at least two copy/json-subset sources", action.Target)
+			}
 		}
-		if action.ResolvedSource != "" && action.ResolvedSource != source {
-			return nil, fmt.Errorf("install plan source %q resolved to %q, want %q", action.Source, action.ResolvedSource, source)
+		for j, sourceName := range sources {
+			source, err := plan.ResolveSource(sourceName, sourceRoot)
+			if err != nil {
+				return nil, err
+			}
+			if j < len(declaredResolved) && declaredResolved[j] != "" && declaredResolved[j] != source {
+				return nil, fmt.Errorf("install plan source %q resolved to %q, want %q", sourceName, declaredResolved[j], source)
+			}
+			resolvedSources[i] = append(resolvedSources[i], source)
 		}
-		resolvedSources[i] = source
+		source := resolvedSources[i][0]
+		if len(action.Sources) > 0 {
+			for _, composedSource := range resolvedSources[i] {
+				if err := validateSource(action.Strategy, composedSource, sourceRoot); err != nil {
+					return nil, err
+				}
+			}
+			composed, err := configsubset.ComposeJSONFiles(resolvedSources[i])
+			if err != nil {
+				return nil, fmt.Errorf("validate composed target %s: %w", action.Target, err)
+			}
+			if !bytes.Equal(composed, action.Content) {
+				return nil, fmt.Errorf("install plan composed content is stale for %s", action.Target)
+			}
+		}
 
 		switch action.Status {
 		case plan.StatusCreate:
@@ -397,6 +430,12 @@ func applyCreate(action plan.Action, source string) error {
 		}
 		return nil
 	case "copy":
+		if len(action.Content) > 0 {
+			if err := writeNewFileFromSourceMode(source, action.Target, action.Content); err != nil {
+				return fmt.Errorf("write composed JSON to %s: %w", action.Target, err)
+			}
+			return nil
+		}
 		if err := copyRegularFile(source, action.Target); err != nil {
 			return fmt.Errorf("copy %s to %s: %w", source, action.Target, err)
 		}
@@ -425,6 +464,12 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 	}
 	switch action.Ownership {
 	case "json-subset":
+		if len(action.Content) > 0 {
+			if err := mergeJSONContentFile(action.Target, action.Content); err != nil {
+				return fmt.Errorf("merge composed JSON update for %s: %w", action.Target, err)
+			}
+			return nil
+		}
 		if err := configsubset.MergeJSONFile(action.Target, source); err != nil {
 			return fmt.Errorf("merge JSON update for %s: %w", action.Target, err)
 		}
@@ -555,4 +600,41 @@ func copyRegularFile(source, target string) error {
 		return err
 	}
 	return os.Chmod(target, info.Mode().Perm())
+}
+
+func writeNewFileFromSourceMode(source, target string, data []byte) error {
+	info, err := os.Stat(source)
+	if err != nil {
+		return err
+	}
+	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		_ = os.Remove(target)
+		return err
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(target)
+		return err
+	}
+	return nil
+}
+
+func mergeJSONContentFile(target string, sourceData []byte) error {
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return err
+	}
+	merged, err := configsubset.MergeJSON(targetData, sourceData)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(target, merged, info.Mode().Perm())
 }

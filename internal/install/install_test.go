@@ -3,14 +3,123 @@ package install_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/install"
+	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
 )
+
+func TestApplyComposedJSONSubsetCreatesAndUpdatesOneSharedTarget(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	for rel, content := range map[string]string{
+		"configs/base.json":   `{"editor":{"theme":"dark"},"servers":["one"]}`,
+		"configs/mobile.json": `{"mobile":true,"servers":["two"]}`,
+	} {
+		path := filepath.Join(sourceRoot, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir source: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("write source: %v", err)
+		}
+	}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"base", "mobile"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"base"}},
+			{Source: "configs/mobile.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"mobile"}},
+		},
+	}
+	opts := plan.Options{Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home}
+	p, err := plan.Build(m, opts)
+	if err != nil {
+		t.Fatalf("Build(create) error = %v", err)
+	}
+	if len(p.Actions) != 1 {
+		t.Fatalf("create actions = %d, want one", len(p.Actions))
+	}
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err != nil {
+		t.Fatalf("Apply(create) error = %v", err)
+	}
+
+	target := filepath.Join(home, ".config", "shared.json")
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	rec, ok := meta.FindByTarget(target)
+	if !ok {
+		t.Fatalf("metadata missing target %s", target)
+	}
+	wantSources := []string{"configs/base.json", "configs/mobile.json"}
+	if !reflect.DeepEqual(rec.SourceList(), wantSources) {
+		t.Fatalf("metadata sources = %#v, want %#v", rec.SourceList(), wantSources)
+	}
+	targetHash, err := state.HashFile(target)
+	if err != nil {
+		t.Fatalf("hash target: %v", err)
+	}
+	if rec.Hash != targetHash {
+		t.Fatalf("metadata hash = %q, want composed target hash %q", rec.Hash, targetHash)
+	}
+
+	if err := os.WriteFile(target, []byte(`{"editor":{"theme":"dark"},"servers":["one"],"userOnly":"keep"}`), 0o640); err != nil {
+		t.Fatalf("write trusted target: %v", err)
+	}
+	opts.Metadata = meta
+	p, err = plan.Build(m, opts)
+	if err != nil {
+		t.Fatalf("Build(update) error = %v", err)
+	}
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.StatusUpdate {
+		t.Fatalf("update actions = %+v, want one update", p.Actions)
+	}
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err != nil {
+		t.Fatalf("Apply(update) error = %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read updated target: %v", err)
+	}
+	for _, want := range []string{`"userOnly": "keep"`, `"mobile": true`, `"two"`} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("updated target missing %s:\n%s", want, got)
+		}
+	}
+	backupMeta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Backup Metadata: %v", err)
+	}
+	if len(backupMeta.Sets) != 1 {
+		t.Fatalf("backup sets = %d, want one shared-target backup", len(backupMeta.Sets))
+	}
+	meta, err = state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("reload metadata: %v", err)
+	}
+	uninstallPlan, err := plan.BuildUninstall(meta, plan.UninstallOptions{SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("BuildUninstall() error = %v", err)
+	}
+	var shared *plan.UninstallAction
+	for i := range uninstallPlan.Actions {
+		if uninstallPlan.Actions[i].Target == target {
+			shared = &uninstallPlan.Actions[i]
+			break
+		}
+	}
+	if shared == nil || shared.Status != plan.UninstallModified {
+		t.Fatalf("shared uninstall action = %+v, want modified so target-only state is preserved by default", shared)
+	}
+}
 
 func TestApplyCreatesSymlinkForCreateAction(t *testing.T) {
 	sourceRoot := t.TempDir()

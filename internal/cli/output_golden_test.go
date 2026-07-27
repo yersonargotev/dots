@@ -167,10 +167,33 @@ func TestEnvelopeGolden(t *testing.T) {
 					Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
 				}, Actions: []plan.Action{
 					{Source: "configs/zsh/zshrc", ResolvedSource: "/abs/machine/local/path/MUST/NOT/APPEAR", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
-					{Source: "configs/git/config", ResolvedSource: "/abs/x", Target: "/home/user/.gitconfig", Strategy: "copy", Status: plan.StatusConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme"}},
+					{Source: "configs/git/config", Sources: []string{"configs/git/config", "configs/git/work.json"}, ResolvedSource: "/abs/x", ResolvedSources: []string{"/abs/x", "/abs/y"}, Content: []byte(`MUST NOT APPEAR`), Target: "/home/user/.gitconfig", Strategy: "copy", Status: plan.StatusConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme"}},
 				}},
 			},
 			golden: "envelope_plan.golden",
+		},
+		{
+			name: "uninstall",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "uninstall",
+				Status:        statusOK,
+				Data: uninstallReport{
+					DryRun:    true,
+					StateRoot: "/home/user/.local/state/dots",
+					Plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{
+						Source: "configs/antigravity/settings.json",
+						Sources: []string{
+							"configs/antigravity/settings.json",
+							"configs/antigravity/mobile-mcp-settings.json",
+						},
+						Target:   "/home/user/.gemini/antigravity-cli/settings.json",
+						Strategy: "copy",
+						Status:   plan.UninstallRemove,
+					}}},
+				},
+			},
+			golden: "envelope_uninstall.golden",
 		},
 		{
 			name: "doctor",
