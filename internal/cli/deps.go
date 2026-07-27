@@ -408,6 +408,10 @@ func fontInstalled(goos, home string) deps.FontLookup {
 // user's Applications directory before the system Applications directory.
 // Other operating systems never satisfy a Darwin application probe.
 func appInstalled(goos, home string) deps.AppLookup {
+	return appInstalledIn(appDirectories(goos, home))
+}
+
+func appDirectories(goos, home string) []string {
 	var dirs []string
 	if goos == "darwin" {
 		if home != "" {
@@ -415,6 +419,10 @@ func appInstalled(goos, home string) deps.AppLookup {
 		}
 		dirs = append(dirs, "/Applications")
 	}
+	return dirs
+}
+
+func appInstalledIn(dirs []string) deps.AppLookup {
 	return func(app string) bool {
 		for _, dir := range dirs {
 			info, err := os.Stat(filepath.Join(dir, app))

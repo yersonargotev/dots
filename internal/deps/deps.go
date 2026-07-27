@@ -103,7 +103,9 @@ func CheckWithToolProbes(m manifest.Manifest, opts Options, look Lookup, fontLoo
 	return report, nil
 }
 
-func dependencyPresent(dep manifest.Dependency, opts Options, look Lookup, fontLook FontLookup) bool {
+// DependencyPresent reports whether any declared detection mode satisfies a
+// Dependency in the selected environment.
+func DependencyPresent(dep manifest.Dependency, opts Options, look Lookup, fontLook FontLookup) bool {
 	if dep.IsFont() {
 		return fontPresent(dep.FontMatches(), fontLook)
 	}

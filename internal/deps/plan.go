@@ -108,7 +108,7 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 
 	report := PlanReport{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags, Tier: tier}
 	for _, dep := range selected {
-		if dependencyPresent(dep, opts, look, fontLook) {
+		if DependencyPresent(dep, opts, look, fontLook) {
 			continue
 		}
 		action, err := actionFor(dep, opts, tier, look)

@@ -71,7 +71,7 @@ func TestCheckAcceptsProvisionerFontFallbackDependency(t *testing.T) {
 func TestCheckAcceptsProvisionerDarwinAppDependency(t *testing.T) {
 	prov := gentleAIProvisioner("codex")
 	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{
-		Name: "ghostty", Command: "ghostty", DarwinApp: "Ghostty.app",
+		Name: "ghostty", Command: "ghostty", DarwinApp: " Ghostty.app ",
 	})
 	m := manifestWithProvisioners(prov)
 

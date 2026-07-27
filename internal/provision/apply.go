@@ -94,29 +94,17 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 func missingDependencies(prov manifest.Provisioner, opts Options, look deps.Lookup, fontLook deps.FontLookup) []string {
 	var missing []string
 	for _, dep := range prov.Dependencies {
-		if dep.IsFont() {
-			matches := dep.FontMatches()
-			if !fontDependencyPresent(matches, fontLook) {
-				missing = append(missing, fontDependencyLabel(matches))
-			}
+		if deps.DependencyPresent(dep, deps.Options{OS: opts.OS, AppLookup: opts.AppLookup}, look, fontLook) {
 			continue
 		}
-		probe := dep.Probe()
-		appPresent := opts.OS == "darwin" && dep.DarwinApp != "" && opts.AppLookup != nil && opts.AppLookup(dep.DarwinApp)
-		if !look(probe) && !appPresent {
-			missing = append(missing, probe)
+		if dep.IsFont() {
+			matches := dep.FontMatches()
+			missing = append(missing, fontDependencyLabel(matches))
+			continue
 		}
+		missing = append(missing, dep.Probe())
 	}
 	return missing
-}
-
-func fontDependencyPresent(matches []string, fontLook deps.FontLookup) bool {
-	for _, match := range matches {
-		if fontLook(match) {
-			return true
-		}
-	}
-	return false
 }
 
 func fontDependencyLabel(matches []string) string {

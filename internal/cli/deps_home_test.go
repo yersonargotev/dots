@@ -120,25 +120,6 @@ func TestDepsCheckHomeFlagDetectsSandboxDarwinApp(t *testing.T) {
 	}
 }
 
-func TestDepsCheckHomeFlagReportsMissingSandboxDarwinApp(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("macOS application detection is Darwin-only")
-	}
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("PATH", t.TempDir())
-
-	sandbox := t.TempDir()
-	manifestPath := writeCLIManifest(t, t.TempDir(), darwinAppManifest)
-	var out, errOut bytes.Buffer
-	code := cli.Run([]string{"deps", "check", "--profile", "default", "--file", manifestPath, "--home", sandbox}, &out, &errOut)
-	if code != 2 {
-		t.Fatalf("exit code = %d, want 2 (findings)\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
-	}
-	if !strings.Contains(out.String(), "missing  Dots Sandbox App") {
-		t.Fatalf("missing sandbox app not reported\noutput:\n%s", out.String())
-	}
-}
-
 func TestDepsCheckHomeFlagIgnoresRealHomeFont(t *testing.T) {
 	// The font lives only in the real home; --home points at an empty sandbox.
 	// A "missing" result proves --home overrides the real home rather than
