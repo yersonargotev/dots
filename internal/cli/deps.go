@@ -66,6 +66,7 @@ func newDepsCheckCommand(profiles *[]string, extraTags *[]string) *cobra.Command
 				ExtraTags: effective.ExtraTags,
 				Selection: &effective.Selection,
 				OS:        runtime.GOOS,
+				AppLookup: appInstalled(runtime.GOOS, resolvedHome),
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), commandOutput)
 			if err != nil {
 				return err
@@ -120,6 +121,7 @@ func newDepsPlanCommand(profiles *[]string, extraTags *[]string) *cobra.Command 
 				ExtraTags: effective.ExtraTags,
 				Selection: &effective.Selection,
 				OS:        runtime.GOOS,
+				AppLookup: appInstalled(runtime.GOOS, resolvedHome),
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
 			if err != nil {
 				return err
@@ -178,6 +180,7 @@ func newDepsInstallCommand(profiles *[]string, extraTags *[]string) *cobra.Comma
 				Arch:      runtime.GOARCH,
 				Home:      resolvedHome,
 				StateRoot: resolvedStateRoot,
+				AppLookup: appInstalled(runtime.GOOS, resolvedHome),
 			}
 
 			report, err := deps.InstallDryRun(*m, options, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
@@ -398,6 +401,28 @@ func fontInstalled(goos, home string) deps.FontLookup {
 	dirs := fontDirectories(goos, home)
 	return func(match string) bool {
 		return deps.ScanFonts(dirs, match)
+	}
+}
+
+// appInstalled is the production AppLookup. On macOS it checks the selected
+// user's Applications directory before the system Applications directory.
+// Other operating systems never satisfy a Darwin application probe.
+func appInstalled(goos, home string) deps.AppLookup {
+	var dirs []string
+	if goos == "darwin" {
+		if home != "" {
+			dirs = append(dirs, filepath.Join(home, "Applications"))
+		}
+		dirs = append(dirs, "/Applications")
+	}
+	return func(app string) bool {
+		for _, dir := range dirs {
+			info, err := os.Stat(filepath.Join(dir, app))
+			if err == nil && info.IsDir() {
+				return true
+			}
+		}
+		return false
 	}
 }
 

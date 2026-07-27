@@ -124,6 +124,9 @@ type Dependency struct {
 	Name        string `yaml:"name"`
 	Requirement string `yaml:"requirement,omitempty"`
 	Command     string `yaml:"command,omitempty"`
+	// DarwinApp names a macOS application bundle that can satisfy the
+	// Dependency when its command is not available on PATH.
+	DarwinApp string `yaml:"darwin_app,omitempty"`
 	// Manual carries dependency-specific remediation for manual-only tools.
 	Manual string `yaml:"manual,omitempty"`
 	// ManualDebian carries Debian/Ubuntu-specific manual remediation.
@@ -469,6 +472,12 @@ func validateDependency(dep Dependency, path string) error {
 	}
 	if dep.Command != "" && strings.TrimSpace(dep.Command) == "" {
 		return fmt.Errorf("%s.command must not be empty", path)
+	}
+	if dep.DarwinApp != "" {
+		app := strings.TrimSpace(dep.DarwinApp)
+		if app == "" || strings.ContainsAny(app, `/\`) || !strings.HasSuffix(app, ".app") {
+			return fmt.Errorf("%s.darwin_app must be an .app bundle name without a path", path)
+		}
 	}
 	if dep.Manual != "" && strings.TrimSpace(dep.Manual) == "" {
 		return fmt.Errorf("%s.manual must not be empty", path)

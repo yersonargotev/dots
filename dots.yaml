@@ -327,6 +327,7 @@ entries:
     dependencies:
       - name: ghostty
         command: ghostty
+        darwin_app: Ghostty.app
         manual_debian: >-
           Install Ghostty from https://ghostty.org/docs/install/binary. On Ubuntu,
           use the community .deb installer from ghostty-ubuntu with /bin/bash -c
@@ -334,7 +335,7 @@ entries:
           or run snap install ghostty --classic; this requires sudo/password
           interactivity. After installation, verify ghostty --version and rerun
           dots deps check.
-        brew: ghostty
+        brew_cask: ghostty
   - source: configs/ghostty/adaptive/adaptive-theme.ghostty
     target: ~/.config/ghostty/adaptive-theme.ghostty
     strategy: symlink

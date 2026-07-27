@@ -760,13 +760,20 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 		}
 	}
 	ghosttyManualFound := false
+	ghosttyDarwinAppFound := false
 	for _, dep := range dependencies["ghostty"] {
 		if strings.Contains(dep.ManualDebian, "snap install ghostty --classic") && strings.Contains(dep.ManualDebian, "requires sudo") {
 			ghosttyManualFound = true
 		}
+		if dep.DarwinApp == "Ghostty.app" {
+			ghosttyDarwinAppFound = true
+		}
 	}
 	if !ghosttyManualFound {
 		t.Fatalf("ghostty dependency missing explicit Ubuntu manual guidance with snap sudo/interactivity note: %#v", dependencies["ghostty"])
+	}
+	if !ghosttyDarwinAppFound {
+		t.Fatalf("ghostty dependency missing Darwin app-bundle detection: %#v", dependencies["ghostty"])
 	}
 
 	for _, name := range []string{"bat", "starship", "zellij", "atuin", "pnpm", "gentle-ai", "engram"} {
@@ -1757,6 +1764,23 @@ entries:
         command: "  "
 `,
 			want: `entries[0].dependencies[0].command must not be empty`,
+		},
+		{
+			name: "dependency with invalid Darwin app bundle name",
+			content: `version: 1
+profiles:
+  default:
+    tags: [desktop]
+entries:
+  - source: configs/ghostty/config.ghostty
+    target: ~/.config/ghostty/config.ghostty
+    strategy: symlink
+    tags: [desktop]
+    dependencies:
+      - name: ghostty
+        darwin_app: ../Ghostty.app
+`,
+			want: `entries[0].dependencies[0].darwin_app must be an .app bundle name without a path`,
 		},
 		{
 			name: "dependency with whitespace-only manual guidance",

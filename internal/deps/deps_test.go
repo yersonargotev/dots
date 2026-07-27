@@ -35,6 +35,37 @@ func fontLookupSet(present ...string) deps.FontLookup {
 	return func(match string) bool { return set[match] }
 }
 
+func appLookupSet(present ...string) deps.AppLookup {
+	set := make(map[string]bool, len(present))
+	for _, p := range present {
+		set[p] = true
+	}
+	return func(app string) bool { return set[app] }
+}
+
+func TestCheckDetectsDarwinAppWhenCommandIsMissing(t *testing.T) {
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/ghostty/config.ghostty", Target: "~/.config/ghostty/config.ghostty", Strategy: "symlink", Tags: []string{"desktop"},
+			Dependencies: []manifest.Dependency{{
+				Name: "ghostty", Command: "ghostty", DarwinApp: "Ghostty.app", BrewCask: "ghostty",
+			}},
+		}},
+	}
+
+	report, err := deps.Check(m, deps.Options{
+		Profile: "default", OS: "darwin", AppLookup: appLookupSet("Ghostty.app"),
+	}, lookupSet(), fontLookupSet())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if len(report.Results) != 1 || !report.Results[0].Present {
+		t.Fatalf("Results = %#v, want Ghostty present via macOS app bundle", report.Results)
+	}
+}
+
 func TestCheckDetectsFontDependencyByScanNotPath(t *testing.T) {
 	m := manifest.Manifest{
 		Version:  1,

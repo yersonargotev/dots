@@ -21,6 +21,11 @@ type Lookup func(command string) bool
 // parallel to Lookup, so font dependency checks stay deterministic in tests.
 type FontLookup func(match string) bool
 
+// AppLookup reports whether a named macOS application bundle is installed.
+// It is injected so tests never need to inspect the operator's Applications
+// directories.
+type AppLookup func(app string) bool
+
 // CommandRunner executes a read-only tool probe and returns its combined output.
 type CommandRunner func(command string, args ...string) (string, error)
 
@@ -34,6 +39,7 @@ type Options struct {
 	Arch      string
 	Home      string
 	StateRoot string
+	AppLookup AppLookup
 }
 
 // Result is the presence finding for a single declared Dependency.
@@ -90,21 +96,21 @@ func CheckWithToolProbes(m manifest.Manifest, opts Options, look Lookup, fontLoo
 	selection, _ := resolveOptionsSelection(m, opts)
 	report := CheckReport{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags}
 	for _, dep := range selected {
-		result := checkResult(dep, look, fontLook)
+		result := checkResult(dep, opts, look, fontLook)
 		probeToolchain(&result, opts, run)
 		report.Results = append(report.Results, result)
 	}
 	return report, nil
 }
 
-func dependencyPresent(dep manifest.Dependency, look Lookup, fontLook FontLookup) bool {
+func dependencyPresent(dep manifest.Dependency, opts Options, look Lookup, fontLook FontLookup) bool {
 	if dep.IsFont() {
 		return fontPresent(dep.FontMatches(), fontLook)
 	}
-	return commandsPresent(dep.Probes(), look)
+	return commandsPresent(dep.Probes(), look) || darwinAppPresent(dep.DarwinApp, opts)
 }
 
-func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Result {
+func checkResult(dep manifest.Dependency, opts Options, look Lookup, fontLook FontLookup) Result {
 	if dep.IsFont() {
 		// A font has no executable on PATH; detect it as an installed asset
 		// by scanning the workstation font directories for any compatible file
@@ -113,7 +119,12 @@ func checkResult(dep manifest.Dependency, look Lookup, fontLook FontLookup) Resu
 		return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: fontProbeLabel(matches), Present: fontPresent(matches, fontLook)}
 	}
 	probes := dep.Probes()
-	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: commandsPresent(probes, look)}
+	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: commandsPresent(probes, look) || darwinAppPresent(dep.DarwinApp, opts)}
+}
+
+func darwinAppPresent(app string, opts Options) bool {
+	app = strings.TrimSpace(app)
+	return opts.OS == "darwin" && app != "" && opts.AppLookup != nil && opts.AppLookup(app)
 }
 
 const maxProbeDetailLen = 240

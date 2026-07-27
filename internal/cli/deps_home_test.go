@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -27,6 +28,22 @@ entries:
     target: ~/.zshrc
     strategy: symlink
     tags: [core]
+`
+
+const darwinAppManifest = `version: 1
+profiles:
+  default:
+    tags: [desktop]
+    dependencies:
+      - name: Dots Sandbox App
+        command: dots-sandbox-app
+        darwin_app: DotsSandbox.app
+        brew_cask: dots-sandbox-app
+entries:
+  - source: configs/ghostty/config.ghostty
+    target: ~/.config/ghostty/config.ghostty
+    strategy: symlink
+    tags: [desktop]
 `
 
 // writeProbeFont drops a file matching the probe glob in every per-user font
@@ -73,6 +90,52 @@ func TestDepsCheckHomeFlagDetectsSandboxFont(t *testing.T) {
 	}
 	if !strings.Contains(got, "Summary: 1 present, 0 missing") {
 		t.Fatalf("unexpected summary\noutput:\n%s", got)
+	}
+}
+
+func TestDepsCheckHomeFlagDetectsSandboxDarwinApp(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS application detection is Darwin-only")
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+
+	sandbox := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(sandbox, "Applications", "DotsSandbox.app"), 0o755); err != nil {
+		t.Fatalf("create sandbox app bundle: %v", err)
+	}
+	manifestPath := writeCLIManifest(t, t.TempDir(), darwinAppManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "check", "--profile", "default", "--file", manifestPath, "--home", sandbox})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "present  Dots Sandbox App") {
+		t.Fatalf("sandbox app not detected under --home\noutput:\n%s", out.String())
+	}
+}
+
+func TestDepsCheckHomeFlagReportsMissingSandboxDarwinApp(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS application detection is Darwin-only")
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+
+	sandbox := t.TempDir()
+	manifestPath := writeCLIManifest(t, t.TempDir(), darwinAppManifest)
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"deps", "check", "--profile", "default", "--file", manifestPath, "--home", sandbox}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2 (findings)\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "missing  Dots Sandbox App") {
+		t.Fatalf("missing sandbox app not reported\noutput:\n%s", out.String())
 	}
 }
 
@@ -127,5 +190,32 @@ func TestDepsPlanHomeFlagDetectsSandboxFont(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, "All declared dependencies are already installed.") {
 		t.Fatalf("plan did not honor --home for sandbox font detection\noutput:\n%s", got)
+	}
+}
+
+func TestDepsPlanHomeFlagDetectsSandboxDarwinApp(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS application detection is Darwin-only")
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+
+	sandbox := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(sandbox, "Applications", "DotsSandbox.app"), 0o755); err != nil {
+		t.Fatalf("create sandbox app bundle: %v", err)
+	}
+	manifestPath := writeCLIManifest(t, t.TempDir(), darwinAppManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "plan", "--profile", "default", "--file", manifestPath, "--home", sandbox, "--tier", "homebrew"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "All declared dependencies are already installed.") {
+		t.Fatalf("plan did not honor --home for sandbox app detection\noutput:\n%s", out.String())
 	}
 }

@@ -118,7 +118,7 @@ func newInstallCommand() *cobra.Command {
 
 			hostOS := installHostOS
 			hostArch := installHostArch
-			depOptions := deps.Options{Profiles: profiles, ExtraTags: extraTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot}
+			depOptions := deps.Options{Profiles: profiles, ExtraTags: extraTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot, AppLookup: appInstalled(hostOS, paths.Home)}
 			depTier, err := resolveInstallTier(hostOS)
 			if err != nil {
 				return err
@@ -466,6 +466,9 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string,
 }
 
 func runProvisionersWithOptions(cmd *cobra.Command, m manifest.Manifest, provisionOpts provision.Options, home string, stateRoot string, sourceRoot string) (provision.Report, error) {
+	if provisionOpts.AppLookup == nil {
+		provisionOpts.AppLookup = appInstalled(provisionOpts.OS, home)
+	}
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()

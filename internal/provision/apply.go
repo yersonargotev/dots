@@ -58,7 +58,7 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
 
-		if missing := missingDependencies(prov, look, fontLook); len(missing) > 0 {
+		if missing := missingDependencies(prov, opts, look, fontLook); len(missing) > 0 {
 			report.Items = append(report.Items, RunItem{
 				Tool:       prov.Tool,
 				Executable: executable,
@@ -91,7 +91,7 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 
 // missingDependencies returns the probes of the Provisioner's declared
 // dependencies that are absent on the workstation, in declared order.
-func missingDependencies(prov manifest.Provisioner, look deps.Lookup, fontLook deps.FontLookup) []string {
+func missingDependencies(prov manifest.Provisioner, opts Options, look deps.Lookup, fontLook deps.FontLookup) []string {
 	var missing []string
 	for _, dep := range prov.Dependencies {
 		if dep.IsFont() {
@@ -102,7 +102,8 @@ func missingDependencies(prov manifest.Provisioner, look deps.Lookup, fontLook d
 			continue
 		}
 		probe := dep.Probe()
-		if !look(probe) {
+		appPresent := opts.OS == "darwin" && dep.DarwinApp != "" && opts.AppLookup != nil && opts.AppLookup(dep.DarwinApp)
+		if !look(probe) && !appPresent {
 			missing = append(missing, probe)
 		}
 	}
