@@ -198,7 +198,7 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 
 func metadataMatchesEntry(meta state.Metadata, target, source, strategy string) bool {
 	rec, ok := meta.FindByTarget(target)
-	return ok && rec.Source == source && rec.Strategy == strategy
+	return ok && rec.HasSource(source) && rec.Strategy == strategy
 }
 
 func targetContainsCompatibleRecordedSource(entry manifest.Entry, target, sourceRoot string, meta state.Metadata, defaultSource string) bool {

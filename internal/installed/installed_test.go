@@ -2,6 +2,7 @@ package installed_test
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	inst "github.com/yersonargotev/dots/internal/installed"
@@ -9,6 +10,43 @@ import (
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/state"
 )
+
+func TestBuildExposesEverySharedTargetContributor(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, ".config", "shared.json")
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"base", "mobile"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"base"}},
+			{Source: "configs/mobile.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"mobile"}},
+		},
+	}
+	meta := state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{{
+		Target: target, Source: "configs/base.json", Sources: []string{"configs/base.json", "configs/mobile.json"}, Strategy: "copy",
+		Profiles: []string{"default"}, Tags: []string{"base", "mobile"},
+	}}}
+
+	report, err := inst.Build(m, meta, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	gotSources := make([]string, 0, len(report.ManagedEntries))
+	for _, entry := range report.ManagedEntries {
+		gotSources = append(gotSources, entry.Source)
+		if !entry.ManifestMatched {
+			t.Fatalf("ManagedEntry = %+v, want manifest match", entry)
+		}
+	}
+	wantSources := []string{"configs/base.json", "configs/mobile.json"}
+	if !reflect.DeepEqual(gotSources, wantSources) {
+		t.Fatalf("managed sources = %#v, want %#v", gotSources, wantSources)
+	}
+	coverage := findProfile(t, report.Profiles, "default")
+	if coverage.TotalEntries != 2 || coverage.CoveredEntries != 2 || coverage.State != inst.CoverageComplete {
+		t.Fatalf("default coverage = %+v, want both contributors covered", coverage)
+	}
+}
 
 func TestBuildInfersLegacyMetadataAndPartialProfiles(t *testing.T) {
 	home := t.TempDir()

@@ -10,7 +10,76 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/state"
 )
+
+func TestWorkstationAndMobileComposeAntigravitySettingsInSandbox(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	t.Setenv("HOME", t.TempDir())
+	stubGentleAIProvisionerTools(t)
+
+	install := cli.NewRootCommand()
+	var out bytes.Buffer
+	install.SetOut(&out)
+	install.SetErr(&out)
+	install.SetArgs([]string{
+		"install", "--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "workstation", "--profile", "mobile", "--skip-deps",
+		"--source-root", repoRoot, "--home", home, "--state-root", stateRoot, "--yes",
+	})
+	if err := install.Execute(); err != nil {
+		t.Fatalf("composed install failed: %v\noutput:\n%s", err, out.String())
+	}
+
+	target := filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read composed target: %v", err)
+	}
+	for _, want := range []string{`"toolPermission"`, `"allowNonWorkspaceAccess"`, `"dart-mcp-server"`} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("composed target missing %s:\n%s", want, data)
+		}
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	rec, ok := meta.FindByTarget(target)
+	if !ok {
+		t.Fatal("metadata missing composed Antigravity target")
+	}
+	wantSources := []string{"configs/antigravity/settings.json", "configs/antigravity/mobile-mcp-settings.json"}
+	if !reflect.DeepEqual(rec.SourceList(), wantSources) {
+		t.Fatalf("metadata sources = %#v, want %#v", rec.SourceList(), wantSources)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(meta.InstalledSelection.Profiles, []string{"workstation", "mobile"}) {
+		t.Fatalf("installed selection = %+v, want workstation + mobile", meta.InstalledSelection)
+	}
+
+	statusCmd := cli.NewRootCommand()
+	var statusOut bytes.Buffer
+	statusCmd.SetOut(&statusOut)
+	statusCmd.SetErr(&statusOut)
+	statusCmd.SetArgs([]string{
+		"status", "--file", filepath.Join(repoRoot, "dots.yaml"),
+		"--profile", "workstation", "--profile", "mobile",
+		"--source-root", repoRoot, "--home", home, "--state-root", stateRoot,
+	})
+	if err := statusCmd.Execute(); err != nil {
+		t.Fatalf("status failed for composed install: %v\noutput:\n%s", err, statusOut.String())
+	}
+	for _, source := range wantSources {
+		if !strings.Contains(statusOut.String(), "ok") || !strings.Contains(statusOut.String(), source) {
+			t.Fatalf("status does not prove contributor %s aligned:\n%s", source, statusOut.String())
+		}
+	}
+}
 
 // TestAntigravityAgentsProfileSeedsUserBaselineInSandbox proves that dots seeds the
 // user-owned Antigravity settings baseline with a copy strategy (regular files, not symlinks)

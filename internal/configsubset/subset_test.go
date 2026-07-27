@@ -1,11 +1,128 @@
 package configsubset
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestComposeJSONFilesComposesSourcesInManifestOrder(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.json")
+	second := filepath.Join(dir, "second.json")
+	third := filepath.Join(dir, "third.json")
+	for path, content := range map[string]string{
+		first:  `{"permissions":{"allow":["Read"],"mode":"default"},"runtimeCounter":9007199254740993}`,
+		second: `{"permissions":{"allow":["Bash(git *)"],"mode":"default"},"hooks":{"PostToolUse":[]}}`,
+		third:  `{"permissions":{"allow":["Read","Bash(go test *)"]}}`,
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	got, err := ComposeJSONFiles([]string{first, second, third})
+	if err != nil {
+		t.Fatalf("ComposeJSONFiles() error = %v", err)
+	}
+	want := `{
+  "hooks": {
+    "PostToolUse": []
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(git *)",
+      "Bash(go test *)"
+    ],
+    "mode": "default"
+  },
+  "runtimeCounter": 9007199254740993
+}
+`
+	if string(got) != want {
+		t.Fatalf("ComposeJSONFiles() =\n%s\nwant:\n%s", got, want)
+	}
+
+	var decoded map[string]any
+	decoder := json.NewDecoder(strings.NewReader(string(got)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if gotNumber := decoded["runtimeCounter"]; gotNumber != json.Number("9007199254740993") {
+		t.Fatalf("runtimeCounter = %#v, want preserved json.Number", gotNumber)
+	}
+}
+
+func TestComposeJSONFilesRejectsIncompatibleOverlap(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.json")
+	second := filepath.Join(dir, "second.json")
+	if err := os.WriteFile(first, []byte(`{"permissions":{"mode":"default"}}`), 0o600); err != nil {
+		t.Fatalf("write first: %v", err)
+	}
+	if err := os.WriteFile(second, []byte(`{"permissions":{"mode":{"name":"default"}}}`), 0o600); err != nil {
+		t.Fatalf("write second: %v", err)
+	}
+
+	_, err := ComposeJSONFiles([]string{first, second})
+	if err == nil {
+		t.Fatal("ComposeJSONFiles() error = nil, want incompatible overlap")
+	}
+	if !strings.Contains(err.Error(), second) {
+		t.Fatalf("error %q does not contain conflicting source path %q", err, second)
+	}
+}
+
+func TestComposeJSONFilesReportsInvalidSourcePath(t *testing.T) {
+	dir := t.TempDir()
+	invalid := filepath.Join(dir, "invalid.json")
+	if err := os.WriteFile(invalid, []byte(`{"permissions":`), 0o600); err != nil {
+		t.Fatalf("write invalid source: %v", err)
+	}
+
+	_, err := ComposeJSONFiles([]string{invalid})
+	if err == nil {
+		t.Fatal("ComposeJSONFiles() error = nil, want parse error")
+	}
+	if !strings.Contains(err.Error(), invalid) {
+		t.Fatalf("error %q does not contain invalid source path %q", err, invalid)
+	}
+}
+
+func TestAnalyzeAndMergeJSONContent(t *testing.T) {
+	target := []byte(`{"permissions":{"allow":["Read"]},"runtimeCounter":9007199254740993}`)
+	source := []byte(`{"permissions":{"allow":["Read","Bash(git *)"]}}`)
+
+	relation, err := AnalyzeJSON(target, source)
+	if err != nil {
+		t.Fatalf("AnalyzeJSON() error = %v", err)
+	}
+	if !relation.Mergeable || relation.Contains {
+		t.Fatalf("AnalyzeJSON() = %#v, want mergeable only", relation)
+	}
+
+	got, err := MergeJSON(target, source)
+	if err != nil {
+		t.Fatalf("MergeJSON() error = %v", err)
+	}
+	want := `{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(git *)"
+    ]
+  },
+  "runtimeCounter": 9007199254740993
+}
+`
+	if string(got) != want {
+		t.Fatalf("MergeJSON() =\n%s\nwant:\n%s", got, want)
+	}
+}
 
 func TestMergeJSONFileAddsMissingValuesAndPreservesTargetState(t *testing.T) {
 	dir := t.TempDir()

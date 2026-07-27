@@ -164,6 +164,43 @@ func TestBuildDiagnosticSections(t *testing.T) {
 	}
 }
 
+func TestBuildReportsAllSharedJSONContributorsAligned(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	writeFile(t, sourceRoot, "configs/base.json", `{"base":true}`)
+	writeFile(t, sourceRoot, "configs/mobile.json", `{"mobile":true}`)
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"base":true,"mobile":true,"runtime":"keep"}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"base", "mobile"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"base"}},
+			{Source: "configs/mobile.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"mobile"}},
+		},
+	}
+	meta := state.Metadata{Entries: []state.Record{{
+		Target: target, Source: "configs/base.json", Sources: []string{"configs/base.json", "configs/mobile.json"}, Strategy: "copy",
+	}}}
+
+	report, err := doctor.Build(m, meta, doctor.Options{
+		Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home,
+	}, lookupSet(), fontLookupSet())
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(report.Configuration.Entries) != 2 ||
+		report.Configuration.Entries[0].State != "ok" ||
+		report.Configuration.Entries[1].State != "ok" {
+		t.Fatalf("configuration = %+v, want both shared-target contributors aligned", report.Configuration.Entries)
+	}
+}
+
 func TestBuildReportsProvisionerReadiness(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()

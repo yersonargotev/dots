@@ -57,11 +57,35 @@ func (p Provenance) Empty() bool {
 type Record struct {
 	Target      string   `json:"target"`
 	Source      string   `json:"source"`
+	Sources     []string `json:"sources,omitempty"`
 	Strategy    string   `json:"strategy"`
 	Hash        string   `json:"hash"`
 	InstalledAt string   `json:"installedAt"`
 	Profiles    []string `json:"profiles,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+}
+
+// SourceList returns every Source of Truth contribution for the managed target.
+// Legacy metadata records only Source; composed subset targets additionally
+// record Sources in deterministic manifest order.
+func (r Record) SourceList() []string {
+	if len(r.Sources) > 0 {
+		return append([]string(nil), r.Sources...)
+	}
+	if r.Source == "" {
+		return nil
+	}
+	return []string{r.Source}
+}
+
+// HasSource reports whether source contributed to this managed target.
+func (r Record) HasSource(source string) bool {
+	for _, candidate := range r.SourceList() {
+		if candidate == source {
+			return true
+		}
+	}
+	return false
 }
 
 // ProvisionerRecord describes the last known result for one selected
@@ -253,4 +277,11 @@ func HashFile(path string) (string, error) {
 		return "", fmt.Errorf("hash source %s: %w", path, err)
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// HashBytes returns the same content digest used by HashFile without requiring
+// a temporary file.
+func HashBytes(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }

@@ -20,6 +20,66 @@ type testEnvelope struct {
 	Error         string          `json:"error"`
 }
 
+func TestInstallJSONRejectsIncompatibleSharedSubsetDuringPlanningWithoutMutation(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	for rel, content := range map[string]string{
+		"configs/base.json":   `{"editor":{"theme":"dark"}}`,
+		"configs/mobile.json": `{"editor":{"theme":"light"}}`,
+	} {
+		path := filepath.Join(sourceRoot, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir source: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("write source: %v", err)
+		}
+	}
+	manifestPath := filepath.Join(sourceRoot, "dots.yaml")
+	if err := os.WriteFile(manifestPath, []byte(`version: 1
+profiles:
+  default:
+    tags: [base, mobile]
+entries:
+  - source: configs/base.json
+    target: ~/.config/shared.json
+    strategy: copy
+    ownership: json-subset
+    tags: [base]
+  - source: configs/mobile.json
+    target: ~/.config/shared.json
+    strategy: copy
+    ownership: json-subset
+    tags: [mobile]
+`), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"install", "--profile", "default", "--skip-deps", "--yes", "--no-tui",
+		"--output", "json", "--file", manifestPath, "--source-root", sourceRoot,
+		"--home", home, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	env := decodeEnvelopeForCommand(t, out.String(), "install")
+	if env.Status != "error" || !strings.Contains(env.Error, "incompatible") {
+		t.Fatalf("envelope = %+v, want planning incompatibility", env)
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("Machine Output Mode wrote stderr:\n%s", errOut.String())
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".config", "shared.json")); !os.IsNotExist(err) {
+		t.Fatalf("target mutated before planning failure; lstat err = %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(stateRoot, "installed.json")); !os.IsNotExist(err) {
+		t.Fatalf("metadata mutated before planning failure; lstat err = %v", err)
+	}
+}
+
 func decodeEnvelope(t *testing.T, out string) testEnvelope {
 	t.Helper()
 	var env testEnvelope

@@ -31,17 +31,24 @@ const ConflictReasonSourceOverrideNotSelected = "source-override-not-selected"
 // Action is a single planned filesystem change for a Managed Entry.
 type Action struct {
 	Source string `json:"source"`
+	// Sources lists every Source of Truth contribution when compatible
+	// json-subset Managed Entries compose into one physical target operation.
+	Sources []string `json:"sources,omitempty"`
 	// ResolvedSource is an absolute, machine-local path and is therefore kept out
 	// of the Agent Output Contract: it differs between machines and install
 	// locations, which would break idempotent envelope comparisons. Agents key on
 	// the portable, manifest-relative Source instead.
-	ResolvedSource string   `json:"-"`
-	Target         string   `json:"target"`
-	Strategy       string   `json:"strategy"`
-	Status         Status   `json:"status"`
-	Reason         string   `json:"reason,omitempty"`
-	MatchingTags   []string `json:"matching_tags,omitempty"`
-	Ownership      string   `json:"-"`
+	ResolvedSource  string   `json:"-"`
+	ResolvedSources []string `json:"-"`
+	// Content is the conservatively composed baseline for a shared json-subset
+	// target. Apply writes or merges it once instead of mutating per contributor.
+	Content      []byte   `json:"-"`
+	Target       string   `json:"target"`
+	Strategy     string   `json:"strategy"`
+	Status       Status   `json:"status"`
+	Reason       string   `json:"reason,omitempty"`
+	MatchingTags []string `json:"matching_tags,omitempty"`
+	Ownership    string   `json:"-"`
 }
 
 // Plan is the preview of changes the installer would apply for a Profile.
@@ -94,6 +101,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	tags := resolved.Tags
 
 	plan := Plan{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
+	actionByTarget := map[string]int{}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue
@@ -128,7 +136,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 				reason = ConflictReasonSourceOverrideNotSelected
 			}
 		}
-		plan.Actions = append(plan.Actions, Action{
+		action := Action{
 			Source:         source,
 			ResolvedSource: sourceAbs,
 			Target:         target,
@@ -137,10 +145,77 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			Reason:         reason,
 			MatchingTags:   matchingTags,
 			Ownership:      entry.Ownership,
-		})
+		}
+		targetKey := filepath.Clean(target)
+		if index, ok := actionByTarget[targetKey]; ok {
+			existing := &plan.Actions[index]
+			if existing.Strategy != "copy" || existing.Ownership != "json-subset" || action.Strategy != "copy" || action.Ownership != "json-subset" {
+				return Plan{}, fmt.Errorf("install plan contains duplicate target %s; only copy entries with json-subset ownership can compose", targetKey)
+			}
+			if len(existing.Sources) == 0 {
+				existing.Sources = []string{existing.Source}
+				existing.ResolvedSources = []string{existing.ResolvedSource}
+			}
+			existing.Sources = append(existing.Sources, action.Source)
+			existing.ResolvedSources = append(existing.ResolvedSources, action.ResolvedSource)
+			composed, err := configsubset.ComposeJSONFiles(existing.ResolvedSources)
+			if err != nil {
+				if strings.Contains(err.Error(), "incompatible") {
+					return Plan{}, fmt.Errorf("shared target %s has incompatible json-subset sources: %w", targetKey, err)
+				}
+				return Plan{}, fmt.Errorf("compose shared target %s: %w", targetKey, err)
+			}
+			existing.Content = composed
+			existing.Status, err = composedJSONStatus(*existing, opts.Metadata)
+			if err != nil {
+				return Plan{}, err
+			}
+			existing.Reason = ""
+			existing.MatchingTags = nil
+			continue
+		}
+		actionByTarget[targetKey] = len(plan.Actions)
+		plan.Actions = append(plan.Actions, action)
 	}
 
 	return plan, nil
+}
+
+func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
+	info, err := os.Lstat(action.Target)
+	if os.IsNotExist(err) {
+		return StatusCreate, nil
+	}
+	if err != nil || !info.Mode().IsRegular() {
+		return StatusConflict, nil
+	}
+	targetData, err := os.ReadFile(action.Target)
+	if err != nil {
+		return "", fmt.Errorf("read shared JSON target %s: %w", action.Target, err)
+	}
+	if bytes.Equal(targetData, action.Content) {
+		return StatusUnchanged, nil
+	}
+	rec, ok := meta.FindByTarget(action.Target)
+	trusted := ok && rec.Strategy == action.Strategy
+	for _, source := range action.Sources {
+		trusted = trusted && rec.HasSource(source)
+	}
+	if !trusted {
+		return StatusConflict, nil
+	}
+	relation, err := configsubset.AnalyzeJSON(targetData, action.Content)
+	if err != nil {
+		return "", fmt.Errorf("analyze shared JSON target %s: %w", action.Target, err)
+	}
+	switch {
+	case relation.Contains:
+		return StatusUnchanged, nil
+	case relation.Mergeable:
+		return StatusUpdate, nil
+	default:
+		return StatusConflict, nil
+	}
 }
 
 // MatchingUnselectedSourceOverrideTags returns the deterministic set of
@@ -447,7 +522,7 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta sta
 
 func metadataMatchesEntry(meta state.Metadata, target, source, strategy string) bool {
 	rec, ok := meta.FindByTarget(target)
-	return ok && rec.Source == source && rec.Strategy == strategy
+	return ok && rec.HasSource(source) && rec.Strategy == strategy
 }
 
 func targetContainsCompatibleRecordedSource(entry manifest.Entry, target, sourceRoot string, meta state.Metadata, defaultSource string) bool {

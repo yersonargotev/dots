@@ -3,11 +3,37 @@ package plan_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
 )
+
+func TestBuildUninstallPlansOneRemovalForCompositeTarget(t *testing.T) {
+	f := newUninstallFixture(t)
+	target := f.target(".config/shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte("{\"base\":true,\"mobile\":true}\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	hash, err := state.HashFile(target)
+	if err != nil {
+		t.Fatalf("hash target: %v", err)
+	}
+	sources := []string{"configs/base.json", "configs/mobile.json"}
+	p := f.build(t, state.Record{
+		Target: target, Source: sources[0], Sources: sources, Strategy: "copy", Hash: hash,
+	})
+	if len(p.Actions) != 1 {
+		t.Fatalf("actions = %d, want one physical removal", len(p.Actions))
+	}
+	if p.Actions[0].Status != plan.UninstallRemove || !reflect.DeepEqual(p.Actions[0].Sources, sources) {
+		t.Fatalf("action = %+v, want removable composite contributors", p.Actions[0])
+	}
+}
 
 func TestValidateBackupableTargetAcceptsFileDirAndSymlink(t *testing.T) {
 	dir := t.TempDir()
