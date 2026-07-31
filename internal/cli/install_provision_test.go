@@ -359,7 +359,7 @@ func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t 
 	if !strings.Contains(string(got), "<!-- dots:rules -->") {
 		t.Fatalf("install with gentle-ai provisioner did not write dots rules block\ncontent:\n%s\noutput:\n%s", got, out.String())
 	}
-	if strings.Contains(string(got), "<!-- dots:delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.6-sol") {
+	if strings.Contains(string(got), "<!-- dots:delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.6 Sol") || strings.Contains(string(got), "gpt-5.6-sol") {
 		t.Fatalf("install without Codex delegation tag wrote delegation guidance\ncontent:\n%s\noutput:\n%s", got, out.String())
 	}
 	assertNoNativeCodexSparkAgents(t, sandboxHome, "install without Codex delegation tag")
@@ -398,12 +398,12 @@ func TestInstallCodexDelegationTagInstallsGuidance(t *testing.T) {
 		t.Fatalf("install with Codex delegation tag did not write Codex AGENTS.md: %v\noutput:\n%s", err, out.String())
 	}
 	content := string(got)
-	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:delegation -->", "gpt-5.6-sol"} {
+	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:delegation -->", "gpt-5.6 Sol"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("install with Codex delegation tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out.String())
 		}
 	}
-	assertNativeCodexSparkAgents(t, sandboxHome, "install with Codex delegation tag")
+	assertNoNativeCodexSparkAgents(t, sandboxHome, "install with Codex delegation tag")
 	if strings.Contains(content, "argote:subagent-delegation") {
 		t.Fatalf("install with Codex delegation tag used legacy markers\ncontent:\n%s", content)
 	}
@@ -438,7 +438,7 @@ func TestInstallCodexDelegationProfileInstallsOnlyCodexDelegation(t *testing.T) 
 	if err != nil {
 		t.Fatalf("codex-delegation profile did not write Codex AGENTS.md: %v\noutput:\n%s", err, out.String())
 	}
-	for _, want := range []string{"<!-- dots:delegation -->", "gpt-5.6-sol"} {
+	for _, want := range []string{"<!-- dots:delegation -->", "gpt-5.6 Sol"} {
 		if !strings.Contains(string(content), want) {
 			t.Fatalf("codex-delegation profile missing %q\ncontent:\n%s\noutput:\n%s", want, content, out.String())
 		}
@@ -449,7 +449,7 @@ func TestInstallCodexDelegationProfileInstallsOnlyCodexDelegation(t *testing.T) 
 	if !strings.Contains(out.String(), "--agent codex --skill delegation --global --copy") {
 		t.Fatalf("codex-delegation profile did not select the Codex-only skill provisioner\noutput:\n%s", out.String())
 	}
-	assertNativeCodexSparkAgents(t, sandboxHome, "codex-delegation profile")
+	assertNoNativeCodexSparkAgents(t, sandboxHome, "codex-delegation profile")
 	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
@@ -495,7 +495,7 @@ func TestInstallWithoutCodexDelegationTagRemovesCurrentAndLegacyGuidance(t *test
 		t.Fatalf("read Codex instructions: %v", err)
 	}
 	content := string(got)
-	for _, not := range []string{"<!-- dots:delegation -->", "argote:subagent-delegation", "\ncurrent\n", "\nlegacy\n", "gpt-5.6-sol"} {
+	for _, not := range []string{"<!-- dots:delegation -->", "argote:subagent-delegation", "\ncurrent\n", "\nlegacy\n", "gpt-5.6 Sol", "gpt-5.6-sol"} {
 		if strings.Contains(content, not) {
 			t.Fatalf("without Codex delegation tag kept %q\ncontent:\n%s\noutput:\n%s", not, content, out.String())
 		}

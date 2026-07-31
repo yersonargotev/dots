@@ -215,10 +215,10 @@ func TestConvergeCodexDelegationIsOptInCodexOnly(t *testing.T) {
 		t.Fatalf("Codex delegation block bounds missing\n%s", codexContent)
 	}
 	codexDelegationContent := codexContent[blockStart:blockEnd]
-	if strings.Count(codexDelegationContent, "gpt-5.6-sol") != 2 {
-		t.Fatalf("Codex delegation block should include GPT-5.6 Sol role guidance exactly twice\n%s", codexContent)
+	if strings.Count(strings.ToLower(codexDelegationContent), "gpt-5.6 sol") != 3 {
+		t.Fatalf("Codex delegation block should include the configured GPT-5.6 Sol references exactly three times\n%s", codexContent)
 	}
-	for _, want := range []string{"delegation` skill", "dots-explorer", "dots-worker", "standing authorization", "across repositories", "tool-level permission required", "reserve this profile's GPT-5.6 Sol low default"} {
+	for _, want := range []string{"delegation` skill", "dots-explorer", "dots-worker", "standing authorization", "across repositories", "tool-level permission required", "reservar", "GPT-5.6 Sol"} {
 		if !strings.Contains(codexDelegationContent, want) {
 			t.Fatalf("Codex delegation block missing policy phrase %q\n%s", want, codexContent)
 		}
@@ -237,23 +237,9 @@ func TestConvergeCodexDelegationIsOptInCodexOnly(t *testing.T) {
 	if strings.Contains(codexContent, "dots:codex-spark-delegation") {
 		t.Fatalf("Codex delegation block should use the model-neutral dots:delegation marker\n%s", codexContent)
 	}
-	for _, tc := range []struct {
-		name  string
-		wants []string
-	}{
-		{name: codexExplorerAgentFile, wants: []string{`name = "dots-explorer"`, `sandbox_mode = "read-only"`, `model = "gpt-5.6-sol"`, `model_reasoning_effort = "low"`, "Outcome:", "Success means:", "stop when the question is answered", "Load the delegation skill", "Do not edit files."}},
-		{name: codexWorkerAgentFile, wants: []string{`name = "dots-worker"`, `sandbox_mode = "workspace-write"`, `model = "gpt-5.6-sol"`, `model_reasoning_effort = "low"`, "Outcome:", "Success means:", "most relevant non-destructive validation", "Load the delegation skill", "changed files"}},
-	} {
-		path := filepath.Join(home, ".codex", "agents", tc.name)
-		got, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read native Codex agent %s: %v", path, err)
-		}
-		content := string(got)
-		for _, want := range tc.wants {
-			if !strings.Contains(content, want) {
-				t.Fatalf("native Codex agent %s missing %q\n%s", path, want, content)
-			}
+	for _, name := range []string{codexExplorerAgentFile, codexWorkerAgentFile} {
+		if _, err := os.Stat(filepath.Join(home, ".codex", "agents", name)); !os.IsNotExist(err) {
+			t.Fatalf("Codex delegation should not install native agent file %s; stat err = %v", name, err)
 		}
 	}
 
@@ -272,7 +258,7 @@ func TestConvergeCodexDelegationIsOptInCodexOnly(t *testing.T) {
 				t.Fatalf("%s missing portable delegation policy phrase %q\n%s", path, want, content)
 			}
 		}
-		for _, not := range []string{codexDelegationStart, codexDelegationEnd, "gpt-5.6-sol"} {
+		for _, not := range []string{codexDelegationStart, codexDelegationEnd, "gpt-5.6 Sol", "gpt-5.6-sol"} {
 			if strings.Contains(content, not) {
 				t.Fatalf("%s unexpectedly contains Codex delegation guidance %q\n%s", path, not, content)
 			}
@@ -421,8 +407,8 @@ func TestDelegationWorkflowDocumentsPreflightAndToolLevelConflict(t *testing.T) 
 		"Delegation Preflight",
 		"~/.codex/AGENTS.md",
 		"dots:delegation",
-		"dots-explorer.toml",
-		"dots-worker.toml",
+		"~/.codex/AGENTS.md",
+		"without-codex-delegation",
 	} {
 		if !strings.Contains(workflow, want) {
 			t.Fatalf("workflow delegation docs missing %q", want)
@@ -439,9 +425,9 @@ func TestDelegationWorkflowDocumentsPreflightAndToolLevelConflict(t *testing.T) 
 		"detailed procedure lives in the `delegation` skill",
 		"Delegation Preflight is required for non-trivial work",
 		"tool-level permission required",
-		"~/.codex/agents/dots-explorer.toml",
-		"~/.codex/agents/dots-worker.toml",
+		"~/.codex/AGENTS.md",
 		"--tag without-codex-delegation",
+		"codex-delegation",
 	} {
 		if !strings.Contains(delegationDoc, want) {
 			t.Fatalf("delegation docs missing %q", want)

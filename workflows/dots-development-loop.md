@@ -53,10 +53,8 @@ permission gates without silently skipping delegation.
 
 Every non-trivial task in this workflow requires loading the `delegation` skill
 when available and completing its Delegation Preflight before implementation or
-review work proceeds. For Codex, the workflow must still confirm the
-`dots:delegation` overlay in `~/.codex/AGENTS.md` plus native custom agents at
-`~/.codex/agents/dots-explorer.toml` and
-`~/.codex/agents/dots-worker.toml`, or record the missing artifact.
+review work proceeds. For Codex, the workflow must confirm the `dots:delegation`
+overlay is present in `~/.codex/AGENTS.md`.
 
 ## Operating rules
 
@@ -153,12 +151,9 @@ Goal: produce the smallest correct diff for the approved issue scope.
    - keep the capability separately installable through the `codex-delegation`
      profile rather than coupling it to the broader `agents` profile;
    - use `without-codex-delegation` as the declarative cleanup tag;
-   - install Codex-native custom agents at `~/.codex/agents/dots-explorer.toml`
-     and `~/.codex/agents/dots-worker.toml` as dots-owned executable delegation
-     artifacts, not only persuasive text;
-   - remove the
-     `<!-- dots:delegation -->...<!-- /dots:delegation -->`
-     block and the two dots-owned native agent files during cleanup;
+   - install only the `<!-- dots:delegation -->...<!-- /dots:delegation -->`
+     Codex overlay into AGENTS during install;
+   - remove the overlay during cleanup;
    - preserve `dots:rules`, Engram, CodeGraph, Codex config, user-owned custom
      agents, and the rest of the agent baseline;
    - if both `codex-delegation` and `without-codex-delegation` are

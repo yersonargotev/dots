@@ -50,11 +50,11 @@ Load the ` + "`delegation`" + ` skill when available, then map safe Codex slices
 
 | Slice | Codex agent |
 | --- | --- |
-| Codebase exploration, impact scans, or test/log triage | ` + "`dots-explorer`" + ` on ` + "`gpt-5.6-sol`" + ` |
-| Separable implementation over disjoint files/modules | ` + "`dots-worker`" + ` on ` + "`gpt-5.6-sol`" + ` |
-| Review, architecture, security, or other judgment-heavy work | Strongest appropriate available model; reserve this profile's GPT-5.6 Sol low default for bounded exploration and implementation. |
+| Codebase exploration, impact scans, o triage de tests/logs | ` + "`dots-explorer`" + ` en ` + "`gpt-5.6 Sol`" + ` |
+| Implementación separable en archivos/módulos disjuntos | ` + "`dots-worker`" + ` en ` + "`gpt-5.6 Sol`" + ` |
+| Review, arquitectura, seguridad, u otro trabajo que requiera juicio | El modelo disponible más fuerte; reservar el default bajo de GPT-5.6 Sol de este perfil para exploración/implementación acotada. |
 
-Selecting the ` + "`codex-delegation`" + ` profile is standing authorization for safe bounded Codex delegation across repositories when the active prompt, workflow, or selected skill asks for subagents, parallel agents, or delegation. If the active Codex tool still requires prompt-level permission, ask once or record ` + "`tool-level permission required`" + ` as the skip reason.`
+Selecting the ` + "`codex-delegation`" + ` profile is standing authorization for safe bounded Codex delegation across repositories. If the active Codex tool still requires prompt-level permission, ask once or record ` + "`tool-level permission required`" + ` as the skip reason.`
 
 const codexExplorerAgent = `name = "dots-explorer"
 description = "Read-only dots explorer for bounded codebase exploration, impact scans, and test/log triage."
@@ -162,11 +162,7 @@ func SyncCopilotCLIEngramProtocol(home string) error {
 // instructions only. Legacy Spark-specific and argote-owned marker pairs are
 // migrated to the generic dots-owned marker pair during the upsert.
 func ConvergeCodexDelegation(home string) error {
-	return errors.Join(
-		convergeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md")),
-		writeCodexAgentFile(home, codexExplorerAgentFile, codexExplorerAgent),
-		writeCodexAgentFile(home, codexWorkerAgentFile, codexWorkerAgent),
-	)
+	return convergeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md"))
 }
 
 // RemoveCodexDelegation removes current and legacy dots-owned delegation blocks
