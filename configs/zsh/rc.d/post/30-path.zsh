@@ -31,5 +31,18 @@ fi
 # `$(yarn global bin)`, which spawns a Node process on every shell startup.
 [[ -d "${HOME}/.yarn/bin" ]] && export PATH="${HOME}/.yarn/bin:${PATH}"
 
+# Homebrew's rustup formula keeps rustc and cargo proxies in its own prefix.
+# Resolve that prefix dynamically so both Apple Silicon and Intel layouts work.
+if (( ${+commands[brew]} )); then
+  _rustup_prefix="$(brew --prefix rustup 2>/dev/null)" || _rustup_prefix=""
+  if [[ -n "${_rustup_prefix}" && -d "${_rustup_prefix}/bin" ]]; then
+    case ":${PATH}:" in
+      *":${_rustup_prefix}/bin:"*) ;;
+      *) export PATH="${_rustup_prefix}/bin:${PATH}" ;;
+    esac
+  fi
+  unset _rustup_prefix
+fi
+
 # Generic local-bin env shim (rustup, uv, and similar installers write here).
 [[ -r "${HOME}/.local/bin/env" ]] && source "${HOME}/.local/bin/env"

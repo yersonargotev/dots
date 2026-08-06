@@ -437,7 +437,7 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 	if wantsJSON(cmd) {
 		stdout = cmd.ErrOrStderr()
 	}
-	report, err := deps.Install(m, options, look, fontInstalled(options.OS, home), tier, depsExecRunner{
+	report, err := deps.Install(m, options, look, fontInstalled(options.OS, home), tier, &depsExecRunner{
 		ctx:       cmd.Context(),
 		stdin:     cmd.InOrStdin(),
 		stdout:    stdout,

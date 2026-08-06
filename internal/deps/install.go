@@ -48,6 +48,14 @@ type Runner interface {
 	Run(executable string, args []string) error
 }
 
+// HomebrewFormulaPATHRunner lets the Homebrew rustup provider expose its
+// formula-owned tool proxies to reprobes and later child commands in this run.
+type HomebrewFormulaPATHRunner interface {
+	Runner
+	AddHomebrewFormulaToPATH(formula string) error
+	Lookup(command string) bool
+}
+
 // InstallStatus describes the result of a real install action.
 type InstallStatus string
 
@@ -125,6 +133,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 
 	report := InstallReport{Profile: plan.Profile, Profiles: plan.Profiles, Tags: plan.Tags, Tier: plan.Tier}
 	requiredUnresolved := false
+	effectiveLook := look
 	for _, action := range plan.Actions {
 		if !actionExecutable(action) {
 			if action.Requirement == manifest.DependencyRequirementRequired {
@@ -174,7 +183,14 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				return report, fmt.Errorf("install %q: %w", action.Dependency, err)
 			}
 		}
-		if len(action.Bootstrap) > 0 && !bootstrapRunnable(action.Bootstrap, look) {
+		if action.Provider == TierHomebrew && action.Toolchain == manifest.DependencyToolchainRustStableRustup {
+			if pathRunner, ok := runner.(HomebrewFormulaPATHRunner); ok {
+				if err := pathRunner.AddHomebrewFormulaToPATH(action.Package); err == nil {
+					effectiveLook = pathRunner.Lookup
+				}
+			}
+		}
+		if len(action.Bootstrap) > 0 && !bootstrapRunnable(action.Bootstrap, effectiveLook) {
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
 			}
@@ -187,7 +203,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Executable:   action.Executable,
 				Args:         args,
 				Bootstrap:    append([]Command(nil), action.Bootstrap...),
-				Manual:       unresolvedToolchainRemediation(action, look),
+				Manual:       unresolvedToolchainRemediation(action, effectiveLook),
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
 				UserLocal:    action.UserLocal,
@@ -216,8 +232,8 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			}
 			return report, fmt.Errorf("bootstrap %q: %w", action.Dependency, err)
 		}
-		if !actionPresent(action, opts, look, fontLook) {
-			manual := unresolvedToolchainRemediation(action, look)
+		if !actionPresent(action, opts, effectiveLook, fontLook) {
+			manual := unresolvedToolchainRemediation(action, effectiveLook)
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
 			}
@@ -288,7 +304,11 @@ func unresolvedToolchainRemediation(action InstallAction, look Lookup) string {
 	if len(missing) == 1 {
 		verb = "is"
 	}
-	return fmt.Sprintf("Rust stable is selected in rustup, but %s %s not available on PATH; ensure rustup exposes its proxies (usually by adding ~/.cargo/bin to PATH), then verify with `rustup which rustc` and `rustup which cargo`", strings.Join(missing, ", "), verb)
+	pathGuidance := "ensure rustup exposes its proxies (usually by adding ~/.cargo/bin to PATH)"
+	if action.Provider == TierHomebrew {
+		pathGuidance = "add the Homebrew rustup proxy directory from `brew --prefix rustup` (usually `$(brew --prefix rustup)/bin`) to PATH"
+	}
+	return fmt.Sprintf("Rust stable is selected in rustup, but %s %s not available on PATH; %s, then verify with `rustup which rustc` and `rustup which cargo`", strings.Join(missing, ", "), verb, pathGuidance)
 }
 
 func missingCommandProbes(probes []string, look Lookup) []string {

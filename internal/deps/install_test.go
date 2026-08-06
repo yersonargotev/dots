@@ -318,11 +318,12 @@ type recordingRunner struct {
 	afterRun             func()
 	afterUserLocal       func(deps.InstallAction)
 	err                  error
+	failOnCall           int
 }
 
 func (r *recordingRunner) Run(executable string, args []string) error {
 	r.calls = append(r.calls, runnerCall{executable: executable, args: append([]string(nil), args...)})
-	if r.err != nil {
+	if r.err != nil && (r.failOnCall == 0 || r.failOnCall == len(r.calls)) {
 		return r.err
 	}
 	if r.afterRun != nil {
@@ -863,6 +864,79 @@ func TestInstallYesExplainsRustupToolchainWhenProbesRemainMissing(t *testing.T) 
 		if !strings.Contains(manual, want) {
 			t.Fatalf("Rust remediation missing %q: %q", want, manual)
 		}
+	}
+}
+
+func TestInstallYesExplainsHomebrewRustupPathWhenProxiesRemainMissing(t *testing.T) {
+	present := map[string]bool{"brew": true, "rustup": true}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:      "Rust stable (rustup)",
+				Commands:  []string{"rustup", "rustc", "cargo"},
+				Brew:      "rustup",
+				Toolchain: manifest.DependencyToolchainRustStableRustup,
+			}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	report, err := deps.Install(m, deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierHomebrew, &recordingRunner{})
+	if err == nil {
+		t.Fatalf("Install() error = nil, want unresolved rust toolchain error")
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusUnresolved {
+		t.Fatalf("report items = %#v, want one unresolved Rust item", report.Items)
+	}
+	manual := report.Items[0].Manual
+	for _, want := range []string{"brew --prefix rustup", "$(brew --prefix rustup)/bin", "rustup which rustc", "rustup which cargo"} {
+		if !strings.Contains(manual, want) {
+			t.Fatalf("Homebrew Rust remediation missing %q: %q", want, manual)
+		}
+	}
+	if strings.Contains(manual, "~/.cargo/bin") {
+		t.Fatalf("Homebrew Rust remediation used standard installer path: %q", manual)
+	}
+}
+
+func TestInstallYesReportsFailedHomebrewRustupBootstrap(t *testing.T) {
+	present := map[string]bool{"brew": true, "rustup": true}
+	runner := &recordingRunner{err: errors.New("bootstrap failed"), failOnCall: 2}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags: []string{"core"},
+			Dependencies: []manifest.Dependency{{
+				Name:      "Rust stable (rustup)",
+				Commands:  []string{"rustup", "rustc", "cargo"},
+				Brew:      "rustup",
+				Toolchain: manifest.DependencyToolchainRustStableRustup,
+			}},
+		}},
+		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	report, err := deps.Install(m, deps.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
+		return present[command]
+	}, fontLookupSet(), deps.TierHomebrew, runner)
+	if err == nil || !strings.Contains(err.Error(), "bootstrap") {
+		t.Fatalf("Install() error = %v, want bootstrap failure", err)
+	}
+	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusFailed {
+		t.Fatalf("report items = %#v, want failed Rust bootstrap", report.Items)
+	}
+	wantCalls := []runnerCall{
+		{executable: "brew", args: []string{"install", "rustup"}},
+		{executable: "rustup", args: []string{"default", "stable"}},
+	}
+	if !reflect.DeepEqual(runner.calls, wantCalls) {
+		t.Fatalf("runner calls = %#v, want %#v", runner.calls, wantCalls)
 	}
 }
 

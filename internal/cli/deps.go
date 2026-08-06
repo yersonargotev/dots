@@ -269,7 +269,7 @@ func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Option
 	if wantsJSON(cmd) {
 		stdout = cmd.ErrOrStderr()
 	}
-	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, depsExecRunner{
+	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, &depsExecRunner{
 		ctx:       cmd.Context(),
 		stdin:     cmd.InOrStdin(),
 		stdout:    stdout,
@@ -332,6 +332,37 @@ func (r depsExecRunner) Run(executable string, args []string) error {
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
 	return cmd.Run()
+}
+
+func (r depsExecRunner) AddHomebrewFormulaToPATH(formula string) error {
+	executable := "brew"
+	if r.brewPath != "" {
+		executable = r.brewPath
+	}
+	cmd := exec.CommandContext(r.ctx, executable, "--prefix", formula)
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("resolve Homebrew formula prefix for %q: %w", formula, err)
+	}
+	prefix := strings.TrimSpace(string(output))
+	if prefix == "" {
+		return fmt.Errorf("resolve Homebrew formula prefix for %q: empty output", formula)
+	}
+	bin := filepath.Join(prefix, "bin")
+	path := os.Getenv("PATH")
+	for _, entry := range filepath.SplitList(path) {
+		if entry == bin {
+			return nil
+		}
+	}
+	if path != "" {
+		bin += string(os.PathListSeparator) + path
+	}
+	return os.Setenv("PATH", bin)
+}
+
+func (r depsExecRunner) Lookup(command string) bool {
+	return lookupCommand(command)
 }
 
 func (r depsExecRunner) RunUserLocal(action deps.InstallAction) error {
