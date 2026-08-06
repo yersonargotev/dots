@@ -275,6 +275,7 @@ dependencies:
       - name: Rust stable (rustup)
         commands: [rustup, rustc, cargo]
         brew: rustup
+        linux_homebrew: true
         toolchain: rust-stable-rustup
 entries:
   - source: configs/zsh/zshrc
