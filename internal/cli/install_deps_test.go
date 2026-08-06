@@ -122,6 +122,80 @@ func TestInstallRunsDependenciesBeforeManagedConfiguration(t *testing.T) {
 	}
 }
 
+func TestInstallThreadsFNMManagedNodeIntoLaterProvisioners(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	binDir := t.TempDir()
+	nodeBinDir := filepath.Join(home, ".local", "share", "fnm", "node-versions", "v24.19.0", "installation", "bin")
+	fnmPath := filepath.Join(binDir, "fnm")
+	nodePath := filepath.Join(nodeBinDir, "node")
+	npxPath := filepath.Join(nodeBinDir, "npx")
+	npxMarker := filepath.Join(stateRoot, "npx-ran")
+
+	if err := os.MkdirAll(nodeBinDir, 0o755); err != nil {
+		t.Fatalf("mkdir fnm node bin: %v", err)
+	}
+	writeExecStub(t, filepath.Join(binDir, "brew"), "#!/bin/sh\n/bin/chmod +x \"$FNM_PATH\"\n")
+	if err := os.WriteFile(fnmPath, []byte("#!/bin/sh\nif [ \"$1\" = install ]; then /bin/chmod +x \"$NODE_PATH\" \"$NPX_PATH\"; exit 0; fi\nif [ \"$1\" = exec ]; then shift; [ \"$1\" = --using=lts/latest ] && shift; [ \"$1\" = node ] && shift; exec \"$NODE_PATH\" \"$@\"; fi\nexit 1\n"), 0o600); err != nil {
+		t.Fatalf("write fake fnm: %v", err)
+	}
+	if err := os.WriteFile(nodePath, []byte("#!/bin/sh\nif [ \"$1\" = -p ] && [ \"$2\" = process.execPath ]; then printf '%s\\n' \"$NODE_PATH\"; exit 0; fi\nexit 0\n"), 0o600); err != nil {
+		t.Fatalf("write fake node: %v", err)
+	}
+	if err := os.WriteFile(npxPath, []byte("#!/bin/sh\nprintf 'ran\\n' > \"$NPX_MARKER\"\n"), 0o600); err != nil {
+		t.Fatalf("write fake npx: %v", err)
+	}
+	t.Setenv("FNM_PATH", fnmPath)
+	t.Setenv("NODE_PATH", nodePath)
+	t.Setenv("NPX_PATH", npxPath)
+	t.Setenv("NPX_MARKER", npxMarker)
+	t.Setenv("PATH", binDir)
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [core]
+dependencies:
+  - tags: [core]
+    dependencies:
+      - name: Node LTS (fnm)
+        commands: [fnm, node]
+        brew: fnm
+        toolchain: node-lts-fnm
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: skills
+    tags: [core]
+    spec:
+      package: example/skills
+      agents: [codex]
+      skills: [example]
+      global: true
+    dependencies:
+      - name: npx
+        command: npx
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Stat(npxMarker); err != nil {
+		t.Fatalf("later npx provisioner did not receive fnm-managed Node PATH: %v\noutput:\n%s", err, out.String())
+	}
+}
+
 func TestInstallSkipDepsPreservesConfigOnlyBehavior(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()

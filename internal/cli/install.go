@@ -175,6 +175,7 @@ func newInstallCommand() *cobra.Command {
 			var p plan.Plan
 			var provPlan provision.Plan
 			installPlanReady := false
+			var dependencyEnvironment []string
 
 			if !skipDeps {
 				depsConfirmed := yes
@@ -226,7 +227,8 @@ func newInstallCommand() *cobra.Command {
 				p.Selection = &effective.Report
 				installPlanReady = true
 
-				depReport, depsApplied, err := runInstallDependencies(cmd, *m, depOptions, depTier, paths.Home, depPreview, depsConfirmed, depLookup, brewDetection.Path)
+				depReport, depsApplied, runEnvironment, err := runInstallDependencies(cmd, *m, depOptions, depTier, paths.Home, depPreview, depsConfirmed, depLookup, brewDetection.Path)
+				dependencyEnvironment = runEnvironment
 				dependenciesReport.Result = &depReport
 				if err != nil {
 					if wantsJSON(cmd) {
@@ -272,7 +274,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			provResult, err := runProvisioners(cmd, *m, profiles, extraTags, paths.Home, paths.StateRoot, paths.SourceRoot)
+			provResult, err := runProvisionersWithEnvironment(cmd, *m, profiles, extraTags, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
 			if err != nil {
 				if wantsJSON(cmd) {
 					return installProvisionerError{err: err, report: installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
@@ -413,23 +415,23 @@ func (e installProvisionerError) JSONErrorData() any { return e.report }
 // Managed Configuration is applied. Interactive runs reuse the deps confirmation
 // prompt for package-manager execution; manual or unresolved Dependencies abort
 // the install before filesystem targets are touched.
-func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier, home string, preview deps.InstallDryRunReport, yes bool, look deps.Lookup, brewPath string) (deps.InstallReport, bool, error) {
+func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier, home string, preview deps.InstallDryRunReport, yes bool, look deps.Lookup, brewPath string) (deps.InstallReport, bool, []string, error) {
 	if !yes {
 		if hasRequiredInstallablePreviewAction(preview) {
 			confirmed, err := confirmDepsInstall(cmd.InOrStdin(), cmd.OutOrStdout())
 			if err != nil {
-				return deps.InstallReport{}, false, err
+				return deps.InstallReport{}, false, nil, err
 			}
 			if !confirmed {
 				fmt.Fprintln(cmd.OutOrStdout(), "Dependency installation cancelled.")
-				return deps.InstallReport{}, false, nil
+				return deps.InstallReport{}, false, nil, nil
 			}
 		} else if hasInstallablePreviewAction(preview) {
 			report, err := unresolvedInstallReportFromPreview(preview)
 			if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
 				renderDepsInstall(cmd.OutOrStdout(), report)
 			}
-			return report, true, err
+			return report, true, nil, err
 		}
 	}
 
@@ -437,7 +439,7 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 	if wantsJSON(cmd) {
 		stdout = cmd.ErrOrStderr()
 	}
-	report, err := deps.Install(m, options, look, fontInstalled(options.OS, home), tier, depsExecRunner{
+	runner := &depsExecRunner{
 		ctx:       cmd.Context(),
 		stdin:     cmd.InOrStdin(),
 		stdout:    stdout,
@@ -445,14 +447,16 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 		home:      home,
 		stateRoot: options.StateRoot,
 		brewPath:  brewPath,
-	})
+	}
+	report, err := deps.Install(m, options, look, fontInstalled(options.OS, home), tier, runner)
+	runEnvironment := runner.Environment()
 	if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
 		renderDepsInstall(cmd.OutOrStdout(), report)
 	}
 	if err != nil {
-		return report, true, err
+		return report, true, runEnvironment, err
 	}
-	return report, true, nil
+	return report, true, runEnvironment, nil
 }
 
 // runProvisioners executes the selected provisioners after dependency installs
@@ -462,10 +466,18 @@ func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options dep
 // error, which the caller surfaces; the tool's own stdout/stderr are streamed
 // through so its progress is visible.
 func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string, extraTags []string, home string, stateRoot string, sourceRoot string) (provision.Report, error) {
-	return runProvisionersWithOptions(cmd, m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS}, home, stateRoot, sourceRoot)
+	return runProvisionersWithEnvironment(cmd, m, profiles, extraTags, home, stateRoot, sourceRoot, nil)
+}
+
+func runProvisionersWithEnvironment(cmd *cobra.Command, m manifest.Manifest, profiles []string, extraTags []string, home string, stateRoot string, sourceRoot string, baseEnv []string) (provision.Report, error) {
+	return runProvisionersWithOptionsAndEnvironment(cmd, m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS}, home, stateRoot, sourceRoot, baseEnv)
 }
 
 func runProvisionersWithOptions(cmd *cobra.Command, m manifest.Manifest, provisionOpts provision.Options, home string, stateRoot string, sourceRoot string) (provision.Report, error) {
+	return runProvisionersWithOptionsAndEnvironment(cmd, m, provisionOpts, home, stateRoot, sourceRoot, nil)
+}
+
+func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Manifest, provisionOpts provision.Options, home string, stateRoot string, sourceRoot string, baseEnv []string) (provision.Report, error) {
 	if provisionOpts.AppLookup == nil {
 		provisionOpts.AppLookup = appInstalled(provisionOpts.OS, home)
 	}
@@ -478,17 +490,18 @@ func runProvisionersWithOptions(cmd *cobra.Command, m manifest.Manifest, provisi
 		stdout = cmd.ErrOrStderr()
 	}
 	runner := provisionExecRunner{
-		ctx:    ctx,
-		home:   home,
-		stdin:  cmd.InOrStdin(),
-		stdout: stdout,
-		stderr: cmd.ErrOrStderr(),
+		ctx:     ctx,
+		home:    home,
+		stdin:   cmd.InOrStdin(),
+		stdout:  stdout,
+		stderr:  cmd.ErrOrStderr(),
+		baseEnv: baseEnv,
 	}
 	selected, selectErr := provision.Select(m, provisionOpts)
 	if selectErr != nil {
 		return provision.Report{}, selectErr
 	}
-	report, err := provision.Apply(m, provisionOpts, lookupCommand, fontInstalled(runtime.GOOS, home), runner)
+	report, err := provision.Apply(m, provisionOpts, runner.Lookup, fontInstalled(runtime.GOOS, home), runner)
 	if !wantsJSON(cmd) {
 		renderProvisionReport(cmd.OutOrStdout(), report)
 	}
