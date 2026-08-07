@@ -65,6 +65,15 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		binaryPath:  func(_ string, command string) string { return "bin/" + command },
 		links:       []string{"codex"},
 	},
+	"claude": {
+		archiveName: func(version, goarch string) (string, bool) { return "", false },
+		url:         func(version, archive string) string { return "" },
+		layout:      userLocalLayoutBundle,
+		command:     "claude",
+		archiveType: "raw",
+		binaryPath:  func(_ string, command string) string { return command },
+		links:       []string{"claude"},
+	},
 	"uv": {
 		archiveName: func(version, goarch string) (string, bool) {
 			switch goarch {
@@ -384,7 +393,7 @@ func InstallUserLocal(home string, action InstallAction) error {
 				return fmt.Errorf("create user-local staging directory: %w", err)
 			}
 			defer os.RemoveAll(staging)
-			if err := extractArchive(data, recipe.archiveType, staging); err != nil {
+			if err := stageUserLocalArtifact(data, archive, recipe, staging); err != nil {
 				return err
 			}
 			if err := os.Rename(staging, optDir); err != nil {
@@ -420,6 +429,20 @@ func InstallUserLocal(home string, action InstallAction) error {
 		}
 	}
 
+	return nil
+}
+
+func stageUserLocalArtifact(data []byte, archive string, recipe userLocalRecipe, dest string) error {
+	if recipe.archiveType != "raw" {
+		return extractArchive(data, recipe.archiveType, dest)
+	}
+	path := filepath.Join(dest, recipe.binaryPath(archive, recipe.command))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create raw artifact directory: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o755); err != nil {
+		return fmt.Errorf("write raw executable artifact: %w", err)
+	}
 	return nil
 }
 

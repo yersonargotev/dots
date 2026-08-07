@@ -122,6 +122,96 @@ entries:
 	}
 }
 
+func TestRollingClaudeCLIPlanAndInstallUseResolvedFixtureArtifact(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	localBin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(localBin, 0o755); err != nil {
+		t.Fatalf("mkdir local bin: %v", err)
+	}
+	t.Setenv("PATH", localBin+string(os.PathListSeparator)+"/usr/bin:/bin")
+
+	platform := claudeFixturePlatform(t, runtime.GOOS, runtime.GOARCH)
+	binary := []byte("#!/bin/sh\nprintf 'claude fixture\\n'\n")
+	sum := sha256.Sum256(binary)
+	digest := hex.EncodeToString(sum[:])
+	var metadataRequests atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/stable":
+			metadataRequests.Add(1)
+			_, _ = w.Write([]byte("2.1.220"))
+		case "/2.1.220/manifest.json":
+			metadataRequests.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"version":   "2.1.220",
+				"platforms": map[string]any{platform: map[string]any{"binary": "claude", "checksum": digest}},
+			})
+		case "/2.1.220/" + platform + "/claude":
+			_, _ = w.Write(binary)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	previousClient, previousURL := depsHTTPClient, depsRollingReleaseURL
+	depsHTTPClient, depsRollingReleaseURL = server.Client(), server.URL
+	t.Cleanup(func() { depsHTTPClient, depsRollingReleaseURL = previousClient, previousURL })
+
+	if err := os.WriteFile(filepath.Join(sourceRoot, "source"), []byte("managed\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	manifestPath := filepath.Join(t.TempDir(), "dots.yaml")
+	manifest := "version: 1\nprofiles:\n  default:\n    tags: [agents]\nentries:\n  - source: source\n    target: ~/.managed\n    strategy: copy\n    tags: [agents]\n    dependencies:\n      - name: claude\n        command: claude\n        rolling_user_local:\n          recipe: claude\n"
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	dryRun := NewRootCommand()
+	var dryRunOut bytes.Buffer
+	dryRun.SetOut(&dryRunOut)
+	dryRun.SetErr(&dryRunOut)
+	dryRun.SetArgs([]string{"--output", "json", "deps", "install", "--dry-run", "--profile", "default", "--file", manifestPath, "--home", home, "--state-root", stateRoot})
+	if err := dryRun.Execute(); err != nil {
+		t.Fatalf("deps install --dry-run error = %v\n%s", err, dryRunOut.String())
+	}
+	for _, want := range []string{"2.1.220", platform, "sha256:" + digest, server.URL + "/2.1.220/" + platform + "/claude", filepath.Join(home, ".local", "opt", "claude", "2.1.220")} {
+		if !strings.Contains(dryRunOut.String(), want) {
+			t.Fatalf("dry-run JSON missing %q\n%s", want, dryRunOut.String())
+		}
+	}
+
+	install := NewRootCommand()
+	var installOut bytes.Buffer
+	install.SetOut(&installOut)
+	install.SetErr(&installOut)
+	install.SetArgs([]string{"install", "--yes", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := install.Execute(); err != nil {
+		t.Fatalf("install error = %v\n%s", err, installOut.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, ".managed")); err != nil {
+		t.Fatalf("managed configuration missing after dependency success: %v", err)
+	}
+	target, err := os.Readlink(filepath.Join(localBin, "claude"))
+	if err != nil || target != filepath.Join(home, ".local", "opt", "claude", "2.1.220", "claude") {
+		t.Fatalf("claude link = (%q, %v)", target, err)
+	}
+	metadata, err := deps.LoadDependencyMetadata(deps.DependencyMetadataPath(stateRoot))
+	if err != nil || len(metadata.Dependencies) != 1 {
+		t.Fatalf("dependency metadata = (%#v, %v)", metadata, err)
+	}
+	receipt := metadata.Dependencies[0]
+	if receipt.Provider != string(deps.TierUserLocal) || receipt.Version != "2.1.220" || receipt.Artifact != "claude" || receipt.Digest != "sha256:"+digest || receipt.Checksum != digest || receipt.Platform != platform || receipt.Path != filepath.Join(localBin, "claude") || receipt.InstalledAt == "" {
+		t.Fatalf("receipt = %#v", receipt)
+	}
+	if metadataRequests.Load() != 4 {
+		t.Fatalf("metadata requests = %d, want stable and manifest for dry-run and pinned install", metadataRequests.Load())
+	}
+}
+
 func TestRollingCodexCLIExistingCommandSkipsReleaseLookup(t *testing.T) {
 	home := t.TempDir()
 	bin := t.TempDir()
@@ -205,6 +295,21 @@ func codexFixtureNames(t *testing.T, goos, goarch string) (asset, binary string)
 		t.Skipf("unsupported test platform %s/%s", goos, goarch)
 	}
 	return "codex-package-" + target + ".tar.gz", "bin/codex"
+}
+
+func claudeFixturePlatform(t *testing.T, goos, goarch string) string {
+	t.Helper()
+	platforms := map[string]string{
+		"darwin_amd64": "darwin-x64",
+		"darwin_arm64": "darwin-arm64",
+		"linux_amd64":  "linux-x64",
+		"linux_arm64":  "linux-arm64",
+	}
+	platform, ok := platforms[goos+"_"+goarch]
+	if !ok {
+		t.Skipf("unsupported test platform %s/%s", goos, goarch)
+	}
+	return platform
 }
 
 func codexFixtureArchive(t *testing.T, binary string) []byte {

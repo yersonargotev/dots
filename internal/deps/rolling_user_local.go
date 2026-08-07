@@ -16,10 +16,22 @@ import (
 )
 
 const (
-	codexRollingRecipe  = "codex"
-	codexReleasesAPIURL = "https://api.github.com/repos/openai/codex/releases/latest"
-	maxReleaseMetadata  = 4 << 20
+	codexRollingRecipe   = "codex"
+	codexReleasesAPIURL  = "https://api.github.com/repos/openai/codex/releases/latest"
+	claudeRollingRecipe  = "claude"
+	claudeReleaseBaseURL = "https://downloads.claude.ai/claude-code-releases"
+	maxReleaseMetadata   = 4 << 20
 )
+
+type claudeReleaseManifest struct {
+	Version   string                            `json:"version"`
+	Platforms map[string]claudePlatformArtifact `json:"platforms"`
+}
+
+type claudePlatformArtifact struct {
+	Binary   string `json:"binary"`
+	Checksum string `json:"checksum"`
+}
 
 type githubRelease struct {
 	TagName    string               `json:"tag_name"`
@@ -42,9 +54,18 @@ func rollingUserLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalA
 		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q cannot declare both user_local and rolling_user_local", dep.Name)
 	}
 	recipe := strings.TrimSpace(dep.RollingUserLocal.Recipe)
-	if recipe != codexRollingRecipe {
+	switch recipe {
+	case codexRollingRecipe:
+		return rollingCodexArtifact(dep, opts)
+	case claudeRollingRecipe:
+		return rollingClaudeArtifact(dep, opts)
+	default:
 		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q declares unsupported rolling_user_local recipe %q", dep.Name, recipe)
 	}
+}
+
+func rollingCodexArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact, bool, error) {
+	recipe := codexRollingRecipe
 	artifactName, platform, ok := codexPlatformArtifact(opts.OS, opts.Arch)
 	if !ok {
 		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q rolling_user_local recipe %q does not support %s/%s", dep.Name, recipe, opts.OS, opts.Arch)
@@ -94,6 +115,156 @@ func rollingUserLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalA
 		Destination:   destination,
 		InstalledPath: installedPath,
 	}, true, nil
+}
+
+func rollingClaudeArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact, bool, error) {
+	platform, ok := claudePlatform(opts.OS, opts.Arch)
+	if !ok {
+		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q rolling_user_local recipe %q does not support %s/%s", dep.Name, claudeRollingRecipe, opts.OS, opts.Arch)
+	}
+	if resolved, ok := opts.ResolvedUserLocal[dep.Name]; ok {
+		if resolved.Recipe != claudeRollingRecipe || resolved.Version == "" || resolved.URL == "" || resolved.Checksum == "" || resolved.Artifact != "claude" || resolved.Platform != platform {
+			return UserLocalArtifact{}, false, fmt.Errorf("dependency %q has incomplete resolved rolling artifact", dep.Name)
+		}
+		return resolved, true, nil
+	}
+
+	baseURL := strings.TrimRight(strings.TrimSpace(opts.RollingReleaseURL), "/")
+	if baseURL == "" {
+		baseURL = claudeReleaseBaseURL
+	}
+	versionBytes, err := fetchReleaseMetadata(opts.HTTPClient, baseURL+"/stable")
+	if err != nil {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q stable channel: %w", claudeRollingRecipe, err)
+	}
+	version := strings.TrimSpace(string(versionBytes))
+	if !stableNumericVersion(version) {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: official stable channel returned malformed version", claudeRollingRecipe)
+	}
+	manifestBytes, err := fetchReleaseMetadata(opts.HTTPClient, baseURL+"/"+version+"/manifest.json")
+	if err != nil {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q integrity metadata: %w", claudeRollingRecipe, err)
+	}
+	var release claudeReleaseManifest
+	if err := json.Unmarshal(manifestBytes, &release); err != nil {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q integrity metadata: parse: %w", claudeRollingRecipe, err)
+	}
+	if release.Version != version {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q integrity metadata version does not match stable channel", claudeRollingRecipe)
+	}
+	platformArtifact, ok := release.Platforms[platform]
+	if !ok || platformArtifact.Binary != "claude" {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q integrity metadata has no claude artifact for %s", claudeRollingRecipe, platform)
+	}
+	digest, err := verifiedSHA256Digest("sha256:" + platformArtifact.Checksum)
+	if err != nil {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q artifact %q: %w", claudeRollingRecipe, platform, err)
+	}
+	artifactURL := baseURL + "/" + version + "/" + platform + "/claude"
+	if err := validateClaudeArtifactURL(artifactURL, baseURL, version, platform); err != nil {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q artifact %q: %w", claudeRollingRecipe, platform, err)
+	}
+	destination, installedPath := userLocalPaths(opts.Home, claudeRollingRecipe, version, userLocalLayoutBundle, "claude")
+	return UserLocalArtifact{
+		Recipe: claudeRollingRecipe, Version: version, Artifact: "claude", URL: artifactURL,
+		Digest: "sha256:" + digest, Checksum: digest, Platform: platform,
+		Layout: userLocalLayoutBundle, Command: "claude", Destination: destination, InstalledPath: installedPath,
+	}, true, nil
+}
+
+func claudePlatform(goos, goarch string) (string, bool) {
+	platforms := map[string]string{
+		"darwin_amd64": "darwin-x64",
+		"darwin_arm64": "darwin-arm64",
+		"linux_amd64":  "linux-x64",
+		"linux_arm64":  "linux-arm64",
+	}
+	platform, ok := platforms[platformKey(goos, goarch)]
+	return platform, ok
+}
+
+func stableNumericVersion(version string) bool {
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		for _, char := range part {
+			if char < '0' || char > '9' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func fetchReleaseMetadata(client *http.Client, endpoint string) ([]byte, error) {
+	origin, err := url.Parse(endpoint)
+	if err != nil || origin.Host == "" || (origin.Scheme != "https" && origin.Scheme != "http") {
+		return nil, errors.New("release metadata URL is malformed")
+	}
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	boundedClient := *client
+	priorRedirectCheck := client.CheckRedirect
+	boundedClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if req.URL.Scheme != origin.Scheme || req.URL.Host != origin.Host {
+			return fmt.Errorf("redirect outside release metadata origin: %s", req.URL.Host)
+		}
+		if priorRedirectCheck != nil {
+			return priorRedirectCheck(req, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("too many redirects")
+		}
+		return nil
+	}
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create release metadata request: %w", err)
+	}
+	resp, err := boundedClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download release metadata: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download release metadata: %s", resp.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxReleaseMetadata+1))
+	if err != nil {
+		return nil, fmt.Errorf("read release metadata: %w", err)
+	}
+	if len(data) > maxReleaseMetadata {
+		return nil, errors.New("release metadata exceeds size limit")
+	}
+	return data, nil
+}
+
+func validateClaudeArtifactURL(raw, base, version, platform string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+		return errors.New("official artifact URL is malformed")
+	}
+	b, err := url.Parse(base)
+	if err != nil || b.Host == "" {
+		return errors.New("official metadata base URL is malformed")
+	}
+	if u.Scheme != b.Scheme || u.Host != b.Host {
+		return errors.New("official artifact URL is outside the release metadata origin")
+	}
+	if b.Host == "downloads.claude.ai" && u.Scheme != "https" {
+		return errors.New("official artifact URL must use https")
+	}
+	wantPath := path.Join("/", b.EscapedPath(), version, platform, "claude")
+	if u.EscapedPath() != wantPath {
+		return errors.New("official artifact URL is not immutable for the resolved release")
+	}
+	return nil
 }
 
 func codexPlatformArtifact(goos, goarch string) (artifact, platform string, ok bool) {
