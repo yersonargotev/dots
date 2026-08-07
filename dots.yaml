@@ -947,6 +947,8 @@ provisioners:
     dependencies:
       - name: claude
         command: claude
+        rolling_user_local:
+          recipe: claude
       - name: dart
         command: dart
         manual_debian: >-
@@ -1071,6 +1073,8 @@ provisioners:
     dependencies:
       - name: claude
         command: claude
+        rolling_user_local:
+          recipe: claude
   - tool: claude
     tags:
       - web
@@ -1083,6 +1087,8 @@ provisioners:
     dependencies:
       - name: claude
         command: claude
+        rolling_user_local:
+          recipe: claude
   - tool: codex
     tags:
       - web
