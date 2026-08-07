@@ -163,6 +163,7 @@ dependencies:
       - name: Node LTS (fnm)
         commands: [fnm, node]
         brew: fnm
+        linux_homebrew: true
         toolchain: node-lts-fnm
 entries:
   - source: configs/zsh/zshrc
