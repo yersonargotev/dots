@@ -164,6 +164,10 @@ type Dependency struct {
 	// home-owned providers. Go owns the allowlisted recipe; the manifest owns the
 	// artifact version and checksum policy.
 	UserLocal *UserLocalProvider `yaml:"user_local,omitempty"`
+	// RollingUserLocal opts this Dependency into a closed rolling recipe. The
+	// recipe owns its official metadata source and platform artifact policy; the
+	// manifest cannot supply a version, URL, checksum, or command.
+	RollingUserLocal *RollingUserLocalProvider `yaml:"rolling_user_local,omitempty"`
 }
 
 // UserLocalProvider is the manifest-owned policy for a reviewed User-Local
@@ -174,6 +178,12 @@ type UserLocalProvider struct {
 	Version   string            `yaml:"version"`
 	Checksum  string            `yaml:"checksum,omitempty"`
 	Checksums map[string]string `yaml:"checksums,omitempty"`
+}
+
+// RollingUserLocalProvider selects one reviewed high-cadence release recipe.
+// Recipe is intentionally the only manifest-controlled field.
+type RollingUserLocalProvider struct {
+	Recipe string `yaml:"recipe"`
 }
 
 const (

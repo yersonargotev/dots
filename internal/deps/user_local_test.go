@@ -4,10 +4,53 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestDownloadAndVerifyRejectsDigestMismatch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("untrusted artifact"))
+	}))
+	defer server.Close()
+
+	_, err := downloadAndVerify(server.URL, strings.Repeat("0", 64))
+	if err == nil || !strings.Contains(err.Error(), "sha256") {
+		t.Fatalf("downloadAndVerify() error = %v, want digest mismatch", err)
+	}
+}
+
+func TestInstallUserLocalRejectsUnsafeArchiveBeforeLinkReplacement(t *testing.T) {
+	home := t.TempDir()
+	data := tarGz(t, map[string]string{"../../escaped": "malicious\n", "bin/codex": "#!/bin/sh\n"})
+	sum := sha256.Sum256(data)
+	oldDownload := downloadUserLocalArtifact
+	downloadUserLocalArtifact = func(url, checksum string) ([]byte, error) {
+		if checksum != hex.EncodeToString(sum[:]) {
+			t.Fatalf("checksum = %q", checksum)
+		}
+		return data, nil
+	}
+	t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
+
+	action := InstallAction{UserLocal: &UserLocalArtifact{Recipe: "codex", Version: "rust-v1.0.0", URL: "https://example.invalid/codex.tar.gz", Checksum: hex.EncodeToString(sum[:]), Layout: userLocalLayoutBundle, Command: "codex"}}
+	err := InstallUserLocal(home, action)
+	if err == nil || !strings.Contains(err.Error(), "unsafe archive path") {
+		t.Fatalf("InstallUserLocal() error = %v, want unsafe archive rejection", err)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".local", "bin", "codex")); !os.IsNotExist(err) {
+		t.Fatalf("codex link created after unsafe archive: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "escaped")); !os.IsNotExist(err) {
+		t.Fatalf("archive escaped selected home: %v", err)
+	}
+}
 
 func TestInstallUserLocalInstallsNeovimBundleInSandboxHome(t *testing.T) {
 	home := t.TempDir()

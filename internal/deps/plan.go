@@ -20,7 +20,7 @@ type ProviderCandidate struct {
 	Available    bool               `json:"-"`
 	Manual       string             `json:"manual,omitempty"`
 	TrustCommand string             `json:"trust_command,omitempty"`
-	UserLocal    *UserLocalArtifact `json:"-"`
+	UserLocal    *UserLocalArtifact `json:"user_local,omitempty"`
 }
 
 // Command is one deterministic argv-shaped command dots may execute as part of
@@ -59,7 +59,7 @@ type InstallAction struct {
 	Manual       string              `json:"manual,omitempty"`
 	TrustCommand string              `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate `json:"candidates,omitempty"`
-	UserLocal    *UserLocalArtifact  `json:"-"`
+	UserLocal    *UserLocalArtifact  `json:"user_local,omitempty"`
 }
 
 // Guidance is the advisory installation hint for one missing Dependency. Command
@@ -275,6 +275,17 @@ func homebrewTapTrustCommand(dep manifest.Dependency, tier Tier) string {
 func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look Lookup) ([]ProviderCandidate, error) {
 	if opts.OS == "linux" && dep.IsFont() {
 		return nil, nil
+	}
+
+	if dep.RollingUserLocal != nil {
+		artifact, ok, err := userLocalArtifact(dep, opts)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, nil
+		}
+		return []ProviderCandidate{{Provider: TierUserLocal, Package: artifact.Recipe + "@" + artifact.Version, Available: true, UserLocal: &artifact}}, nil
 	}
 
 	candidateTiers := []Tier{tier}

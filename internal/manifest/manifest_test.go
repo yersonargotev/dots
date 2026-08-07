@@ -51,6 +51,49 @@ entries:
 	}
 }
 
+func TestLoadFileRollingUserLocalAcceptsOnlyRecipe(t *testing.T) {
+	base := `version: 1
+profiles:
+  default:
+    tags: [agents]
+entries:
+  - source: configs/codex/config.toml
+    target: ~/.codex/config.toml
+    strategy: copy
+    tags: [agents]
+    dependencies:
+      - name: codex
+        command: codex
+        rolling_user_local:
+          recipe: codex
+`
+	path := filepath.Join(t.TempDir(), "dots.yaml")
+	if err := os.WriteFile(path, []byte(base), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+	policy := got.Entries[0].Dependencies[0].RollingUserLocal
+	if policy == nil || policy.Recipe != "codex" {
+		t.Fatalf("rolling policy = %#v", policy)
+	}
+
+	for _, field := range []string{"url", "checksum", "command", "installer"} {
+		t.Run(field, func(t *testing.T) {
+			badPath := filepath.Join(t.TempDir(), "dots.yaml")
+			content := base + "          " + field + ": https://attacker.invalid/install\n"
+			if err := os.WriteFile(badPath, []byte(content), 0o600); err != nil {
+				t.Fatalf("write manifest: %v", err)
+			}
+			if _, err := manifest.LoadFile(badPath); err == nil || !strings.Contains(err.Error(), "field "+field+" not found") {
+				t.Fatalf("LoadFile() error = %v, want closed rolling policy rejection", err)
+			}
+		})
+	}
+}
+
 func TestLoadFileParsesEntryOwnership(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")

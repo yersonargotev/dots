@@ -5,6 +5,7 @@
 package deps
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -40,6 +41,14 @@ type Options struct {
 	Home      string
 	StateRoot string
 	AppLookup AppLookup
+	// HTTPClient and RollingReleaseURL are injectable test seams for controlled
+	// release fixtures. Production callers leave both unset, which selects the
+	// allowlisted official metadata endpoint and a bounded default client.
+	HTTPClient        *http.Client
+	RollingReleaseURL string
+	// ResolvedUserLocal pins network-derived actions already shown in the
+	// Dependency Plan so execution cannot silently install a different release.
+	ResolvedUserLocal map[string]UserLocalArtifact
 }
 
 // Result is the presence finding for a single declared Dependency.

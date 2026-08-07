@@ -18,7 +18,11 @@ type DependencyRecord struct {
 	Provider    string `json:"provider"`
 	Path        string `json:"path"`
 	Version     string `json:"version,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Artifact    string `json:"artifact,omitempty"`
+	Digest      string `json:"digest,omitempty"`
 	Checksum    string `json:"checksum,omitempty"`
+	Platform    string `json:"platform,omitempty"`
 	InstalledAt string `json:"installedAt"`
 }
 
@@ -89,7 +93,11 @@ func RecordDependencyInstallation(stateRoot, home string, action InstallAction) 
 		Provider:    string(TierUserLocal),
 		Path:        UserLocalInstalledPath(home, action),
 		Version:     action.UserLocal.Version,
+		URL:         action.UserLocal.URL,
+		Artifact:    action.UserLocal.Artifact,
+		Digest:      action.UserLocal.Digest,
 		Checksum:    action.UserLocal.Checksum,
+		Platform:    action.UserLocal.Platform,
 		InstalledAt: time.Now().UTC().Format(time.RFC3339),
 	})
 	return SaveDependencyMetadata(DependencyMetadataPath(stateRoot), meta)
