@@ -370,10 +370,14 @@ func TestDepsInstallUsesHomebrewRustupProxyPathForReprobesAndLaterCommands(t *te
 	if err := os.MkdirAll(proxyBin, 0o755); err != nil {
 		t.Fatalf("create fake rustup proxy bin: %v", err)
 	}
-	for _, command := range []string{"rustc", "cargo", "followup"} {
+	for _, command := range []string{"rustc", "cargo"} {
 		if err := os.WriteFile(filepath.Join(proxyBin, command), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 			t.Fatalf("write fake %s proxy: %v", command, err)
 		}
+	}
+	followupPath := filepath.Join(binDir, "followup")
+	if err := os.WriteFile(followupPath, []byte("#!/bin/sh\nexit 0\n"), 0o600); err != nil {
+		t.Fatalf("write fake followup: %v", err)
 	}
 
 	runLog := filepath.Join(binDir, "calls")
@@ -385,8 +389,9 @@ fi
 printf 'brew %%s %%s\n' "$1" "$2" >> %q
 if [ "$2" = "followup" ]; then
   command -v rustc >/dev/null || exit 9
+  /bin/chmod +x %q
 fi
-`, formulaPrefix, runLog)
+`, formulaPrefix, runLog, followupPath)
 	if err := os.WriteFile(filepath.Join(binDir, "brew"), []byte(brewScript), 0o700); err != nil {
 		t.Fatalf("write fake brew: %v", err)
 	}
@@ -737,6 +742,70 @@ func TestDepsInstallYesDoesNotRunFNMBootstrapWhenFNMIsMissing(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, "manual") || strings.Contains(got, `exec: "fnm"`) {
 		t.Fatalf("deps install --yes should not execute missing fnm bootstrap:\n%s", got)
+	}
+}
+
+func TestDepsInstallYesActivatesFNMManagedNodeBeforeReprobe(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	binDir := t.TempDir()
+	nodeBinDir := filepath.Join(home, ".local", "share", "fnm", "node-versions", "v24.19.0", "installation", "bin")
+	fnmPath := filepath.Join(binDir, "fnm")
+	nodePath := filepath.Join(nodeBinDir, "node")
+	brewPath := filepath.Join(binDir, "brew")
+
+	if err := os.MkdirAll(nodeBinDir, 0o755); err != nil {
+		t.Fatalf("mkdir fnm node bin: %v", err)
+	}
+	writeExecStub(t, brewPath, "#!/bin/sh\n/bin/chmod +x \"$FNM_PATH\"\n")
+	if err := os.WriteFile(fnmPath, []byte("#!/bin/sh\nif [ \"$1\" = install ]; then /bin/chmod +x \"$NODE_PATH\"; exit 0; fi\nif [ \"$1\" = exec ]; then shift; [ \"$1\" = --using=lts/latest ] && shift; [ \"$1\" = node ] && shift; exec \"$NODE_PATH\" \"$@\"; fi\nexit 1\n"), 0o600); err != nil {
+		t.Fatalf("write fake fnm: %v", err)
+	}
+	if err := os.WriteFile(nodePath, []byte("#!/bin/sh\nif [ \"$1\" = -p ] && [ \"$2\" = process.execPath ]; then printf '%s\\n' \"$NODE_PATH\"; exit 0; fi\nexit 0\n"), 0o600); err != nil {
+		t.Fatalf("write fake node: %v", err)
+	}
+	t.Setenv("FNM_PATH", fnmPath)
+	t.Setenv("NODE_PATH", nodePath)
+	t.Setenv("PATH", binDir)
+	manifestPath := writeDepsInstallManifest(t, fnmBootstrapDepsManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "install", "--yes", "--file", manifestPath, "--profile", "default", "--tier", "homebrew", "--home", home, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "Summary: 1 installed, 0 manual, 0 unresolved, 0 failed") {
+		t.Fatalf("deps install did not accept executable fnm-managed Node:\n%s", out.String())
+	}
+}
+
+func TestDepsInstallLeavesFNMNodeUnresolvedWhenSelectedNodeIsNotExecutable(t *testing.T) {
+	binDir := t.TempDir()
+	writeExecStub(t, filepath.Join(binDir, "fnm"), "#!/bin/sh\nexit 0\n")
+	t.Setenv("PATH", binDir)
+	manifestPath := writeDepsInstallManifest(t, fnmBootstrapDepsManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "install", "--yes", "--file", manifestPath, "--profile", "default", "--tier", "generic"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatalf("Execute() error = nil, want unresolved Node dependency\noutput:\n%s", out.String())
+	}
+	for _, want := range []string{
+		"unresolved Node LTS (fnm)",
+		"node is not executable in fnm's selected environment",
+		"fnm exec --using=lts/latest node --version",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("fnm unresolved output missing %q\noutput:\n%s", want, out.String())
+		}
 	}
 }
 

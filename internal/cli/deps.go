@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -269,14 +271,15 @@ func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Option
 	if wantsJSON(cmd) {
 		stdout = cmd.ErrOrStderr()
 	}
-	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, &depsExecRunner{
+	runner := &depsExecRunner{
 		ctx:       cmd.Context(),
 		stdin:     cmd.InOrStdin(),
 		stdout:    stdout,
 		stderr:    cmd.ErrOrStderr(),
 		home:      home,
 		stateRoot: options.StateRoot,
-	})
+	}
+	report, err := deps.Install(m, options, lookupCommand, fontInstalled(runtime.GOOS, home), tier, runner)
 	if err != nil {
 		if !wantsJSON(cmd) && (report.Profile != "" || len(report.Items) > 0) {
 			renderDepsInstall(cmd.OutOrStdout(), report)
@@ -321,25 +324,30 @@ type depsExecRunner struct {
 	home      string
 	stateRoot string
 	brewPath  string
+	env       []string
 }
 
-func (r depsExecRunner) Run(executable string, args []string) error {
+func (r *depsExecRunner) Run(executable string, args []string) error {
 	if executable == "brew" && r.brewPath != "" {
 		executable = r.brewPath
+	} else if resolved, ok := lookPathInEnvironment(executable, r.environment()); ok {
+		executable = resolved
 	}
 	cmd := exec.CommandContext(r.ctx, executable, args...)
 	cmd.Stdin = r.stdin
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
+	cmd.Env = r.environment()
 	return cmd.Run()
 }
 
-func (r depsExecRunner) AddHomebrewFormulaToPATH(formula string) error {
+func (r *depsExecRunner) AddHomebrewFormulaToPATH(formula string) error {
 	executable := "brew"
 	if r.brewPath != "" {
 		executable = r.brewPath
 	}
 	cmd := exec.CommandContext(r.ctx, executable, "--prefix", formula)
+	cmd.Env = r.environment()
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("resolve Homebrew formula prefix for %q: %w", formula, err)
@@ -349,28 +357,136 @@ func (r depsExecRunner) AddHomebrewFormulaToPATH(formula string) error {
 		return fmt.Errorf("resolve Homebrew formula prefix for %q: empty output", formula)
 	}
 	bin := filepath.Join(prefix, "bin")
-	path := os.Getenv("PATH")
+	path := environmentValue(r.environment(), "PATH")
 	for _, entry := range filepath.SplitList(path) {
 		if entry == bin {
 			return nil
 		}
 	}
-	if path != "" {
-		bin += string(os.PathListSeparator) + path
-	}
-	return os.Setenv("PATH", bin)
+	r.prependPath(bin)
+	return nil
 }
 
-func (r depsExecRunner) Lookup(command string) bool {
-	return lookupCommand(command)
-}
-
-func (r depsExecRunner) RunUserLocal(action deps.InstallAction) error {
+func (r *depsExecRunner) RunUserLocal(action deps.InstallAction) error {
 	return deps.InstallUserLocal(r.home, action)
 }
 
-func (r depsExecRunner) RecordUserLocal(action deps.InstallAction) error {
+func (r *depsExecRunner) RecordUserLocal(action deps.InstallAction) error {
 	return deps.RecordDependencyInstallation(r.stateRoot, r.home, action)
+}
+
+func (r *depsExecRunner) Lookup(command string) bool {
+	if command == "brew" && r.brewPath != "" {
+		return executableFile(r.brewPath)
+	}
+	if _, ok := lookPathInEnvironment(command, r.environment()); ok {
+		return true
+	}
+	if command != "fnm" {
+		return false
+	}
+	candidates := []string{filepath.Join(r.home, ".local", "share", "fnm", "fnm")}
+	if fnmDir := environmentValue(r.environment(), "FNM_DIR"); filepath.IsAbs(fnmDir) {
+		candidates = append([]string{filepath.Join(fnmDir, "fnm")}, candidates...)
+	}
+	for _, candidate := range candidates {
+		if !executableFile(candidate) {
+			continue
+		}
+		r.prependPath(filepath.Dir(candidate))
+		return true
+	}
+	return false
+}
+
+func (r *depsExecRunner) ActivateToolchain(toolchain string) error {
+	if toolchain != manifest.DependencyToolchainNodeLTSFNM {
+		return nil
+	}
+	fnmPath, ok := lookPathInEnvironment("fnm", r.environment())
+	if !ok {
+		return errors.New("fnm is not executable")
+	}
+	var stdout bytes.Buffer
+	cmd := exec.CommandContext(r.ctx, fnmPath, "exec", "--using=lts/latest", "node", "-p", "process.execPath")
+	cmd.Stdin = r.stdin
+	cmd.Stdout = &stdout
+	cmd.Stderr = r.stderr
+	cmd.Env = r.environment()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	nodePath := strings.TrimSpace(stdout.String())
+	if !filepath.IsAbs(nodePath) || !executableFile(nodePath) {
+		return fmt.Errorf("fnm returned non-executable node path %q", nodePath)
+	}
+	r.prependPath(filepath.Dir(nodePath))
+	return nil
+}
+
+func (r *depsExecRunner) Environment() []string {
+	return append([]string(nil), r.environment()...)
+}
+
+func (r *depsExecRunner) environment() []string {
+	if r.env == nil {
+		r.env = replaceEnvironmentValue(os.Environ(), "HOME", r.home)
+	}
+	return r.env
+}
+
+func (r *depsExecRunner) prependPath(dir string) {
+	path := environmentValue(r.environment(), "PATH")
+	if path == "" {
+		r.env = replaceEnvironmentValue(r.env, "PATH", dir)
+		return
+	}
+	r.env = replaceEnvironmentValue(r.env, "PATH", dir+string(os.PathListSeparator)+path)
+}
+
+func lookPathInEnvironment(command string, env []string) (string, bool) {
+	if strings.ContainsRune(command, os.PathSeparator) {
+		return command, filepath.IsAbs(command) && executableFile(command)
+	}
+	for _, dir := range filepath.SplitList(environmentValue(env, "PATH")) {
+		if !filepath.IsAbs(dir) {
+			continue
+		}
+		candidate := filepath.Join(dir, command)
+		if executableFile(candidate) {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func executableFile(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0
+}
+
+func environmentValue(env []string, name string) string {
+	prefix := name + "="
+	for _, item := range env {
+		if strings.HasPrefix(item, prefix) {
+			return strings.TrimPrefix(item, prefix)
+		}
+	}
+	return ""
+}
+
+func replaceEnvironmentValue(env []string, name, value string) []string {
+	prefix := name + "="
+	out := make([]string, 0, len(env)+1)
+	for _, item := range env {
+		if !strings.HasPrefix(item, prefix) {
+			out = append(out, item)
+		}
+	}
+	return append(out, prefix+value)
 }
 
 // lookupCommand reports whether a command resolves on the current PATH. It is

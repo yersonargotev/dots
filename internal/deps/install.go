@@ -56,6 +56,14 @@ type HomebrewFormulaPATHRunner interface {
 	Lookup(command string) bool
 }
 
+// ToolchainEnvironment exposes an environment established by a constrained
+// toolchain bootstrap. Install uses it for reprobes and later child commands in
+// the same dependency run without mutating the parent process environment.
+type ToolchainEnvironment interface {
+	ActivateToolchain(toolchain string) error
+	Lookup(command string) bool
+}
+
 // InstallStatus describes the result of a real install action.
 type InstallStatus string
 
@@ -133,8 +141,19 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 
 	report := InstallReport{Profile: plan.Profile, Profiles: plan.Profiles, Tags: plan.Tags, Tier: plan.Tier}
 	requiredUnresolved := false
-	effectiveLook := look
+	executionLook := look
+	toolchainEnvironment, hasToolchainEnvironment := runner.(ToolchainEnvironment)
+	if hasToolchainEnvironment {
+		executionLook = toolchainEnvironment.Lookup
+	}
+	environmentActivated := false
 	for _, action := range plan.Actions {
+		// Toolchain activation can satisfy a later action that was missing when
+		// the Install Plan was built (for example npx after fnm activates Node).
+		// Re-probe before honoring that stale plan status.
+		if environmentActivated && actionPresent(action, opts, executionLook, fontLook) {
+			continue
+		}
 		if !actionExecutable(action) {
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
@@ -186,11 +205,12 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 		if action.Provider == TierHomebrew && action.Toolchain == manifest.DependencyToolchainRustStableRustup {
 			if pathRunner, ok := runner.(HomebrewFormulaPATHRunner); ok {
 				if err := pathRunner.AddHomebrewFormulaToPATH(action.Package); err == nil {
-					effectiveLook = pathRunner.Lookup
+					executionLook = pathRunner.Lookup
+					environmentActivated = true
 				}
 			}
 		}
-		if len(action.Bootstrap) > 0 && !bootstrapRunnable(action.Bootstrap, effectiveLook) {
+		if len(action.Bootstrap) > 0 && !bootstrapRunnable(action.Bootstrap, executionLook) {
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
 			}
@@ -203,7 +223,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				Executable:   action.Executable,
 				Args:         args,
 				Bootstrap:    append([]Command(nil), action.Bootstrap...),
-				Manual:       unresolvedToolchainRemediation(action, effectiveLook),
+				Manual:       unresolvedToolchainRemediation(action, executionLook),
 				TrustCommand: action.TrustCommand,
 				Candidates:   action.Candidates,
 				UserLocal:    action.UserLocal,
@@ -232,8 +252,15 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			}
 			return report, fmt.Errorf("bootstrap %q: %w", action.Dependency, err)
 		}
-		if !actionPresent(action, opts, effectiveLook, fontLook) {
-			manual := unresolvedToolchainRemediation(action, effectiveLook)
+		if hasToolchainEnvironment && action.Toolchain != "" {
+			// Activation failure is represented as unresolved below: a successful
+			// bootstrap is not proof that the selected runtime is executable.
+			if err := toolchainEnvironment.ActivateToolchain(action.Toolchain); err == nil {
+				environmentActivated = true
+			}
+		}
+		if !actionPresent(action, opts, executionLook, fontLook) {
+			manual := unresolvedToolchainRemediation(action, executionLook)
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
 			}
@@ -292,6 +319,9 @@ func unresolvedToolchainRemediation(action InstallAction, look Lookup) string {
 			return ""
 		}
 		return fmt.Sprintf("%s installed through the user-local provider, but %s is still not available on PATH; ensure ~/.local/bin is on PATH and rerun dots deps check", action.Dependency, strings.Join(missing, ", "))
+	}
+	if action.Toolchain == manifest.DependencyToolchainNodeLTSFNM {
+		return "Node LTS was installed through fnm, but node is not executable in fnm's selected environment; verify with `fnm exec --using=lts/latest node --version`, then rerun dots deps install"
 	}
 	if action.Toolchain != manifest.DependencyToolchainRustStableRustup {
 		return ""

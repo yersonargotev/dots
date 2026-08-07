@@ -25,17 +25,29 @@ type provisionExecRunner struct {
 }
 
 func (r provisionExecRunner) Run(executable string, args []string) error {
+	if resolved, ok := lookPathInEnvironment(executable, r.environment()); ok {
+		executable = resolved
+	}
 	cmd := exec.CommandContext(r.ctx, executable, args...)
 	cmd.Stdin = r.stdin
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
 
+	cmd.Env = r.environment()
+	return cmd.Run()
+}
+
+func (r provisionExecRunner) Lookup(command string) bool {
+	_, ok := lookPathInEnvironment(command, r.environment())
+	return ok
+}
+
+func (r provisionExecRunner) environment() []string {
 	base := r.baseEnv
 	if base == nil {
 		base = os.Environ()
 	}
-	cmd.Env = envForProvisioner(base, r.home)
-	return cmd.Run()
+	return envForProvisioner(base, r.home)
 }
 
 // envForProvisioner returns base with a sandboxed HOME, a user-local npm prefix,
