@@ -2,11 +2,13 @@ package cli
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -212,6 +214,107 @@ func TestRollingClaudeCLIPlanAndInstallUseResolvedFixtureArtifact(t *testing.T) 
 	}
 }
 
+func TestRollingGitHubCLIRecipesPreviewInstallAndRecordResolvedArtifact(t *testing.T) {
+	recipes := []struct {
+		name, command, version, archivedCommand string
+	}{
+		{"opencode", "opencode", "v1.2.3", "opencode"},
+		{"antigravity", "agy", "1.1.0", "antigravity"},
+		{"copilot", "copilot", "v1.0.0", "copilot"},
+	}
+	for _, recipe := range recipes {
+		t.Run(recipe.name, func(t *testing.T) {
+			home := t.TempDir()
+			sourceRoot := t.TempDir()
+			stateRoot := t.TempDir()
+			localBin := filepath.Join(home, ".local", "bin")
+			if err := os.MkdirAll(localBin, 0o755); err != nil {
+				t.Fatalf("mkdir local bin: %v", err)
+			}
+			t.Setenv("PATH", localBin+string(os.PathListSeparator)+"/usr/bin:/bin")
+
+			assetName := githubRecipeFixtureAsset(t, recipe.name, runtime.GOOS, runtime.GOARCH)
+			archive := rollingFixtureArchive(t, assetName, recipe.archivedCommand)
+			sum := sha256.Sum256(archive)
+			digest := hex.EncodeToString(sum[:])
+			var metadataRequests atomic.Int32
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/releases":
+					metadataRequests.Add(1)
+					_ = json.NewEncoder(w).Encode([]map[string]any{
+						{"tag_name": recipe.version + "-beta.1", "prerelease": true},
+						{"tag_name": recipe.version, "assets": []map[string]string{{"name": assetName, "browser_download_url": server.URL + "/" + assetName, "digest": "sha256:" + digest}}},
+					})
+				case "/" + assetName:
+					_, _ = w.Write(archive)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			previousClient, previousURL := depsHTTPClient, depsRollingReleaseURL
+			depsHTTPClient, depsRollingReleaseURL = server.Client(), server.URL+"/releases"
+			t.Cleanup(func() { depsHTTPClient, depsRollingReleaseURL = previousClient, previousURL })
+
+			if err := os.WriteFile(filepath.Join(sourceRoot, "source"), []byte("managed\n"), 0o600); err != nil {
+				t.Fatalf("write source: %v", err)
+			}
+			manifestPath := filepath.Join(t.TempDir(), "dots.yaml")
+			manifest := fmt.Sprintf("version: 1\nprofiles:\n  default:\n    tags: [agents]\nentries:\n  - source: source\n    target: ~/.managed\n    strategy: copy\n    tags: [agents]\n    dependencies:\n      - name: %s\n        command: %s\n        rolling_user_local:\n          recipe: %s\n", recipe.name, recipe.command, recipe.name)
+			if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil {
+				t.Fatalf("write manifest: %v", err)
+			}
+
+			for _, output := range []string{"human", "json"} {
+				cmd := NewRootCommand()
+				var out bytes.Buffer
+				cmd.SetOut(&out)
+				cmd.SetErr(&out)
+				args := []string{"deps", "install", "--dry-run", "--profile", "default", "--file", manifestPath, "--home", home, "--state-root", stateRoot}
+				if output == "json" {
+					args = append([]string{"--output", "json"}, args...)
+				}
+				cmd.SetArgs(args)
+				if err := cmd.Execute(); err != nil {
+					t.Fatalf("%s dry-run error = %v\n%s", output, err, out.String())
+				}
+				for _, want := range []string{recipe.version, assetName, "sha256:" + digest, runtime.GOOS + "_" + runtime.GOARCH, filepath.Join(home, ".local", "opt", recipe.name, recipe.version), filepath.Join(localBin, recipe.command)} {
+					if !strings.Contains(out.String(), want) {
+						t.Fatalf("%s dry-run missing %q\n%s", output, want, out.String())
+					}
+				}
+			}
+
+			install := NewRootCommand()
+			var installOut bytes.Buffer
+			install.SetOut(&installOut)
+			install.SetErr(&installOut)
+			install.SetArgs([]string{"install", "--yes", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+			if err := install.Execute(); err != nil {
+				t.Fatalf("install error = %v\n%s", err, installOut.String())
+			}
+			wantTarget := filepath.Join(home, ".local", "opt", recipe.name, recipe.version, recipe.archivedCommand)
+			if target, err := os.Readlink(filepath.Join(localBin, recipe.command)); err != nil || target != wantTarget {
+				t.Fatalf("%s link = (%q, %v), want %q", recipe.command, target, err, wantTarget)
+			}
+			metadata, err := deps.LoadDependencyMetadata(deps.DependencyMetadataPath(stateRoot))
+			if err != nil || len(metadata.Dependencies) != 1 {
+				t.Fatalf("dependency metadata = (%#v, %v)", metadata, err)
+			}
+			receipt := metadata.Dependencies[0]
+			if receipt.Dependency != recipe.name || receipt.Provider != string(deps.TierUserLocal) || receipt.Version != recipe.version || receipt.URL != server.URL+"/"+assetName || receipt.Artifact != assetName || receipt.Digest != "sha256:"+digest || receipt.Checksum != digest || receipt.Platform != runtime.GOOS+"_"+runtime.GOARCH || receipt.Path != filepath.Join(localBin, recipe.command) || receipt.InstalledAt == "" {
+				t.Fatalf("receipt = %#v", receipt)
+			}
+			if metadataRequests.Load() != 3 {
+				t.Fatalf("metadata requests = %d, want one per preview/install command", metadataRequests.Load())
+			}
+		})
+	}
+}
+
 func TestRollingCodexCLIExistingCommandSkipsReleaseLookup(t *testing.T) {
 	home := t.TempDir()
 	bin := t.TempDir()
@@ -318,6 +421,66 @@ func codexFixtureArchive(t *testing.T, binary string) []byte {
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
 	body := []byte("#!/bin/sh\nprintf 'codex fixture\\n'\n")
+	if err := tw.WriteHeader(&tar.Header{Name: binary, Mode: 0o755, Size: int64(len(body))}); err != nil {
+		t.Fatalf("write tar header: %v", err)
+	}
+	if _, err := tw.Write(body); err != nil {
+		t.Fatalf("write tar body: %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func githubRecipeFixtureAsset(t *testing.T, recipe, goos, goarch string) string {
+	t.Helper()
+	platform := goos + "_" + goarch
+	assets := map[string]map[string]string{
+		"opencode": {
+			"darwin_amd64": "opencode-darwin-x64.zip", "darwin_arm64": "opencode-darwin-arm64.zip",
+			"linux_amd64": "opencode-linux-x64.tar.gz", "linux_arm64": "opencode-linux-arm64.tar.gz",
+		},
+		"antigravity": {
+			"darwin_amd64": "agy_cli_mac_x64.tar.gz", "darwin_arm64": "agy_cli_mac_arm64.tar.gz",
+			"linux_amd64": "agy_cli_linux_x64.tar.gz", "linux_arm64": "agy_cli_linux_arm64.tar.gz",
+		},
+		"copilot": {
+			"darwin_amd64": "copilot-darwin-x64.tar.gz", "darwin_arm64": "copilot-darwin-arm64.tar.gz",
+			"linux_amd64": "copilot-linux-x64.tar.gz", "linux_arm64": "copilot-linux-arm64.tar.gz",
+		},
+	}
+	asset := assets[recipe][platform]
+	if asset == "" {
+		t.Skipf("unsupported test recipe/platform %s %s/%s", recipe, goos, goarch)
+	}
+	return asset
+}
+
+func rollingFixtureArchive(t *testing.T, asset, binary string) []byte {
+	t.Helper()
+	body := []byte("#!/bin/sh\nprintf 'rolling fixture\\n'\n")
+	if strings.HasSuffix(asset, ".zip") {
+		var buf bytes.Buffer
+		zw := zip.NewWriter(&buf)
+		w, err := zw.Create(binary)
+		if err != nil {
+			t.Fatalf("create zip entry: %v", err)
+		}
+		if _, err := w.Write(body); err != nil {
+			t.Fatalf("write zip entry: %v", err)
+		}
+		if err := zw.Close(); err != nil {
+			t.Fatalf("close zip: %v", err)
+		}
+		return buf.Bytes()
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
 	if err := tw.WriteHeader(&tar.Header{Name: binary, Mode: 0o755, Size: int64(len(body))}); err != nil {
 		t.Fatalf("write tar header: %v", err)
 	}

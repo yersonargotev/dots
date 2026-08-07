@@ -16,11 +16,17 @@ import (
 )
 
 const (
-	codexRollingRecipe   = "codex"
-	codexReleasesAPIURL  = "https://api.github.com/repos/openai/codex/releases/latest"
-	claudeRollingRecipe  = "claude"
-	claudeReleaseBaseURL = "https://downloads.claude.ai/claude-code-releases"
-	maxReleaseMetadata   = 4 << 20
+	codexRollingRecipe        = "codex"
+	codexReleasesAPIURL       = "https://api.github.com/repos/openai/codex/releases/latest"
+	opencodeRollingRecipe     = "opencode"
+	opencodeReleasesAPIURL    = "https://api.github.com/repos/anomalyco/opencode/releases/latest"
+	antigravityRollingRecipe  = "antigravity"
+	antigravityReleasesAPIURL = "https://api.github.com/repos/google-antigravity/antigravity-cli/releases/latest"
+	copilotRollingRecipe      = "copilot"
+	copilotReleasesAPIURL     = "https://api.github.com/repos/github/copilot-cli/releases/latest"
+	claudeRollingRecipe       = "claude"
+	claudeReleaseBaseURL      = "https://downloads.claude.ai/claude-code-releases"
+	maxReleaseMetadata        = 4 << 20
 )
 
 type claudeReleaseManifest struct {
@@ -46,6 +52,59 @@ type githubReleaseAsset struct {
 	Digest             string `json:"digest"`
 }
 
+type githubRollingSpec struct {
+	recipe         string
+	repository     string
+	releasesURL    string
+	command        string
+	platformAssets map[string]string
+}
+
+var (
+	codexPlatformAssets = map[string]string{
+		"darwin_amd64": "codex-package-x86_64-apple-darwin.tar.gz",
+		"darwin_arm64": "codex-package-aarch64-apple-darwin.tar.gz",
+		"linux_amd64":  "codex-package-x86_64-unknown-linux-musl.tar.gz",
+		"linux_arm64":  "codex-package-aarch64-unknown-linux-musl.tar.gz",
+	}
+	opencodePlatformAssets = map[string]string{
+		"darwin_amd64": "opencode-darwin-x64.zip",
+		"darwin_arm64": "opencode-darwin-arm64.zip",
+		"linux_amd64":  "opencode-linux-x64.tar.gz",
+		"linux_arm64":  "opencode-linux-arm64.tar.gz",
+	}
+	antigravityPlatformAssets = map[string]string{
+		"darwin_amd64": "agy_cli_mac_x64.tar.gz",
+		"darwin_arm64": "agy_cli_mac_arm64.tar.gz",
+		"linux_amd64":  "agy_cli_linux_x64.tar.gz",
+		"linux_arm64":  "agy_cli_linux_arm64.tar.gz",
+	}
+	copilotPlatformAssets = map[string]string{
+		"darwin_amd64": "copilot-darwin-x64.tar.gz",
+		"darwin_arm64": "copilot-darwin-arm64.tar.gz",
+		"linux_amd64":  "copilot-linux-x64.tar.gz",
+		"linux_arm64":  "copilot-linux-arm64.tar.gz",
+	}
+	githubRollingSpecs = map[string]githubRollingSpec{
+		codexRollingRecipe: {
+			recipe: codexRollingRecipe, repository: "openai/codex", releasesURL: codexReleasesAPIURL,
+			command: "codex", platformAssets: codexPlatformAssets,
+		},
+		opencodeRollingRecipe: {
+			recipe: opencodeRollingRecipe, repository: "anomalyco/opencode", releasesURL: opencodeReleasesAPIURL,
+			command: "opencode", platformAssets: opencodePlatformAssets,
+		},
+		antigravityRollingRecipe: {
+			recipe: antigravityRollingRecipe, repository: "google-antigravity/antigravity-cli", releasesURL: antigravityReleasesAPIURL,
+			command: "agy", platformAssets: antigravityPlatformAssets,
+		},
+		copilotRollingRecipe: {
+			recipe: copilotRollingRecipe, repository: "github/copilot-cli", releasesURL: copilotReleasesAPIURL,
+			command: "copilot", platformAssets: copilotPlatformAssets,
+		},
+	}
+)
+
 func rollingUserLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact, bool, error) {
 	if dep.RollingUserLocal == nil {
 		return UserLocalArtifact{}, false, nil
@@ -54,9 +113,10 @@ func rollingUserLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalA
 		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q cannot declare both user_local and rolling_user_local", dep.Name)
 	}
 	recipe := strings.TrimSpace(dep.RollingUserLocal.Recipe)
+	if spec, ok := githubRollingSpecs[recipe]; ok {
+		return rollingGitHubArtifact(dep, opts, spec)
+	}
 	switch recipe {
-	case codexRollingRecipe:
-		return rollingCodexArtifact(dep, opts)
 	case claudeRollingRecipe:
 		return rollingClaudeArtifact(dep, opts)
 	default:
@@ -64,14 +124,17 @@ func rollingUserLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalA
 	}
 }
 
-func rollingCodexArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact, bool, error) {
-	recipe := codexRollingRecipe
-	artifactName, platform, ok := codexPlatformArtifact(opts.OS, opts.Arch)
+func rollingGitHubArtifact(dep manifest.Dependency, opts Options, spec githubRollingSpec) (UserLocalArtifact, bool, error) {
+	if strings.TrimSpace(dep.Command) != spec.command || len(dep.Commands) != 0 {
+		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q rolling_user_local recipe %q requires command %q", dep.Name, spec.recipe, spec.command)
+	}
+	platform := platformKey(opts.OS, opts.Arch)
+	artifactName, ok := spec.platformAssets[platform]
 	if !ok {
-		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q rolling_user_local recipe %q does not support %s/%s", dep.Name, recipe, opts.OS, opts.Arch)
+		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q rolling_user_local recipe %q does not support %s/%s", dep.Name, spec.recipe, opts.OS, opts.Arch)
 	}
 	if resolved, ok := opts.ResolvedUserLocal[dep.Name]; ok {
-		if resolved.Recipe != recipe || resolved.Version == "" || resolved.URL == "" || resolved.Checksum == "" || resolved.Artifact != artifactName || resolved.Platform != platform {
+		if resolved.Recipe != spec.recipe || resolved.Version == "" || resolved.URL == "" || resolved.Checksum == "" || resolved.Artifact != artifactName || resolved.Platform != platform {
 			return UserLocalArtifact{}, false, fmt.Errorf("dependency %q has incomplete resolved rolling artifact", dep.Name)
 		}
 		return resolved, true, nil
@@ -79,41 +142,33 @@ func rollingCodexArtifact(dep manifest.Dependency, opts Options) (UserLocalArtif
 
 	releaseURL := strings.TrimSpace(opts.RollingReleaseURL)
 	if releaseURL == "" {
-		releaseURL = codexReleasesAPIURL
+		releaseURL = spec.releasesURL
 	}
 	releases, err := fetchGitHubReleases(opts.HTTPClient, releaseURL)
 	if err != nil {
-		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: %w", recipe, err)
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: %w", spec.recipe, err)
 	}
 	release, err := latestStableRelease(releases)
 	if err != nil {
-		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: %w", recipe, err)
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: %w", spec.recipe, err)
 	}
 	asset, err := uniqueReleaseAsset(release, artifactName)
 	if err != nil {
-		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: %w", recipe, err)
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: %w", spec.recipe, err)
 	}
 	digest, err := verifiedSHA256Digest(asset.Digest)
 	if err != nil {
-		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q asset %q: %w", recipe, artifactName, err)
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q asset %q: %w", spec.recipe, artifactName, err)
 	}
-	if err := validateRollingArtifactURL(asset.BrowserDownloadURL, releaseURL, release.TagName, artifactName); err != nil {
-		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q asset %q: %w", recipe, artifactName, err)
+	if err := validateRollingArtifactURL(asset.BrowserDownloadURL, releaseURL, spec.repository, release.TagName, artifactName); err != nil {
+		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q asset %q: %w", spec.recipe, artifactName, err)
 	}
 
-	destination, installedPath := userLocalPaths(opts.Home, recipe, release.TagName, userLocalLayoutBundle, "codex")
+	destination, installedPath := userLocalPaths(opts.Home, spec.recipe, release.TagName, userLocalLayoutBundle, spec.command)
 	return UserLocalArtifact{
-		Recipe:        recipe,
-		Version:       release.TagName,
-		Artifact:      artifactName,
-		URL:           asset.BrowserDownloadURL,
-		Digest:        "sha256:" + digest,
-		Checksum:      digest,
-		Platform:      platform,
-		Layout:        userLocalLayoutBundle,
-		Command:       "codex",
-		Destination:   destination,
-		InstalledPath: installedPath,
+		Recipe: spec.recipe, Version: release.TagName, Artifact: artifactName, URL: asset.BrowserDownloadURL,
+		Digest: "sha256:" + digest, Checksum: digest, Platform: platform,
+		Layout: userLocalLayoutBundle, Command: spec.command, Destination: destination, InstalledPath: installedPath,
 	}, true, nil
 }
 
@@ -267,21 +322,6 @@ func validateClaudeArtifactURL(raw, base, version, platform string) error {
 	return nil
 }
 
-func codexPlatformArtifact(goos, goarch string) (artifact, platform string, ok bool) {
-	targets := map[string]string{
-		"darwin_amd64": "x86_64-apple-darwin",
-		"darwin_arm64": "aarch64-apple-darwin",
-		"linux_amd64":  "x86_64-unknown-linux-musl",
-		"linux_arm64":  "aarch64-unknown-linux-musl",
-	}
-	platform = platformKey(goos, goarch)
-	target, ok := targets[platform]
-	if !ok {
-		return "", platform, false
-	}
-	return "codex-package-" + target + ".tar.gz", platform, true
-}
-
 func fetchGitHubReleases(client *http.Client, endpoint string) ([]githubRelease, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
@@ -356,7 +396,7 @@ func verifiedSHA256Digest(digest string) (string, error) {
 	return value, nil
 }
 
-func validateRollingArtifactURL(raw, metadataURL, version, artifact string) error {
+func validateRollingArtifactURL(raw, metadataURL, repository, version, artifact string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return errors.New("official asset URL is malformed")
@@ -369,7 +409,7 @@ func validateRollingArtifactURL(raw, metadataURL, version, artifact string) erro
 		if u.Scheme != "https" || u.Host != "github.com" {
 			return errors.New("official asset URL is outside github.com")
 		}
-		wantPath := path.Join("/openai/codex/releases/download", version, artifact)
+		wantPath := path.Join("/", repository, "releases/download", version, artifact)
 		if u.EscapedPath() != wantPath {
 			return errors.New("official asset URL is not immutable for the resolved release")
 		}

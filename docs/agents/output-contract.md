@@ -197,9 +197,11 @@ prose the text surface prints:
   produced the report.
 - Selected User-Local Provider actions include `user_local` with the resolved
   recipe, version, artifact, URL, checksum/digest, platform, layout, command,
-  home-owned destination, and installed link path. Rolling recipes expose these fields only after
-  official metadata resolution succeeds; a resolution failure is an execution
-  error rather than a partially installable action.
+  home-owned destination, and installed link path. Human rolling-provider hints
+  include the resolved artifact, platform, digest, destination, and link path.
+  Rolling recipes expose these fields only after official metadata resolution
+  succeeds; a resolution failure is an execution error rather than a partially
+  installable action.
 - Dependency reports include `requirement` (`required` or `optional`) anywhere a
   dependency item/action is exposed. Omitted manifest values are normalized to
   `required`; optional unresolved Dependencies remain reportable but do not
