@@ -50,10 +50,19 @@ type userLocalRecipe struct {
 	url         func(version, archive string) string
 	layout      string
 	command     string
-	archiveType string
+	archiveType userLocalArchiveType
 	binaryPath  func(archive, command string) string
 	links       []string
 }
+
+type userLocalArchiveType string
+
+const (
+	userLocalArchiveTarGzip     userLocalArchiveType = "tar.gz"
+	userLocalArchiveZip         userLocalArchiveType = "zip"
+	userLocalArchiveRaw         userLocalArchiveType = "raw"
+	userLocalArchiveByExtension userLocalArchiveType = "by-extension"
+)
 
 var userLocalRecipes = map[string]userLocalRecipe{
 	"codex": {
@@ -61,7 +70,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		url:         func(version, archive string) string { return "" },
 		layout:      userLocalLayoutBundle,
 		command:     "codex",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(_ string, command string) string { return "bin/" + command },
 		links:       []string{"codex"},
 	},
@@ -70,9 +79,36 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		url:         func(version, archive string) string { return "" },
 		layout:      userLocalLayoutBundle,
 		command:     "claude",
-		archiveType: "raw",
+		archiveType: userLocalArchiveRaw,
 		binaryPath:  func(_ string, command string) string { return command },
 		links:       []string{"claude"},
+	},
+	"opencode": {
+		archiveName: func(version, goarch string) (string, bool) { return "", false },
+		url:         func(version, archive string) string { return "" },
+		layout:      userLocalLayoutBundle,
+		command:     "opencode",
+		archiveType: userLocalArchiveByExtension,
+		binaryPath:  func(_ string, command string) string { return command },
+		links:       []string{"opencode"},
+	},
+	"antigravity": {
+		archiveName: func(version, goarch string) (string, bool) { return "", false },
+		url:         func(version, archive string) string { return "" },
+		layout:      userLocalLayoutBundle,
+		command:     "agy",
+		archiveType: userLocalArchiveTarGzip,
+		binaryPath:  func(_ string, _ string) string { return "antigravity" },
+		links:       []string{"agy"},
+	},
+	"copilot": {
+		archiveName: func(version, goarch string) (string, bool) { return "", false },
+		url:         func(version, archive string) string { return "" },
+		layout:      userLocalLayoutBundle,
+		command:     "copilot",
+		archiveType: userLocalArchiveTarGzip,
+		binaryPath:  func(_ string, command string) string { return command },
+		links:       []string{"copilot"},
 	},
 	"uv": {
 		archiveName: func(version, goarch string) (string, bool) {
@@ -90,7 +126,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutBundle,
 		command:     "uv",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(archive, command string) string { return strings.TrimSuffix(archive, ".tar.gz") + "/" + command },
 		links:       []string{"uv", "uvx"},
 	},
@@ -111,7 +147,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutSingle,
 		command:     "pnpm",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(_ string, command string) string { return "package/" + command },
 		links:       []string{"pnpm"},
 	},
@@ -131,7 +167,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutBundle,
 		command:     "nvim",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath: func(archive, command string) string {
 			return strings.TrimSuffix(archive, ".tar.gz") + "/bin/" + command
 		},
@@ -151,7 +187,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutSingle,
 		command:     "gentle-ai",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(_ string, command string) string { return command },
 		links:       []string{"gentle-ai"},
 	},
@@ -169,7 +205,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutSingle,
 		command:     "engram",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(_ string, command string) string { return command },
 		links:       []string{"engram"},
 	},
@@ -189,7 +225,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutBundle,
 		command:     "bun",
-		archiveType: "zip",
+		archiveType: userLocalArchiveZip,
 		binaryPath:  func(archive, command string) string { return strings.TrimSuffix(archive, ".zip") + "/" + command },
 		links:       []string{"bun"},
 	},
@@ -209,7 +245,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutSingle,
 		command:     "bat",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(archive, command string) string { return strings.TrimSuffix(archive, ".tar.gz") + "/" + command },
 		links:       []string{"bat"},
 	},
@@ -229,7 +265,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutBundle,
 		command:     "atuin",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(archive, command string) string { return strings.TrimSuffix(archive, ".tar.gz") + "/" + command },
 		links:       []string{"atuin"},
 	},
@@ -249,7 +285,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutSingle,
 		command:     "starship",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(_ string, command string) string { return command },
 		links:       []string{"starship"},
 	},
@@ -269,7 +305,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		layout:      userLocalLayoutSingle,
 		command:     "zellij",
-		archiveType: "tar.gz",
+		archiveType: userLocalArchiveTarGzip,
 		binaryPath:  func(_ string, command string) string { return command },
 		links:       []string{"zellij"},
 	},
@@ -325,7 +361,7 @@ func (a UserLocalArtifact) Hint() string {
 		target, installedPath = userLocalPaths("", a.Recipe, a.Version, a.Layout, a.Command)
 	}
 	if a.Digest != "" {
-		return fmt.Sprintf("user-local install %s %s artifact %s (%s) to %s with link at %s", a.Recipe, a.Version, a.Artifact, a.Digest, target, installedPath)
+		return fmt.Sprintf("user-local install %s %s artifact %s for %s (%s) to %s with link at %s", a.Recipe, a.Version, a.Artifact, a.Platform, a.Digest, target, installedPath)
 	}
 	if a.Layout == userLocalLayoutBundle {
 		return fmt.Sprintf("user-local install %s %s to %s with link at %s", a.Recipe, a.Version, target, installedPath)
@@ -383,30 +419,28 @@ func InstallUserLocal(home string, action InstallAction) error {
 	installedPath := filepath.Join(binDir, artifact.Command)
 	if artifact.Layout == userLocalLayoutBundle {
 		optDir := filepath.Join(home, ".local", "opt", artifact.Recipe, artifact.Version)
-		if _, err := os.Stat(optDir); os.IsNotExist(err) {
-			parent := filepath.Dir(optDir)
-			if err := os.MkdirAll(parent, 0o755); err != nil {
-				return fmt.Errorf("create user-local opt parent: %w", err)
-			}
-			staging, err := os.MkdirTemp(parent, ".dots-"+artifact.Recipe+"-*")
-			if err != nil {
-				return fmt.Errorf("create user-local staging directory: %w", err)
-			}
-			defer os.RemoveAll(staging)
-			if err := stageUserLocalArtifact(data, archive, recipe, staging); err != nil {
+		parent := filepath.Dir(optDir)
+		if err := os.MkdirAll(parent, 0o755); err != nil {
+			return fmt.Errorf("create user-local opt parent: %w", err)
+		}
+		staging, err := os.MkdirTemp(parent, ".dots-"+artifact.Recipe+"-*")
+		if err != nil {
+			return fmt.Errorf("create user-local staging directory: %w", err)
+		}
+		defer os.RemoveAll(staging)
+		if err := stageUserLocalArtifact(data, archive, recipe, staging); err != nil {
+			return err
+		}
+		for _, link := range recipe.links {
+			if err := ensureExecutable(filepath.Join(staging, recipe.binaryPath(archive, link))); err != nil {
 				return err
 			}
-			if err := os.Rename(staging, optDir); err != nil {
-				return fmt.Errorf("promote user-local bundle: %w", err)
-			}
-		} else if err != nil {
-			return fmt.Errorf("inspect user-local opt directory: %w", err)
+		}
+		if err := replaceUserLocalBundle(staging, optDir); err != nil {
+			return err
 		}
 		for _, link := range recipe.links {
 			target := filepath.Join(optDir, recipe.binaryPath(archive, link))
-			if err := ensureExecutable(target); err != nil {
-				return err
-			}
 			if err := replaceSymlink(target, filepath.Join(binDir, link)); err != nil {
 				return err
 			}
@@ -432,9 +466,52 @@ func InstallUserLocal(home string, action InstallAction) error {
 	return nil
 }
 
+func replaceUserLocalBundle(staging, destination string) error {
+	if _, err := os.Lstat(destination); os.IsNotExist(err) {
+		if err := os.Rename(staging, destination); err != nil {
+			return fmt.Errorf("promote user-local bundle: %w", err)
+		}
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect user-local bundle: %w", err)
+	}
+
+	backup, err := os.MkdirTemp(filepath.Dir(destination), ".dots-previous-"+filepath.Base(destination)+"-*")
+	if err != nil {
+		return fmt.Errorf("reserve previous user-local bundle path: %w", err)
+	}
+	if err := os.Remove(backup); err != nil {
+		return fmt.Errorf("prepare previous user-local bundle path: %w", err)
+	}
+	if err := os.Rename(destination, backup); err != nil {
+		return fmt.Errorf("preserve previous user-local bundle: %w", err)
+	}
+	if err := os.Rename(staging, destination); err != nil {
+		if rollbackErr := os.Rename(backup, destination); rollbackErr != nil {
+			return fmt.Errorf("promote user-local bundle: %v (restore previous bundle: %w)", err, rollbackErr)
+		}
+		return fmt.Errorf("promote user-local bundle: %w", err)
+	}
+	if err := os.RemoveAll(backup); err != nil {
+		return fmt.Errorf("remove previous user-local bundle: %w", err)
+	}
+	return nil
+}
+
 func stageUserLocalArtifact(data []byte, archive string, recipe userLocalRecipe, dest string) error {
-	if recipe.archiveType != "raw" {
-		return extractArchive(data, recipe.archiveType, dest)
+	if recipe.archiveType != userLocalArchiveRaw {
+		archiveType := recipe.archiveType
+		if archiveType == userLocalArchiveByExtension {
+			switch {
+			case strings.HasSuffix(archive, ".tar.gz"):
+				archiveType = userLocalArchiveTarGzip
+			case strings.HasSuffix(archive, ".zip"):
+				archiveType = userLocalArchiveZip
+			default:
+				return fmt.Errorf("unsupported user-local archive %q", archive)
+			}
+		}
+		return extractArchive(data, archiveType, dest)
 	}
 	path := filepath.Join(dest, recipe.binaryPath(archive, recipe.command))
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -519,11 +596,11 @@ func redirectAllowed(initial, redirect *url.URL) bool {
 	}
 }
 
-func extractArchive(data []byte, typ, dest string) error {
+func extractArchive(data []byte, typ userLocalArchiveType, dest string) error {
 	files := 0
 	var extracted int64
 	switch typ {
-	case "tar.gz":
+	case userLocalArchiveTarGzip:
 		gz, err := gzip.NewReader(bytes.NewReader(data))
 		if err != nil {
 			return fmt.Errorf("open tar.gz artifact: %w", err)
@@ -566,7 +643,7 @@ func extractArchive(data []byte, typ, dest string) error {
 				return fmt.Errorf("close extracted file: %w", closeErr)
 			}
 		}
-	case "zip":
+	case userLocalArchiveZip:
 		zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 		if err != nil {
 			return fmt.Errorf("open zip artifact: %w", err)

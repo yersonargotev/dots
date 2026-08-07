@@ -1,6 +1,8 @@
 package deps
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -138,6 +140,195 @@ func TestRollingCodexSelectsStableOfficialArtifactForSupportedPlatforms(t *testi
 	}
 }
 
+func TestRollingGitHubRecipesSelectStableVerifiedArtifactsForSupportedPlatforms(t *testing.T) {
+	recipes := []struct {
+		name, command, version string
+		assets                 map[string]string
+	}{
+		{"opencode", "opencode", "v1.2.3", opencodePlatformAssets},
+		{"antigravity", "agy", "1.1.0", antigravityPlatformAssets},
+		{"copilot", "copilot", "v1.0.0", copilotPlatformAssets},
+	}
+	platforms := []string{"darwin_amd64", "darwin_arm64", "linux_amd64", "linux_arm64"}
+	for _, recipe := range recipes {
+		t.Run(recipe.name, func(t *testing.T) {
+			for _, platform := range platforms {
+				t.Run(platform, func(t *testing.T) {
+					assetName := recipe.assets[platform]
+					goos, goarch, _ := strings.Cut(platform, "_")
+					server := rollingReleaseServer(t, []githubRelease{
+						{TagName: recipe.version + "-beta.1", Prerelease: true, Assets: releaseAssetsFor("SERVER", assetName)},
+						{TagName: recipe.version, Assets: releaseAssetsFor("SERVER", assetName)},
+					})
+					artifact, ok, err := rollingUserLocalArtifact(rollingDependency(recipe.name, recipe.command), Options{
+						OS: goos, Arch: goarch, Home: "/tmp/home", HTTPClient: server.Client(), RollingReleaseURL: server.URL + "/releases",
+					})
+					if err != nil {
+						t.Fatalf("rollingUserLocalArtifact() error = %v", err)
+					}
+					if !ok || artifact.Version != recipe.version || artifact.Artifact != assetName || artifact.Platform != platform {
+						t.Fatalf("artifact = %#v, want stable %s artifact", artifact, assetName)
+					}
+					if artifact.Command != recipe.command || artifact.Digest != "sha256:"+strings.Repeat("a", 64) {
+						t.Fatalf("artifact = %#v, want verified %s command", artifact, recipe.command)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestRollingOpenCodeInstallsTarAndZipArtifacts(t *testing.T) {
+	tests := []struct {
+		name, archive string
+		data          func(*testing.T, map[string]string) []byte
+	}{
+		{"linux tar", "opencode-linux-x64.tar.gz", tarGz},
+		{"macOS zip", "opencode-darwin-arm64.zip", zipFiles},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			data := tt.data(t, map[string]string{"opencode": "#!/bin/sh\nprintf 'opencode fixture\\n'\n"})
+			oldDownload := downloadUserLocalArtifact
+			downloadUserLocalArtifact = func(string, string) ([]byte, error) { return data, nil }
+			t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
+
+			artifact := UserLocalArtifact{Recipe: "opencode", Version: "v1.2.3", URL: "https://example.invalid/" + tt.archive, Checksum: "fixture", Layout: userLocalLayoutBundle, Command: "opencode"}
+			if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err != nil {
+				t.Fatalf("InstallUserLocal() error = %v", err)
+			}
+			want := filepath.Join(home, ".local", "opt", "opencode", "v1.2.3", "opencode")
+			if target, err := os.Readlink(filepath.Join(home, ".local", "bin", "opencode")); err != nil || target != want {
+				t.Fatalf("opencode link = (%q, %v), want %q", target, err, want)
+			}
+		})
+	}
+}
+
+func TestRollingAntigravityInstallsVendorBinaryAsAgy(t *testing.T) {
+	home := t.TempDir()
+	data := tarGz(t, map[string]string{"antigravity": "#!/bin/sh\nprintf 'antigravity fixture\\n'\n"})
+	oldDownload := downloadUserLocalArtifact
+	downloadUserLocalArtifact = func(string, string) ([]byte, error) { return data, nil }
+	t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
+
+	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: "fixture", Layout: userLocalLayoutBundle, Command: "agy"}
+	if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err != nil {
+		t.Fatalf("InstallUserLocal() error = %v", err)
+	}
+	want := filepath.Join(home, ".local", "opt", "antigravity", "1.1.0", "antigravity")
+	if target, err := os.Readlink(filepath.Join(home, ".local", "bin", "agy")); err != nil || target != want {
+		t.Fatalf("agy link = (%q, %v), want %q", target, err, want)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".local", "bin", "antigravity")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected antigravity command link: %v", err)
+	}
+}
+
+func TestRollingGitHubRecipesFailClosedForInvalidMetadata(t *testing.T) {
+	recipes := []struct {
+		name, command, asset string
+	}{
+		{"opencode", "opencode", "opencode-linux-x64.tar.gz"},
+		{"antigravity", "agy", "agy_cli_linux_x64.tar.gz"},
+		{"copilot", "copilot", "copilot-linux-x64.tar.gz"},
+	}
+	for _, recipe := range recipes {
+		t.Run(recipe.name, func(t *testing.T) {
+			tests := []struct {
+				name     string
+				releases []githubRelease
+				want     string
+			}{
+				{"no stable release", []githubRelease{{TagName: "v2.0.0-beta.1", Prerelease: true}}, "no stable release"},
+				{"missing platform asset", []githubRelease{{TagName: "v1.0.0"}}, "has no asset"},
+				{"missing digest", []githubRelease{{TagName: "v1.0.0", Assets: []githubReleaseAsset{{Name: recipe.asset, BrowserDownloadURL: "SERVER/" + recipe.asset}}}}, "must use sha256"},
+				{"duplicate asset", []githubRelease{{TagName: "v1.0.0", Assets: releaseAssetsFor("SERVER", recipe.asset, recipe.asset)}}, "2 assets"},
+				{"unexpected platform asset", []githubRelease{{TagName: "v1.0.0", Assets: releaseAssetsFor("SERVER", "unexpected-"+recipe.asset)}}, "has no asset"},
+			}
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					server := rollingReleaseServer(t, tt.releases)
+					_, _, err := rollingUserLocalArtifact(rollingDependency(recipe.name, recipe.command), Options{OS: "linux", Arch: "amd64", HTTPClient: server.Client(), RollingReleaseURL: server.URL + "/releases"})
+					if err == nil || !strings.Contains(err.Error(), tt.want) {
+						t.Fatalf("error = %v, want containing %q", err, tt.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestRollingGitHubRecipesRejectMismatchedDependencyCommands(t *testing.T) {
+	recipes := []struct {
+		name, command, asset string
+	}{
+		{"opencode", "opencode", "opencode-linux-x64.tar.gz"},
+		{"antigravity", "agy", "agy_cli_linux_x64.tar.gz"},
+		{"copilot", "copilot", "copilot-linux-x64.tar.gz"},
+	}
+	for _, recipe := range recipes {
+		t.Run(recipe.name, func(t *testing.T) {
+			dep := rollingDependency(recipe.name, "wrong-command")
+			resolved := UserLocalArtifact{Recipe: recipe.name, Version: "v1.0.0", Artifact: recipe.asset, URL: "https://example.invalid/asset", Checksum: strings.Repeat("a", 64), Platform: "linux_amd64"}
+			_, _, err := rollingUserLocalArtifact(dep, Options{OS: "linux", Arch: "amd64", ResolvedUserLocal: map[string]UserLocalArtifact{recipe.name: resolved}})
+			if err == nil || !strings.Contains(err.Error(), "requires command") || !strings.Contains(err.Error(), recipe.command) {
+				t.Fatalf("error = %v, want required command %q", err, recipe.command)
+			}
+		})
+	}
+}
+
+func TestInstallRollingBundleReplacesPreexistingVersionWithVerifiedArtifact(t *testing.T) {
+	home := t.TempDir()
+	optDir := filepath.Join(home, ".local", "opt", "antigravity", "1.1.0")
+	if err := os.MkdirAll(optDir, 0o755); err != nil {
+		t.Fatalf("mkdir preexisting bundle: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(optDir, "antigravity"), []byte("stale bytes\n"), 0o755); err != nil {
+		t.Fatalf("write preexisting binary: %v", err)
+	}
+	data := tarGz(t, map[string]string{"antigravity": "verified bytes\n"})
+	oldDownload := downloadUserLocalArtifact
+	downloadUserLocalArtifact = func(string, string) ([]byte, error) { return data, nil }
+	t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
+
+	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: "verified", Layout: userLocalLayoutBundle, Command: "agy"}
+	if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err != nil {
+		t.Fatalf("InstallUserLocal() error = %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(optDir, "antigravity"))
+	if err != nil || string(got) != "verified bytes\n" {
+		t.Fatalf("installed binary = (%q, %v), want verified artifact bytes", got, err)
+	}
+}
+
+func TestInstallRollingBundlePreservesPreexistingVersionWhenVerifiedArchiveIsInvalid(t *testing.T) {
+	home := t.TempDir()
+	optDir := filepath.Join(home, ".local", "opt", "antigravity", "1.1.0")
+	if err := os.MkdirAll(optDir, 0o755); err != nil {
+		t.Fatalf("mkdir preexisting bundle: %v", err)
+	}
+	oldBinary := filepath.Join(optDir, "antigravity")
+	if err := os.WriteFile(oldBinary, []byte("previous bytes\n"), 0o755); err != nil {
+		t.Fatalf("write preexisting binary: %v", err)
+	}
+	data := tarGz(t, map[string]string{"unexpected": "verified but invalid layout\n"})
+	oldDownload := downloadUserLocalArtifact
+	downloadUserLocalArtifact = func(string, string) ([]byte, error) { return data, nil }
+	t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
+
+	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: "verified", Layout: userLocalLayoutBundle, Command: "agy"}
+	if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err == nil || !strings.Contains(err.Error(), "stat extracted executable") {
+		t.Fatalf("InstallUserLocal() error = %v, want invalid layout rejection", err)
+	}
+	got, err := os.ReadFile(oldBinary)
+	if err != nil || string(got) != "previous bytes\n" {
+		t.Fatalf("preserved binary = (%q, %v), want previous bytes", got, err)
+	}
+}
+
 func TestRollingCodexFailsClosedForInvalidMetadata(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -196,6 +387,32 @@ func TestPlanSkipsRollingResolutionWhenClaudeIsPresent(t *testing.T) {
 	}
 	if len(report.Actions) != 0 || requests.Load() != 0 {
 		t.Fatalf("report/actions = %#v, requests = %d; want no resolution", report.Actions, requests.Load())
+	}
+}
+
+func TestPlanSkipsRollingGitHubResolutionForEachPresentCommand(t *testing.T) {
+	dependencies := []manifest.Dependency{
+		rollingDependency("opencode", "opencode"),
+		rollingDependency("antigravity", "agy"),
+		rollingDependency("copilot", "copilot"),
+	}
+	for _, dep := range dependencies {
+		t.Run(dep.Name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				http.Error(w, "unexpected", http.StatusInternalServerError)
+			}))
+			defer server.Close()
+
+			report, err := Plan(rollingManifest(dep), Options{Profile: "default", OS: "linux", Arch: "amd64", HTTPClient: server.Client(), RollingReleaseURL: server.URL}, lookupSetInternal(dep.Command), func(string) bool { return false }, TierDebian)
+			if err != nil {
+				t.Fatalf("Plan() error = %v", err)
+			}
+			if len(report.Actions) != 0 || requests.Load() != 0 {
+				t.Fatalf("report/actions = %#v, requests = %d; want no resolution", report.Actions, requests.Load())
+			}
+		})
 	}
 }
 
@@ -259,6 +476,37 @@ func releaseAssets(base string) []githubReleaseAsset {
 	return assets
 }
 
+func releaseAssetsFor(base string, names ...string) []githubReleaseAsset {
+	assets := make([]githubReleaseAsset, 0, len(names))
+	for _, name := range names {
+		assets = append(assets, githubReleaseAsset{Name: name, BrowserDownloadURL: base + "/" + name, Digest: "sha256:" + strings.Repeat("a", 64)})
+	}
+	return assets
+}
+
+func zipFiles(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for name, body := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatalf("create zip entry: %v", err)
+		}
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("write zip entry: %v", err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("close zip: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func rollingDependency(name, command string) manifest.Dependency {
+	return manifest.Dependency{Name: name, Command: command, RollingUserLocal: &manifest.RollingUserLocalProvider{Recipe: name}}
+}
+
 func rollingCodexDependency() manifest.Dependency {
 	return manifest.Dependency{Name: "codex", Command: "codex", RollingUserLocal: &manifest.RollingUserLocalProvider{Recipe: "codex"}}
 }
@@ -268,7 +516,11 @@ func rollingClaudeDependency() manifest.Dependency {
 }
 
 func rollingCodexManifest() manifest.Manifest {
-	return manifest.Manifest{Profiles: map[string]manifest.Profile{"default": {Tags: []string{"agents"}}}, Entries: []manifest.Entry{{Source: "source", Target: "target", Tags: []string{"agents"}, Dependencies: []manifest.Dependency{rollingCodexDependency()}}}}
+	return rollingManifest(rollingCodexDependency())
+}
+
+func rollingManifest(dependencies ...manifest.Dependency) manifest.Manifest {
+	return manifest.Manifest{Profiles: map[string]manifest.Profile{"default": {Tags: []string{"agents"}}}, Entries: []manifest.Entry{{Source: "source", Target: "target", Tags: []string{"agents"}, Dependencies: dependencies}}}
 }
 
 func lookupSetInternal(commands ...string) Lookup {
