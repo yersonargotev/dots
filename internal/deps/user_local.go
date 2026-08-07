@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,17 +24,25 @@ import (
 // UserLocalArtifact is the resolved, reviewed user-local install recipe for a
 // Dependency on the current platform.
 type UserLocalArtifact struct {
-	Recipe   string `json:"recipe"`
-	Version  string `json:"version"`
-	URL      string `json:"url"`
-	Checksum string `json:"checksum"`
-	Layout   string `json:"layout"`
-	Command  string `json:"command"`
+	Recipe        string `json:"recipe"`
+	Version       string `json:"version"`
+	Artifact      string `json:"artifact,omitempty"`
+	URL           string `json:"url"`
+	Digest        string `json:"digest,omitempty"`
+	Checksum      string `json:"checksum"`
+	Platform      string `json:"platform,omitempty"`
+	Layout        string `json:"layout"`
+	Command       string `json:"command"`
+	Destination   string `json:"destination,omitempty"`
+	InstalledPath string `json:"installed_path,omitempty"`
 }
 
 const (
 	userLocalLayoutSingle = "single-binary"
 	userLocalLayoutBundle = "bundle"
+	maxArtifactBytes      = 512 << 20
+	maxExtractedBytes     = 1 << 30
+	maxArchiveFiles       = 10_000
 )
 
 type userLocalRecipe struct {
@@ -47,6 +56,15 @@ type userLocalRecipe struct {
 }
 
 var userLocalRecipes = map[string]userLocalRecipe{
+	"codex": {
+		archiveName: func(version, goarch string) (string, bool) { return "", false },
+		url:         func(version, archive string) string { return "" },
+		layout:      userLocalLayoutBundle,
+		command:     "codex",
+		archiveType: "tar.gz",
+		binaryPath:  func(_ string, command string) string { return "bin/" + command },
+		links:       []string{"codex"},
+	},
 	"uv": {
 		archiveName: func(version, goarch string) (string, bool) {
 			switch goarch {
@@ -249,6 +267,9 @@ var userLocalRecipes = map[string]userLocalRecipe{
 }
 
 func userLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact, bool, error) {
+	if dep.RollingUserLocal != nil {
+		return rollingUserLocalArtifact(dep, opts)
+	}
 	if opts.OS != "linux" || dep.UserLocal == nil {
 		return UserLocalArtifact{}, false, nil
 	}
@@ -279,7 +300,8 @@ func userLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact
 	if checksum == "" {
 		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q user_local checksum is required for %s", dep.Name, platformKey(opts.OS, arch))
 	}
-	return UserLocalArtifact{Recipe: recipeName, Version: version, URL: recipe.url(version, archive), Checksum: checksum, Layout: recipe.layout, Command: recipe.command}, true, nil
+	destination, installedPath := userLocalPaths(opts.Home, recipeName, version, recipe.layout, recipe.command)
+	return UserLocalArtifact{Recipe: recipeName, Version: version, Artifact: archive, URL: recipe.url(version, archive), Checksum: checksum, Platform: platformKey(opts.OS, arch), Layout: recipe.layout, Command: recipe.command, Destination: destination, InstalledPath: installedPath}, true, nil
 }
 
 func platformKey(goos, goarch string) string { return goos + "_" + goarch }
@@ -288,11 +310,33 @@ func (a UserLocalArtifact) Hint() string {
 	if a.Recipe == "" {
 		return "user-local install"
 	}
-	target := "~/.local/bin/" + a.Command
+	target := a.Destination
+	installedPath := a.InstalledPath
+	if target == "" {
+		target, installedPath = userLocalPaths("", a.Recipe, a.Version, a.Layout, a.Command)
+	}
+	if a.Digest != "" {
+		return fmt.Sprintf("user-local install %s %s artifact %s (%s) to %s with link at %s", a.Recipe, a.Version, a.Artifact, a.Digest, target, installedPath)
+	}
 	if a.Layout == userLocalLayoutBundle {
-		target = "~/.local/opt/" + a.Recipe + " with shim in ~/.local/bin"
+		return fmt.Sprintf("user-local install %s %s to %s with link at %s", a.Recipe, a.Version, target, installedPath)
 	}
 	return fmt.Sprintf("user-local install %s %s to %s", a.Recipe, a.Version, target)
+}
+
+func userLocalPaths(home, recipe, version, layout, command string) (destination, installedPath string) {
+	if strings.TrimSpace(home) == "" {
+		installedPath = filepath.Join("~", ".local", "bin", command)
+		if layout == userLocalLayoutBundle {
+			return filepath.Join("~", ".local", "opt", recipe, version), installedPath
+		}
+		return installedPath, installedPath
+	}
+	installedPath = filepath.Join(home, ".local", "bin", command)
+	if layout == userLocalLayoutBundle {
+		return filepath.Join(home, ".local", "opt", recipe, version), installedPath
+	}
+	return installedPath, installedPath
 }
 
 func (a UserLocalArtifact) archiveName() string {
@@ -330,14 +374,24 @@ func InstallUserLocal(home string, action InstallAction) error {
 	installedPath := filepath.Join(binDir, artifact.Command)
 	if artifact.Layout == userLocalLayoutBundle {
 		optDir := filepath.Join(home, ".local", "opt", artifact.Recipe, artifact.Version)
-		if err := os.RemoveAll(optDir); err != nil {
-			return fmt.Errorf("prepare user-local opt directory: %w", err)
-		}
-		if err := os.MkdirAll(optDir, 0o755); err != nil {
-			return fmt.Errorf("create user-local opt directory: %w", err)
-		}
-		if err := extractArchive(data, recipe.archiveType, optDir); err != nil {
-			return err
+		if _, err := os.Stat(optDir); os.IsNotExist(err) {
+			parent := filepath.Dir(optDir)
+			if err := os.MkdirAll(parent, 0o755); err != nil {
+				return fmt.Errorf("create user-local opt parent: %w", err)
+			}
+			staging, err := os.MkdirTemp(parent, ".dots-"+artifact.Recipe+"-*")
+			if err != nil {
+				return fmt.Errorf("create user-local staging directory: %w", err)
+			}
+			defer os.RemoveAll(staging)
+			if err := extractArchive(data, recipe.archiveType, staging); err != nil {
+				return err
+			}
+			if err := os.Rename(staging, optDir); err != nil {
+				return fmt.Errorf("promote user-local bundle: %w", err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("inspect user-local opt directory: %w", err)
 		}
 		for _, link := range recipe.links {
 			target := filepath.Join(optDir, recipe.binaryPath(archive, link))
@@ -372,7 +426,22 @@ func InstallUserLocal(home string, action InstallAction) error {
 var downloadUserLocalArtifact = downloadAndVerify
 
 func downloadAndVerify(url, checksum string) ([]byte, error) {
-	client := http.Client{Timeout: 5 * time.Minute}
+	initial, err := parseArtifactURL(url)
+	if err != nil {
+		return nil, fmt.Errorf("download user-local artifact: %w", err)
+	}
+	client := http.Client{
+		Timeout: 5 * time.Minute,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return errors.New("too many redirects")
+			}
+			if redirectAllowed(initial, req.URL) {
+				return nil
+			}
+			return fmt.Errorf("redirect outside allowed artifact hosts: %s", req.URL.Host)
+		},
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("download user-local artifact: %w", err)
@@ -381,9 +450,12 @@ func downloadAndVerify(url, checksum string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download user-local artifact: %s", resp.Status)
 	}
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxArtifactBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read user-local artifact: %w", err)
+	}
+	if len(data) > maxArtifactBytes {
+		return nil, errors.New("read user-local artifact: artifact exceeds size limit")
 	}
 	sum := sha256.Sum256(data)
 	got := hex.EncodeToString(sum[:])
@@ -398,7 +470,35 @@ func downloadAndVerify(url, checksum string) ([]byte, error) {
 	return data, nil
 }
 
+func parseArtifactURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+		return nil, errors.New("artifact URL is malformed")
+	}
+	return u, nil
+}
+
+func redirectAllowed(initial, redirect *url.URL) bool {
+	if redirect.Scheme != initial.Scheme {
+		return false
+	}
+	if redirect.Host == initial.Host {
+		return true
+	}
+	if initial.Scheme != "https" || initial.Host != "github.com" || redirect.Scheme != "https" {
+		return false
+	}
+	switch redirect.Host {
+	case "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com":
+		return true
+	default:
+		return false
+	}
+}
+
 func extractArchive(data []byte, typ, dest string) error {
+	files := 0
+	var extracted int64
 	switch typ {
 	case "tar.gz":
 		gz, err := gzip.NewReader(bytes.NewReader(data))
@@ -417,6 +517,11 @@ func extractArchive(data []byte, typ, dest string) error {
 			}
 			if h.Typeflag != tar.TypeReg {
 				continue
+			}
+			files++
+			extracted += h.Size
+			if files > maxArchiveFiles || h.Size < 0 || extracted > maxExtractedBytes {
+				return errors.New("extract tar.gz artifact: archive exceeds extraction limits")
 			}
 			path, err := safeJoin(dest, h.Name)
 			if err != nil {
@@ -446,6 +551,11 @@ func extractArchive(data []byte, typ, dest string) error {
 		for _, f := range zr.File {
 			if f.FileInfo().IsDir() {
 				continue
+			}
+			files++
+			extracted += int64(f.UncompressedSize64)
+			if files > maxArchiveFiles || extracted > maxExtractedBytes {
+				return errors.New("extract zip artifact: archive exceeds extraction limits")
 			}
 			path, err := safeJoin(dest, f.Name)
 			if err != nil {
@@ -483,10 +593,10 @@ func extractArchive(data []byte, typ, dest string) error {
 }
 
 func safeJoin(root, name string) (string, error) {
-	clean := filepath.Clean(name)
-	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	if name == "" || !filepath.IsLocal(name) {
 		return "", fmt.Errorf("unsafe archive path %q", name)
 	}
+	clean := filepath.Clean(name)
 	path := filepath.Join(root, clean)
 	if !strings.HasPrefix(path, filepath.Clean(root)+string(filepath.Separator)) && path != filepath.Clean(root) {
 		return "", fmt.Errorf("unsafe archive path %q", name)
@@ -506,11 +616,23 @@ func ensureExecutable(path string) error {
 }
 
 func replaceSymlink(target, link string) error {
-	if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("replace user-local symlink: %w", err)
+	tmp, err := os.CreateTemp(filepath.Dir(link), ".dots-link-*")
+	if err != nil {
+		return fmt.Errorf("create temporary user-local link: %w", err)
 	}
-	if err := os.Symlink(target, link); err != nil {
+	tmpPath := tmp.Name()
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temporary user-local link: %w", err)
+	}
+	if err := os.Remove(tmpPath); err != nil {
+		return fmt.Errorf("prepare temporary user-local link: %w", err)
+	}
+	defer os.Remove(tmpPath)
+	if err := os.Symlink(target, tmpPath); err != nil {
 		return fmt.Errorf("create user-local symlink: %w", err)
+	}
+	if err := os.Rename(tmpPath, link); err != nil {
+		return fmt.Errorf("replace user-local symlink: %w", err)
 	}
 	return nil
 }
@@ -521,9 +643,15 @@ func copyFile(src, dst string, mode os.FileMode) error {
 		return fmt.Errorf("open extracted executable: %w", err)
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	out, err := os.CreateTemp(filepath.Dir(dst), ".dots-executable-*")
 	if err != nil {
-		return fmt.Errorf("create user-local executable: %w", err)
+		return fmt.Errorf("create temporary user-local executable: %w", err)
+	}
+	tmpPath := out.Name()
+	defer os.Remove(tmpPath)
+	if err := out.Chmod(mode); err != nil {
+		out.Close()
+		return fmt.Errorf("set temporary user-local executable mode: %w", err)
 	}
 	_, copyErr := io.Copy(out, in)
 	closeErr := out.Close()
@@ -532,6 +660,9 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	}
 	if closeErr != nil {
 		return fmt.Errorf("close user-local executable: %w", closeErr)
+	}
+	if err := os.Rename(tmpPath, dst); err != nil {
+		return fmt.Errorf("replace user-local executable: %w", err)
 	}
 	return nil
 }

@@ -30,7 +30,7 @@ type InstallPreview struct {
 	Manual       string               `json:"manual,omitempty"`
 	TrustCommand string               `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate  `json:"candidates,omitempty"`
-	UserLocal    *UserLocalArtifact   `json:"-"`
+	UserLocal    *UserLocalArtifact   `json:"user_local,omitempty"`
 }
 
 // InstallDryRunReport previews the install actions for a Profile without
@@ -87,7 +87,7 @@ type InstallItem struct {
 	Manual       string              `json:"manual,omitempty"`
 	TrustCommand string              `json:"trust_command,omitempty"`
 	Candidates   []ProviderCandidate `json:"candidates,omitempty"`
-	UserLocal    *UserLocalArtifact  `json:"-"`
+	UserLocal    *UserLocalArtifact  `json:"user_local,omitempty"`
 }
 
 // InstallReport records the stable dots summary for a real install run.

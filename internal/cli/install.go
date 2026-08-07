@@ -118,7 +118,7 @@ func newInstallCommand() *cobra.Command {
 
 			hostOS := installHostOS
 			hostArch := installHostArch
-			depOptions := deps.Options{Profiles: profiles, ExtraTags: extraTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot, AppLookup: appInstalled(hostOS, paths.Home)}
+			depOptions := deps.Options{Profiles: profiles, ExtraTags: extraTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot, AppLookup: appInstalled(hostOS, paths.Home), HTTPClient: depsHTTPClient, RollingReleaseURL: depsRollingReleaseURL}
 			depTier, err := resolveInstallTier(hostOS)
 			if err != nil {
 				return err
@@ -416,6 +416,7 @@ func (e installProvisionerError) JSONErrorData() any { return e.report }
 // prompt for package-manager execution; manual or unresolved Dependencies abort
 // the install before filesystem targets are touched.
 func runInstallDependencies(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier, home string, preview deps.InstallDryRunReport, yes bool, look deps.Lookup, brewPath string) (deps.InstallReport, bool, []string, error) {
+	options = pinResolvedUserLocal(options, preview)
 	if !yes {
 		if hasRequiredInstallablePreviewAction(preview) {
 			confirmed, err := confirmDepsInstall(cmd.InOrStdin(), cmd.OutOrStdout())

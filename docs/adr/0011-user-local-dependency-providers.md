@@ -1,5 +1,7 @@
 # Add reviewed user-local dependency providers
 
+**Superseded in part by ADR 0016**: fixed manifest-owned versions and checksums remain required for `user_local`; the separately named `rolling_user_local` category resolves official immutable release evidence through closed recipes.
+
 Linux dependency provisioning should support a first-class User-Local Provider for reviewed tools that can be installed safely under the user's home-owned environment, after distro package providers and before Linuxbrew fallback. This keeps `dots` from depending on `sudo` or Linuxbrew for every Ubuntu workstation tool while preserving the reviewed provider model from ADR 0010: Go owns allowlisted install recipes, `dots.yaml` opts each Dependency into user-local installation, and downloaded artifacts must carry explicit version/checksum policy instead of normalizing `curl latest`.
 
 User-local installs use a fixed layout: single binaries land at `~/.local/bin/<command>`, extracted or multi-file tools land under `~/.local/opt/<tool>/...` with a shim or symlink in `~/.local/bin`. Providers must not mutate shell configuration or PATH; if `~/.local/bin` is not available after install, the Dependency remains unresolved with repair guidance. The first implementation slice should install only missing Dependencies, persist minimal Dependency Installation Metadata for auditability, and leave `dots status` dependency semantics to a later decision.

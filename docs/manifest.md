@@ -213,6 +213,7 @@ Tag-scoped Dependency Sets use:
 | `brew` | No | Homebrew formula token. Mutually exclusive with `brew_cask`. |
 | `linux_homebrew` | No | Allows Linux distro tiers to fall back to the Homebrew formula when the distro provider is absent or unavailable. Keep this opt-in for reviewed CLI/runtime tools only. |
 | `user_local` | No | Linux-only opt-in for a reviewed User-Local Provider recipe. Requires `recipe`, `version`, and `checksum` or per-platform `checksums`; installs into `~/.local/bin` or `~/.local/opt/<tool>` without using system package managers. |
+| `rolling_user_local` | No | macOS/Linux opt-in for a closed Rolling User-Local Provider recipe. Accepts only `recipe`; dots resolves the latest stable official version, immutable platform artifact, and digest before the action is installable. |
 | `brew_cask` | No | Homebrew cask token. Renders as `brew install --cask <token>`. |
 | `apt` | No | Debian/Ubuntu package name. |
 | `dnf` | No | Fedora package name. |
@@ -222,6 +223,8 @@ Tag-scoped Dependency Sets use:
 
 
 User-Local Providers are not system packages. They are reviewed, allowlisted Go recipes that write only to the selected home-owned environment and require explicit manifest policy. `dots` does not mutate shell startup files or `PATH`; after installation it re-runs normal Dependency probes, so `~/.local/bin` must already be visible in the current `PATH` for the Dependency to become present. Invalid `user_local` policy such as an unknown recipe, missing version, unsupported platform, or missing checksum is a manifest/planning error, not a silent fallback to Linuxbrew or manual guidance.
+
+Rolling User-Local Providers use the separate `rolling_user_local` field. The manifest may select only a reviewed recipe and cannot declare a repository, URL, command, checksum, or installer script. The `codex` recipe resolves official stable `openai/codex` release metadata only when `codex` is absent, supports macOS/Linux on amd64/arm64, and requires the official release asset SHA-256 digest. Plans can therefore perform read-only network access, while a present command performs no release lookup or replacement. Resolution or verification failure stops a required installation before Managed Configuration changes.
 
 `pnpm` is intentionally installed from the pinned standalone `@pnpm/linux-*` executable artifacts instead of through Corepack. Node remains part of the Core Development Baseline through `Node LTS (fnm)`, but the pnpm provider does not enable Corepack, create Corepack shims, run global `npm install -g`, or mutate shell configuration.
 

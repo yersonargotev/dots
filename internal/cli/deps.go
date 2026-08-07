@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,11 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
+)
+
+var (
+	depsHTTPClient        *http.Client
+	depsRollingReleaseURL string
 )
 
 func newDepsCommand() *cobra.Command {
@@ -119,11 +125,15 @@ func newDepsPlanCommand(profiles *[]string, extraTags *[]string) *cobra.Command 
 			}
 
 			report, err := deps.Plan(*m, deps.Options{
-				Profiles:  effective.Profiles,
-				ExtraTags: effective.ExtraTags,
-				Selection: &effective.Selection,
-				OS:        runtime.GOOS,
-				AppLookup: appInstalled(runtime.GOOS, resolvedHome),
+				Profiles:          effective.Profiles,
+				ExtraTags:         effective.ExtraTags,
+				Selection:         &effective.Selection,
+				OS:                runtime.GOOS,
+				Arch:              runtime.GOARCH,
+				Home:              resolvedHome,
+				AppLookup:         appInstalled(runtime.GOOS, resolvedHome),
+				HTTPClient:        depsHTTPClient,
+				RollingReleaseURL: depsRollingReleaseURL,
 			}, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
 			if err != nil {
 				return err
@@ -176,19 +186,22 @@ func newDepsInstallCommand(profiles *[]string, extraTags *[]string) *cobra.Comma
 			}
 
 			options := deps.Options{
-				Profiles:  *profiles,
-				ExtraTags: *extraTags,
-				OS:        runtime.GOOS,
-				Arch:      runtime.GOARCH,
-				Home:      resolvedHome,
-				StateRoot: resolvedStateRoot,
-				AppLookup: appInstalled(runtime.GOOS, resolvedHome),
+				Profiles:          *profiles,
+				ExtraTags:         *extraTags,
+				OS:                runtime.GOOS,
+				Arch:              runtime.GOARCH,
+				Home:              resolvedHome,
+				StateRoot:         resolvedStateRoot,
+				AppLookup:         appInstalled(runtime.GOOS, resolvedHome),
+				HTTPClient:        depsHTTPClient,
+				RollingReleaseURL: depsRollingReleaseURL,
 			}
 
 			report, err := deps.InstallDryRun(*m, options, lookupCommand, fontInstalled(runtime.GOOS, resolvedHome), resolvedTier)
 			if err != nil {
 				return err
 			}
+			options = pinResolvedUserLocal(options, report)
 
 			if dryRun {
 				if wantsJSON(cmd) {
@@ -236,6 +249,19 @@ func newDepsInstallCommand(profiles *[]string, extraTags *[]string) *cobra.Comma
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview dependency install actions without executing package managers")
 	cmd.Flags().BoolVar(&yes, "yes", false, "execute dependency install actions without interactive confirmation")
 	return cmd
+}
+
+func pinResolvedUserLocal(options deps.Options, preview deps.InstallDryRunReport) deps.Options {
+	for _, item := range preview.Items {
+		if item.UserLocal == nil || item.UserLocal.Digest == "" {
+			continue
+		}
+		if options.ResolvedUserLocal == nil {
+			options.ResolvedUserLocal = make(map[string]deps.UserLocalArtifact)
+		}
+		options.ResolvedUserLocal[item.Dependency] = *item.UserLocal
+	}
+	return options
 }
 
 func loadDepsManifest(cmd *cobra.Command, file, home string) (*manifest.Manifest, error) {

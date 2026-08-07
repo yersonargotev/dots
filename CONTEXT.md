@@ -104,6 +104,10 @@ _Avoid_: distro support, package support level
 A reviewed Dependency provider that installs a tool into the user's home-owned environment, such as `~/.local/bin` or `~/.local/opt/<tool>`, without mutating system package managers or requiring `sudo`. It is a first-class provider category with allowlisted tool behavior, not arbitrary shell execution.
 _Avoid_: local script, custom install command, manual curl pipe
 
+**Rolling User-Local Provider**:
+A closed User-Local Provider recipe for a high-release-cadence tool. The Install Manifest selects only an allowlisted recipe; dots resolves the latest stable official release for the Supported Platform, requires an immutable artifact and official digest, and records the resolved evidence in Dependency Installation Metadata. A command already present on `PATH` satisfies the Dependency without resolution or replacement.
+_Avoid_: latest installer script, mutable download, unpinned URL
+
 **Install Plan**:
 The preview of filesystem changes, conflicts, dependency findings, and backup requirements that the Dotfiles CLI computes before applying installation. It is shown during normal installation and is the output of dry-run mode.
 _Avoid_: preview, dry run output, change list
