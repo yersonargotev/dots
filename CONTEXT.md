@@ -104,6 +104,10 @@ _Avoid_: distro support, package support level
 A reviewed Dependency provider that installs a tool into the user's home-owned environment, such as `~/.local/bin` or `~/.local/opt/<tool>`, without mutating system package managers or requiring `sudo`. It is a first-class provider category with allowlisted tool behavior, not arbitrary shell execution.
 _Avoid_: local script, custom install command, manual curl pipe
 
+**Rolling User-Local Provider**:
+A User-Local Provider for fast-moving tools that resolves the latest stable artifact from allowlisted official metadata when the Dependency is absent, verifies its published digest, and records the resolved release instead of pinning it in the Install Manifest.
+_Avoid_: latest installer, unpinned download, auto-updater
+
 **Install Plan**:
 The preview of filesystem changes, conflicts, dependency findings, and backup requirements that the Dotfiles CLI computes before applying installation. It is shown during normal installation and is the output of dry-run mode.
 _Avoid_: preview, dry run output, change list
@@ -180,6 +184,9 @@ _Avoid_: category, group, label
 The `core` Tag's intended workstation role: a general development environment that should be useful on any supported machine. It includes shell and terminal foundations plus common developer runtimes and package tools, rather than only minimal dotfile plumbing. GUI applications, agent-specific tooling, web/mobile-specialized tooling, secrets, and machine-specific state remain outside core unless explicitly selected by another Profile or Tag.
 _Avoid_: minimal shell, everything profile, desktop baseline
 
+**Agent CLI Baseline**:
+The `agents` Tag's intended workstation role: the supported agent command-line tools plus their dots-owned native Managed Configuration and required support Dependencies. Generated memory, context, skills, global rules, and specialized web, mobile, or delegation capabilities remain outside the baseline.
+_Avoid_: agent setup, AI tools profile, generated agent environment
 
 **OS Filter**:
 A manifest constraint that limits a Managed Entry to specific operating systems, such as `darwin` or `linux`. OS Filters complement Profiles but do not replace them.
