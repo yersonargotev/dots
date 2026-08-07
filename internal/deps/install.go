@@ -48,6 +48,14 @@ type Runner interface {
 	Run(executable string, args []string) error
 }
 
+// HomebrewFormulaPATHRunner lets the Homebrew rustup provider expose its
+// formula-owned tool proxies to reprobes and later child commands in this run.
+type HomebrewFormulaPATHRunner interface {
+	Runner
+	AddHomebrewFormulaToPATH(formula string) error
+	Lookup(command string) bool
+}
+
 // ToolchainEnvironment exposes an environment established by a constrained
 // toolchain bootstrap. Install uses it for reprobes and later child commands in
 // the same dependency run without mutating the parent process environment.
@@ -138,12 +146,12 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 	if hasToolchainEnvironment {
 		executionLook = toolchainEnvironment.Lookup
 	}
-	toolchainActivated := false
+	environmentActivated := false
 	for _, action := range plan.Actions {
 		// Toolchain activation can satisfy a later action that was missing when
 		// the Install Plan was built (for example npx after fnm activates Node).
 		// Re-probe before honoring that stale plan status.
-		if toolchainActivated && actionPresent(action, opts, executionLook, fontLook) {
+		if environmentActivated && actionPresent(action, opts, executionLook, fontLook) {
 			continue
 		}
 		if !actionExecutable(action) {
@@ -194,6 +202,14 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 				return report, fmt.Errorf("install %q: %w", action.Dependency, err)
 			}
 		}
+		if action.Provider == TierHomebrew && action.Toolchain == manifest.DependencyToolchainRustStableRustup {
+			if pathRunner, ok := runner.(HomebrewFormulaPATHRunner); ok {
+				if err := pathRunner.AddHomebrewFormulaToPATH(action.Package); err == nil {
+					executionLook = pathRunner.Lookup
+					environmentActivated = true
+				}
+			}
+		}
 		if len(action.Bootstrap) > 0 && !bootstrapRunnable(action.Bootstrap, executionLook) {
 			if action.Requirement == manifest.DependencyRequirementRequired {
 				requiredUnresolved = true
@@ -240,7 +256,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			// Activation failure is represented as unresolved below: a successful
 			// bootstrap is not proof that the selected runtime is executable.
 			if err := toolchainEnvironment.ActivateToolchain(action.Toolchain); err == nil {
-				toolchainActivated = true
+				environmentActivated = true
 			}
 		}
 		if !actionPresent(action, opts, executionLook, fontLook) {
@@ -318,7 +334,11 @@ func unresolvedToolchainRemediation(action InstallAction, look Lookup) string {
 	if len(missing) == 1 {
 		verb = "is"
 	}
-	return fmt.Sprintf("Rust stable is selected in rustup, but %s %s not available on PATH; ensure rustup exposes its proxies (usually by adding ~/.cargo/bin to PATH), then verify with `rustup which rustc` and `rustup which cargo`", strings.Join(missing, ", "), verb)
+	pathGuidance := "ensure rustup exposes its proxies (usually by adding ~/.cargo/bin to PATH)"
+	if action.Provider == TierHomebrew {
+		pathGuidance = "add the Homebrew rustup proxy directory from `brew --prefix rustup` (usually `$(brew --prefix rustup)/bin`) to PATH"
+	}
+	return fmt.Sprintf("Rust stable is selected in rustup, but %s %s not available on PATH; %s, then verify with `rustup which rustc` and `rustup which cargo`", strings.Join(missing, ", "), verb, pathGuidance)
 }
 
 func missingCommandProbes(probes []string, look Lookup) []string {

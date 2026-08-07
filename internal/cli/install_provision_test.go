@@ -245,6 +245,69 @@ func TestInstallExecutesProvisionerAfterFilesWithHomeThreaded(t *testing.T) {
 	}
 }
 
+func TestInstallProvisionerInheritsHomebrewRustupProxyPath(t *testing.T) {
+	sandboxHome := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	stubDir := t.TempDir()
+	formulaPrefix := filepath.Join(t.TempDir(), "rustup")
+	proxyBin := filepath.Join(formulaPrefix, "bin")
+	if err := os.MkdirAll(proxyBin, 0o755); err != nil {
+		t.Fatalf("create fake rustup proxy bin: %v", err)
+	}
+	for _, command := range []string{"rustc", "cargo"} {
+		writeExecStub(t, filepath.Join(proxyBin, command), "#!/bin/sh\nexit 0\n")
+	}
+	writeExecStub(t, filepath.Join(stubDir, "brew"), "#!/bin/sh\nif [ \"$1\" = \"--prefix\" ]; then printf '%s\\n' "+strconv.Quote(formulaPrefix)+"; fi\n")
+	writeExecStub(t, filepath.Join(stubDir, "rustup"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\ncommand -v rustc >/dev/null || exit 9\nprintf 'ok' > \"$HOME/provisioner-saw-rustc\"\n")
+	t.Setenv("PATH", stubDir)
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, sandboxHome, `version: 1
+profiles:
+  default:
+    tags: [core]
+dependencies:
+  - tags: [core]
+    dependencies:
+      - name: Rust stable (rustup)
+        commands: [rustup, rustc, cargo]
+        brew: rustup
+        linux_homebrew: true
+        toolchain: rust-stable-rustup
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: gentle-ai
+    tags: [core]
+    spec:
+      scope: global
+      persona: neutral
+      agents: [codex]
+    dependencies:
+      - name: gentle-ai
+      - name: engram
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(sandboxHome, "provisioner-saw-rustc")); err != nil {
+		t.Fatalf("provisioner did not inherit Homebrew rustup proxy PATH: %v\noutput:\n%s", err, out.String())
+	}
+}
+
 func TestInstallCoreZimFWProvisionerCreatesRuntimeInSandbox(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()

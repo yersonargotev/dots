@@ -363,6 +363,136 @@ entries:
 	}
 }
 
+func TestDepsInstallUsesHomebrewRustupProxyPathForReprobesAndLaterCommands(t *testing.T) {
+	binDir := t.TempDir()
+	formulaPrefix := filepath.Join(t.TempDir(), "rustup")
+	proxyBin := filepath.Join(formulaPrefix, "bin")
+	if err := os.MkdirAll(proxyBin, 0o755); err != nil {
+		t.Fatalf("create fake rustup proxy bin: %v", err)
+	}
+	for _, command := range []string{"rustc", "cargo"} {
+		if err := os.WriteFile(filepath.Join(proxyBin, command), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+			t.Fatalf("write fake %s proxy: %v", command, err)
+		}
+	}
+	followupPath := filepath.Join(binDir, "followup")
+	if err := os.WriteFile(followupPath, []byte("#!/bin/sh\nexit 0\n"), 0o600); err != nil {
+		t.Fatalf("write fake followup: %v", err)
+	}
+
+	runLog := filepath.Join(binDir, "calls")
+	brewScript := fmt.Sprintf(`#!/bin/sh
+if [ "$1" = "--prefix" ] && [ "$2" = "rustup" ]; then
+  printf '%%s\n' %q
+  exit 0
+fi
+printf 'brew %%s %%s\n' "$1" "$2" >> %q
+if [ "$2" = "followup" ]; then
+  command -v rustc >/dev/null || exit 9
+  /bin/chmod +x %q
+fi
+`, formulaPrefix, runLog, followupPath)
+	if err := os.WriteFile(filepath.Join(binDir, "brew"), []byte(brewScript), 0o700); err != nil {
+		t.Fatalf("write fake brew: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "rustup"), []byte(fmt.Sprintf("#!/bin/sh\nprintf 'rustup %%s %%s\\n' \"$1\" \"$2\" >> %q\n", runLog)), 0o700); err != nil {
+		t.Fatalf("write fake rustup: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	manifestPath := writeDepsInstallManifest(t, `version: 1
+profiles:
+  default:
+    tags: [core]
+dependencies:
+  - tags: [core]
+    dependencies:
+      - name: Rust stable (rustup)
+        commands: [rustup, rustc, cargo]
+        brew: rustup
+        toolchain: rust-stable-rustup
+      - name: followup
+        command: followup
+        brew: followup
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "install", "--yes", "--file", manifestPath, "--tier", "homebrew"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	gotCalls, err := os.ReadFile(runLog)
+	if err != nil {
+		t.Fatalf("read fake command calls: %v", err)
+	}
+	for _, want := range []string{"brew install rustup", "rustup default stable", "brew install followup"} {
+		if !strings.Contains(string(gotCalls), want) {
+			t.Fatalf("calls missing %q:\n%s", want, gotCalls)
+		}
+	}
+	if !strings.Contains(out.String(), "Summary: 2 installed, 0 manual, 0 unresolved, 0 failed") {
+		t.Fatalf("install did not converge:\n%s", out.String())
+	}
+}
+
+func TestDepsInstallHomebrewRustupPrefixFailureRemainsUnresolved(t *testing.T) {
+	binDir := t.TempDir()
+	brew := `#!/bin/sh
+if [ "$1" = "--prefix" ]; then exit 7; fi
+exit 0
+`
+	if err := os.WriteFile(filepath.Join(binDir, "brew"), []byte(brew), 0o700); err != nil {
+		t.Fatalf("write fake brew: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "rustup"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write fake rustup: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	manifestPath := writeDepsInstallManifest(t, `version: 1
+profiles:
+  default:
+    tags: [core]
+dependencies:
+  - tags: [core]
+    dependencies:
+      - name: Rust stable (rustup)
+        commands: [rustup, rustc, cargo]
+        brew: rustup
+        toolchain: rust-stable-rustup
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"deps", "install", "--yes", "--file", manifestPath, "--tier", "homebrew"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "unresolved required dependencies remain") {
+		t.Fatalf("Execute() error = %v, want unresolved dependency\noutput:\n%s", err, out.String())
+	}
+	for _, want := range []string{"unresolved Rust stable (rustup)", "brew --prefix rustup", "$(brew --prefix rustup)/bin"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("Homebrew prefix failure output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
 func TestDepsInstallDryRunRendersPreview(t *testing.T) {
 	binDir := t.TempDir()
 	brew := binDir + "/brew"

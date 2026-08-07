@@ -341,6 +341,32 @@ func (r *depsExecRunner) Run(executable string, args []string) error {
 	return cmd.Run()
 }
 
+func (r *depsExecRunner) AddHomebrewFormulaToPATH(formula string) error {
+	executable := "brew"
+	if r.brewPath != "" {
+		executable = r.brewPath
+	}
+	cmd := exec.CommandContext(r.ctx, executable, "--prefix", formula)
+	cmd.Env = r.environment()
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("resolve Homebrew formula prefix for %q: %w", formula, err)
+	}
+	prefix := strings.TrimSpace(string(output))
+	if prefix == "" {
+		return fmt.Errorf("resolve Homebrew formula prefix for %q: empty output", formula)
+	}
+	bin := filepath.Join(prefix, "bin")
+	path := environmentValue(r.environment(), "PATH")
+	for _, entry := range filepath.SplitList(path) {
+		if entry == bin {
+			return nil
+		}
+	}
+	r.prependPath(bin)
+	return nil
+}
+
 func (r *depsExecRunner) RunUserLocal(action deps.InstallAction) error {
 	return deps.InstallUserLocal(r.home, action)
 }
