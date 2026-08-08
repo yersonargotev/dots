@@ -9,9 +9,9 @@ review, squash merge, and green CI on the integrated `main` commit without
 requiring routine human checkpoints.
 
 This workflow replaces the repository-specific `dots-pr-creation` and
-`dots-pr-fast-path` workflows. Triage and issue creation prepare its input;
-independent review is composed within it. There is no fast path that bypasses
-the issue contract.
+`dots-pr-fast-path` workflows. Issue creation prepares its input; independent
+review is composed within it. There is no fast path that bypasses the issue
+contract.
 
 ## Implementation surface
 
@@ -33,17 +33,13 @@ Migrate source/tests that name the removed `dots-development-loop.md`, including
 invariants in this specification and `docs/agents/delegation.md`. Do not retain
 obsolete workflow names merely to satisfy tests.
 
-Update the triage workflow so every transition to `ready-for-agent`, including
-a maintainer's quick override, creates or updates the issue's one authoritative
-Agent Brief. It must never offer a brief as optional because that would create
-an issue the delivery admission contract immediately rejects.
-
-Apply the same invariant to every readiness producer. Update `to-prd`,
-`to-issues`, and `dots-issue-creation` so they create or update a complete Agent
-Brief before adding `ready-for-agent`. If they cannot produce the complete
-contract, leave the issue in `needs-triage`. Update triage-label documentation so
-`ready-for-agent` means both the label and exactly one valid Agent Brief, not
-merely a sufficiently detailed issue body.
+Keep the repository-owned Agent Brief contract in
+`docs/agents/agent-brief.md`. `dots-issue-creation` is the sole readiness
+producer: it creates or updates a complete Agent Brief before adding
+`ready-for-agent`. If it cannot produce the complete contract, it leaves the
+issue in `needs-triage`. Triage-label documentation defines `ready-for-agent` as
+both the label and exactly one valid Agent Brief, not merely a sufficiently
+detailed issue body.
 
 ## Trigger
 
@@ -173,7 +169,7 @@ scope, and return to triage when new evidence makes the brief incorrect, unsafe,
 or materially incomplete.
 
 When a contract failure returns the issue to triage, prefix its issue comment
-with the AI-triage disclaimer required by the repository triage workflow.
+with the AI-triage disclaimer required by the repository Agent Brief contract.
 
 ## Resume and isolation
 
@@ -446,7 +442,7 @@ as intentionally pending synchronization.
   interface metadata and exactly-one-issue argument handling.
 - `dots-pr-creation` and `dots-pr-fast-path` are fully removed; active skills,
   docs, tests, and metadata contain no stale operational references to them.
-- Triage, `to-prd`, `to-issues`, and `dots-issue-creation` create or update
+- `dots-issue-creation` is the sole readiness producer and creates or updates
   exactly one valid Agent Brief before applying `ready-for-agent`.
 - Agent Brief parsing supports only the required AI-triage disclaimer and blank
   lines before `## Agent Brief`, detects duplicates, and validates every

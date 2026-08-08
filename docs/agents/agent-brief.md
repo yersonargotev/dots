@@ -1,5 +1,9 @@
 # Writing Agent Briefs
 
+This document is the repository-owned Agent Brief contract.
+`dots-issue-creation` is the sole readiness producer and must satisfy this
+contract before applying `ready-for-agent`.
+
 An agent brief is a structured comment posted on a GitHub issue when it moves to `ready-for-agent`. It is the authoritative specification that an AFK agent will work from. The original issue body and discussion are context — the agent brief is the contract.
 
 Each issue has exactly one comment headed `## Agent Brief`. The repository's
@@ -36,7 +40,7 @@ Describe **what** the system should do, not **how** to implement it. The agent w
 
 - **Good:** "The `SkillConfig` type should accept an optional `schedule` field of type `CronExpression`"
 - **Bad:** "Open src/types/skill.ts and add a schedule field on line 42"
-- **Good:** "When a user runs `/triage` with no arguments, they should see a summary of issues needing attention"
+- **Good:** "When issue creation runs with no arguments, the user should see a summary of issues needing attention"
 - **Bad:** "Add a switch statement in the main handler function"
 
 ### Complete acceptance criteria
@@ -144,7 +148,7 @@ checked for matches.
 - Markdown file format in `.out-of-scope/` — each file should have a
   `# Concept Name` heading, a `**Decision:**` line, a `**Reason:**` line,
   and a `**Prior requests:**` list with issue links
-- The triage workflow should read all `.out-of-scope/*.md` files early
+- The issue-creation workflow should read all `.out-of-scope/*.md` files early
   and match incoming issues against them by concept similarity
 
 **Acceptance criteria:**
@@ -152,7 +156,7 @@ checked for matches.
 - [ ] The file includes the decision, reasoning, and link to the closed issue
 - [ ] If a matching `.out-of-scope/` file already exists, the new issue is
       appended to its "Prior requests" list rather than creating a duplicate
-- [ ] During triage, existing `.out-of-scope/` files are checked and surfaced
+- [ ] During issue creation, existing `.out-of-scope/` files are checked and surfaced
       when a new issue matches a prior rejection
 
 **Out of scope:**

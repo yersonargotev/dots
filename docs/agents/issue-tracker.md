@@ -11,10 +11,10 @@ This repository tracks work in GitHub Issues.
 ## Workflow
 
 - Product requirements and implementation-ready work should be published as GitHub Issues.
-- PRD issues should use the `ready-for-agent` label only after their workflow creates or updates exactly one complete Agent Brief.
-- `ready-for-agent` requires both the label and exactly one complete, internally consistent Agent Brief. See `.agents/skills/triage/AGENT-BRIEF.md` for that contract.
+- `dots-issue-creation` is the sole producer of `ready-for-agent` issues. It applies the label only after creating or updating exactly one complete Agent Brief.
+- `ready-for-agent` requires both the label and exactly one complete, internally consistent Agent Brief. See [`docs/agents/agent-brief.md`](agent-brief.md) for the repository-owned contract.
 - [`workflows/delivery-issue.md`](../../workflows/delivery-issue.md) is the single source of truth for taking one approved issue through squash merge and green post-merge CI on `main`. There is no separate delivery fast path.
-- Triage and issue-creation workflows prepare delivery input. Release publication remains a separate, potentially batched workflow after delivery.
+- Issue creation prepares delivery input. Release publication remains a separate, potentially batched workflow after delivery.
 - Public issue templates intentionally do not auto-apply labels; maintainers/admins apply triage labels after creation.
 - The `Maintainer governance` workflow removes issue/PR labels added by non-maintainers and reopens PRs closed without merge by non-maintainers.
 - Use the GitHub CLI (`gh`) when creating or updating issues from automation.

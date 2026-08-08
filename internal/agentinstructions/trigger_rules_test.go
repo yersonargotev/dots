@@ -288,21 +288,29 @@ func TestDeliverySkillIsExplicitThinAdapter(t *testing.T) {
 	}
 }
 
-func TestReadinessProducersRequireAgentBrief(t *testing.T) {
-	root := filepath.Join("..", "..", ".agents", "skills")
-	cases := map[string]string{
-		filepath.Join(root, "triage", "SKILL.md"):              "find the existing `## Agent Brief` comment; create it if absent, otherwise update it in place",
-		filepath.Join(root, "to-prd", "SKILL.md"):              "one complete Agent Brief",
-		filepath.Join(root, "to-issues", "SKILL.md"):           "one complete Agent Brief",
-		filepath.Join(root, "dots-issue-creation", "SKILL.md"): "one complete Agent Brief",
+func TestReadinessProducerRequiresRepositoryAgentBrief(t *testing.T) {
+	root := filepath.Join("..", "..")
+	cases := map[string][]string{
+		filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md"): {
+			"one complete Agent Brief",
+			"docs/agents/agent-brief.md",
+		},
+		filepath.Join(root, "docs", "agents", "agent-brief.md"): {
+			"exactly one comment headed `## Agent Brief`",
+			"`Category`, `Summary`, `Current behavior`",
+			"`Desired behavior`, `Key interfaces`, `Acceptance criteria`, and `Out of scope`",
+			"Revise that comment in place",
+		},
 	}
-	for path, want := range cases {
+	for path, wants := range cases {
 		got, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
-		if !strings.Contains(string(got), want) {
-			t.Fatalf("readiness producer %s missing %q", path, want)
+		for _, want := range wants {
+			if !strings.Contains(string(got), want) {
+				t.Fatalf("readiness contract %s missing %q", path, want)
+			}
 		}
 	}
 }
