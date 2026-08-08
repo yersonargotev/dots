@@ -29,7 +29,7 @@ Five **state** roles:
 
 - `needs-triage` — maintainer needs to evaluate
 - `needs-info` — waiting on reporter for more information
-- `ready-for-agent` — fully specified, ready for an AFK agent
+- `ready-for-agent` — fully specified with exactly one valid Agent Brief, ready for an AFK agent
 - `ready-for-human` — needs human implementation
 - `wontfix` — will not be actioned
 
@@ -78,7 +78,11 @@ Show counts and a one-line summary per issue. Let the maintainer pick.
 
 ## Quick state override
 
-If the maintainer says "move #42 to ready-for-agent", trust them and apply the role directly. Confirm what you're about to do (role changes, comment, close), then act. Skip grilling. If moving to `ready-for-agent` without a grilling session, ask whether they want to write an agent brief.
+If the maintainer says "move #42 to ready-for-agent", trust the requested state
+but still enforce its contract. Skip grilling, create or update exactly one
+complete Agent Brief, then apply `ready-for-agent`. If the available context
+cannot produce a complete brief, keep `needs-triage` and report the concrete
+gaps; an Agent Brief is never optional.
 
 ## Needs-info template
 
