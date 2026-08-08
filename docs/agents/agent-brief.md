@@ -19,7 +19,8 @@ fields. A field may explicitly state `None` or `Not applicable` when appropriate
 Completeness is semantic: the fields must be internally consistent, contain no
 open questions, cover relevant errors and edge cases, and provide independently
 verifiable acceptance criteria. Each criterion must map to automated evidence,
-manual evidence, or both. External dependencies and blocking issues must be
+manual evidence, or both. A complete brief may be prepared while its issue is
+natively blocked, but external dependencies and blocking issues must be
 resolved before the issue moves to `ready-for-agent`.
 
 ## Principles

@@ -72,9 +72,12 @@ CLI | Dotfiles configuration | Installation workflow | Documentation | CI / rele
 - Use temporary directories for home/config behavior.
 ```
 
-## Dependency notes for sliced issues
+## Optional relationship mirrors for sliced issues
 
-Add one of these sections when publishing multiple related issues:
+Native GitHub `parent`/`subIssues` and `blockedBy`/`blocking` relationships are
+the source of truth. Add these sections only as a readable mirror after native
+relationships are created, or as an explicitly reported fallback when the
+target tracker or installed CLI has no native relationship support.
 
 ```md
 ### Parent
@@ -91,3 +94,7 @@ Add one of these sections when publishing multiple related issues:
 ### Blocked by
 - #124
 ```
+
+Never leave placeholder issue numbers in a published body. A text-only section
+does not satisfy the sliced-work relationship contract when the supported
+native flags are available.
