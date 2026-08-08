@@ -1,5 +1,5 @@
 {
-  "schema_version": "5",
+  "schema_version": "6",
   "command": "plan",
   "status": "findings",
   "data": {
@@ -23,6 +23,12 @@
         "target": "/home/user/.zshrc",
         "strategy": "symlink",
         "status": "create"
+      },
+      {
+        "source": "configs/app/settings.json",
+        "target": "/home/user/.config/app/settings.json",
+        "strategy": "copy",
+        "status": "migrate"
       },
       {
         "source": "configs/git/config",

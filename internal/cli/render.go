@@ -22,7 +22,7 @@ func renderPlan(w io.Writer, p plan.Plan) {
 	}
 
 	var counts struct {
-		create, update, conflict, unchanged, missingSource int
+		create, update, migrate, conflict, unchanged, missingSource int
 	}
 	for _, a := range p.Actions {
 		fmt.Fprintf(w, "  %-15s %-9s %s -> %s\n", a.Status, a.Strategy, a.Source, a.Target)
@@ -32,6 +32,8 @@ func renderPlan(w io.Writer, p plan.Plan) {
 			counts.create++
 		case plan.StatusUpdate:
 			counts.update++
+		case plan.StatusMigrate:
+			counts.migrate++
 		case plan.StatusConflict:
 			counts.conflict++
 		case plan.StatusUnchanged:
@@ -45,9 +47,9 @@ func renderPlan(w io.Writer, p plan.Plan) {
 		}
 	}
 
-	if counts.update > 0 {
-		fmt.Fprintf(w, "\nSummary: %d create, %d update, %d conflict, %d unchanged, %d missing-source\n",
-			counts.create, counts.update, counts.conflict, counts.unchanged, counts.missingSource)
+	if counts.update > 0 || counts.migrate > 0 {
+		fmt.Fprintf(w, "\nSummary: %d create, %d update, %d migrate, %d conflict, %d unchanged, %d missing-source\n",
+			counts.create, counts.update, counts.migrate, counts.conflict, counts.unchanged, counts.missingSource)
 	} else {
 		fmt.Fprintf(w, "\nSummary: %d create, %d conflict, %d unchanged, %d missing-source\n",
 			counts.create, counts.conflict, counts.unchanged, counts.missingSource)

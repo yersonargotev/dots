@@ -39,6 +39,7 @@ type manifestValidateReport struct {
 }
 
 type installReport struct {
+	RepositoryRefresh   *gitrepo.Update            `json:"repository_refresh,omitempty"`
 	DryRun              bool                       `json:"dry_run"`
 	Selection           selection.Report           `json:"selection"`
 	PackageManagerSetup *pkgmgr.Report             `json:"package_manager_setup,omitempty"`
@@ -60,11 +61,12 @@ type installBackupSetReport struct {
 }
 
 type updateReport struct {
-	DryRun       bool             `json:"dry_run"`
-	Selection    selection.Report `json:"selection"`
-	Update       gitrepo.Update   `json:"update"`
-	Plan         plan.Plan        `json:"plan"`
-	Provisioners provision.Plan   `json:"provisioners"`
+	DryRun       bool                     `json:"dry_run"`
+	Selection    selection.Report         `json:"selection"`
+	Update       gitrepo.Update           `json:"update"`
+	Plan         plan.Plan                `json:"plan"`
+	Provisioners provision.Plan           `json:"provisioners"`
+	BackupSets   []installBackupSetReport `json:"backup_sets,omitempty"`
 }
 
 type upgradeReport struct {

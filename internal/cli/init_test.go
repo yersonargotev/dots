@@ -110,7 +110,7 @@ func writeCLISourceFile(t *testing.T, path, content string) {
 	}
 }
 
-func TestInstallDryRunRejectsStaleDefaultInstalledRepository(t *testing.T) {
+func TestInstallDryRunPreviewsStaleDefaultInstalledRepository(t *testing.T) {
 	sourceRepo := newCLISourceRepo(t)
 	if err := testrepo.TagWithHerdrManifest(sourceRepo, "v0.99.1"); err != nil {
 		t.Fatalf("tag Source of Truth with Herdr manifest: %v", err)
@@ -132,11 +132,11 @@ func TestInstallDryRunRejectsStaleDefaultInstalledRepository(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	code := cli.Run([]string{"install", "--dry-run", "--profile", "default", "--home", home}, &out, &errOut)
-	if code != 1 {
-		t.Fatalf("install --dry-run with stale source exit code = %d, want 1\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	if code != 0 {
+		t.Fatalf("install --dry-run with stale source exit code = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
 	}
-	if !strings.Contains(errOut.String(), "not at v0.99.1") {
-		t.Fatalf("dry-run stale source error should explain release mismatch, got:\n%s", errOut.String())
+	if !strings.Contains(out.String(), "Installed Repository can fast-forward") || !strings.Contains(out.String(), "configs/herdr/config.toml") {
+		t.Fatalf("dry-run should preview the incoming ref and plan, got:\n%s", out.String())
 	}
 	manifest, err := os.ReadFile(filepath.Join(sourceRoot, "dots.yaml"))
 	if err != nil {
@@ -145,4 +145,51 @@ func TestInstallDryRunRejectsStaleDefaultInstalledRepository(t *testing.T) {
 	if strings.Contains(string(manifest), "configs/herdr/config.toml") {
 		t.Fatalf("dry-run must not update the Installed Repository, got:\n%s", manifest)
 	}
+}
+
+func TestInstallPreservesDirtyDefaultInstalledRepositoryDuringRefRefresh(t *testing.T) {
+	sourceRepo := newCLISourceRepo(t)
+	if err := testrepo.TagWithHerdrManifest(sourceRepo, "v0.99.1"); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	sourceRoot := filepath.Join(home, ".local", "share", "dots")
+	if _, err := bootstrap.Ensure(bootstrap.Options{SourceRoot: sourceRoot, RepositoryURL: sourceRepo, RepositoryRef: "v0.99.0"}); err != nil {
+		t.Fatal(err)
+	}
+	local := filepath.Join(sourceRoot, "local.txt")
+	if err := os.WriteFile(local, []byte("preserve me\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldVersion := version.Value
+	version.Value = "v0.99.1"
+	defer func() { version.Value = oldVersion }()
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"install", "--yes", "--skip-deps", "--profile", "default", "--home", home}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("install exit = %d\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "Preserved local Installed Repository changes in stash@{0}") {
+		t.Fatalf("install did not report preserved changes:\n%s", out.String())
+	}
+	stashes := runCLIGitOutput(t, sourceRoot, "stash", "list")
+	if !strings.Contains(stashes, "dots preserved local Installed Repository changes") {
+		t.Fatalf("install stash missing:\n%s", stashes)
+	}
+	if _, err := os.Stat(local); !os.IsNotExist(err) {
+		t.Fatalf("dirty file remained in refreshed checkout: %v", err)
+	}
+}
+
+func runCLIGitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
 }

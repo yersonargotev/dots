@@ -12,10 +12,9 @@ import (
 const DefaultRepositoryURL = "https://github.com/yersonargotev/dots.git"
 
 type Options struct {
-	SourceRoot     string
-	RepositoryURL  string
-	RepositoryRef  string
-	UpdateExisting bool
+	SourceRoot    string
+	RepositoryURL string
+	RepositoryRef string
 }
 
 type Result struct {
@@ -33,11 +32,6 @@ func Ensure(opts Options) (Result, error) {
 
 	result := Result{SourceRoot: opts.SourceRoot}
 	if validSourceRoot(opts.SourceRoot) {
-		if opts.UpdateExisting {
-			if err := ensureRepositoryRef(opts); err != nil {
-				return Result{}, err
-			}
-		}
 		return result, nil
 	}
 
@@ -68,35 +62,6 @@ func Ensure(opts Options) (Result, error) {
 	}
 	result.Cloned = true
 	return result, nil
-}
-
-func ensureRepositoryRef(opts Options) error {
-	ref := strings.TrimSpace(opts.RepositoryRef)
-	if ref == "" {
-		return nil
-	}
-	matches, err := repositoryRefMatches(opts.SourceRoot, ref, fmt.Sprintf("cannot update it to %s", ref))
-	if err != nil {
-		return err
-	}
-	if matches {
-		return nil
-	}
-	if dirty, err := repositoryDirty(opts.SourceRoot); err != nil {
-		return err
-	} else if dirty {
-		return fmt.Errorf("Installed Repository at %s has local changes; refusing to update to %s. Commit/stash them, move it aside, or pass --source-root", opts.SourceRoot, ref)
-	}
-	if err := fetchRepositoryRef(opts.SourceRoot, ref); err != nil {
-		return err
-	}
-	if err := checkoutFetchHead(opts.SourceRoot, ref); err != nil {
-		return err
-	}
-	if !validSourceRoot(opts.SourceRoot) {
-		return errors.New("updated Installed Repository does not contain a valid dots.yaml at repository root")
-	}
-	return nil
 }
 
 // RequireCurrentRef verifies a valid Installed Repository already matches the
@@ -137,28 +102,6 @@ func repositoryAtRef(sourceRoot, ref string) (bool, error) {
 		return false, nil
 	}
 	return strings.TrimSpace(head) == strings.TrimSpace(target), nil
-}
-
-func repositoryDirty(sourceRoot string) (bool, error) {
-	status, err := gitOutput(sourceRoot, "status", "--porcelain")
-	if err != nil {
-		return false, fmt.Errorf("inspect Installed Repository status: %w", err)
-	}
-	return strings.TrimSpace(status) != "", nil
-}
-
-func fetchRepositoryRef(sourceRoot, ref string) error {
-	if _, err := gitOutput(sourceRoot, "fetch", "--depth", "1", "origin", ref); err != nil {
-		return fmt.Errorf("update Installed Repository to %s: %w", ref, err)
-	}
-	return nil
-}
-
-func checkoutFetchHead(sourceRoot, ref string) error {
-	if _, err := gitOutput(sourceRoot, "checkout", "--detach", "FETCH_HEAD"); err != nil {
-		return fmt.Errorf("checkout Installed Repository ref %s: %w", ref, err)
-	}
-	return nil
 }
 
 func gitOutput(sourceRoot string, args ...string) (string, error) {

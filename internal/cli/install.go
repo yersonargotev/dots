@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/agentinstructions"
 	"github.com/yersonargotev/dots/internal/backups"
-	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/codexconfig"
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/deps/pkgmgr"
@@ -68,22 +68,22 @@ func newInstallCommand() *cobra.Command {
 				return fmt.Errorf("--backup-and-replace requires --yes for non-interactive conflict replacement")
 			}
 
-			if !cmd.Flags().Changed("file") && !cmd.Flags().Changed("source-root") {
-				bootstrapOpts := bootstrap.Options{
-					SourceRoot:     paths.SourceRoot,
-					RepositoryRef:  defaultInitRepositoryRef("", version.Value),
-					UpdateExisting: !dryRun,
-				}
-				if dryRun {
-					if err := bootstrap.RequireCurrentRef(bootstrapOpts); err != nil {
-						return err
-					}
-				} else if _, err := bootstrap.Ensure(bootstrapOpts); err != nil {
+			prep := installRepositoryPreparation{SourceReadRoot: paths.SourceRoot, LegacyMigrations: map[string]plan.LegacyMigration{}, cleanup: func() {}}
+			defaultRepository := !cmd.Flags().Changed("file") && !cmd.Flags().Changed("source-root")
+			if defaultRepository {
+				prep, err = prepareInstallRepository(cmd, paths, dryRun)
+				if err != nil {
 					return err
 				}
+				defer prep.cleanup()
 			}
 
-			m, err := loadManifestForCommand(cmd, file, paths.SourceRoot)
+			var m *manifest.Manifest
+			if defaultRepository && prep.SourceReadRoot != paths.SourceRoot {
+				m, err = manifest.LoadFile(filepath.Join(prep.SourceReadRoot, file))
+			} else {
+				m, err = loadManifestForCommand(cmd, file, paths.SourceRoot)
+			}
 			if err != nil {
 				return err
 			}
@@ -158,13 +158,13 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if dryRun {
-				p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths)
+				p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
 				if err != nil {
 					return err
 				}
 				p.Selection = &effective.Report
 				if wantsJSON(cmd) {
-					return emitOK(cmd, installReport{DryRun: true, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+					return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: true, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
 				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profiles); err != nil {
 					return err
@@ -184,7 +184,7 @@ func newInstallCommand() *cobra.Command {
 						packageManagerSetup.Status = pkgmgr.StatusUnavailable
 						err := fmt.Errorf("Homebrew Package Manager Setup requires interactive confirmation; rerun without --yes or install Homebrew manually with %s", packageManagerSetup.Command.Display)
 						if wantsJSON(cmd) {
-							return installDependencyGateError{err: err, report: installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport}}
+							return installDependencyGateError{err: err, report: installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport}}
 						}
 						return err
 					}
@@ -220,7 +220,7 @@ func newInstallCommand() *cobra.Command {
 					renderDepsInstallPreview(cmd.OutOrStdout(), depPreview)
 					depsConfirmed = true
 				}
-				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths)
+				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
 				if err != nil {
 					return err
 				}
@@ -232,7 +232,7 @@ func newInstallCommand() *cobra.Command {
 				dependenciesReport.Result = &depReport
 				if err != nil {
 					if wantsJSON(cmd) {
-						return installDependencyGateError{err: err, report: installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan}}
+						return installDependencyGateError{err: err, report: installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan}}
 					}
 					return err
 				}
@@ -242,7 +242,7 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if !installPlanReady {
-				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths)
+				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
 				if err != nil {
 					return err
 				}
@@ -269,7 +269,7 @@ func newInstallCommand() *cobra.Command {
 			}
 			if !applied {
 				if wantsJSON(cmd) {
-					return emitOK(cmd, installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+					return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
 				return nil
 			}
@@ -277,7 +277,7 @@ func newInstallCommand() *cobra.Command {
 			provResult, err := runProvisionersWithEnvironment(cmd, *m, profiles, extraTags, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
 			if err != nil {
 				if wantsJSON(cmd) {
-					return installProvisionerError{err: err, report: installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
+					return installProvisionerError{err: err, report: installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
 				}
 				return err
 			}
@@ -286,7 +286,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, installReport{DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups})
+				return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups})
 			}
 			return nil
 		},
@@ -316,14 +316,16 @@ func renderInstallPlanAndProvisioners(cmd *cobra.Command, m manifest.Manifest, p
 	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS)
 }
 
-func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, profiles []string, extraTags []string, hostOS string, paths resolvedPaths) (plan.Plan, provision.Plan, error) {
+func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, profiles []string, extraTags []string, hostOS string, paths resolvedPaths, sourceReadRoot string, legacyMigrations map[string]plan.LegacyMigration) (plan.Plan, provision.Plan, error) {
 	p, err := plan.Build(m, plan.Options{
-		Profiles:   profiles,
-		ExtraTags:  extraTags,
-		OS:         hostOS,
-		SourceRoot: paths.SourceRoot,
-		Home:       paths.Home,
-		Metadata:   meta,
+		Profiles:         profiles,
+		ExtraTags:        extraTags,
+		OS:               hostOS,
+		SourceRoot:       paths.SourceRoot,
+		SourceReadRoot:   sourceReadRoot,
+		Home:             paths.Home,
+		Metadata:         meta,
+		LegacyMigrations: legacyMigrations,
 	})
 	if err != nil {
 		return plan.Plan{}, provision.Plan{}, err

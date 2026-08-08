@@ -10,10 +10,12 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/repositoryrefresh"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/version"
@@ -196,6 +198,21 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		return updateReport{DryRun: opts.dryRun, Selection: effective.Report}, nil
 	}
 	opts.changeAccepted = accepted
+	preRefresh, err := gitrepo.Preview(paths.SourceRoot)
+	if errors.Is(err, gitrepo.ErrNotFastForward) {
+		return updateReport{}, fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", paths.SourceRoot)
+	}
+	if err != nil {
+		return updateReport{}, err
+	}
+	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
+	if err != nil {
+		return updateReport{}, err
+	}
+	legacyMigrations, err := repositoryrefresh.CaptureLegacyTargets(*previousManifest, meta, paths.SourceRoot, paths.Home, preRefresh.OldRev)
+	if err != nil {
+		return updateReport{}, err
+	}
 
 	out := cmd.OutOrStdout()
 	var update gitrepo.Update
@@ -233,10 +250,6 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 		return updateReport{}, err
 	}
-	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
-	if err != nil {
-		return updateReport{}, err
-	}
 	sourceReadRoot := paths.SourceRoot
 	if opts.dryRun && update.Changed() {
 		snapshotRoot, err := os.MkdirTemp("", "dots-update-preview-*")
@@ -249,7 +262,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 		sourceReadRoot = snapshotRoot
 	}
-	p, err := plan.Build(*m, plan.Options{Selection: &effective.Selection, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, SourceReadRoot: sourceReadRoot, Home: paths.Home, Metadata: meta})
+	p, err := plan.Build(*m, plan.Options{Selection: &effective.Selection, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, SourceReadRoot: sourceReadRoot, Home: paths.Home, Metadata: meta, LegacyMigrations: legacyMigrations})
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -282,7 +295,15 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if opts.dryRun {
 		return report, nil
 	}
+	beforeBackups, err := backups.Load(backups.Path(paths.StateRoot))
+	if err != nil {
+		return updateReport{}, err
+	}
 	applied, err := resolveAndApply(cmd, p, paths, opts.yes, opts.noTUI, false)
+	if err != nil {
+		return updateReport{}, err
+	}
+	report.BackupSets, err = createdBackupSetReports(paths.StateRoot, beforeBackups)
 	if err != nil {
 		return updateReport{}, err
 	}

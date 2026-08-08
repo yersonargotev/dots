@@ -21,6 +21,7 @@ type Status string
 const (
 	StatusCreate        Status = "create"
 	StatusUpdate        Status = "update"
+	StatusMigrate       Status = "migrate"
 	StatusConflict      Status = "conflict"
 	StatusUnchanged     Status = "unchanged"
 	StatusMissingSource Status = "missing-source"
@@ -52,6 +53,21 @@ type Action struct {
 	Reason          string   `json:"reason,omitempty"`
 	MatchingTags    []string `json:"matching_tags,omitempty"`
 	Ownership       string   `json:"-"`
+	// Migration carries pre-refresh evidence for an ownership-changing legacy
+	// symlink. It is intentionally excluded from machine output; status is the
+	// portable contract and captured workstation content may be sensitive.
+	Migration *LegacyMigration `json:"-"`
+}
+
+// LegacyMigration is provenance-backed content captured before the Installed
+// Repository checkout changed. FinalContent is the exact regular-file content
+// apply may materialize after last-moment symlink and content revalidation.
+type LegacyMigration struct {
+	LinkDestination       string
+	CapturedContent       []byte
+	PreviousSourceContent []byte
+	ExpectedLinkContent   []byte
+	FinalContent          []byte
 }
 
 // Plan is the preview of changes the installer would apply for a Profile.
@@ -87,9 +103,10 @@ type Options struct {
 	SourceRoot string
 	// SourceReadRoot optionally supplies a snapshot used only to inspect source
 	// existence and content. Empty defaults to SourceRoot.
-	SourceReadRoot string
-	Home           string
-	Metadata       state.Metadata
+	SourceReadRoot   string
+	Home             string
+	Metadata         state.Metadata
+	LegacyMigrations map[string]LegacyMigration
 }
 
 // Build computes the Install Plan for the selected Profile without mutating
@@ -162,6 +179,20 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			MatchingTags:   matchingTags,
 			Ownership:      entry.Ownership,
 		}
+		if actionStatus == StatusConflict {
+			if migration, ok := opts.LegacyMigrations[target]; ok {
+				planned, compatible, migrateErr := planLegacyMigration(entry, readSourceAbs, migration)
+				if migrateErr != nil {
+					return Plan{}, migrateErr
+				}
+				if compatible {
+					action.Status = StatusMigrate
+					action.Migration = &planned
+					action.Reason = ""
+					action.MatchingTags = nil
+				}
+			}
+		}
 		if rec, ok := opts.Metadata.FindByTarget(target); ok && rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
 			action.PreviousContent = append([]byte(nil), rec.OwnedContent...)
 		}
@@ -203,6 +234,41 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	}
 
 	return plan, nil
+}
+
+func planLegacyMigration(entry manifest.Entry, currentSource string, migration LegacyMigration) (LegacyMigration, bool, error) {
+	if entry.Strategy != "copy" || migration.LinkDestination == "" {
+		return LegacyMigration{}, false, nil
+	}
+	current, err := os.ReadFile(currentSource)
+	if err != nil {
+		return LegacyMigration{}, false, fmt.Errorf("read migration source %s: %w", currentSource, err)
+	}
+	planned := migration
+	planned.ExpectedLinkContent = append([]byte(nil), current...)
+	switch entry.Ownership {
+	case "json-subset":
+		reconciliation, err := configsubset.ReconcileJSON(migration.CapturedContent, migration.PreviousSourceContent, current)
+		if err != nil {
+			return LegacyMigration{}, false, err
+		}
+		if !reconciliation.Compatible {
+			return LegacyMigration{}, false, nil
+		}
+		planned.FinalContent = reconciliation.Content
+	case "toml-subset":
+		merged, err := configsubset.MergeTOML(migration.CapturedContent, current)
+		if err != nil {
+			return LegacyMigration{}, false, nil
+		}
+		planned.FinalContent = merged
+	default:
+		if !bytes.Equal(migration.CapturedContent, migration.PreviousSourceContent) {
+			return LegacyMigration{}, false, nil
+		}
+		planned.FinalContent = append([]byte(nil), current...)
+	}
+	return planned, true, nil
 }
 
 func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {

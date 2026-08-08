@@ -33,6 +33,27 @@ func MachineName() string {
 // destination. The created Backup Set is returned so callers can report or
 // restore it later.
 func CreateSet(stateRoot string, targets []string, opts CreateOptions) (BackupSet, error) {
+	return createSet(stateRoot, targets, opts, nil)
+}
+
+// CreateContentSet records one Backup Set whose preserved item is captured
+// regular-file content rather than the target's current filesystem type. This
+// is required for legacy symlink migrations: after repository refresh the link
+// no longer exposes the pre-refresh application content, but that exact content
+// was captured before the checkout changed.
+func CreateContentSet(stateRoot, target string, content []byte, mode fs.FileMode, opts CreateOptions) (BackupSet, error) {
+	return createSet(stateRoot, []string{target}, opts, func(backupFile string) error {
+		if err := os.MkdirAll(filepath.Dir(backupFile), 0o755); err != nil {
+			return fmt.Errorf("create Backup Set directory: %w", err)
+		}
+		if err := os.WriteFile(backupFile, content, mode.Perm()); err != nil {
+			return fmt.Errorf("backup captured content for %s: %w", target, err)
+		}
+		return nil
+	})
+}
+
+func createSet(stateRoot string, targets []string, opts CreateOptions, captured func(string) error) (BackupSet, error) {
 	now := time.Now().UTC()
 	set := BackupSet{
 		ID:        "backup-" + now.Format("20060102T150405.000000000Z"),
@@ -45,7 +66,13 @@ func CreateSet(stateRoot string, targets []string, opts CreateOptions) (BackupSe
 
 	for i, target := range targets {
 		backupFile := FilePath(stateRoot, set.ID, i+1, target)
-		if err := copyTarget(target, backupFile); err != nil {
+		var err error
+		if captured != nil {
+			err = captured(backupFile)
+		} else {
+			err = copyTarget(target, backupFile)
+		}
+		if err != nil {
 			return BackupSet{}, err
 		}
 	}

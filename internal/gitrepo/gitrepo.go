@@ -33,6 +33,64 @@ type Update struct {
 	AttachedBranch   string   `json:"attached_branch,omitempty"`
 }
 
+// RefPreview resolves one requested remote ref without changing the Installed
+// Repository work tree. Callers can inspect the old and incoming revisions,
+// capture migration evidence, and then pass the result to CheckoutRef.
+func RefPreview(dir, ref string) (Update, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return Update{}, errors.New("repository ref is required")
+	}
+	old, err := head(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	if _, err := run(dir, "fetch", "--depth", "1", "origin", ref); err != nil {
+		return Update{}, fmt.Errorf("fetch Installed Repository ref %s: %w", ref, err)
+	}
+	newRev, err := revision(dir, "FETCH_HEAD")
+	if err != nil {
+		return Update{}, fmt.Errorf("resolve Installed Repository ref %s: %w", ref, err)
+	}
+	var incoming []string
+	if old != newRev {
+		incoming, err = incomingCommitsBetween(dir, old, newRev)
+		if err != nil {
+			return Update{}, fmt.Errorf("inspect incoming Installed Repository commits: %w", err)
+		}
+	}
+	return Update{OldRev: old, NewRev: newRev, Incoming: incoming}, nil
+}
+
+// CheckoutRef applies an exact RefPreview after preserving local changes. It
+// checks both revisions before mutation so a stale preview cannot move an
+// unexpected checkout, and checks out only the already fetched requested
+// commit without merging or rebasing.
+func CheckoutRef(dir string, preview Update) (Update, error) {
+	current, err := head(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	if current != preview.OldRev || !validRevision(preview.NewRev) {
+		return Update{}, errors.New("installed repository changed after ref preview")
+	}
+	preserved, stashed, err := PreserveLocalChanges(dir)
+	if err != nil {
+		return Update{}, err
+	}
+	result := preview
+	if stashed {
+		result.PreservedChanges = preserved
+	}
+	if preview.OldRev == preview.NewRev {
+		return result, nil
+	}
+	if _, err := run(dir, "checkout", "--detach", preview.NewRev); err != nil {
+		return Update{}, fmt.Errorf("checkout Installed Repository ref %s: %w", preview.NewRev, err)
+	}
+	return result, nil
+}
+
 type upstreamTarget struct {
 	Ref             string
 	Rev             string
@@ -150,6 +208,26 @@ func validRevision(revision string) bool {
 	return revision != "" && strings.Trim(revision, "0123456789abcdefABCDEF") == ""
 }
 
+func revision(dir, ref string) (string, error) {
+	out, err := run(dir, "rev-parse", "--verify", ref+"^{commit}")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func incomingCommitsBetween(dir, oldRev, newRev string) ([]string, error) {
+	out, err := run(dir, "log", "--oneline", "--no-decorate", oldRev+".."+newRev)
+	if err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(out)
+	if trimmed == "" {
+		return nil, nil
+	}
+	return strings.Split(trimmed, "\n"), nil
+}
+
 func pathInside(path, root string) bool {
 	relative, err := filepath.Rel(root, path)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
@@ -185,7 +263,7 @@ func PreserveLocalChanges(dir string) (string, bool, error) {
 	if clean {
 		return "", false, nil
 	}
-	if _, err := run(dir, "stash", "push", "--include-untracked", "-m", "dots update preserved local Installed Repository changes"); err != nil {
+	if _, err := run(dir, "stash", "push", "--include-untracked", "-m", "dots preserved local Installed Repository changes"); err != nil {
 		return "", false, fmt.Errorf("preserve local changes for %s: %w", dir, err)
 	}
 	return "stash@{0}", true, nil

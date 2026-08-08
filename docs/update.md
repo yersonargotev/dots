@@ -1,6 +1,6 @@
 # `dots update`
 
-`dots update` refreshes the [Installed Repository](../CONTEXT.md#installed-repository) (default `~/.local/share/dots`) and re-runs the safe install flow so managed configuration stays aligned with the [Source of Truth](../CONTEXT.md). It reuses the existing Install Plan, Conflict Resolution, and Backup Set machinery rather than reimplementing filesystem logic — the only behavior unique to `update` is advancing the repository's Git state.
+`dots update` refreshes the [Installed Repository](../CONTEXT.md#installed-repository) (default `~/.local/share/dots`) and re-runs the safe install flow so managed configuration stays aligned with the [Source of Truth](../CONTEXT.md). It shares repository preservation with default-path `dots install` and reuses the existing Install Plan, Conflict Resolution, and Backup Set machinery rather than reimplementing filesystem logic — the only behavior unique to `update` is its upstream fast-forward target.
 
 ## What it does
 
@@ -50,6 +50,18 @@ without that evidence stays additive-only until a safe run records the current
 baseline. TOML subset updates remain additive. Every `update` creates a Backup
 Set before mutation, and unmanaged or incompatible targets remain Conflicts.
 
+When an incoming manifest changes a previously installed symlink into a regular
+copy target, the plan may instead report `migrate`. This status requires matching
+Installation Metadata provenance, an exact legacy manifest entry and symlink
+destination, and an unambiguous content reconciliation. Dots captures the live
+legacy content before stashing and refreshing the repository. Apply then
+revalidates the symlink type, destination, and post-refresh content, creates a
+Backup Set containing the captured regular-file content, and only then
+materializes the new target. Manual or stale symlinks, incompatible content,
+ambiguous metadata, and targets changed after planning remain Conflicts or fail
+closed without being touched. Confirmed `--yes` runs apply safe `migrate`
+actions; they are not Conflict Resolution decisions.
+
 ## Flags
 
 `update` accepts the same path, selection, and safety flags as `install`:
@@ -76,7 +88,10 @@ Installed Repository can fast-forward a1b2c3d -> e4f5a6b:
 (dry run: working tree and managed files not modified)
 ```
 
-Because no fast-forward is applied in a dry run, the rendered plan reflects the **current** Source of Truth, not the post-update state. Run `update` without `--dry-run` to apply the fast-forward and compute the plan against the updated repository.
+The rendered plan reflects a temporary read-only snapshot of the incoming Source
+of Truth, including any `migrate` actions, while canonical target paths still
+refer to the Installed Repository. Dry-run does not change the checkout,
+targets, Installation Metadata, or Backup Sets.
 
 After a successful explicit install, an unattended update can reuse the
 Installed Selection:

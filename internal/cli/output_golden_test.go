@@ -168,6 +168,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
 				}, Actions: []plan.Action{
 					{Source: "configs/zsh/zshrc", ResolvedSource: "/abs/machine/local/path/MUST/NOT/APPEAR", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
+					{Source: "configs/app/settings.json", ResolvedSource: "/abs/MUST/NOT/APPEAR", Target: "/home/user/.config/app/settings.json", Strategy: "copy", Status: plan.StatusMigrate, Migration: &plan.LegacyMigration{CapturedContent: []byte("MUST NOT APPEAR")}},
 					{Source: "configs/git/config", Sources: []string{"configs/git/config", "configs/git/work.json"}, ResolvedSource: "/abs/x", ResolvedSources: []string{"/abs/x", "/abs/y"}, Content: []byte(`MUST NOT APPEAR`), Target: "/home/user/.gitconfig", Strategy: "copy", Status: plan.StatusConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme"}},
 				}},
 			},
@@ -319,6 +320,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					Provisioners: provision.Plan{
 						Profile: "core", Profiles: []string{"core"}, Tags: []string{"core", "desktop", "work"}, Steps: []provision.Step{},
 					},
+					BackupSets: []installBackupSetReport{{BackupSet: backups.BackupSet{ID: "backup-20260808T120000Z", CreatedAt: "2026-08-08T12:00:00Z", Reason: "pre-install legacy target migration", Targets: []string{"/home/user/.config/app/settings.json"}}, Path: "/home/user/.local/state/dots/backups/backup-20260808T120000Z"}},
 				},
 			},
 			golden: "envelope_update.golden",
