@@ -41,7 +41,7 @@ slice.
 - **Codex**: dots owns a TOML subset for status-line fields, not an app theme
   with a light/dark seam. No adaptive change was made.
 - **OpenCode**: dots owns only the MCP overlay from ADR 0005. There is no
-  dots-owned theme/status fragment to change without touching gentle-ai-owned
+  dots-owned theme/status fragment to change without touching user-owned
   global config, so it remains unchanged.
 - **bat**: bat supports native `auto:system` and `--theme-light/--theme-dark`,
   but the managed config has no include seam. Enabling it in the default config

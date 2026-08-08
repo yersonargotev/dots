@@ -208,20 +208,20 @@ func TestBuildReportsProvisionerReadiness(t *testing.T) {
 
 	m := singleEntryManifest("configs/app/config")
 	m.Provisioners = []manifest.Provisioner{{
-		Tool: "gentle-ai",
+		Tool: "claude",
 		Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"codex"}},
+		Spec: manifest.ProvisionerSpec{Marketplace: "example/tools"},
 		Dependencies: []manifest.Dependency{
-			{Name: "gentle-ai"},
-			{Name: "engram"},
+			{Name: "claude"},
+			{Name: "npx"},
 		},
 	}}
 
-	// gentle-ai present, engram missing: the provisioner is surfaced as not ready
+	// claude present, npx missing: the provisioner is surfaced as not ready
 	// without ever being executed.
 	report, err := doctor.Build(m, state.Metadata{}, doctor.Options{
 		Profile: "default", OS: "darwin", SourceRoot: sourceRoot, Home: home,
-	}, lookupSet("gentle-ai"), fontLookupSet())
+	}, lookupSet("claude"), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -230,15 +230,15 @@ func TestBuildReportsProvisionerReadiness(t *testing.T) {
 		t.Fatalf("len(Provisioners.Items) = %d, want 1", len(report.Provisioners.Items))
 	}
 	item := report.Provisioners.Items[0]
-	if item.Tool != "gentle-ai" {
-		t.Fatalf("provisioner tool = %q, want gentle-ai", item.Tool)
+	if item.Tool != "claude" {
+		t.Fatalf("provisioner tool = %q, want claude", item.Tool)
 	}
-	wantArgs := []string{"install", "--scope", "global", "--agents", "codex"}
+	wantArgs := []string{"plugin", "marketplace", "add", "example/tools"}
 	if !equalStrings(item.Args, wantArgs) {
 		t.Fatalf("provisioner args = %#v, want %#v", item.Args, wantArgs)
 	}
-	if !equalStrings(item.Missing, []string{"engram"}) {
-		t.Fatalf("provisioner missing = %#v, want [engram]", item.Missing)
+	if !equalStrings(item.Missing, []string{"npx"}) {
+		t.Fatalf("provisioner missing = %#v, want [npx]", item.Missing)
 	}
 }
 

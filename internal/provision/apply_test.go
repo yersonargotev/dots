@@ -50,22 +50,22 @@ func appLookupWith(present ...string) deps.AppLookup {
 	return func(app string) bool { return set[app] }
 }
 
-func gentleAIProvisioner(agent string) manifest.Provisioner {
+func marketplaceProvisioner(source string) manifest.Provisioner {
 	return manifest.Provisioner{
-		Tool: "gentle-ai",
+		Tool: "claude",
 		Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{agent}},
+		Spec: manifest.ProvisionerSpec{Marketplace: source},
 		Dependencies: []manifest.Dependency{
-			{Name: "gentle-ai"},
-			{Name: "engram"},
+			{Name: "claude"},
+			{Name: "npx"},
 		},
 	}
 }
 
 func TestApplyRunsSelectedProvisionersInOrder(t *testing.T) {
-	m := manifestWithProvisioners(gentleAIProvisioner("codex"), gentleAIProvisioner("claude"))
+	m := manifestWithProvisioners(marketplaceProvisioner("example/one"), marketplaceProvisioner("example/two"))
 	runner := &fakeRunner{}
-	look := lookupWith("gentle-ai", "engram")
+	look := lookupWith("claude", "npx")
 
 	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, fontLookupWith(), runner)
 	if err != nil {
@@ -73,8 +73,8 @@ func TestApplyRunsSelectedProvisionersInOrder(t *testing.T) {
 	}
 
 	wantCalls := [][]string{
-		{"gentle-ai", "install", "--scope", "global", "--agents", "codex"},
-		{"gentle-ai", "install", "--scope", "global", "--agents", "claude"},
+		{"claude", "plugin", "marketplace", "add", "example/one"},
+		{"claude", "plugin", "marketplace", "add", "example/two"},
 	}
 	if !reflect.DeepEqual(runner.calls, wantCalls) {
 		t.Fatalf("runner.calls = %#v, want %#v", runner.calls, wantCalls)
@@ -90,9 +90,9 @@ func TestApplyRunsSelectedProvisionersInOrder(t *testing.T) {
 }
 
 func TestApplyFailsWithoutRunningWhenDependencyMissing(t *testing.T) {
-	m := manifestWithProvisioners(gentleAIProvisioner("codex"))
+	m := manifestWithProvisioners(marketplaceProvisioner("example/tools"))
 	runner := &fakeRunner{}
-	look := lookupWith("gentle-ai") // engram missing
+	look := lookupWith("claude") // npx missing
 
 	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, fontLookupWith(), runner)
 	if err == nil {
@@ -108,16 +108,16 @@ func TestApplyFailsWithoutRunningWhenDependencyMissing(t *testing.T) {
 	if item.Status != provision.RunStatusMissingDeps {
 		t.Fatalf("report.Items[0].Status = %q, want missing-dependencies", item.Status)
 	}
-	if !reflect.DeepEqual(item.Missing, []string{"engram"}) {
-		t.Fatalf("report.Items[0].Missing = %#v, want [engram]", item.Missing)
+	if !reflect.DeepEqual(item.Missing, []string{"npx"}) {
+		t.Fatalf("report.Items[0].Missing = %#v, want [npx]", item.Missing)
 	}
 }
 
 func TestApplyStopsAndReportsOnRunnerFailure(t *testing.T) {
-	m := manifestWithProvisioners(gentleAIProvisioner("codex"), gentleAIProvisioner("claude"))
-	runErr := errors.New("gentle-ai exploded")
+	m := manifestWithProvisioners(marketplaceProvisioner("example/one"), marketplaceProvisioner("example/two"))
+	runErr := errors.New("provisioner exploded")
 	runner := &fakeRunner{failOn: 1, failErr: runErr}
-	look := lookupWith("gentle-ai", "engram")
+	look := lookupWith("claude", "npx")
 
 	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, fontLookupWith(), runner)
 	if err == nil {
@@ -151,21 +151,21 @@ func TestApplyNoProvisionersIsNoOp(t *testing.T) {
 }
 
 func TestApplyUnknownProfileIsError(t *testing.T) {
-	m := manifestWithProvisioners(gentleAIProvisioner("codex"))
+	m := manifestWithProvisioners(marketplaceProvisioner("example/tools"))
 	if _, err := provision.Apply(m, provision.Options{Profile: "ghost", OS: "darwin"}, lookupWith(), fontLookupWith(), &fakeRunner{}); err == nil {
 		t.Fatal("Apply() error = nil, want unknown-profile error")
 	}
 }
 
 func TestApplyAcceptsProvisionerFontFallbackDependency(t *testing.T) {
-	prov := gentleAIProvisioner("codex")
+	prov := marketplaceProvisioner("example/tools")
 	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{
 		Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*", FontFallbackMatches: []string{"CaskaydiaCoveNerdFont*"},
 	})
 	m := manifestWithProvisioners(prov)
 	runner := &fakeRunner{}
 
-	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, lookupWith("gentle-ai", "engram"), fontLookupWith("CaskaydiaCoveNerdFont*"), runner)
+	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, lookupWith("claude", "npx"), fontLookupWith("CaskaydiaCoveNerdFont*"), runner)
 	if err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
@@ -175,7 +175,7 @@ func TestApplyAcceptsProvisionerFontFallbackDependency(t *testing.T) {
 }
 
 func TestApplyUsesFontLookupForProvisionerFontDependencies(t *testing.T) {
-	prov := gentleAIProvisioner("codex")
+	prov := marketplaceProvisioner("example/tools")
 	prov.Dependencies = append(prov.Dependencies, manifest.Dependency{
 		Name: "CascadiaCode Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*",
 	})
@@ -185,13 +185,13 @@ func TestApplyUsesFontLookupForProvisionerFontDependencies(t *testing.T) {
 
 	report, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, func(command string) bool {
 		commandProbes = append(commandProbes, command)
-		return command == "gentle-ai" || command == "engram"
+		return command == "claude" || command == "npx"
 	}, fontLookupWith("CascadiaCodeNF*"), runner)
 	if err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
 
-	if !reflect.DeepEqual(commandProbes, []string{"gentle-ai", "engram"}) {
+	if !reflect.DeepEqual(commandProbes, []string{"claude", "npx"}) {
 		t.Fatalf("command probes = %#v, want only command dependencies", commandProbes)
 	}
 	if len(report.Items) != 1 || report.Items[0].Status != provision.RunStatusProvisioned {

@@ -21,7 +21,7 @@ func TestWorkstationAndMobileComposeAntigravitySettingsInSandbox(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := filepath.Join(home, ".local", "state", "dots")
 	t.Setenv("HOME", t.TempDir())
-	stubGentleAIProvisionerTools(t)
+	stubManifestProvisionerTools(t)
 
 	install := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -89,7 +89,7 @@ func TestWorkstationAndMobileExpandLegacyAntigravityMetadataInSandbox(t *testing
 	home := t.TempDir()
 	stateRoot := filepath.Join(home, ".local", "state", "dots")
 	t.Setenv("HOME", t.TempDir())
-	stubGentleAIProvisionerTools(t)
+	stubManifestProvisionerTools(t)
 
 	source := filepath.Join(repoRoot, "configs", "antigravity", "settings.json")
 	baseline, err := os.ReadFile(source)
@@ -160,8 +160,7 @@ func TestWorkstationAndMobileExpandLegacyAntigravityMetadataInSandbox(t *testing
 
 // TestAntigravityAgentsProfileSeedsUserBaselineInSandbox proves that dots seeds the
 // user-owned Antigravity settings baseline with a copy strategy (regular files, not symlinks)
-// before the gentle-ai provisioner runs, that the settings contain the expected baseline keys,
-// and that the provisioner does not escape the sandbox HOME.
+// before any Provisioner runs and that the settings contain the expected baseline keys.
 func TestAntigravityAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -173,8 +172,6 @@ func TestAntigravityAgentsProfileSeedsUserBaselineInSandbox(t *testing.T) {
 	t.Setenv("HOME", realHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nexit 0\n")
 	writeManifestDependencyStubs(t, stubDir)
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -328,8 +325,6 @@ func TestAntigravitySettingsProvisionerAdditionsDoNotDrift(t *testing.T) {
 	t.Setenv("HOME", realHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nexit 0\n")
 	writeManifestDependencyStubs(t, stubDir)
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))

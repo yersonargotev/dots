@@ -128,6 +128,37 @@ func TestPreviewReportsIncomingWithoutModifyingWorkingTree(t *testing.T) {
 	}
 }
 
+func TestReadFileAtRevisionReadsIncomingFileWithoutModifyingWorkingTree(t *testing.T) {
+	requireGit(t)
+	origin, clone := setupRemoteAndClone(t)
+
+	writeFile(t, filepath.Join(origin, "dots.yaml"), "version: 1\n")
+	gitExec(t, origin, "add", "-A")
+	gitExec(t, origin, "commit", "-m", "add manifest")
+	update, err := gitrepo.Preview(clone)
+	if err != nil {
+		t.Fatalf("Preview() error = %v", err)
+	}
+	content, err := gitrepo.ReadFileAtRevision(clone, update.NewRev, "dots.yaml")
+	if err != nil {
+		t.Fatalf("ReadFileAtRevision() error = %v", err)
+	}
+	if string(content) != "version: 1\n" {
+		t.Fatalf("ReadFileAtRevision() = %q, want incoming manifest", content)
+	}
+	snapshot := t.TempDir()
+	if err := gitrepo.ExportRevision(clone, update.NewRev, snapshot); err != nil {
+		t.Fatalf("ExportRevision() error = %v", err)
+	}
+	exported, err := os.ReadFile(filepath.Join(snapshot, "dots.yaml"))
+	if err != nil || string(exported) != "version: 1\n" {
+		t.Fatalf("ExportRevision() manifest = %q, err=%v", exported, err)
+	}
+	if _, err := os.Stat(filepath.Join(clone, "dots.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("ReadFileAtRevision() changed work tree; stat err = %v", err)
+	}
+}
+
 func TestPreviewSupportsDetachedInstalledRepositoryAtReleaseTag(t *testing.T) {
 	requireGit(t)
 	origin, clone := setupRemoteAndClone(t)

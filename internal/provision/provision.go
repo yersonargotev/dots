@@ -1,5 +1,5 @@
-// Package provision drives allowlisted external agent-configuration tools
-// (initially gentle-ai) declared in the Install Manifest. dots versions the
+// Package provision drives allowlisted external configuration tools declared in
+// the Install Manifest. dots versions the
 // declarative invocation — the tool plus its flag spec — and renders it into an
 // exact, resolved command. It never versions the intellectual layer the tool
 // regenerates (skills, agents, personas, CLAUDE.md).
@@ -49,7 +49,7 @@ func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 	case "zimfw":
 		return "zsh", []string{"-c", zimfwInstallScript}
 	default:
-		return p.Tool, renderGentleAIArgs(p.Spec)
+		return "", nil
 	}
 }
 
@@ -63,30 +63,6 @@ func renderCodeGraphArgs(spec manifest.ProvisionerSpec) []string {
 		location = "global"
 	}
 	return []string{"-c", codeGraphInstallScript, "codegraph-install", target, location}
-}
-
-// renderGentleAIArgs renders the selected gentle-ai action plus its flags in a
-// deterministic order; unset scalar flags and empty list flags are omitted, and
-// list values are comma-joined. The action defaults to install for existing
-// manifests that only declare install flags.
-func renderGentleAIArgs(spec manifest.ProvisionerSpec) []string {
-	action := strings.TrimSpace(spec.Action)
-	if action == "" {
-		action = "install"
-	}
-	args := []string{action}
-	args = appendScalarFlag(args, "--scope", spec.Scope)
-	args = appendScalarFlag(args, "--channel", spec.Channel)
-	args = appendScalarFlag(args, "--persona", spec.Persona)
-	args = appendScalarFlag(args, "--preset", spec.Preset)
-	args = appendScalarFlag(args, "--sdd-mode", spec.SDDMode)
-	args = appendListFlag(args, "--agents", spec.Agents)
-	args = appendListFlag(args, "--components", spec.Components)
-	args = appendListFlag(args, "--skills", spec.Skills)
-	if spec.Yes {
-		args = append(args, "--yes")
-	}
-	return args
 }
 
 // renderClaudeArgs renders one idempotent `claude` invocation. A marketplace
@@ -144,22 +120,6 @@ func renderSkillsArgs(spec manifest.ProvisionerSpec) []string {
 		args = append(args, "--copy")
 	}
 	return args
-}
-
-func appendScalarFlag(args []string, flag, value string) []string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return args
-	}
-	return append(args, flag, value)
-}
-
-func appendListFlag(args []string, flag string, values []string) []string {
-	joined := joinNonEmpty(values)
-	if joined == "" {
-		return args
-	}
-	return append(args, flag, joined)
 }
 
 func joinNonEmpty(values []string) string {

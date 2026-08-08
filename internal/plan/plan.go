@@ -75,14 +75,18 @@ func (p Plan) HasFindings() bool {
 
 // Options carries the resolved inputs needed to compute a Plan.
 type Options struct {
-	Profile    string
-	Profiles   []string
-	ExtraTags  []string
-	Selection  *manifest.Selection
-	OS         string
+	Profile   string
+	Profiles  []string
+	ExtraTags []string
+	Selection *manifest.Selection
+	OS        string
+	// SourceRoot is the canonical Installed Repository path recorded in Actions.
 	SourceRoot string
-	Home       string
-	Metadata   state.Metadata
+	// SourceReadRoot optionally supplies a snapshot used only to inspect source
+	// existence and content. Empty defaults to SourceRoot.
+	SourceReadRoot string
+	Home           string
+	Metadata       state.Metadata
 }
 
 // Build computes the Install Plan for the selected Profile without mutating
@@ -99,9 +103,14 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		resolved = &selection
 	}
 	tags := resolved.Tags
+	readRoot := opts.SourceReadRoot
+	if readRoot == "" {
+		readRoot = opts.SourceRoot
+	}
 
 	plan := Plan{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
 	actionByTarget := map[string]int{}
+	readSourcesByTarget := map[string][]string{}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue
@@ -120,15 +129,19 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		if err != nil {
 			return Plan{}, err
 		}
+		readSourceAbs, err := ResolveSource(source, readRoot)
+		if err != nil {
+			return Plan{}, err
+		}
 		entry.Source = source
-		actionStatus, err := status(entry, target, sourceAbs, opts.SourceRoot, opts.Metadata, defaultSource)
+		actionStatus, err := status(entry, target, readSourceAbs, readRoot, sourceAbs, opts.Metadata, defaultSource)
 		if err != nil {
 			return Plan{}, err
 		}
 		var reason string
 		var matchingTags []string
 		if actionStatus == StatusConflict {
-			matchingTags, err = MatchingUnselectedSourceOverrideTags(entry, tags, target, opts.SourceRoot)
+			matchingTags, err = matchingUnselectedSourceOverrideTags(entry, tags, target, readRoot, opts.SourceRoot)
 			if err != nil {
 				return Plan{}, err
 			}
@@ -158,7 +171,8 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			}
 			existing.Sources = append(existing.Sources, action.Source)
 			existing.ResolvedSources = append(existing.ResolvedSources, action.ResolvedSource)
-			composed, err := configsubset.ComposeJSONFiles(existing.ResolvedSources)
+			readSourcesByTarget[targetKey] = append(readSourcesByTarget[targetKey], readSourceAbs)
+			composed, err := configsubset.ComposeJSONFiles(readSourcesByTarget[targetKey])
 			if err != nil {
 				if strings.Contains(err.Error(), "incompatible") {
 					return Plan{}, fmt.Errorf("shared target %s has incompatible json-subset sources: %w", targetKey, err)
@@ -175,6 +189,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			continue
 		}
 		actionByTarget[targetKey] = len(plan.Actions)
+		readSourcesByTarget[targetKey] = []string{readSourceAbs}
 		plan.Actions = append(plan.Actions, action)
 	}
 
@@ -229,6 +244,10 @@ func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
 // Alternate sources receive the same containment and existence checks as a
 // selected Managed Entry source before they can produce remediation guidance.
 func MatchingUnselectedSourceOverrideTags(entry manifest.Entry, selectedTags []string, target, sourceRoot string) ([]string, error) {
+	return matchingUnselectedSourceOverrideTags(entry, selectedTags, target, sourceRoot, sourceRoot)
+}
+
+func matchingUnselectedSourceOverrideTags(entry manifest.Entry, selectedTags []string, target, sourceReadRoot, sourceRoot string) ([]string, error) {
 	if len(entry.SourceOverrides) == 0 || (entry.Strategy != "symlink" && entry.Strategy != "copy") {
 		return nil, nil
 	}
@@ -247,18 +266,22 @@ func MatchingUnselectedSourceOverrideTags(entry manifest.Entry, selectedTags []s
 
 	matching := make([]string, 0, len(overrideTags))
 	for _, tag := range overrideTags {
-		sourceAbs, err := ResolveSource(entry.SourceOverrides[tag], sourceRoot)
+		sourceAbs, err := ResolveSource(entry.SourceOverrides[tag], sourceReadRoot)
 		if err != nil {
 			return nil, err
 		}
-		exists, err := safeSourceExists(sourceAbs, sourceRoot)
+		exists, err := safeSourceExists(sourceAbs, sourceReadRoot)
 		if err != nil {
 			return nil, err
 		}
 		if !exists {
 			continue
 		}
-		matches, err := targetMatchesSource(entry.Strategy, target, sourceAbs)
+		canonicalSourceAbs, err := ResolveSource(entry.SourceOverrides[tag], sourceRoot)
+		if err != nil {
+			return nil, err
+		}
+		matches, err := targetMatchesSource(entry.Strategy, target, sourceAbs, canonicalSourceAbs)
 		if err != nil {
 			return nil, err
 		}
@@ -269,7 +292,7 @@ func MatchingUnselectedSourceOverrideTags(entry manifest.Entry, selectedTags []s
 	return matching, nil
 }
 
-func targetMatchesSource(strategy, target, sourceAbs string) (bool, error) {
+func targetMatchesSource(strategy, target, sourceAbs, canonicalSourceAbs string) (bool, error) {
 	info, err := os.Lstat(target)
 	if err != nil {
 		return false, nil
@@ -283,7 +306,7 @@ func targetMatchesSource(strategy, target, sourceAbs string) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("readlink target %s: %w", target, err)
 		}
-		return dest == sourceAbs, nil
+		return dest == canonicalSourceAbs, nil
 	case "copy":
 		if !info.Mode().IsRegular() {
 			return false, nil
@@ -460,7 +483,7 @@ func InsideRoot(path, root string) bool {
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
-func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta state.Metadata, defaultSource string) (Status, error) {
+func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSourceAbs string, meta state.Metadata, defaultSource string) (Status, error) {
 	// The managed source must exist before any target comparison is
 	// meaningful: a missing source cannot be installed, and a symlink that
 	// still points at a deleted source is broken, not unchanged.
@@ -484,7 +507,7 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot string, meta sta
 			return StatusConflict, nil
 		}
 		dest, err := os.Readlink(target)
-		if err != nil || dest != sourceAbs {
+		if err != nil || dest != canonicalSourceAbs {
 			return StatusConflict, nil
 		}
 		return StatusUnchanged, nil

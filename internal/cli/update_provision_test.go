@@ -20,15 +20,12 @@ entries:
     strategy: copy
     tags: [core]
 provisioners:
-  - tool: gentle-ai
+  - tool: claude
     tags: [core]
     spec:
-      scope: global
-      persona: neutral
-      agents: [codex]
+      marketplace: example/tools
     dependencies:
-      - name: gentle-ai
-      - name: engram
+      - name: claude
 `
 
 // TestUpdateDryRunRendersProvisionerPlan proves a dry-run update renders the
@@ -48,7 +45,7 @@ func TestUpdateDryRunRendersProvisionerPlan(t *testing.T) {
 
 	for _, want := range []string{
 		`Provisioners for profile "default" (tags: core)`,
-		"gentle-ai install --scope global --persona neutral --agents codex",
+		"claude plugin marketplace add example/tools",
 		"Summary: 1 provisioner(s)",
 	} {
 		if !strings.Contains(out, want) {
@@ -71,8 +68,7 @@ func TestUpdateExecutesProvisionersAfterApply(t *testing.T) {
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf 'ok' > \"$HOME/gentle-ai-ran\"\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nprintf 'ok' > \"$HOME/claude-ran\"\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	_, sourceRoot := newInstalledRepo(t, map[string]string{
@@ -83,56 +79,14 @@ func TestUpdateExecutesProvisionersAfterApply(t *testing.T) {
 	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot)
 
-	if _, err := os.Stat(filepath.Join(sandboxHome, "gentle-ai-ran")); err != nil {
+	if _, err := os.Stat(filepath.Join(sandboxHome, "claude-ran")); err != nil {
 		t.Fatalf("update did not run the provisioner under the sandbox HOME %q: %v\noutput:\n%s", sandboxHome, err, out)
 	}
-	if _, err := os.Stat(filepath.Join(fakeRealHome, "gentle-ai-ran")); err == nil {
+	if _, err := os.Stat(filepath.Join(fakeRealHome, "claude-ran")); err == nil {
 		t.Fatalf("update ran the provisioner under the inherited HOME %q instead of the sandbox", fakeRealHome)
 	}
 	if !strings.Contains(out, `Provisioner results for profile "default" (tags: core)`) {
 		t.Fatalf("update output missing provisioner results report\noutput:\n%s", out)
-	}
-}
-
-// TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner proves update
-// does not create the dots-owned CodeGraph instruction block unless the
-// CodeGraph provisioner is selected.
-func TestUpdateDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *testing.T) {
-	requireGitCLI(t)
-	sandboxHome := t.TempDir()
-	stateRoot := t.TempDir()
-	fakeRealHome := t.TempDir()
-	t.Setenv("HOME", fakeRealHome)
-
-	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
-	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	_, sourceRoot := newInstalledRepo(t, map[string]string{
-		"configs/git/gitconfig": "managed\n",
-		"dots.yaml":             updateProvisionerManifest,
-	})
-
-	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
-		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot)
-
-	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
-	if err != nil {
-		t.Fatalf("update with gentle-ai provisioner did not write dots rules block: %v\noutput:\n%s", err, out)
-	}
-	if strings.Contains(string(got), "dots:codegraph-mode") {
-		t.Fatalf("update with gentle-ai provisioner wrote CodeGraph instruction block without the codegraph tag\ncontent:\n%s\noutput:\n%s", got, out)
-	}
-	if !strings.Contains(string(got), "<!-- dots:rules -->") {
-		t.Fatalf("update with gentle-ai provisioner did not write dots rules block\ncontent:\n%s\noutput:\n%s", got, out)
-	}
-	if strings.Contains(string(got), "<!-- dots:delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.6-sol") {
-		t.Fatalf("update without Codex Spark tag wrote delegation guidance\ncontent:\n%s\noutput:\n%s", got, out)
-	}
-	assertNoNativeCodexSparkAgents(t, sandboxHome, "update without Codex Spark tag")
-	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
 	}
 }
 
@@ -144,8 +98,7 @@ func TestUpdateLegacyCodexSparkDelegationTagInstallsGenericGuidance(t *testing.T
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	_, sourceRoot := newInstalledRepo(t, map[string]string{
@@ -161,7 +114,7 @@ func TestUpdateLegacyCodexSparkDelegationTagInstallsGenericGuidance(t *testing.T
 		t.Fatalf("update with Codex Spark tag did not write Codex AGENTS.md: %v\noutput:\n%s", err, out)
 	}
 	content := string(got)
-	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:delegation -->", "gpt-5.6-sol"} {
+	for _, want := range []string{"<!-- dots:delegation -->", "gpt-5.6-sol"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("update with Codex Spark tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out)
 		}
@@ -183,8 +136,7 @@ func TestUpdateLegacyWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgent
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	codexPath := filepath.Join(sandboxHome, ".codex", "AGENTS.md")
@@ -215,7 +167,7 @@ func TestUpdateLegacyWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgent
 			t.Fatalf("without Codex Spark tag kept %q\ncontent:\n%s\noutput:\n%s", not, content, out)
 		}
 	}
-	for _, want := range []string{"<!-- dots:rules -->", "Keep diffs surgical", "before", "after"} {
+	for _, want := range []string{"before", "after"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("without Codex Spark tag removed expected %q\ncontent:\n%s", want, content)
 		}
@@ -284,8 +236,7 @@ func TestUpdateCanceledConflictDoesNotRunProvisioners(t *testing.T) {
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf 'ran' > \"$HOME/gentle-ai-ran\"\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nprintf 'ran' > \"$HOME/claude-ran\"\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	_, sourceRoot := newInstalledRepo(t, map[string]string{
@@ -316,7 +267,7 @@ func TestUpdateCanceledConflictDoesNotRunProvisioners(t *testing.T) {
 	if string(got) != "local\n" {
 		t.Fatalf("canceled update changed conflict target to %q", got)
 	}
-	if _, err := os.Stat(filepath.Join(sandboxHome, "gentle-ai-ran")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(sandboxHome, "claude-ran")); !os.IsNotExist(err) {
 		t.Fatalf("canceled update ran the provisioner in sandbox HOME; stat err = %v", err)
 	}
 	if !strings.Contains(out.String(), "Conflict resolution canceled; no changes applied.") {

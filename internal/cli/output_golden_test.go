@@ -57,7 +57,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					Profiles: []string{"default"}, ExtraTags: []string{}, EffectiveTags: []string{"default"}, ManagedEntries: []string{"~/.zshrc"}, Dependencies: []string{}, Provisioners: []string{},
 				},
 				Removed: selection.Changes{
-					Profiles: []string{"core", "work"}, ExtraTags: []string{"adaptive-theme"}, EffectiveTags: []string{"core", "work", "adaptive-theme"}, ManagedEntries: []string{"~/.work"}, Dependencies: []string{}, Provisioners: []string{"gentle-ai"},
+					Profiles: []string{"core", "work"}, ExtraTags: []string{"adaptive-theme"}, EffectiveTags: []string{"core", "work", "adaptive-theme"}, ManagedEntries: []string{"~/.work"}, Dependencies: []string{}, Provisioners: []string{"claude"},
 				},
 				MissingProfiles: []string{},
 				StaleExtraTags:  []string{},
@@ -103,7 +103,7 @@ func TestEnvelopeGolden(t *testing.T) {
 						Profile: "default",
 						Summary: provision.StatusSummary{State: provision.SummaryStatePending, Pending: 1},
 						Items: []provision.StatusItem{
-							{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global", "--agents", "claude-code"}, Targets: []string{"~/.claude", "~/.gentle-ai"}, Status: provision.StatusStatePending},
+							{Tool: "claude", Executable: "claude", Args: []string{"plugin", "marketplace", "add", "example/tools"}, Targets: []string{"~/.claude", "~/.claude.json"}, Status: provision.StatusStatePending},
 						},
 					},
 				},
@@ -128,7 +128,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					ManagedEntries: []inst.ManagedEntry{{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", InstalledAt: "2026-07-08T12:00:00Z", Tags: []string{"core"}, TagsSource: "recorded", Profiles: []string{"core"}, ProfilesSource: "recorded", ManifestMatched: true}},
 					Tags:           []string{"core"},
 					Profiles:       []inst.ProfileCoverage{{Name: "core", Source: "recorded+inferred", State: inst.CoverageComplete, CoveredTags: []string{"core"}, CoveredEntries: 1, TotalEntries: 1}},
-					Provisioners:   []inst.ProvisionerRun{{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global"}, Status: "provisioned", LastRunAt: "2026-07-08T12:00:00Z", Profile: "core", Profiles: []string{"core"}, ProfilesSource: "recorded", Tags: []string{"core"}, TagsSource: "recorded", ManifestMatched: true}},
+					Provisioners:   []inst.ProvisionerRun{{Tool: "claude", Executable: "claude", Args: []string{"plugin", "marketplace", "add", "example/tools"}, Status: "provisioned", LastRunAt: "2026-07-08T12:00:00Z", Profile: "core", Profiles: []string{"core"}, ProfilesSource: "recorded", Tags: []string{"core"}, TagsSource: "recorded", ManifestMatched: true}},
 				},
 			},
 			golden: "envelope_installed.golden",
@@ -216,7 +216,7 @@ func TestEnvelopeGolden(t *testing.T) {
 						{Source: "configs/zsh/zshrc", Target: "/Users/me/.zshrc", Strategy: "symlink", State: status.StateOK},
 					}},
 					Provisioners: provision.CheckReport{Profile: "default", Items: []provision.Readiness{
-						{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global"}, Missing: []string{"engram"}},
+						{Tool: "claude", Executable: "claude", Args: []string{"plugin", "marketplace", "add", "example/tools"}, Missing: []string{"npx"}},
 					}},
 					SecretScan: doctor.SecretReport{Findings: []doctor.SecretFinding{
 						{Source: "configs/git/config", Line: 3, Pattern: "credential-assignment"},
@@ -292,7 +292,7 @@ func TestEnvelopeGolden(t *testing.T) {
 						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
 					}},
 					Provisioners: provision.Plan{Profile: "default", Steps: []provision.Step{
-						{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global", "--agents", "claude-code"}, Targets: []string{"~/.claude", "~/.gentle-ai"}, GlobalTools: []string{"claude (~/.local/bin via npm prefix)"}},
+						{Tool: "claude", Executable: "claude", Args: []string{"plugin", "marketplace", "add", "example/tools"}, Targets: []string{"~/.claude", "~/.claude.json"}},
 					}},
 					BackupSets: []installBackupSetReport{{
 						BackupSet: backups.BackupSet{ID: "backup-20260627T140000.000000000Z", CreatedAt: "2026-06-27T14:00:00Z", Reason: "pre-install conflict protection", Targets: []string{"/home/user/.gitconfig"}},

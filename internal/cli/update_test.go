@@ -332,6 +332,64 @@ entries:
 	}
 }
 
+func TestUpdateDryRunPlansAgainstIncomingSourcesWithoutChangingCheckout(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/existing": "old\n",
+		"dots.yaml": `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/existing
+    target: ~/.existing
+    strategy: copy
+    tags: [core]
+`,
+	})
+	if err := os.WriteFile(filepath.Join(home, ".existing"), []byte("old\n"), 0o600); err != nil {
+		t.Fatalf("write existing target: %v", err)
+	}
+	advanceUpstream(t, origin, "change and add managed sources", map[string]string{
+		"configs/existing": "new\n",
+		"configs/added":    "added\n",
+		"dots.yaml": `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/existing
+    target: ~/.existing
+    strategy: copy
+    tags: [core]
+  - source: configs/added
+    target: ~/.added
+    strategy: copy
+    tags: [core]
+`,
+	})
+
+	out := runBareUpdate(t, "--profile", "default", "--dry-run",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot)
+	for _, want := range []string{"conflict", "configs/existing", "create", "configs/added"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dry-run output missing %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "0 missing-source") {
+		t.Fatalf("dry-run reported an incoming source as missing:\n%s", out)
+	}
+	if got, err := os.ReadFile(filepath.Join(sourceRoot, "configs/existing")); err != nil || string(got) != "old\n" {
+		t.Fatalf("dry-run changed existing checkout source: content=%q err=%v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(sourceRoot, "configs/added")); !os.IsNotExist(err) {
+		t.Fatalf("dry-run materialized incoming source in checkout; stat err = %v", err)
+	}
+}
+
 // --- helpers ---
 
 func requireGitCLI(t *testing.T) {

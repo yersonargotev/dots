@@ -49,6 +49,32 @@ entries:
 	}
 }
 
+func TestUpgradeDryRunReadsIncomingManifestAfterRetiredProvisionerDialect(t *testing.T) {
+	requireGitCLI(t)
+	home, stateRoot, sourceRoot, _ := setupRetiredProvisionerEvolution(t)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"upgrade", "--profile", "core", "--dry-run",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("upgrade --dry-run error = %v\noutput:\n%s", err, out.String())
+	}
+	if want := "Removed: effective-tags=retired managed-entries=~/.retired dependencies=retired-tool,gentle-ai,engram provisioners=gentle-ai"; !strings.Contains(out.String(), want) {
+		t.Fatalf("upgrade --dry-run output missing retired surfaces %q:\n%s", want, out.String())
+	}
+	manifestContent, err := os.ReadFile(filepath.Join(sourceRoot, "dots.yaml"))
+	if err != nil {
+		t.Fatalf("read unchanged manifest: %v", err)
+	}
+	if !strings.Contains(string(manifestContent), "tool: gentle-ai") {
+		t.Fatalf("upgrade --dry-run changed the Installed Repository manifest:\n%s", manifestContent)
+	}
+}
+
 func TestUpgradeJSONRequiresDryRunOrYes(t *testing.T) {
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer

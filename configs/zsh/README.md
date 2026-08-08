@@ -33,7 +33,7 @@ configs/zsh/
 │       ├── 30-path.zsh    # portable PATH additions (guarded)
 │       ├── 40-tools.zsh   # zoxide/starship/atuin/fnm (guarded)
 │       ├── 50-aliases.zsh # eza listings (guarded)
-│       └── 60-ai.zsh      # Claude/Engram/Copilot knobs (no secrets)
+│       └── 60-ai.zsh      # Claude/Copilot knobs (no secrets)
 └── zshrc.local.example    # template for machine-specific values + secrets
 ```
 
@@ -49,7 +49,7 @@ manages. Start from the template:
 cp configs/zsh/zshrc.local.example ~/.zshrc.local
 ```
 
-This is where tokens (e.g. `ENGRAM_CLOUD_TOKEN`), per-machine `PATH` entries, and
+This is where tokens, per-machine `PATH` entries, and
 IDE shell integrations live.
 
 ## Zim runtime

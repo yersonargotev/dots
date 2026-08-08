@@ -18,7 +18,7 @@ func TestAtuinDefaultProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
-	stubGentleAIProvisionerTools(t)
+	stubManifestProvisionerTools(t)
 
 	install := cli.NewRootCommand()
 	var installOut bytes.Buffer

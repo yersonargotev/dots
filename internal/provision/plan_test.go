@@ -24,16 +24,16 @@ func manifestWithProvisioners(provs ...manifest.Provisioner) manifest.Manifest {
 
 func TestSelect(t *testing.T) {
 	coreProv := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global"},
+		Tool: "zimfw", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Yes: true},
 	}
 	desktopProv := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"desktop"},
-		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"codex"}},
+		Tool: "claude", Tags: []string{"desktop"},
+		Spec: manifest.ProvisionerSpec{Marketplace: "example/tools"},
 	}
 	linuxOnlyProv := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"}, OS: []string{"linux"},
-		Spec: manifest.ProvisionerSpec{Persona: "neutral"},
+		Tool: "zimfw", Tags: []string{"core"}, OS: []string{"linux"},
+		Spec: manifest.ProvisionerSpec{Yes: true},
 	}
 
 	tests := []struct {
@@ -96,8 +96,8 @@ func TestSelect(t *testing.T) {
 
 func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 	prov := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"codex", "opencode"}},
+		Tool: "claude", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Marketplace: "example/tools"},
 	}
 	m := manifestWithProvisioners(prov)
 
@@ -113,15 +113,15 @@ func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
 	}
 	step := p.Steps[0]
-	if step.Tool != "gentle-ai" || step.Executable != "gentle-ai" {
-		t.Fatalf("Step tool/executable = %q/%q, want gentle-ai", step.Tool, step.Executable)
+	if step.Tool != "claude" || step.Executable != "claude" {
+		t.Fatalf("Step tool/executable = %q/%q, want claude", step.Tool, step.Executable)
 	}
-	wantArgs := []string{"install", "--scope", "global", "--agents", "codex,opencode"}
+	wantArgs := []string{"plugin", "marketplace", "add", "example/tools"}
 	if !reflect.DeepEqual(step.Args, wantArgs) {
 		t.Fatalf("Step.Args = %#v, want %#v", step.Args, wantArgs)
 	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.codex", "~/.config/opencode", "~/.gentle-ai"}) {
-		t.Fatalf("Step.Targets = %#v, want [~/.codex ~/.config/opencode ~/.gentle-ai]", step.Targets)
+	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.claude.json"}) {
+		t.Fatalf("Step.Targets = %#v, want [~/.claude ~/.claude.json]", step.Targets)
 	}
 }
 
@@ -263,101 +263,6 @@ func TestPlanResolvesZimFWProvisioner(t *testing.T) {
 	}
 }
 
-func TestPlanResolvesClaudeCodeGentleAIProvisioner(t *testing.T) {
-	prov := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"claude-code"}},
-	}
-	m := manifestWithProvisioners(prov)
-
-	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
-	if err != nil {
-		t.Fatalf("Build() error = %v", err)
-	}
-	if len(p.Steps) != 1 {
-		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
-	}
-
-	step := p.Steps[0]
-	if !reflect.DeepEqual(step.Args, []string{"install", "--scope", "global", "--agents", "claude-code"}) {
-		t.Fatalf("claude-code gentle-ai args = %#v", step.Args)
-	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.claude", "~/.gentle-ai"}) {
-		t.Fatalf("claude-code targets = %#v, want [~/.claude ~/.gentle-ai]", step.Targets)
-	}
-	if !reflect.DeepEqual(step.GlobalTools, []string{"claude (~/.local/bin via npm prefix)"}) {
-		t.Fatalf("claude-code global tools = %#v, want claude npm-prefix disclosure", step.GlobalTools)
-	}
-}
-
-func TestPlanDoesNotReportGlobalToolsForGentleAIUninstall(t *testing.T) {
-	prov := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Action: "uninstall", Agents: []string{"claude-code"}, Yes: true},
-	}
-	m := manifestWithProvisioners(prov)
-
-	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
-	if err != nil {
-		t.Fatalf("Build() error = %v", err)
-	}
-	if len(p.Steps) != 1 {
-		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
-	}
-	if len(p.Steps[0].GlobalTools) != 0 {
-		t.Fatalf("uninstall global tools = %#v, want none", p.Steps[0].GlobalTools)
-	}
-}
-
-func TestPlanResolvesAntigravityGentleAIProvisioner(t *testing.T) {
-	prov := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"antigravity"}},
-	}
-	m := manifestWithProvisioners(prov)
-
-	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
-	if err != nil {
-		t.Fatalf("Build() error = %v", err)
-	}
-	if len(p.Steps) != 1 {
-		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
-	}
-
-	step := p.Steps[0]
-	if !reflect.DeepEqual(step.Args, []string{"install", "--scope", "global", "--agents", "antigravity"}) {
-		t.Fatalf("antigravity gentle-ai args = %#v", step.Args)
-	}
-	if !reflect.DeepEqual(step.Targets, []string{"~/.gemini", "~/.gentle-ai"}) {
-		t.Fatalf("antigravity targets = %#v, want [~/.gemini ~/.gentle-ai]", step.Targets)
-	}
-}
-
-func TestPlanResolvesVSCodeCopilotGentleAIProvisioner(t *testing.T) {
-	prov := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"vscode-copilot"}},
-	}
-	m := manifestWithProvisioners(prov)
-
-	p, err := provision.Build(m, provision.Options{Profile: "default", OS: "linux"})
-	if err != nil {
-		t.Fatalf("Build() error = %v", err)
-	}
-	if len(p.Steps) != 1 {
-		t.Fatalf("len(Plan.Steps) = %d, want 1", len(p.Steps))
-	}
-
-	step := p.Steps[0]
-	if !reflect.DeepEqual(step.Args, []string{"install", "--scope", "global", "--agents", "vscode-copilot"}) {
-		t.Fatalf("vscode-copilot gentle-ai args = %#v", step.Args)
-	}
-	wantTargets := []string{"~/Library/Application Support/Code/User", "~/.config/Code/User", "~/.gentle-ai"}
-	if !reflect.DeepEqual(step.Targets, wantTargets) {
-		t.Fatalf("vscode-copilot targets = %#v, want %#v", step.Targets, wantTargets)
-	}
-}
-
 func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 	skills := manifest.Provisioner{
 		Tool: "skills", Tags: []string{"core"},
@@ -403,8 +308,8 @@ func TestPlanResolvesSkillsProvisioner(t *testing.T) {
 
 func TestPlanEmptyWhenNoProvisionerSelected(t *testing.T) {
 	prov := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"desktop"},
-		Spec: manifest.ProvisionerSpec{Scope: "global"},
+		Tool: "claude", Tags: []string{"desktop"},
+		Spec: manifest.ProvisionerSpec{Marketplace: "example/tools"},
 	}
 	m := manifestWithProvisioners(prov)
 

@@ -526,17 +526,17 @@ func TestInstallDryRunIncludesSelectedProvisionerDependencies(t *testing.T) {
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
 		Provisioners: []manifest.Provisioner{
 			{
-				Tool: "gentle-ai",
+				Tool: "claude",
 				Tags: []string{"core"},
 				Dependencies: []manifest.Dependency{
-					{Name: "gentle-ai", Brew: "gentleman-programming/tap/gentle-ai"},
-					{Name: "engram", Brew: "gentleman-programming/tap/engram"},
+					{Name: "claude", Brew: "example/tools/claude"},
+					{Name: "npx", Brew: "node"},
 				},
 			},
 		},
 	}
 
-	report, err := deps.InstallDryRun(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("engram"), fontLookupSet(), deps.TierHomebrew)
+	report, err := deps.InstallDryRun(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("npx"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("InstallDryRun() error = %v", err)
 	}
@@ -544,13 +544,13 @@ func TestInstallDryRunIncludesSelectedProvisionerDependencies(t *testing.T) {
 		t.Fatalf("Items len = %d, want 1 (%#v)", len(report.Items), report.Items)
 	}
 	item := report.Items[0]
-	if item.Dependency != "gentle-ai" {
-		t.Fatalf("Items[0].Dependency = %q, want gentle-ai", item.Dependency)
+	if item.Dependency != "claude" {
+		t.Fatalf("Items[0].Dependency = %q, want claude", item.Dependency)
 	}
-	if item.Package != "gentleman-programming/tap/gentle-ai" {
+	if item.Package != "example/tools/claude" {
 		t.Fatalf("Items[0].Package = %q, want tap package", item.Package)
 	}
-	if item.TrustCommand != "brew trust --formula gentleman-programming/tap/gentle-ai" {
+	if item.TrustCommand != "brew trust --formula example/tools/claude" {
 		t.Fatalf("Items[0].TrustCommand = %q, want formula trust guidance", item.TrustCommand)
 	}
 }

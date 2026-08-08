@@ -70,7 +70,7 @@
             ],
             "dependencies": [],
             "provisioners": [
-              "gentle-ai"
+              "claude"
             ]
           },
           "missing_profiles": [],
@@ -206,7 +206,7 @@
               ],
               "dependencies": [],
               "provisioners": [
-                "gentle-ai"
+                "claude"
               ]
             },
             "missing_profiles": [],
@@ -229,21 +229,17 @@
       "profile": "default",
       "steps": [
         {
-          "tool": "gentle-ai",
-          "executable": "gentle-ai",
+          "tool": "claude",
+          "executable": "claude",
           "args": [
-            "install",
-            "--scope",
-            "global",
-            "--agents",
-            "claude-code"
+            "plugin",
+            "marketplace",
+            "add",
+            "example/tools"
           ],
           "targets": [
             "~/.claude",
-            "~/.gentle-ai"
-          ],
-          "global_tools": [
-            "claude (~/.local/bin via npm prefix)"
+            "~/.claude.json"
           ]
         }
       ]

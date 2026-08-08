@@ -385,10 +385,62 @@ entries:
 
 func TestUpdateReportsProfileTagRemovalsWithoutDeletingRetiredSurfaces(t *testing.T) {
 	requireGitCLI(t)
-	home := t.TempDir()
-	stateRoot := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
+	home, stateRoot, sourceRoot, retiredTarget := setupRetiredProvisionerEvolution(t)
 
+	out := runBareUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	if want := "Removed: effective-tags=retired managed-entries=~/.retired dependencies=retired-tool,gentle-ai,engram provisioners=gentle-ai"; !strings.Contains(out, want) {
+		t.Fatalf("output missing retired surfaces %q:\n%s", want, out)
+	}
+	got, err := os.ReadFile(retiredTarget)
+	if err != nil {
+		t.Fatalf("retired target was deleted: %v", err)
+	}
+	if string(got) != "keep me\n" {
+		t.Fatalf("retired target changed to %q", got)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.ResolvedTags, []string{"core"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResolvedTags = %#v, want %#v", got, want)
+	}
+}
+
+func TestUpdateDryRunReportsRetiredProvisionerEvolutionWithoutChangingTheCheckout(t *testing.T) {
+	requireGitCLI(t)
+	home, stateRoot, sourceRoot, retiredTarget := setupRetiredProvisionerEvolution(t)
+
+	out := runBareUpdate(t, "--yes", "--dry-run", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	if want := "Removed: effective-tags=retired managed-entries=~/.retired dependencies=retired-tool,gentle-ai,engram provisioners=gentle-ai"; !strings.Contains(out, want) {
+		t.Fatalf("dry-run output missing retired surfaces %q:\n%s", want, out)
+	}
+	manifestContent, err := os.ReadFile(filepath.Join(sourceRoot, "dots.yaml"))
+	if err != nil {
+		t.Fatalf("read unchanged manifest: %v", err)
+	}
+	if !strings.Contains(string(manifestContent), "tool: gentle-ai") {
+		t.Fatalf("dry-run changed the Installed Repository manifest:\n%s", manifestContent)
+	}
+	if got, err := os.ReadFile(retiredTarget); err != nil || string(got) != "keep me\n" {
+		t.Fatalf("dry-run changed retired target: content=%q err=%v", got, err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.ResolvedTags, []string{"core", "retired"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("dry-run ResolvedTags = %#v, want unchanged %#v", got, want)
+	}
+}
+
+func setupRetiredProvisionerEvolution(t *testing.T) (home, stateRoot, sourceRoot, retiredTarget string) {
+	t.Helper()
+	home = t.TempDir()
+	stateRoot = t.TempDir()
+	t.Setenv("HOME", t.TempDir())
 	origin, sourceRoot := newInstalledRepo(t, map[string]string{
 		"configs/core":    "core\n",
 		"configs/retired": "retired\n",
@@ -413,15 +465,25 @@ provisioners:
   - tool: gentle-ai
     tags: [retired]
     spec:
+      action: install
       scope: global
+      channel: stable
+      persona: senior-architect
+      preset: minimal
+      sdd-mode: true
       agents: [codex]
+      components: [engram]
+      yes: true
+    dependencies:
+      - name: gentle-ai
+      - name: engram
 `,
 	})
 	previous := state.InstalledSelection{Profiles: []string{"core"}, ResolvedTags: []string{"core", "retired"}}
 	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
 		t.Fatalf("save metadata: %v", err)
 	}
-	retiredTarget := filepath.Join(home, ".retired")
+	retiredTarget = filepath.Join(home, ".retired")
 	if err := os.WriteFile(retiredTarget, []byte("keep me\n"), 0o600); err != nil {
 		t.Fatalf("write retired target: %v", err)
 	}
@@ -438,26 +500,7 @@ entries:
     tags: [core]
 `,
 	})
-
-	out := runBareUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
-		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
-	if want := "Removed: effective-tags=retired managed-entries=~/.retired dependencies=retired-tool provisioners=gentle-ai"; !strings.Contains(out, want) {
-		t.Fatalf("output missing retired surfaces %q:\n%s", want, out)
-	}
-	got, err := os.ReadFile(retiredTarget)
-	if err != nil {
-		t.Fatalf("retired target was deleted: %v", err)
-	}
-	if string(got) != "keep me\n" {
-		t.Fatalf("retired target changed to %q", got)
-	}
-	meta, err := state.Load(state.Path(stateRoot))
-	if err != nil {
-		t.Fatalf("load metadata: %v", err)
-	}
-	if got, want := meta.InstalledSelection.ResolvedTags, []string{"core"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("ResolvedTags = %#v, want %#v", got, want)
-	}
+	return home, stateRoot, sourceRoot, retiredTarget
 }
 
 func TestUpdateProvisionerFailurePreservesPreviousInstalledSelection(t *testing.T) {
@@ -467,8 +510,7 @@ func TestUpdateProvisionerFailurePreservesPreviousInstalledSelection(t *testing.
 	t.Setenv("HOME", t.TempDir())
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 7\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 7\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	previous := state.InstalledSelection{Profiles: []string{"core"}, ResolvedTags: []string{"core"}}

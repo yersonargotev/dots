@@ -51,18 +51,17 @@
       },
       "items": [
         {
-          "tool": "gentle-ai",
-          "executable": "gentle-ai",
+          "tool": "claude",
+          "executable": "claude",
           "args": [
-            "install",
-            "--scope",
-            "global",
-            "--agents",
-            "claude-code"
+            "plugin",
+            "marketplace",
+            "add",
+            "example/tools"
           ],
           "targets": [
             "~/.claude",
-            "~/.gentle-ai"
+            "~/.claude.json"
           ],
           "status": "pending"
         }

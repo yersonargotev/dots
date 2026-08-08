@@ -4,6 +4,6 @@ Platform: ok (darwin)
 Dependencies: ok (no dependencies declared)
 Configuration: ok (0 ok, 0 concerns)
 Provisioners: warn (1 not ready)
-  not ready: gentle-ai install --scope global --agents codex (missing: engram)
+  not ready: claude plugin marketplace add example/tools (missing: npx)
 Secret Scan: ok (0 findings)
 Guardrail: Secret Scan catches obvious credential and private-key patterns only; it is not proof this repository is safe.

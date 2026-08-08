@@ -987,7 +987,7 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
-	stubGentleAIProvisionerTools(t)
+	stubManifestProvisionerTools(t)
 
 	sourceRoot, err := filepath.Abs(filepath.Clean(filepath.Join("..", "..")))
 	if err != nil {

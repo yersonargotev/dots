@@ -53,9 +53,9 @@ func TestProvisionExecRunnerThreadsHomeToSubprocess(t *testing.T) {
 	sandboxHome := t.TempDir()
 	fakeRealHome := t.TempDir()
 
-	// A stub standing in for gentle-ai: it writes a marker into whatever HOME the
+	// A generic stub writes a marker into whatever HOME the
 	// subprocess sees. A correctly threaded runner makes that the sandbox home.
-	stub := filepath.Join(t.TempDir(), "gentle-ai")
+	stub := filepath.Join(t.TempDir(), "provisioner-test-tool")
 	script := "#!/bin/sh\nprintf 'provisioned' > \"$HOME/marker\"\n"
 	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
 		t.Fatalf("write stub: %v", err)
@@ -87,7 +87,7 @@ func TestProvisionExecRunnerExposesLocalNPMPrefixAndBin(t *testing.T) {
 	sandboxHome := t.TempDir()
 	fakeRealHome := t.TempDir()
 
-	stub := filepath.Join(t.TempDir(), "gentle-ai")
+	stub := filepath.Join(t.TempDir(), "provisioner-test-tool")
 	script := `#!/bin/sh
 if [ "$NPM_CONFIG_PREFIX" != "$HOME/.local" ]; then
   exit 8
@@ -118,57 +118,10 @@ printf 'ok' > "$HOME/npm-prefix-ok"
 	}
 }
 
-func TestRunProvisionersGivesGentleAILocalNPMPrefix(t *testing.T) {
-	home := t.TempDir()
-	stubDir := t.TempDir()
-	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	script := `#!/bin/sh
-if [ "$NPM_CONFIG_PREFIX" != "$HOME/.local" ]; then
-  echo "would fall back to sudo npm install" >&2
-  exit 7
-fi
-case ":$PATH:" in
-  *":$HOME/.local/bin:"*) ;;
-  *) echo "local npm bin missing from PATH" >&2; exit 8 ;;
-esac
-printf 'npm-local' > "$HOME/gentle-ai-npm-mode"
-`
-	if err := os.WriteFile(filepath.Join(stubDir, "gentle-ai"), []byte(script), 0o755); err != nil {
-		t.Fatalf("write gentle-ai stub: %v", err)
-	}
-
-	m := manifest.Manifest{
-		Version: 1,
-		Profiles: map[string]manifest.Profile{
-			"workstation": {Tags: []string{"agents"}},
-		},
-		Provisioners: []manifest.Provisioner{
-			{Tool: "gentle-ai", Tags: []string{"agents"}, Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"claude-code"}}},
-		},
-	}
-
-	cmd := NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-
-	if _, err := runProvisioners(cmd, m, []string{"workstation"}, nil, home, t.TempDir(), t.TempDir()); err != nil {
-		t.Fatalf("runProvisioners() error = %v\noutput:\n%s", err, out.String())
-	}
-	got, err := os.ReadFile(filepath.Join(home, "gentle-ai-npm-mode"))
-	if err != nil {
-		t.Fatalf("gentle-ai stub did not confirm local npm mode: %v", err)
-	}
-	if string(got) != "npm-local" {
-		t.Fatalf("gentle-ai npm mode marker = %q, want npm-local", got)
-	}
-}
-
 func TestRunProvisionersRendersPartialReportOnFailure(t *testing.T) {
 	home := t.TempDir()
 	stubDir := t.TempDir()
-	countPath := filepath.Join(t.TempDir(), "gentle-ai-count")
+	countPath := filepath.Join(t.TempDir(), "claude-count")
 	t.Setenv("PROVISION_COUNT", countPath)
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
@@ -179,19 +132,9 @@ if [ -f "$PROVISION_COUNT" ]; then
 fi
 printf first > "$PROVISION_COUNT"
 printf ok > "$HOME/first-attempt"
-mkdir -p "$HOME/.codex"
-cat > "$HOME/.codex/AGENTS.md" <<'EOF'
-before
-
-<!-- gentle-ai:trigger-rules -->
-stale review-readability rule
-<!-- /gentle-ai:trigger-rules -->
-
-after
-EOF
 `
-	if err := os.WriteFile(filepath.Join(stubDir, "gentle-ai"), []byte(script), 0o755); err != nil {
-		t.Fatalf("write gentle-ai stub: %v", err)
+	if err := os.WriteFile(filepath.Join(stubDir, "claude"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write claude stub: %v", err)
 	}
 
 	m := manifest.Manifest{
@@ -203,8 +146,8 @@ EOF
 			{Source: "configs/zsh/zshrc", Target: "~/.zshrc", Strategy: "symlink", Tags: []string{"core"}},
 		},
 		Provisioners: []manifest.Provisioner{
-			{Tool: "gentle-ai", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"codex"}}},
-			{Tool: "gentle-ai", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"claude"}}},
+			{Tool: "claude", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Marketplace: "example/one"}},
+			{Tool: "claude", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Marketplace: "example/two"}},
 		},
 	}
 
@@ -221,19 +164,12 @@ EOF
 	got := out.String()
 	for _, want := range []string{
 		`Provisioner results for profile "default" (tags: core)`,
-		"gentle-ai install --scope global --agents codex — provisioned",
-		"gentle-ai install --scope global --agents claude — failed",
+		"claude plugin marketplace add example/one — provisioned",
+		"claude plugin marketplace add example/two — failed",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("partial report missing %q\noutput:\n%s", want, got)
 		}
-	}
-	instructions, readErr := os.ReadFile(filepath.Join(home, ".codex", "AGENTS.md"))
-	if readErr != nil {
-		t.Fatalf("read cleaned Codex instructions: %v", readErr)
-	}
-	if strings.Contains(string(instructions), "gentle-ai:trigger-rules") || strings.Contains(string(instructions), "review-readability") {
-		t.Fatalf("stale gentle-ai trigger rules survived after a later provisioner failure\ncontent:\n%s", instructions)
 	}
 }
 

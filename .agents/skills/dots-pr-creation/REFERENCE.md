@@ -73,18 +73,6 @@ grep -n '| `<skill>` |' .atl/skill-registry.md
 
 If YAML tooling is installed, validate metadata with `python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' <file>` or the repo's preferred validator.
 
-## `.atl` registry/cache gotcha
-
-`.atl` can be gitignored. If a skill changes the local registry/cache intentionally:
-
-```bash
-gentle-ai skill-registry refresh --cwd /Users/argote/Documents/dev/yersonargotev/dots --force
-git status --short --ignored .atl
-git add -f .atl/skill-registry.md .atl/.skill-registry.cache.json
-```
-
-Stage the registry and cache together. A changed registry with a stale cache fingerprint is a review blocker.
-
 ## Safety guardrails
 
 - Never run `dots install` against the real `$HOME`.

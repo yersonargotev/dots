@@ -1123,3 +1123,36 @@ func TestBuildSelectsMatchingEntryAsCreate(t *testing.T) {
 		t.Errorf("Action.Status = %q, want %q", action.Status, plan.StatusCreate)
 	}
 }
+
+func TestBuildReadsSnapshotContentWhileKeepingCanonicalSymlinkPaths(t *testing.T) {
+	canonicalRoot := t.TempDir()
+	readRoot := t.TempDir()
+	home := t.TempDir()
+	for _, root := range []string{canonicalRoot, readRoot} {
+		if err := os.MkdirAll(filepath.Join(root, "configs"), 0o755); err != nil {
+			t.Fatalf("mkdir configs: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "configs", "tool"), []byte("managed\n"), 0o600); err != nil {
+			t.Fatalf("write source: %v", err)
+		}
+	}
+	canonicalSource := filepath.Join(canonicalRoot, "configs", "tool")
+	if err := os.Symlink(canonicalSource, filepath.Join(home, ".tool")); err != nil {
+		t.Fatalf("write target symlink: %v", err)
+	}
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{{Source: "configs/tool", Target: "~/.tool", Strategy: "symlink", Tags: []string{"core"}}},
+	}
+
+	got, err := plan.Build(m, plan.Options{Profile: "default", OS: "darwin", SourceRoot: canonicalRoot, SourceReadRoot: readRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(got.Actions) != 1 || got.Actions[0].Status != plan.StatusUnchanged {
+		t.Fatalf("Actions = %#v, want unchanged canonical symlink", got.Actions)
+	}
+	if got.Actions[0].ResolvedSource != canonicalSource {
+		t.Fatalf("ResolvedSource = %q, want canonical %q", got.Actions[0].ResolvedSource, canonicalSource)
+	}
+}

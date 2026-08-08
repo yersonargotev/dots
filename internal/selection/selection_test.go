@@ -86,29 +86,27 @@ func TestCompareEvolutionReportsSelectedSurfaceChangesInManifestOrder(t *testing
 
 func TestRepositoryAgentsEvolutionReportsRetiredGentleAISurfaces(t *testing.T) {
 	manifestPath := filepath.Join("..", "..", "dots.yaml")
-	oldManifest, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("load old manifest fixture: %v", err)
+	oldManifest := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"agents": {Tags: []string{"agents"}}},
+		Provisioners: []manifest.Provisioner{
+			{
+				Tool: "gentle-ai", Tags: []string{"agents"},
+				Dependencies: []manifest.Dependency{{Name: "gentle-ai"}, {Name: "engram"}},
+			},
+			{Tool: "skills", Tags: []string{"agents"}},
+		},
 	}
 	newManifest, err := manifest.LoadFile(manifestPath)
 	if err != nil {
 		t.Fatalf("load current manifest: %v", err)
 	}
-	for i := range oldManifest.Provisioners {
-		for j, tag := range oldManifest.Provisioners[i].Tags {
-			if tag == "retired-gentle-ai" {
-				oldManifest.Provisioners[i].Tags[j] = "agents"
-			}
-		}
-	}
-
-	previous, err := selection.ResolveIntent(*oldManifest, selection.Intent{
+	previous, err := selection.ResolveIntent(oldManifest, selection.Intent{
 		Source: selection.SourceRecorded, Profiles: []string{"agents"},
 	})
 	if err != nil {
 		t.Fatalf("resolve previous agents selection: %v", err)
 	}
-	evolved, err := selection.CompareEvolution(*oldManifest, *newManifest, previous, "linux")
+	evolved, err := selection.CompareEvolution(oldManifest, *newManifest, previous, "linux")
 	if err != nil {
 		t.Fatalf("compare agents evolution: %v", err)
 	}
@@ -614,7 +612,7 @@ func TestRecordReloadsLatestInventoryBeforePersistingSelection(t *testing.T) {
 	latest := state.Metadata{
 		Version:      2,
 		Entries:      []state.Record{{Target: "/home/user/.zshrc"}},
-		Provisioners: []state.ProvisionerRecord{{Tool: "gentle-ai"}},
+		Provisioners: []state.ProvisionerRecord{{Tool: "claude"}},
 		InstalledSelection: &state.InstalledSelection{
 			Profiles: []string{"old"},
 		},

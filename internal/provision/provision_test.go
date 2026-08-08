@@ -1,11 +1,10 @@
 package provision_test
 
 import (
-	"reflect"
-	"testing"
-
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/provision"
+	"reflect"
+	"testing"
 )
 
 func TestRenderCommand(t *testing.T) {
@@ -15,91 +14,6 @@ func TestRenderCommand(t *testing.T) {
 		wantExec string
 		wantArgs []string
 	}{
-		{
-			name: "full spec renders every flag in deterministic order",
-			prov: manifest.Provisioner{
-				Tool: "gentle-ai",
-				Spec: manifest.ProvisionerSpec{
-					Scope:      "global",
-					Channel:    "stable",
-					Persona:    "neutral",
-					Preset:     "custom",
-					SDDMode:    "strict",
-					Agents:     []string{"codex", "claude"},
-					Components: []string{"engram", "sdd"},
-					Skills:     []string{"tdd", "go-testing"},
-				},
-			},
-			wantExec: "gentle-ai",
-			wantArgs: []string{
-				"install",
-				"--scope", "global",
-				"--channel", "stable",
-				"--persona", "neutral",
-				"--preset", "custom",
-				"--sdd-mode", "strict",
-				"--agents", "codex,claude",
-				"--components", "engram,sdd",
-				"--skills", "tdd,go-testing",
-			},
-		},
-		{
-			name: "partial spec omits unset flags",
-			prov: manifest.Provisioner{
-				Tool: "gentle-ai",
-				Spec: manifest.ProvisionerSpec{
-					Scope:  "global",
-					Agents: []string{"codex"},
-				},
-			},
-			wantExec: "gentle-ai",
-			wantArgs: []string{"install", "--scope", "global", "--agents", "codex"},
-		},
-		{
-			name: "uninstall renders action with cleanup flags",
-			prov: manifest.Provisioner{
-				Tool: "gentle-ai",
-				Spec: manifest.ProvisionerSpec{
-					Action:     "uninstall",
-					Agents:     []string{"codex", "claude-code"},
-					Components: []string{"sdd"},
-					Yes:        true,
-				},
-			},
-			wantExec: "gentle-ai",
-			wantArgs: []string{"uninstall", "--agents", "codex,claude-code", "--components", "sdd", "--yes"},
-		},
-		{
-			name: "persona only",
-			prov: manifest.Provisioner{
-				Tool: "gentle-ai",
-				Spec: manifest.ProvisionerSpec{Persona: "gentleman"},
-			},
-			wantExec: "gentle-ai",
-			wantArgs: []string{"install", "--persona", "gentleman"},
-		},
-		{
-			name: "preset only",
-			prov: manifest.Provisioner{
-				Tool: "gentle-ai",
-				Spec: manifest.ProvisionerSpec{Preset: "custom"},
-			},
-			wantExec: "gentle-ai",
-			wantArgs: []string{"install", "--preset", "custom"},
-		},
-		{
-			name: "whitespace scalars and list entries are trimmed and dropped",
-			prov: manifest.Provisioner{
-				Tool: "gentle-ai",
-				Spec: manifest.ProvisionerSpec{
-					Scope:   "  global  ",
-					Channel: "   ",
-					Agents:  []string{" codex ", "", "  ", "claude"},
-				},
-			},
-			wantExec: "gentle-ai",
-			wantArgs: []string{"install", "--scope", "global", "--agents", "codex,claude"},
-		},
 		{
 			name: "claude marketplace registration",
 			prov: manifest.Provisioner{
@@ -230,7 +144,6 @@ func TestRenderCommand(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotExec, gotArgs := provision.RenderCommand(tt.prov)

@@ -51,6 +51,51 @@ entries:
 	}
 }
 
+func TestLoadPreviousFileProjectsRetiredProvisionerInventoryWithoutAcceptingItsDialect(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  agents:
+    tags: [agents]
+entries:
+  - source: configs/agents
+    target: ~/.agents
+    strategy: copy
+    tags: [agents]
+provisioners:
+  - tool: gentle-ai
+    tags: [agents]
+    spec:
+      action: install
+      persona: senior-architect
+      components: [engram]
+    dependencies:
+      - name: gentle-ai
+      - name: engram
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	if _, err := manifest.LoadFile(path); err == nil || !strings.Contains(err.Error(), "field action not found") {
+		t.Fatalf("LoadFile() error = %v, want retired dialect rejection", err)
+	}
+	got, err := manifest.LoadPreviousFile(path)
+	if err != nil {
+		t.Fatalf("LoadPreviousFile() error = %v", err)
+	}
+	if len(got.Provisioners) != 1 || got.Provisioners[0].Tool != "gentle-ai" {
+		t.Fatalf("Provisioners = %#v, want retired tool inventory", got.Provisioners)
+	}
+	if !got.Provisioners[0].Spec.IsEmpty() {
+		t.Fatalf("previous Provisioner spec = %#v, want discarded dialect", got.Provisioners[0].Spec)
+	}
+	wantDependencies := []manifest.Dependency{{Name: "gentle-ai"}, {Name: "engram"}}
+	if !reflect.DeepEqual(got.Provisioners[0].Dependencies, wantDependencies) {
+		t.Fatalf("Dependencies = %#v, want %#v", got.Provisioners[0].Dependencies, wantDependencies)
+	}
+}
+
 func TestLoadFileRollingUserLocalAcceptsOnlyRecipe(t *testing.T) {
 	base := `version: 1
 profiles:
@@ -209,84 +254,6 @@ entries:
 	}
 	if deps[0].Name != "Desktop Nerd Font" || deps[0].Requirement != "optional" || deps[0].BrewCask != "font-cascadia-code-nf" || deps[0].FontMatch != "CascadiaCodeNF*" || !sameStrings(deps[0].FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
 		t.Fatalf("Profile dependency = %#v, want desktop font dependency with fallback match", deps[0])
-	}
-}
-
-func TestLoadFileParsesProvisioners(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "dots.yaml")
-	content := []byte(`version: 1
-profiles:
-  default:
-    tags: [core]
-entries:
-  - source: configs/zsh/zshrc
-    target: ~/.zshrc
-    strategy: symlink
-    tags: [core]
-provisioners:
-  - tool: gentle-ai
-    tags: [core]
-    os: [darwin, linux]
-    spec:
-      action: install
-      scope: global
-      channel: stable
-      persona: neutral
-      preset: custom
-      sdd-mode: strict
-      agents: [codex]
-      components: [engram]
-      skills: [tdd]
-    dependencies:
-      - name: gentle-ai
-        brew: gentleman-programming/tap/gentle-ai
-      - name: engram
-        requirement: optional
-        brew: gentleman-programming/tap/engram
-`)
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
-
-	got, err := manifest.LoadFile(path)
-	if err != nil {
-		t.Fatalf("LoadFile() error = %v", err)
-	}
-
-	if len(got.Provisioners) != 1 {
-		t.Fatalf("Provisioners len = %d, want 1", len(got.Provisioners))
-	}
-	prov := got.Provisioners[0]
-	if prov.Tool != "gentle-ai" {
-		t.Fatalf("Provisioner.Tool = %q, want gentle-ai", prov.Tool)
-	}
-	if !sameStrings(prov.Tags, []string{"core"}) {
-		t.Fatalf("Provisioner.Tags = %#v, want [core]", prov.Tags)
-	}
-	if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
-		t.Fatalf("Provisioner.OS = %#v, want [darwin linux]", prov.OS)
-	}
-	if prov.Spec.Action != "install" || prov.Spec.Scope != "global" || prov.Spec.Channel != "stable" || prov.Spec.Persona != "neutral" || prov.Spec.Preset != "custom" || prov.Spec.SDDMode != "strict" || prov.Spec.Yes {
-		t.Fatalf("Provisioner.Spec scalar flags = %#v, want install/global/stable/neutral/custom/strict/no yes", prov.Spec)
-	}
-	if !sameStrings(prov.Spec.Agents, []string{"codex"}) {
-		t.Fatalf("Provisioner.Spec.Agents = %#v, want [codex]", prov.Spec.Agents)
-	}
-	if !sameStrings(prov.Spec.Components, []string{"engram"}) {
-		t.Fatalf("Provisioner.Spec.Components = %#v, want [engram]", prov.Spec.Components)
-	}
-	if !sameStrings(prov.Spec.Skills, []string{"tdd"}) {
-		t.Fatalf("Provisioner.Spec.Skills = %#v, want [tdd]", prov.Spec.Skills)
-	}
-	if len(prov.Dependencies) != 2 {
-		t.Fatalf("Provisioner.Dependencies len = %d, want 2", len(prov.Dependencies))
-	}
-	if prov.Dependencies[0].Name != "gentle-ai" || prov.Dependencies[0].Brew != "gentleman-programming/tap/gentle-ai" {
-		t.Fatalf("Provisioner.Dependencies[0] = %#v, want gentle-ai brew dependency", prov.Dependencies[0])
-	}
-	if prov.Dependencies[1].Name != "engram" || prov.Dependencies[1].Requirement != "optional" || prov.Dependencies[1].Brew != "gentleman-programming/tap/engram" {
-		t.Fatalf("Provisioner.Dependencies[1] = %#v, want optional engram brew dependency", prov.Dependencies[1])
 	}
 }
 
@@ -862,7 +829,7 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 		t.Fatalf("ghostty dependency missing Darwin app-bundle detection: %#v", dependencies["ghostty"])
 	}
 
-	for _, name := range []string{"bat", "starship", "zellij", "atuin", "pnpm", "gentle-ai", "engram"} {
+	for _, name := range []string{"bat", "starship", "zellij", "atuin", "pnpm"} {
 		if len(dependencies[name]) == 0 {
 			t.Fatalf("repository manifest missing %s dependency", name)
 		}
@@ -1060,81 +1027,6 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 	}
 }
 
-func TestRepositoryManifestIncludesMattPocockEngineeringSkillsProvisioner(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var skills *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool == "skills" && prov.Spec.Package == "mattpocock/skills/skills/engineering" {
-			skills = prov
-		}
-	}
-
-	if skills == nil {
-		t.Fatal("repository manifest missing skills provisioner for mattpocock/skills/skills/engineering")
-	}
-	if !hasString(skills.Tags, "retired-gentle-ai") {
-		t.Errorf("skills provisioner %#v missing retired-gentle-ai tag", skills.Spec)
-	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
-	}
-	wantSkills := []string{"ask-matt", "codebase-design", "diagnosing-bugs", "domain-modeling", "grill-with-docs", "implement", "improve-codebase-architecture", "prototype", "resolving-merge-conflicts", "setup-matt-pocock-skills", "tdd", "to-issues", "to-prd", "triage"}
-	if !sameStrings(skills.Spec.Skills, wantSkills) {
-		t.Errorf("skills provisioner skills = %#v, want %#v", skills.Spec.Skills, wantSkills)
-	}
-	if !skills.Spec.Global || !skills.Spec.Copy {
-		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
-	}
-	if !hasDependency(skills.Dependencies, "npx") {
-		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
-	}
-}
-
-func TestRepositoryManifestIncludesMattPocockReviewSkillProvisioner(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var skills *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool == "skills" && prov.Spec.Package == "mattpocock/skills" {
-			skills = prov
-		}
-	}
-
-	if skills == nil {
-		t.Fatal("repository manifest missing skills provisioner for mattpocock/skills review bundle")
-	}
-	if !hasString(skills.Tags, "retired-gentle-ai") {
-		t.Errorf("skills provisioner %#v missing retired-gentle-ai tag", skills.Spec)
-	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
-	}
-	if !sameStrings(skills.Spec.Skills, []string{"grilling", "loop-me", "review", "writing-great-skills"}) {
-		t.Errorf("skills provisioner skills = %#v, want [grilling loop-me review writing-great-skills]", skills.Spec.Skills)
-	}
-	if !skills.Spec.Global || !skills.Spec.Copy {
-		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
-	}
-	if !hasDependency(skills.Dependencies, "npx") {
-		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
-	}
-}
-
 func TestRepositoryManifestScopesDelegationSkillProvisioners(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
@@ -1175,247 +1067,14 @@ func TestRepositoryManifestScopesDelegationSkillProvisioners(t *testing.T) {
 		t.Errorf("codex-delegation agents = %#v, want [codex]", codexOnly[0].Spec.Agents)
 	}
 
-	agents := delegationProvisioners(selectProvisioners(provision.Options{Profile: "agents", ExtraTags: []string{"retired-gentle-ai"}, OS: "darwin"}))
-	if len(agents) != 1 {
-		t.Fatalf("retired gentle-ai tag selected %d delegation provisioners, want 1 non-Codex legacy provisioner", len(agents))
-	}
-	var selectedAgents []string
-	for _, skills := range agents {
-		selectedAgents = append(selectedAgents, skills.Spec.Agents...)
-		if !sameStrings(skills.Spec.Skills, []string{"delegation"}) {
-			t.Errorf("skills provisioner skills = %#v, want [delegation]", skills.Spec.Skills)
-		}
-		if !skills.Spec.Global || !skills.Spec.Copy {
-			t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
-		}
-		if !hasDependency(skills.Dependencies, "npx") {
-			t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
-		}
-	}
-	if !sameStrings(selectedAgents, []string{"claude-code", "antigravity", "opencode", "github-copilot"}) {
-		t.Errorf("retired delegation targets = %#v, want [claude-code antigravity opencode github-copilot]", selectedAgents)
+	agents := delegationProvisioners(selectProvisioners(provision.Options{Profile: "agents", OS: "darwin"}))
+	if len(agents) != 0 {
+		t.Fatalf("agents selected %d delegation provisioners, want none", len(agents))
 	}
 
-	combined := delegationProvisioners(selectProvisioners(provision.Options{Profiles: []string{"agents", "codex-delegation"}, ExtraTags: []string{"retired-gentle-ai"}, OS: "darwin"}))
-	if len(combined) != 2 {
-		t.Fatalf("agents + codex-delegation selected %d delegation provisioners, want the same 2 without duplicate Codex provisioning", len(combined))
-	}
-}
-
-func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var cleanup, sddInstall, codexInstall, claudeInstall, antigravityInstall, opencodeInstall, copilotInstall, personaInstall *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool != "gentle-ai" {
-			continue
-		}
-		switch {
-		case cleanup == nil && prov.Spec.Action == "uninstall":
-			cleanup = prov
-		case sddInstall == nil && sameStrings(prov.Spec.Components, []string{"sdd"}):
-			sddInstall = prov
-		case personaInstall == nil && sameStrings(prov.Spec.Components, []string{"persona"}):
-			personaInstall = prov
-		case codexInstall == nil && sameStrings(prov.Spec.Agents, []string{"codex"}):
-			codexInstall = prov
-		case claudeInstall == nil && sameStrings(prov.Spec.Agents, []string{"claude-code"}):
-			claudeInstall = prov
-		case antigravityInstall == nil && sameStrings(prov.Spec.Agents, []string{"antigravity"}):
-			antigravityInstall = prov
-		case opencodeInstall == nil && sameStrings(prov.Spec.Agents, []string{"opencode"}):
-			opencodeInstall = prov
-		case copilotInstall == nil && sameStrings(prov.Spec.Agents, []string{"vscode-copilot"}):
-			copilotInstall = prov
-		}
-	}
-
-	if cleanup == nil {
-		t.Fatal("repository manifest missing gentle-ai uninstall cleanup provisioner")
-	}
-	if sddInstall == nil {
-		t.Fatal("repository manifest missing opt-in gentle-ai SDD install provisioner")
-	}
-	if codexInstall == nil {
-		t.Fatal("repository manifest missing gentle-ai codex basic install provisioner")
-	}
-	if claudeInstall == nil {
-		t.Fatal("repository manifest missing gentle-ai claude basic install provisioner")
-	}
-	if antigravityInstall == nil {
-		t.Fatal("repository manifest missing gentle-ai antigravity basic install provisioner")
-	}
-	if opencodeInstall == nil {
-		t.Fatal("repository manifest missing gentle-ai opencode basic install provisioner")
-	}
-	if copilotInstall == nil {
-		t.Fatal("repository manifest missing gentle-ai vscode-copilot basic install provisioner")
-	}
-	for _, prov := range []*manifest.Provisioner{cleanup, codexInstall, claudeInstall, antigravityInstall, opencodeInstall, copilotInstall} {
-		if !sameStrings(prov.Tags, []string{"retired-gentle-ai"}) {
-			t.Fatalf("gentle-ai provisioner tags = %#v, want [retired-gentle-ai] so production Profiles do not apply retired setup", prov.Tags)
-		}
-	}
-	if cleanup.Spec.Yes != true {
-		t.Fatalf("gentle-ai cleanup yes = %v, want true", cleanup.Spec.Yes)
-	}
-	if !sameStrings(cleanup.Spec.Agents, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
-		t.Fatalf("gentle-ai cleanup agents = %#v, want [codex claude-code opencode antigravity vscode-copilot]", cleanup.Spec.Agents)
-	}
-	if !sameStrings(cleanup.Spec.Components, []string{"sdd", "persona"}) {
-		t.Fatalf("gentle-ai cleanup components = %#v, want [sdd persona]", cleanup.Spec.Components)
-	}
-	if !sameStrings(sddInstall.Tags, []string{"sdd"}) {
-		t.Fatalf("gentle-ai SDD install tags = %#v, want [sdd] so agents profile only installs SDD with --tag sdd", sddInstall.Tags)
-	}
-	if personaInstall != nil {
-		t.Fatalf("repository manifest must not install gentle-ai persona; found tags %#v spec %#v", personaInstall.Tags, personaInstall.Spec)
-	}
-	if !sameStrings(sddInstall.Spec.Agents, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
-		t.Fatalf("gentle-ai SDD install agents = %#v, want [codex claude-code opencode antigravity vscode-copilot]", sddInstall.Spec.Agents)
-	}
-	if sddInstall.Spec.SDDMode != "multi" {
-		t.Fatalf("gentle-ai SDD install mode = %q, want multi", sddInstall.Spec.SDDMode)
-	}
-	if codexInstall.Spec.Preset != "custom" {
-		t.Fatalf("gentle-ai codex install preset = %q, want custom", codexInstall.Spec.Preset)
-	}
-	if !sameStrings(codexInstall.Spec.Components, []string{"engram", "context7"}) {
-		t.Fatalf("gentle-ai codex install components = %#v, want [engram context7]", codexInstall.Spec.Components)
-	}
-	if hasString(codexInstall.Spec.Components, "permissions") {
-		t.Fatalf("gentle-ai codex install components = %#v, must not include permissions because it installs gentle-dev", codexInstall.Spec.Components)
-	}
-	if claudeInstall.Spec.Preset != "custom" {
-		t.Fatalf("gentle-ai claude install preset = %q, want custom", claudeInstall.Spec.Preset)
-	}
-	if !sameStrings(claudeInstall.Spec.Components, []string{"engram", "context7", "permissions"}) {
-		t.Fatalf("gentle-ai claude install components = %#v, want [engram context7 permissions]", claudeInstall.Spec.Components)
-	}
-	if !sameStrings(antigravityInstall.Spec.Components, []string{"engram", "context7"}) {
-		t.Fatalf("gentle-ai antigravity install components = %#v, want [engram context7]", antigravityInstall.Spec.Components)
-	}
-	if hasString(antigravityInstall.Spec.Components, "sdd") || hasString(antigravityInstall.Spec.Components, "permissions") {
-		t.Fatalf("gentle-ai antigravity install components = %#v, must not include sdd or permissions", antigravityInstall.Spec.Components)
-	}
-	if !sameStrings(opencodeInstall.Spec.Components, []string{"engram", "context7"}) {
-		t.Fatalf("gentle-ai opencode install components = %#v, want [engram context7]", opencodeInstall.Spec.Components)
-	}
-	if hasString(opencodeInstall.Spec.Components, "sdd") || hasString(opencodeInstall.Spec.Components, "permissions") {
-		t.Fatalf("gentle-ai opencode install components = %#v, must not include sdd or permissions", opencodeInstall.Spec.Components)
-	}
-	if !sameStrings(copilotInstall.Spec.Components, []string{"engram", "context7"}) {
-		t.Fatalf("gentle-ai vscode-copilot install components = %#v, want [engram context7]", copilotInstall.Spec.Components)
-	}
-	if hasString(copilotInstall.Spec.Components, "sdd") || hasString(copilotInstall.Spec.Components, "permissions") {
-		t.Fatalf("gentle-ai vscode-copilot install components = %#v, must not include sdd or permissions", copilotInstall.Spec.Components)
-	}
-	for i := range got.Provisioners {
-		if &got.Provisioners[i] == cleanup {
-			break
-		}
-		if &got.Provisioners[i] == sddInstall || &got.Provisioners[i] == codexInstall || &got.Provisioners[i] == claudeInstall || &got.Provisioners[i] == antigravityInstall || &got.Provisioners[i] == opencodeInstall || &got.Provisioners[i] == copilotInstall {
-			t.Fatal("gentle-ai install provisioner appears before cleanup")
-		}
-	}
-}
-
-func TestRepositoryManifestRetiredGentleAIProvisionersRemainOutsideProductionProfiles(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	desktop, err := provision.Build(*got, provision.Options{Profile: "desktop", OS: "darwin"})
-	if err != nil {
-		t.Fatalf("provision.Build(desktop) error = %v", err)
-	}
-	for _, step := range desktop.Steps {
-		if step.Tool == "gentle-ai" {
-			t.Fatalf("desktop profile selected gentle-ai provisioner args %#v; desktop must not install SDD or gentle-dev agent setup", step.Args)
-		}
-	}
-
-	agents, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"retired-gentle-ai"}, OS: "darwin"})
-	if err != nil {
-		t.Fatalf("provision.Build(agents) error = %v", err)
-	}
-	if len(agents.Steps) == 0 {
-		t.Fatal("agents profile selected no provisioners, want gentle-ai setup there")
-	}
-	foundGentleAI := false
-	for _, step := range agents.Steps {
-		if step.Tool == "gentle-ai" {
-			foundGentleAI = true
-			break
-		}
-	}
-	if !foundGentleAI {
-		t.Fatal("agents profile did not select gentle-ai provisioners")
-	}
-	wantSDDArgs := []string{
-		"install",
-		"--scope", "global",
-		"--channel", "stable",
-		"--preset", "custom",
-		"--sdd-mode", "multi",
-		"--agents", "codex,claude-code,opencode,antigravity,vscode-copilot",
-		"--components", "sdd",
-	}
-	for _, step := range agents.Steps {
-		if step.Tool == "gentle-ai" && sameStrings(step.Args, wantSDDArgs) {
-			t.Fatalf("agents profile selected SDD install args %#v; SDD must require --tag sdd", step.Args)
-		}
-	}
-
-	agentsWithSDD, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"retired-gentle-ai", "sdd"}, OS: "darwin"})
-	if err != nil {
-		t.Fatalf("provision.Build(agents --tag sdd) error = %v", err)
-	}
-	foundSDDInstall := false
-	for _, step := range agentsWithSDD.Steps {
-		if step.Tool == "gentle-ai" && sameStrings(step.Args, wantSDDArgs) {
-			foundSDDInstall = true
-			break
-		}
-	}
-	if !foundSDDInstall {
-		t.Fatal("agents profile with --tag sdd did not select the Gentle-AI SDD install provisioner")
-	}
-
-	wantPersonaArgs := []string{
-		"install",
-		"--scope", "global",
-		"--channel", "stable",
-		"--persona", "neutral",
-		"--preset", "custom",
-		"--agents", "codex,claude-code,opencode,antigravity,vscode-copilot",
-		"--components", "persona",
-	}
-	for _, step := range agents.Steps {
-		if step.Tool == "gentle-ai" && sameStrings(step.Args, wantPersonaArgs) {
-			t.Fatalf("agents profile selected persona install args %#v; persona must require --tag persona", step.Args)
-		}
-	}
-
-	agentsWithPersona, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"retired-gentle-ai", "persona"}, OS: "darwin"})
-	if err != nil {
-		t.Fatalf("provision.Build(agents --tag persona) error = %v", err)
-	}
-	for _, step := range agentsWithPersona.Steps {
-		if step.Tool == "gentle-ai" && sameStrings(step.Args, wantPersonaArgs) {
-			t.Fatalf("agents profile with --tag persona selected persona install args %#v; repository manifest must not install persona", step.Args)
-		}
+	combined := delegationProvisioners(selectProvisioners(provision.Options{Profiles: []string{"agents", "codex-delegation"}, OS: "darwin"}))
+	if len(combined) != 1 {
+		t.Fatalf("agents + codex-delegation selected %d delegation provisioners, want one Codex provisioner", len(combined))
 	}
 }
 
@@ -2053,7 +1712,17 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be one of claude, codegraph, codex, gentle-ai, skills, zimfw",
+			want: "provisioners[0].tool must be one of claude, codegraph, codex, skills, zimfw",
+		},
+		{
+			name: "retired gentle-ai tool",
+			provisioner: `  - tool: gentle-ai
+    tags: [agents]
+    spec:
+      scope: global
+      agents: [codex]
+`,
+			want: "provisioners[0].tool must be one of claude, codegraph, codex, skills, zimfw",
 		},
 		{
 			name: "claude spec sets neither marketplace nor plugin",
@@ -2116,46 +1785,6 @@ provisioners:
 			want: "provisioners[0].spec.env is only valid when mcp is set",
 		},
 		{
-			name: "claude spec mixes gentle-ai flags",
-			provisioner: `  - tool: claude
-    tags: [core]
-    spec:
-      marketplace: ChromeDevTools/chrome-devtools-mcp
-      persona: neutral
-`,
-			want: "provisioners[0].spec must not set gentle-ai install flags for the claude tool",
-		},
-		{
-			name: "gentle-ai spec mixes claude fields",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      scope: global
-      plugin: chrome-devtools-mcp
-`,
-			want: "provisioners[0].spec must not set claude fields (marketplace, plugin, from) for the gentle-ai tool",
-		},
-		{
-			name: "gentle-ai spec mixes mcp fields",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      scope: global
-      mcp: chrome-devtools
-`,
-			want: "provisioners[0].spec must not set MCP fields (mcp, command, env) for the gentle-ai tool",
-		},
-		{
-			name: "gentle-ai spec mixes skills fields",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      scope: global
-      package: vercel-labs/agent-skills
-`,
-			want: "provisioners[0].spec must not set skills.sh fields (package, global, copy) for the gentle-ai tool",
-		},
-		{
 			name: "claude spec mixes marketplace and mcp",
 			provisioner: `  - tool: claude
     tags: [core]
@@ -2183,17 +1812,6 @@ provisioners:
       mcp: chrome-devtools
 `,
 			want: "provisioners[0].spec.command is required when mcp is set",
-		},
-		{
-			name: "codex spec mixes gentle-ai flags",
-			provisioner: `  - tool: codex
-    tags: [core]
-    spec:
-      mcp: chrome-devtools
-      command: [npx, chrome-devtools-mcp@latest]
-      persona: neutral
-`,
-			want: "provisioners[0].spec must not set gentle-ai install flags for the codex tool",
 		},
 		{
 			name: "codex spec mixes claude fields",
@@ -2283,15 +1901,6 @@ provisioners:
 			want: "provisioners[0].spec.package must be an owner/repo package reference with optional path or @ref",
 		},
 		{
-			name: "zimfw spec requires yes",
-			provisioner: `  - tool: zimfw
-    tags: [core]
-    spec:
-      action: install
-`,
-			want: "provisioners[0].spec must not set gentle-ai fields (action, scope, channel, persona, preset, sdd-mode, agents, components, skills) for the zimfw tool",
-		},
-		{
 			name: "zimfw spec rejects mcp fields",
 			provisioner: `  - tool: zimfw
     tags: [core]
@@ -2343,16 +1952,6 @@ provisioners:
 			want: "provisioners[0].spec.skills[0] must be data, not a CLI flag",
 		},
 		{
-			name: "skills spec mixes gentle-ai scalar fields",
-			provisioner: `  - tool: skills
-    tags: [core]
-    spec:
-      package: vercel-labs/agent-skills
-      persona: neutral
-`,
-			want: "provisioners[0].spec must not set gentle-ai fields (action, scope, channel, persona, preset, sdd-mode, components, yes) for the skills tool",
-		},
-		{
 			name: "skills spec mixes claude fields",
 			provisioner: `  - tool: skills
     tags: [core]
@@ -2374,136 +1973,78 @@ provisioners:
 		},
 		{
 			name: "missing spec",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: [core]
 `,
 			want: "provisioners[0].spec is required",
 		},
 		{
 			name: "missing tags",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: []
     spec:
-      scope: global
+      marketplace: example/tools
 `,
 			want: "provisioners[0].tags is required",
 		},
 		{
 			name: "empty tag value",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: ["", core]
     spec:
-      scope: global
+      marketplace: example/tools
 `,
 			want: "provisioners[0].tags[0] must not be empty",
 		},
 		{
 			name: "unsupported os filter",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: [core]
     os: [windows]
     spec:
-      scope: global
+      marketplace: example/tools
 `,
 			want: "provisioners[0].os[0] must be one of darwin, linux",
 		},
 		{
-			name: "unsupported persona",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      persona: senior-architect
-`,
-			want: "provisioners[0].spec.persona must be one of gentleman, neutral",
-		},
-		{
-			name: "unsupported gentle-ai action",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      action: sync
-`,
-			want: "provisioners[0].spec.action must be one of install, uninstall",
-		},
-		{
-			name: "yes without uninstall action",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      preset: custom
-      yes: true
-`,
-			want: "provisioners[0].spec.yes is only valid when action is uninstall",
-		},
-		{
-			name: "uninstall action rejects install-only fields",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      action: uninstall
-      scope: global
-      agents: [codex]
-      components: [sdd]
-      yes: true
-`,
-			want: "provisioners[0].spec uninstall action must not set install-only fields (scope, channel, persona, preset, sdd-mode, skills)",
-		},
-		{
-			name: "whitespace-only agents list is missing spec",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      agents: ["  "]
-`,
-			want: "provisioners[0].spec is required",
-		},
-		{
 			name: "empty agent value",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: skills
     tags: [core]
     spec:
-      scope: global
+      package: example/tools
       agents: ["  "]
+      global: true
 `,
 			want: "provisioners[0].spec.agents[0] must not be empty",
 		},
 		{
-			name: "empty component value",
-			provisioner: `  - tool: gentle-ai
-    tags: [core]
-    spec:
-      scope: global
-      components: ["  "]
-`,
-			want: "provisioners[0].spec.components[0] must not be empty",
-		},
-		{
 			name: "empty skill value",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: skills
     tags: [core]
     spec:
-      scope: global
+      package: example/tools
       skills: ["  "]
+      global: true
 `,
 			want: "provisioners[0].spec.skills[0] must not be empty",
 		},
 		{
 			name: "dependency without name",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: [core]
     spec:
-      scope: global
+      marketplace: example/tools
     dependencies:
-      - brew: gentleman-programming/tap/gentle-ai
+      - brew: example/tools
 `,
 			want: "provisioners[0].dependencies[0].name is required",
 		},
 		{
 			name: "dependency with whitespace-only manual guidance",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: [core]
     spec:
-      scope: global
+      marketplace: example/tools
     dependencies:
       - name: ghostty
         manual: "  "
@@ -2512,10 +2053,10 @@ provisioners:
 		},
 		{
 			name: "dependency with whitespace-only Debian manual guidance",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: [core]
     spec:
-      scope: global
+      marketplace: example/tools
     dependencies:
       - name: ghostty
         manual_debian: "  "
@@ -2524,10 +2065,10 @@ provisioners:
 		},
 		{
 			name: "dependency with whitespace-only brew cask",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: [core]
     spec:
-      scope: global
+      marketplace: example/tools
     dependencies:
       - name: CascadiaCode Nerd Font
         brew_cask: "  "
@@ -2537,10 +2078,10 @@ provisioners:
 		},
 		{
 			name: "dependency with ambiguous homebrew formula and cask",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: [core]
     spec:
-      scope: global
+      marketplace: example/tools
     dependencies:
       - name: CascadiaCode Nerd Font
         brew: cascadia-code
@@ -2550,10 +2091,10 @@ provisioners:
 		},
 		{
 			name: "dependency with empty font fallback match",
-			provisioner: `  - tool: gentle-ai
+			provisioner: `  - tool: claude
     tags: [core]
     spec:
-      scope: global
+      marketplace: example/tools
     dependencies:
       - name: CascadiaCode Nerd Font
         font_match: "CascadiaCodeNF*"

@@ -24,15 +24,12 @@ entries:
     strategy: symlink
     tags: [core]
 provisioners:
-  - tool: gentle-ai
+  - tool: claude
     tags: [core]
     spec:
-      scope: global
-      persona: neutral
-      agents: [codex]
+      marketplace: example/tools
     dependencies:
-      - name: gentle-ai
-      - name: engram
+      - name: claude
 `
 
 const codexDelegationProfileManifest = `version: 1
@@ -169,7 +166,7 @@ func gitTopLevel(t *testing.T, gitPath, dir string) string {
 
 // TestInstallDryRunRendersProvisionerWithoutInvoking proves --dry-run prints the
 // resolved provisioner command and the roots it affects, while creating no files
-// and never invoking the tool (gentle-ai is absent, so an invocation would
+// and never invoking the tool (claude is absent, so an invocation would
 // error; the run succeeds because dry-run returns before any execution).
 func TestInstallDryRunRendersProvisionerWithoutInvoking(t *testing.T) {
 	home := t.TempDir()
@@ -194,8 +191,8 @@ func TestInstallDryRunRendersProvisionerWithoutInvoking(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		`Provisioners for profile "default" (tags: core)`,
-		"gentle-ai install --scope global --persona neutral --agents codex",
-		"affects: ~/.codex, ~/.gentle-ai",
+		"claude plugin marketplace add example/tools",
+		"affects: ~/.claude, ~/.claude.json",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("dry-run output missing %q\noutput:\n%s", want, got)
@@ -215,8 +212,7 @@ func TestInstallExecutesProvisionerAfterFilesWithHomeThreaded(t *testing.T) {
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf 'ok' > \"$HOME/gentle-ai-ran\"\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nprintf 'ok' > \"$HOME/claude-ran\"\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
@@ -237,10 +233,10 @@ func TestInstallExecutesProvisionerAfterFilesWithHomeThreaded(t *testing.T) {
 		t.Fatalf("install did not create the file entry: %v", err)
 	}
 	// The provisioner must have run with HOME threaded to the sandbox.
-	if _, err := os.Stat(filepath.Join(sandboxHome, "gentle-ai-ran")); err != nil {
+	if _, err := os.Stat(filepath.Join(sandboxHome, "claude-ran")); err != nil {
 		t.Fatalf("provisioner did not run under the sandbox HOME %q: %v", sandboxHome, err)
 	}
-	if _, err := os.Stat(filepath.Join(fakeRealHome, "gentle-ai-ran")); err == nil {
+	if _, err := os.Stat(filepath.Join(fakeRealHome, "claude-ran")); err == nil {
 		t.Fatalf("provisioner wrote into the inherited HOME %q instead of the sandbox", fakeRealHome)
 	}
 }
@@ -260,8 +256,7 @@ func TestInstallProvisionerInheritsHomebrewRustupProxyPath(t *testing.T) {
 	}
 	writeExecStub(t, filepath.Join(stubDir, "brew"), "#!/bin/sh\nif [ \"$1\" = \"--prefix\" ]; then printf '%s\\n' "+strconv.Quote(formulaPrefix)+"; fi\n")
 	writeExecStub(t, filepath.Join(stubDir, "rustup"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\ncommand -v rustc >/dev/null || exit 9\nprintf 'ok' > \"$HOME/provisioner-saw-rustc\"\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\ncommand -v rustc >/dev/null || exit 9\nprintf 'ok' > \"$HOME/provisioner-saw-rustc\"\n")
 	t.Setenv("PATH", stubDir)
 
 	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
@@ -283,15 +278,12 @@ entries:
     strategy: symlink
     tags: [core]
 provisioners:
-  - tool: gentle-ai
+  - tool: claude
     tags: [core]
     spec:
-      scope: global
-      persona: neutral
-      agents: [codex]
+      marketplace: example/tools
     dependencies:
-      - name: gentle-ai
-      - name: engram
+      - name: claude
 `)
 
 	cmd := cli.NewRootCommand()
@@ -387,50 +379,6 @@ provisioners:
 // TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner proves a
 // non-CodeGraph provisioner does not create the dots-owned CodeGraph
 // instruction block.
-func TestInstallDoesNotWriteCodeGraphInstructionBlockAfterGentleAIProvisioner(t *testing.T) {
-	sandboxHome := t.TempDir()
-	sourceRoot := t.TempDir()
-	stateRoot := t.TempDir()
-	fakeRealHome := t.TempDir()
-	t.Setenv("HOME", fakeRealHome)
-
-	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
-	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
-	manifestPath := writeCLIManifest(t, sandboxHome, provisionerManifest)
-
-	cmd := cli.NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot})
-
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
-	}
-
-	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
-	if err != nil {
-		t.Fatalf("install with gentle-ai provisioner did not write dots rules block: %v\noutput:\n%s", err, out.String())
-	}
-	if strings.Contains(string(got), "dots:codegraph-mode") {
-		t.Fatalf("install with gentle-ai provisioner wrote CodeGraph instruction block without the codegraph tag\ncontent:\n%s\noutput:\n%s", got, out.String())
-	}
-	if !strings.Contains(string(got), "<!-- dots:rules -->") {
-		t.Fatalf("install with gentle-ai provisioner did not write dots rules block\ncontent:\n%s\noutput:\n%s", got, out.String())
-	}
-	if strings.Contains(string(got), "<!-- dots:delegation -->") || strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gpt-5.6-sol") {
-		t.Fatalf("install without Codex delegation tag wrote delegation guidance\ncontent:\n%s\noutput:\n%s", got, out.String())
-	}
-	assertNoNativeCodexSparkAgents(t, sandboxHome, "install without Codex delegation tag")
-	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("install wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
-	}
-}
-
 func TestInstallCodexDelegationTagInstallsGuidance(t *testing.T) {
 	sandboxHome := t.TempDir()
 	sourceRoot := t.TempDir()
@@ -439,8 +387,7 @@ func TestInstallCodexDelegationTagInstallsGuidance(t *testing.T) {
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
@@ -450,7 +397,7 @@ func TestInstallCodexDelegationTagInstallsGuidance(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-delegation"})
+	cmd.SetArgs([]string{"install", "--yes", "--skip-deps", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-delegation"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -461,7 +408,7 @@ func TestInstallCodexDelegationTagInstallsGuidance(t *testing.T) {
 		t.Fatalf("install with Codex delegation tag did not write Codex AGENTS.md: %v\noutput:\n%s", err, out.String())
 	}
 	content := string(got)
-	for _, want := range []string{"<!-- dots:rules -->", "<!-- dots:delegation -->", "gpt-5.6-sol"} {
+	for _, want := range []string{"<!-- dots:delegation -->", "gpt-5.6-sol"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("install with Codex delegation tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out.String())
 		}
@@ -526,8 +473,7 @@ func TestInstallWithoutCodexDelegationTagRemovesCurrentAndLegacyGuidance(t *test
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	codexPath := filepath.Join(sandboxHome, ".codex", "AGENTS.md")
@@ -547,7 +493,7 @@ func TestInstallWithoutCodexDelegationTagRemovesCurrentAndLegacyGuidance(t *test
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-delegation", "--tag", "without-codex-delegation"})
+	cmd.SetArgs([]string{"install", "--yes", "--skip-deps", "--file", manifestPath, "--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--tag", "codex-delegation", "--tag", "without-codex-delegation"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -563,7 +509,7 @@ func TestInstallWithoutCodexDelegationTagRemovesCurrentAndLegacyGuidance(t *test
 			t.Fatalf("without Codex delegation tag kept %q\ncontent:\n%s\noutput:\n%s", not, content, out.String())
 		}
 	}
-	for _, want := range []string{"<!-- dots:rules -->", "Keep diffs surgical", "before", "after"} {
+	for _, want := range []string{"before", "after"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("without Codex delegation tag removed expected %q\ncontent:\n%s", want, content)
 		}
@@ -598,13 +544,12 @@ entries:
     strategy: symlink
     tags: [core]
 provisioners:
-  - tool: gentle-ai
+  - tool: claude
     tags: [desktop]
     spec:
-      scope: global
-      agents: [codex]
+      marketplace: example/tools
     dependencies:
-      - name: gentle-ai
+      - name: claude
 `)
 
 	cmd := cli.NewRootCommand()
@@ -745,8 +690,6 @@ func TestInstallAgentsCodeGraphTagWritesScopedPolicyOverlayInSandbox(t *testing.
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), `#!/bin/sh
 if [ "$1" = init ]; then
   printf '%s|%s\n' "$PWD" "$*" >> "$HOME/codegraph-init-calls"
@@ -897,8 +840,6 @@ func TestInstallAgentsCodeGraphTagMigratesExistingManagedCodexConfig(t *testing.
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), `#!/bin/sh
 printf '%s\n' "$*" >> "$HOME/codegraph-args"
 mkdir -p "$HOME/.codex" "$HOME/.claude" "$HOME/.gemini" "$HOME/.config/opencode"
@@ -1061,8 +1002,7 @@ func TestInstallTUICancelDoesNotRunProvisioners(t *testing.T) {
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf 'ran' > \"$HOME/gentle-ai-ran\"\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nprintf 'ran' > \"$HOME/claude-ran\"\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	previousSelection := state.InstalledSelection{
@@ -1092,15 +1032,12 @@ entries:
     strategy: copy
     tags: [core]
 provisioners:
-  - tool: gentle-ai
+  - tool: claude
     tags: [core]
     spec:
-      scope: global
-      persona: neutral
-      agents: [codex]
+      marketplace: example/tools
     dependencies:
-      - name: gentle-ai
-      - name: engram
+      - name: claude
 `)
 
 	cmd := cli.NewRootCommand()
@@ -1121,10 +1058,10 @@ provisioners:
 	if string(got) != "local\n" {
 		t.Fatalf("canceled install changed conflict target to %q", got)
 	}
-	if _, err := os.Stat(filepath.Join(sandboxHome, "gentle-ai-ran")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(sandboxHome, "claude-ran")); !os.IsNotExist(err) {
 		t.Fatalf("canceled install ran provisioner in sandbox HOME; stat err = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(fakeRealHome, "gentle-ai-ran")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(fakeRealHome, "claude-ran")); !os.IsNotExist(err) {
 		t.Fatalf("canceled install ran provisioner in inherited HOME; stat err = %v", err)
 	}
 	if !strings.Contains(out.String(), "Conflict resolution canceled; no changes applied.") {
@@ -1147,8 +1084,7 @@ func TestInstallPersistsFailedProvisionerForStatusResumeGuidance(t *testing.T) {
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 7\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 7\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
@@ -1168,7 +1104,7 @@ func TestInstallPersistsFailedProvisionerForStatusResumeGuidance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	rec, ok := meta.FindProvisioner("default", "gentle-ai", "gentle-ai", []string{"install", "--scope", "global", "--persona", "neutral", "--agents", "codex"})
+	rec, ok := meta.FindProvisioner("default", "claude", "claude", []string{"plugin", "marketplace", "add", "example/tools"})
 	if !ok {
 		t.Fatalf("failed provisioner was not persisted: %+v", meta.Provisioners)
 	}
@@ -1185,7 +1121,7 @@ func TestInstallPersistsFailedProvisionerForStatusResumeGuidance(t *testing.T) {
 	got := statusOut.String()
 	for _, want := range []string{
 		`Declared provisioners for profile "default" (tags: core) — failed`,
-		"failed               gentle-ai install --scope global --persona neutral --agents codex",
+		"failed               claude plugin marketplace add example/tools",
 		"resume: run dots install again after addressing failed or missing provisioners.",
 	} {
 		if !strings.Contains(got, want) {
