@@ -33,12 +33,13 @@ const (
 
 // UninstallAction is a single planned removal for a recorded Managed Entry.
 type UninstallAction struct {
-	Target    string          `json:"target"`
-	Source    string          `json:"source"`
-	Sources   []string        `json:"sources,omitempty"`
-	Strategy  string          `json:"strategy"`
-	Ownership string          `json:"ownership,omitempty"`
-	Status    UninstallStatus `json:"status"`
+	Target         string          `json:"target"`
+	Source         string          `json:"source"`
+	Sources        []string        `json:"sources,omitempty"`
+	Strategy       string          `json:"strategy"`
+	Ownership      string          `json:"ownership,omitempty"`
+	ForceRemovable bool            `json:"-"`
+	Status         UninstallStatus `json:"status"`
 }
 
 // UninstallPlan is the preview of removals an uninstall would apply.
@@ -94,6 +95,7 @@ func BuildUninstall(meta state.Metadata, opts UninstallOptions) (UninstallPlan, 
 			Ownership: rec.Ownership,
 			Status:    status,
 		})
+		plan.Actions[len(plan.Actions)-1].ForceRemovable = rec.Ownership == "whole"
 		if len(rec.Sources) > 0 {
 			plan.Actions[len(plan.Actions)-1].Sources = rec.SourceList()
 		}

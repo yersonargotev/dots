@@ -16,6 +16,7 @@ import (
 	"github.com/yersonargotev/dots/internal/selectionmigration"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
+	"github.com/yersonargotev/dots/internal/uninstall"
 	"github.com/yersonargotev/dots/internal/upgrade"
 )
 
@@ -179,7 +180,7 @@ func TestEnvelopeGolden(t *testing.T) {
 				Command:       "uninstall",
 				Status:        statusOK,
 				Data: uninstallReport{
-					DryRun:    true,
+					DryRun:    false,
 					StateRoot: "/home/user/.local/state/dots",
 					Plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{
 						Source: "configs/antigravity/settings.json",
@@ -187,10 +188,12 @@ func TestEnvelopeGolden(t *testing.T) {
 							"configs/antigravity/settings.json",
 							"configs/antigravity/mobile-mcp-settings.json",
 						},
-						Target:   "/home/user/.gemini/antigravity-cli/settings.json",
-						Strategy: "copy",
-						Status:   plan.UninstallRemove,
+						Target:    "/home/user/.gemini/antigravity-cli/settings.json",
+						Strategy:  "copy",
+						Ownership: "json-subset",
+						Status:    plan.UninstallRemove,
 					}}},
+					Result: uninstall.Result{Updated: []string{"/home/user/.gemini/antigravity-cli/settings.json"}},
 				},
 			},
 			golden: "envelope_uninstall.golden",

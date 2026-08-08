@@ -189,7 +189,7 @@ func stillRemovable(rec state.Record, sourceRoot, home string, force bool) (bool
 	case plan.UninstallRemove:
 		return true, nil
 	case plan.UninstallModified:
-		if rec.Ownership != "" {
+		if rec.Ownership != "whole" {
 			return false, nil
 		}
 		return force, nil

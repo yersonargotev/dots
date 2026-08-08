@@ -51,9 +51,11 @@ func (p Provenance) Empty() bool {
 	return p.SourceRoot == "" && p.SourceRevision == "" && p.DotsVersion == "" && p.RecordedAt == ""
 }
 
-// Record describes a single managed target the CLI installed. Copy-like
-// strategies may record a source content hash; symlink records leave Hash empty
-// because drift is detected from the link destination.
+// Record describes a single managed target the CLI installed. Version 4 records
+// explicit whole or partial Ownership; an empty value is legacy and grants no
+// force-removal authority. Copy-like strategies may record a source content
+// hash; symlink records leave Hash empty because drift is detected from the link
+// destination.
 type Record struct {
 	Target       string          `json:"target"`
 	Source       string          `json:"source"`

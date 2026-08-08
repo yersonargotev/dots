@@ -27,7 +27,7 @@ func newEnv(t *testing.T) *env {
 		sourceRoot: t.TempDir(),
 		home:       t.TempDir(),
 		stateRoot:  t.TempDir(),
-		meta:       state.Metadata{Version: 1},
+		meta:       state.Metadata{Version: state.CurrentVersion},
 	}
 }
 
@@ -70,7 +70,7 @@ func (e *env) installCopy(t *testing.T, rel, name string) string {
 	if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
 		t.Fatalf("write target: %v", err)
 	}
-	e.meta.Entries = append(e.meta.Entries, state.Record{Target: target, Source: rel, Strategy: "copy", Hash: hash})
+	e.meta.Entries = append(e.meta.Entries, state.Record{Target: target, Source: rel, Strategy: "copy", Ownership: "whole", Hash: hash})
 	return target
 }
 

@@ -102,6 +102,10 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 		}
 		hash := ""
 		var ownedContent []byte
+		recordedOwnership := action.Ownership
+		if recordedOwnership == "" {
+			recordedOwnership = "whole"
+		}
 		if action.Strategy != "symlink" {
 			if len(action.Sources) > 0 {
 				hash = state.HashBytes(action.Content)
@@ -127,7 +131,7 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 			Source:       action.Source,
 			Sources:      append([]string(nil), action.Sources...),
 			Strategy:     action.Strategy,
-			Ownership:    action.Ownership,
+			Ownership:    recordedOwnership,
 			OwnedContent: ownedContent,
 			Hash:         hash,
 			InstalledAt:  now,

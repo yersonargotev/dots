@@ -131,7 +131,7 @@ func willRemove(p plan.UninstallPlan, force bool) bool {
 		case plan.UninstallRemove:
 			return true
 		case plan.UninstallModified:
-			if force && action.Ownership == "" {
+			if force && action.ForceRemovable {
 				return true
 			}
 		}
@@ -144,17 +144,17 @@ func willRemove(p plan.UninstallPlan, force bool) bool {
 // none so a clean plan reads without noise.
 func renderModifiedHint(w io.Writer, p plan.UninstallPlan, force bool) {
 	modified := 0
-	partial := 0
+	protected := 0
 	for _, action := range p.Actions {
 		if action.Status == plan.UninstallModified {
-			if action.Ownership == "" {
+			if action.ForceRemovable {
 				modified++
 			} else {
-				partial++
+				protected++
 			}
 		}
 	}
-	if modified == 0 && partial == 0 {
+	if modified == 0 && protected == 0 {
 		return
 	}
 	if modified > 0 && force {
@@ -162,8 +162,8 @@ func renderModifiedHint(w io.Writer, p plan.UninstallPlan, force bool) {
 	} else if modified > 0 {
 		fmt.Fprintf(w, "\nNote: %d modified target(s) will be skipped; re-run with --force to remove them.\n", modified)
 	}
-	if partial > 0 {
-		fmt.Fprintf(w, "\nNote: %d partially owned target(s) will be preserved because recorded owned content changed; --force never broadens partial ownership.\n", partial)
+	if protected > 0 {
+		fmt.Fprintf(w, "\nNote: %d target(s) will be preserved because partial or legacy ownership evidence is insufficient; --force never broadens ownership.\n", protected)
 	}
 }
 

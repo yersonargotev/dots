@@ -135,6 +135,56 @@ func TestUninstallYesRemovesOwnedTargetsAndPrunes(t *testing.T) {
 	}
 }
 
+func TestUninstallForcePreservesModifiedCopyFromLegacyMetadata(t *testing.T) {
+	e := newInstalledEnv(t)
+	// A global metadata upgrade must not retroactively mark an untouched legacy
+	// record as whole-owned; the per-record ownership field is the proof.
+	e.meta.Version = state.CurrentVersion
+	source := filepath.Join(e.sourceRoot, "configs", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	baseline := []byte(`{"owned":true}`)
+	if err := os.WriteFile(source, baseline, 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	hash := state.HashBytes(baseline)
+	target := filepath.Join(e.home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	content := `{"owned":true,"external":"preserve"}`
+	if err := os.WriteFile(target, []byte(content), 0o640); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	e.meta.Entries = append(e.meta.Entries, state.Record{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Hash: hash,
+	})
+	e.save(t)
+
+	out, err := e.run(t, "", "--yes", "--force")
+	if err != nil {
+		t.Fatalf("uninstall legacy --force error = %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "legacy ownership evidence is insufficient") || !strings.Contains(out, "Nothing to remove") {
+		t.Fatalf("uninstall did not explain protected legacy target:\n%s", out)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read preserved target: %v", err)
+	}
+	if string(got) != content {
+		t.Fatalf("legacy --force changed target to %s", got)
+	}
+	meta, err := state.Load(state.Path(e.stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if _, ok := meta.FindByTarget(target); !ok {
+		t.Fatal("legacy --force pruned ownership metadata")
+	}
+}
+
 func TestUninstallCancelLeavesTargetsUntouched(t *testing.T) {
 	e := newInstalledEnv(t)
 	target := e.installSymlink(t, "shell/zshrc", ".zshrc")
