@@ -10,4 +10,13 @@ This passes the opinionated-tool litmus test: it reproduces a daily-used MCP ser
 
 **Consequences**: The merge-not-replace behavior of `OPENCODE_CONFIG` is load-bearing and was verified against the installed OpenCode (`opencode debug config`): pointing `OPENCODE_CONFIG` at the fragment resolves `chrome-devtools` alongside the user's existing servers (`codegraph`, `context7`, `engram`) with the command and `environment` intact, and the full gentle-ai config is preserved. The overlay lives at `~/.config/opencode-dots.json`, deliberately outside `~/.config/opencode/` so it never appears in gentle-ai's git repository there. The `zshenv` export is guarded on the file's existence, so a profile without the web fragment (the overlay is `web`-tagged as of ADR 0008) simply skips it. The prior invariant — dots must not version gentle-ai's rendered `opencode.json` — is refined, not dropped: the seed test now forbids `configs/opencode/opencode.json` specifically, while allowing the hand-authored overlay fragment. `OPENCODE_CONFIG` is a single-slot variable; if the author later needs it for another purpose this overlay must be reconciled with that use.
 
+**Native baseline amendment**: Issue #370 retires gentle-ai as the production
+owner of the global file. The `agents` Profile installs a minimal
+`configs/opencode/opencode.json` to `~/.config/opencode/opencode.json` with JSON
+Subset Ownership. The `web` entry now contributes its Chrome DevTools JSON
+subset to that same target, replacing the standalone `OPENCODE_CONFIG` mechanism
+so `agents + web` composes without requiring `core` shell configuration.
+Authentication, runtime state, and unrelated JSON keys remain outside both
+dots-owned subsets.
+
 **Superseding profile note**: ADR 0008 keeps this provisioning mechanism but moves Chrome DevTools selection from `desktop` to the explicit `web` profile so browser/frontend tooling stays opt-in.

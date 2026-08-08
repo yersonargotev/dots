@@ -9,7 +9,7 @@
 3. **Fast-forwards only.** `update` fetches the upstream and advances the branch with `git merge --ff-only`. If the branch has diverged from its upstream, it cannot be fast-forwarded; `update` reports the divergence and asks you to resolve it manually with Git. It never performs an automatic merge or rebase.
 4. **Recomputes the Install Plan.** After the fast-forward, the manifest is loaded from the updated repository (so a manifest change pulled from upstream is honored) and a fresh Install Plan is computed against the current workstation state, surfacing any new Conflicts or Drift.
 5. **Applies safely.** The post-update install resolves conflicts exactly like `dots install`: interactive TUI by default, text prompts with `--no-tui`, or the conservative skip default with `--yes`. Any `replace` still creates a [Backup Set](../CONTEXT.md) before touching an existing target.
-6. **Runs provisioners.** After the file plan is applied, `update` runs the same provisioners `install` would for the active profile, so provisioner-managed agent configuration (gentle-ai cleanup/install, Claude plugins, Claude MCP servers, Codex MCP servers) stays aligned with the Source of Truth. Provisioners run in manifest order, which allows a cleanup command to run before an install command. Provisioners run only when the file apply was not canceled; a `--dry-run` renders the Provisioners plan section without executing anything. If conflict resolution is canceled, the whole run aborts before any provisioner can mutate tool-managed config.
+6. **Runs provisioners and convergence.** After the file plan is applied, `update` runs the same selected Provisioners as `install`, then converges marker-owned instruction cleanup for the native Agent CLI Baseline. Provisioners run only when file application was not canceled; `--dry-run` renders the plan without executing it. If Conflict Resolution is canceled, the whole run aborts before any tool-managed configuration changes.
 
 ## Versioning model
 
@@ -117,33 +117,30 @@ failed Managed Entry or Provisioner work preserve the previous intent.
 
 ## Profiles and provisioners
 
-Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` profile selects desktop configuration and non-web desktop integrations. The `agents` profile selects gentle-ai memory/context setup and cleanup provisioners for Codex, Claude Code, OpenCode, Antigravity, and VS Code Copilot, plus agent settings baselines, shared engineering skills, the dots-owned `delegation` skill, and compact dots-owned global agent rules; Codex-only delegation is available through `--profile codex-delegation`, which installs the dots-owned `delegation` skill only for Codex, a model-neutral overlay, and native Codex custom agents at `~/.codex/agents/dots-explorer.toml` and `~/.codex/agents/dots-worker.toml`; the overlay and native agents are removable with `--tag without-codex-delegation`. gentle-ai persona prompt Regenerated Content is cleaned up rather than installed by this repository; SDD remains optional with `--tag sdd`. CodeGraph is independent and selected with `--tag codegraph`; CodeGraph's installer owns generated MCP/instruction setup, while dots owns the scoped `<!-- dots:codegraph-mode -->` routing and verification policy overlay plus a Codex SessionStart hook that runs `codegraph init` only when the current Git repository lacks `.codegraph`. The `web` profile selects frontend design skills plus Chrome DevTools for Claude, Codex, and the OpenCode overlay. The `mobile` profile selects Dart and Flutter agent skills plus the Dart and Flutter MCP server for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. Use `workstation` when you explicitly want both desktop integrations and agent setup; web and mobile tooling remain separate opt-ins. This is design-intent: desktop installs should configure desktop tools, not opt into SDD, gentle-dev agent setup, browser/frontend tooling, or mobile-specific skills.
+Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` Profile selects desktop configuration and non-web desktop integrations. The `agents` Profile is the native Agent CLI Baseline: Codex, Claude Code, OpenCode, Antigravity, Copilot CLI, shared `jq`, and their dots-owned native Managed Configuration. It does not select gentle-ai, Engram, Context7, generated permissions, SDD/persona operations, third-party engineering skills, delegation, or dots-owned global agent rules. `core` owns GitHub CLI and also selects `jq`. CodeGraph remains an explicit Tag, while `codex-delegation`, `web`, and `mobile` retain independent intent. The `web` Profile composes its Chrome DevTools overlay over OpenCode's native JSON baseline without replacing it. Use `workstation` when you explicitly want core, desktop integrations, and the Agent CLI Baseline together; web and mobile remain separate opt-ins.
 
 Use `--profile codex-delegation` when only Codex delegation is desired. It installs the dots-owned `delegation` skill for Codex, the model-neutral `<!-- dots:delegation -->` overlay, and native `dots-explorer`/`dots-worker` agents without the broader agent baseline. Remove the overlay and native agents with `--profile codex-delegation --tag without-codex-delegation`. The legacy Spark-named install and cleanup tags remain compatibility aliases. See [`docs/agents/delegation.md`](agents/delegation.md) for the portable task-fit delegation policy and the current inventory of native delegation artifacts by supported agent surface.
 
-The gentle-ai provisioner can model cleanup before install by using separate entries in manifest order. Missing `action` still defaults to `install`; `yes` is only valid for `uninstall` because it confirms a cleanup action. Install/update plan output also calls out provisioners that may install or update user-local global tools, such as Claude Code through the npm prefix under `~/.local`:
+During update or upgrade, selection evolution reports gentle-ai and Engram
+Dependencies plus their gentle-ai/skills Provisioners as removed surfaces. This
+report is informational: dots does not uninstall binaries, delete directories,
+remove Dependency Installation Metadata, or erase historical Provisioner
+receipts. After Managed Configuration succeeds, dots removes only known
+marker-delimited gentle-ai trigger/persona/Engram blocks and the dots-owned
+global-rules block from supported instruction files. Unmarked and co-owned
+content, complete files, Codex delegation, authentication, and Secret state are
+preserved.
 
-The `gentle-ai` and `engram` executables themselves are still Dependencies, not
-Provisioner side effects. On Linux their reviewed User-Local Providers install
-pinned release tarballs only when the executable probe is missing; the later
-Provisioner step only runs after those probes pass.
-
-```yaml
-provisioners:
-  - tool: gentle-ai
-    tags: [agents]
-    spec:
-      action: uninstall
-      agents: [codex, claude-code, opencode, antigravity, vscode-copilot]
-      components: [sdd, persona]
-      yes: true
-  - tool: gentle-ai
-    tags: [agents]
-    spec:
-      preset: custom
-      agents: [claude-code]
-      components: [engram, context7, permissions]
-```
+To remove residual gentle-ai state, first review it outside dots (for example
+`~/.gentle-ai`, agent instruction files, generated skills, and any external
+gentle-ai/Engram installation). Use the vendor's explicit uninstall flow or
+remove reviewed residual paths manually only after confirming their ownership.
+Do not delete entire shared agent configuration directories, authentication
+files, or historical dots receipts. The retired implementation remains under a
+non-Profile manifest tag only until #371 removes it; production Profiles never
+select that tag. OpenCode's `web` Managed Entry composes its MCP subset directly
+into the native `~/.config/opencode/opencode.json`, so
+`--profile agents --profile web` does not depend on `core` shell configuration.
 
 After installs or updates, use `dots installed` to inspect the read-only
 Installation Metadata inventory: the authoritative Installed Selection, any

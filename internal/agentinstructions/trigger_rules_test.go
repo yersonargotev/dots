@@ -407,6 +407,58 @@ func TestRemoveCodexDelegationRemovesCurrentAndLegacyMarkers(t *testing.T) {
 	}
 }
 
+func TestRetireGentleAIStateRemovesOnlyOwnedMarkerBlocks(t *testing.T) {
+	home := t.TempDir()
+	paths := instructionPaths(home, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"})
+	content := "user before\n\n" +
+		gentleAITriggerRulesStart + "\ntrigger rules\n" + gentleAITriggerRulesEnd + "\n\n" +
+		gentleAIPersonaStart + "\npersona\n" + gentleAIPersonaEnd + "\n\n" +
+		gentleAIEngramStart + "\nengram\n" + gentleAIEngramEnd + "\n\n" +
+		dotsRulesStart + "\ndots rules\n" + dotsRulesEnd + "\n\n" +
+		codexDelegationStart + "\nindependent delegation\n" + codexDelegationEnd + "\n\n" +
+		"## Personality\nUnmarked user-owned personality.\n\nuser after\n"
+	for _, path := range paths {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o640); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	if err := RetireGentleAIState(home); err != nil {
+		t.Fatalf("RetireGentleAIState() error = %v", err)
+	}
+
+	for _, path := range paths {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read preserved instruction file %s: %v", path, err)
+		}
+		output := string(got)
+		for _, removed := range []string{
+			gentleAITriggerRulesStart, gentleAIPersonaStart, gentleAIEngramStart, dotsRulesStart,
+			"trigger rules", "\npersona\n", "\nengram\n", "\ndots rules\n",
+		} {
+			if strings.Contains(output, removed) {
+				t.Errorf("retirement kept owned content %q in %s:\n%s", removed, path, output)
+			}
+		}
+		for _, preserved := range []string{
+			"user before", codexDelegationStart, "independent delegation",
+			"## Personality", "Unmarked user-owned personality.", "user after",
+		} {
+			if !strings.Contains(output, preserved) {
+				t.Errorf("retirement removed unowned content %q from %s:\n%s", preserved, path, output)
+			}
+		}
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != 0o640 {
+			t.Errorf("instruction file mode = %v, %v; want 0640", info, err)
+		}
+	}
+}
+
 func TestDelegationWorkflowDocumentsPreflightAndToolLevelConflict(t *testing.T) {
 	workflowPath := filepath.Join("..", "..", "workflows", "dots-development-loop.md")
 	got, err := os.ReadFile(workflowPath)

@@ -26,15 +26,21 @@ func stubGentleAIProvisionerTools(t *testing.T) {
 func writeManifestDependencyStubs(t *testing.T, dir string) {
 	t.Helper()
 	for _, name := range []string{
+		"agy",
 		"atuin",
 		"bat",
 		"bun",
+		"claude",
+		"codex",
+		"copilot",
 		"dart",
 		"fnm",
 		"flutter",
 		"ghostty",
 		"git",
 		"go",
+		"gh",
+		"jq",
 		"node",
 		"nvim",
 		"npx",

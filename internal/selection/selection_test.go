@@ -3,7 +3,9 @@ package selection_test
 import (
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -79,6 +81,50 @@ func TestCompareEvolutionReportsSelectedSurfaceChangesInManifestOrder(t *testing
 	}
 	if want := []string{"old-tool"}; !reflect.DeepEqual(delta.Removed.Provisioners, want) {
 		t.Fatalf("removed Provisioners = %#v, want %#v", delta.Removed.Provisioners, want)
+	}
+}
+
+func TestRepositoryAgentsEvolutionReportsRetiredGentleAISurfaces(t *testing.T) {
+	manifestPath := filepath.Join("..", "..", "dots.yaml")
+	oldManifest, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("load old manifest fixture: %v", err)
+	}
+	newManifest, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("load current manifest: %v", err)
+	}
+	for i := range oldManifest.Provisioners {
+		for j, tag := range oldManifest.Provisioners[i].Tags {
+			if tag == "retired-gentle-ai" {
+				oldManifest.Provisioners[i].Tags[j] = "agents"
+			}
+		}
+	}
+
+	previous, err := selection.ResolveIntent(*oldManifest, selection.Intent{
+		Source: selection.SourceRecorded, Profiles: []string{"agents"},
+	})
+	if err != nil {
+		t.Fatalf("resolve previous agents selection: %v", err)
+	}
+	evolved, err := selection.CompareEvolution(*oldManifest, *newManifest, previous, "linux")
+	if err != nil {
+		t.Fatalf("compare agents evolution: %v", err)
+	}
+	if evolved.Report.Delta == nil {
+		t.Fatal("agents evolution Delta = nil")
+	}
+	removed := evolved.Report.Delta.Removed
+	for _, dependency := range []string{"gentle-ai", "engram"} {
+		if !slices.Contains(removed.Dependencies, dependency) {
+			t.Errorf("removed Dependencies = %#v, want %q", removed.Dependencies, dependency)
+		}
+	}
+	for _, provisioner := range []string{"gentle-ai", "skills"} {
+		if !slices.Contains(removed.Provisioners, provisioner) {
+			t.Errorf("removed Provisioners = %#v, want %q", removed.Provisioners, provisioner)
+		}
 	}
 }
 
