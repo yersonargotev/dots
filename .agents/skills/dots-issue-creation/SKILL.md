@@ -16,17 +16,16 @@ Read these when context is stale or the workflow may have changed:
 - `docs/agents/triage-labels.md`
 - `CONTEXT.md` when issue text touches domain concepts
 
-## What this corrects
+## Repository conventions
 
-- `to-issues` is useful for splitting plans into vertical tracer-bullet slices.
-- The generic `issue-creation` skill is only a rough reference here: this repo uses `needs-triage` and `ready-for-agent`, not `status:needs-review` / `status:approved`.
+- This repo uses `needs-triage` and `ready-for-agent`, not generic status labels.
 - `gh issue create --template ... --body-file ...` does not work. Use a template-shaped body file plus explicit labels.
 
 ## Delivery handoff
 
 Every issue handed to `delivery-issue` requires exactly one complete Agent Brief
 before it receives `ready-for-agent`. There is no delivery fast path around that
-contract. Use the format in `../triage/AGENT-BRIEF.md`.
+contract. Use the format in `../../../docs/agents/agent-brief.md`.
 
 ## Workflow
 

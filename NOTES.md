@@ -9,10 +9,6 @@
 
 ## Workflow conventions
 
-- Use `loop-me` when designing or revising reusable workflow specs in `workflows/*.md`.
-- Use `grilling` when the plan or decision needs one-question-at-a-time stress testing and codebase exploration cannot answer the question.
-- `grill-with-docs` is skipped only for mechanical or already-aligned work: small fixes, documentation adjustments with no new decision, explicit review follow-ups, or issues already marked `ready-for-agent`.
-- Changes touching domain language, CLI UX, security, installation behavior, release workflow, or architecture go through `grill-with-docs`.
 - `delivery-issue` is explicitly triggered with `N`, `#N`, or a same-repository GitHub issue URL. Once admission succeeds, it has no routine human checkpoint and runs autonomously until complete or genuinely blocked.
 - Codex subagent delegation is evaluated during non-trivial Delivery Runs. The main thread owns requirements, decisions, integration, external delivery state, and final verification.
 - Good delegation slices: independent exploration, impact scans, test/log triage, or disjoint implementation ownership. Good opt-outs: tiny mechanical tasks, single coherent edits with no independent research value, real user configuration, GitHub/external-state mutation, or overlapping write scopes.

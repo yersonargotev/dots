@@ -10,8 +10,9 @@ This repository uses the default triage label vocabulary.
 | Needs human implementation | `ready-for-human` |
 | Will not be actioned | `wontfix` |
 
-## PRD Publishing
+## Agent-ready publishing
 
-PRD issues created by the `to-prd` workflow should receive the `ready-for-agent`
-label only after `to-prd` creates or updates exactly one complete Agent Brief.
-Otherwise they remain `needs-triage`.
+`dots-issue-creation` is the sole readiness producer. It applies the
+`ready-for-agent` label only after creating or updating exactly one complete
+Agent Brief that satisfies the repository-owned contract in
+[`agent-brief.md`](agent-brief.md). Otherwise the issue remains `needs-triage`.
