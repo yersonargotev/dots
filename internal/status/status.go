@@ -159,6 +159,12 @@ func selectedJSONContributions(m manifest.Manifest, tags []string, opts Options)
 		if err != nil {
 			return nil, nil, err
 		}
+		if err := plan.ValidateResolvedTarget(target, opts.Home); err != nil {
+			return nil, nil, err
+		}
+		if err := plan.ValidateTargetParentInsideHome(target, opts.Home); err != nil {
+			return nil, nil, err
+		}
 		if _, err := os.Lstat(target); os.IsNotExist(err) {
 			continue
 		}

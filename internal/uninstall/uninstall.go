@@ -128,6 +128,15 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 // time. It preserves the physical target when external content remains and
 // reports false without mutation when any formerly owned value changed.
 func removeOwnedJSON(rec state.Record, home string) (applied, deleted bool, err error) {
+	if err := plan.ValidateResolvedTarget(rec.Target, home); err != nil {
+		return false, false, err
+	}
+	if err := plan.ValidateTargetParentInsideHome(rec.Target, home); err != nil {
+		return false, false, err
+	}
+	if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(rec.Target, home, "owned JSON target"); err != nil {
+		return false, false, err
+	}
 	leaf, err := os.Lstat(rec.Target)
 	if os.IsNotExist(err) {
 		return true, true, nil
@@ -137,12 +146,6 @@ func removeOwnedJSON(rec state.Record, home string) (applied, deleted bool, err 
 	}
 	if !leaf.Mode().IsRegular() {
 		return false, false, nil
-	}
-	if err := validateRemovableTarget(rec.Target, home); err != nil {
-		return false, false, err
-	}
-	if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(rec.Target, home, "owned JSON target"); err != nil {
-		return false, false, err
 	}
 	targetData, err := os.ReadFile(rec.Target)
 	if err != nil {

@@ -427,3 +427,36 @@ func TestApplyIgnoresForgedRemovableActionOutsideHome(t *testing.T) {
 		t.Fatalf("forged action modified out-of-home target: %q", got)
 	}
 }
+
+func TestApplyDoesNotPruneMissingJSONTargetBehindEscapedParent(t *testing.T) {
+	e := newEnv(t)
+	outside := t.TempDir()
+	parent := filepath.Join(e.home, ".config")
+	if err := os.Symlink(outside, parent); err != nil {
+		t.Fatalf("symlink escaped target parent: %v", err)
+	}
+	target := filepath.Join(parent, "shared.json")
+	e.meta.Entries = append(e.meta.Entries, state.Record{
+		Target:       target,
+		Source:       "configs/shared.json",
+		Strategy:     "copy",
+		Ownership:    "json-subset",
+		OwnedContent: []byte(`{"owned":true}`),
+	})
+	e.saveMeta(t)
+
+	forged := plan.UninstallPlan{Actions: []plan.UninstallAction{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", Status: plan.UninstallRemove,
+	}}}
+	_, err := uninstall.Apply(forged, uninstall.Options{
+		SourceRoot: e.sourceRoot,
+		Home:       e.home,
+		StateRoot:  e.stateRoot,
+	})
+	if err == nil {
+		t.Fatal("Apply() error = nil, want escaped JSON target parent error")
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("escaped missing JSON target record should be kept, not pruned")
+	}
+}

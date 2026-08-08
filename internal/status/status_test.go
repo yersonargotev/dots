@@ -565,6 +565,27 @@ func TestBuildRejectsTargetParentSymlinkEscapeBeforeReadingTarget(t *testing.T) 
 	}
 }
 
+func TestBuildRejectsJSONSubsetParentSymlinkEscapeBeforeCollectingContributions(t *testing.T) {
+	f := newFixture(manifest.Entry{Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"}})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+	outsideHome := t.TempDir()
+	writeSource(t, f.sourceRoot, "configs/shared.json", `{"owned":true}`)
+	if err := os.Symlink(outsideHome, filepath.Join(f.home, ".config")); err != nil {
+		t.Fatalf("symlink escaped target parent: %v", err)
+	}
+
+	_, err := status.Build(f.manifest, state.Metadata{}, status.Options{
+		Profile:    "default",
+		OS:         "linux",
+		SourceRoot: f.sourceRoot,
+		Home:       f.home,
+	})
+	if err == nil {
+		t.Fatal("Build() error = nil, want JSON contribution target parent symlink escape error")
+	}
+}
+
 func TestBuildRejectsSourceSymlinkEscape(t *testing.T) {
 	f := newFixture(manifest.Entry{Source: "configs/secret", Target: "~/.secret", Strategy: "copy", Tags: []string{"core"}})
 	f.sourceRoot = t.TempDir()
