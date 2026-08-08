@@ -57,7 +57,7 @@ Application-owned mutable state initialized from a reviewed Source of Truth base
 _Avoid_: copied config, managed runtime file, drifted baseline
 
 **JSON Subset Ownership**:
-An Entry Ownership mode for co-owned JSON targets where the repository source is the dots-owned baseline and the workstation target may contain additional object keys or array elements added by another supported owner. All scalar values, object keys, and array elements present in the baseline must still be present and equal in the target; otherwise the target is Drift when Installation Metadata proves dots installed it, or a Conflict when it does not.
+An Entry Ownership mode for co-owned strict-JSON targets where the repository source is the dots-owned baseline and the workstation target may contain additional object keys or array elements added by another supported owner. Installation Metadata records the last dots-owned contribution so a later install can add new values, remove unchanged retired values, and reject externally changed former values. Uninstall subtracts only that proven contribution and preserves the target while external content remains.
 _Avoid_: JSON merge, partial sync, tolerate anything
 
 **Backup Set**:
@@ -129,7 +129,7 @@ The current alignment between a workstation and the repository-owned Source of T
 _Avoid_: health, sync state, installed state
 
 **Installation Metadata**:
-The state file stored under `~/.local/state/dots/installed.json` that records what the Dotfiles CLI installed, including Managed Entries, Provisioners, strategies, hashes, timestamps, and an optional Installed Selection. It lets the CLI detect Drift for copied and templated targets while preserving machine-level selection intent separately from historical inventory.
+The state file stored under `~/.local/state/dots/installed.json` that records what the Dotfiles CLI installed, including Managed Entries, Provisioners, strategies, hashes, timestamps, optional structured-ownership evidence, and an optional Installed Selection. It lets the CLI detect Drift and reconcile or remove only proven contributions for copied subset-owned targets while preserving machine-level selection intent separately from historical inventory.
 _Avoid_: install log, state file, tracking file
 
 **Installed Selection**:

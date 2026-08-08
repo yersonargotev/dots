@@ -1,6 +1,7 @@
 package state_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -94,6 +95,56 @@ func TestSaveThenLoadRoundTripsInstalledSelectionV3(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Load() metadata = %+v, want %+v", got, want)
+	}
+}
+
+func TestSaveThenLoadRoundTripsOwnedJSONContributionV4(t *testing.T) {
+	path := state.Path(t.TempDir())
+	want := state.Metadata{
+		Version: state.CurrentVersion,
+		Entries: []state.Record{{
+			Target:       "/home/user/.config/shared.json",
+			Source:       "configs/shared.json",
+			Strategy:     "copy",
+			Ownership:    "json-subset",
+			OwnedContent: []byte(`{"owned":true}`),
+		}},
+	}
+
+	if err := state.Save(path, want); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, err := state.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.Version != want.Version || len(got.Entries) != 1 || got.Entries[0].Ownership != "json-subset" {
+		t.Fatalf("Load() metadata = %+v, want v4 owned JSON record", got)
+	}
+	var gotOwned, wantOwned any
+	if err := json.Unmarshal(got.Entries[0].OwnedContent, &gotOwned); err != nil {
+		t.Fatalf("decode loaded owned content: %v", err)
+	}
+	if err := json.Unmarshal(want.Entries[0].OwnedContent, &wantOwned); err != nil {
+		t.Fatalf("decode wanted owned content: %v", err)
+	}
+	if !reflect.DeepEqual(gotOwned, wantOwned) {
+		t.Fatalf("owned content = %v, want %v", gotOwned, wantOwned)
+	}
+}
+
+func TestLoadLegacyRecordDoesNotGainPartialOwnershipEvidence(t *testing.T) {
+	path := state.Path(t.TempDir())
+	data := `{"version":3,"entries":[{"target":"/home/user/.config/shared.json","source":"configs/shared.json","strategy":"copy","hash":"abc","installedAt":"now"}]}`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatalf("write legacy metadata: %v", err)
+	}
+	got, err := state.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(got.Entries) != 1 || got.Entries[0].Ownership != "" || len(got.Entries[0].OwnedContent) != 0 {
+		t.Fatalf("Load() legacy record = %+v, want no partial ownership evidence", got.Entries)
 	}
 }
 

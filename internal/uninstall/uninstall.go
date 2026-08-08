@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/yersonargotev/dots/internal/backups"
+	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -34,6 +35,9 @@ type Options struct {
 type Result struct {
 	// Removed lists the targets successfully deleted, in plan order.
 	Removed []string `json:"removed"`
+	// Updated lists co-owned targets that remained after dots removed or pruned
+	// its recorded contribution.
+	Updated []string `json:"updated,omitempty"`
 	// RestoredSets lists the IDs of Backup Sets restored when RestoreBackups is
 	// set, each restored at most once even if it covers several removed targets.
 	RestoredSets []string `json:"restored_sets"`
@@ -46,6 +50,7 @@ type Result struct {
 // was removed, and the metadata file is deleted once empty.
 func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 	var result Result
+	var restorableRemoved []string
 
 	home, err := cleanAbs(opts.Home)
 	if err != nil {
@@ -72,6 +77,21 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 			// The plan references a target dots no longer records; never act on it.
 			continue
 		}
+		if rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+			if action.Status != plan.UninstallRemove {
+				continue
+			}
+			applied, deleted, err := removeOwnedJSON(rec, home)
+			if err != nil {
+				return result, err
+			}
+			if applied && deleted {
+				result.Removed = append(result.Removed, action.Target)
+			} else if applied {
+				result.Updated = append(result.Updated, action.Target)
+			}
+			continue
+		}
 		remove, err := stillRemovable(rec, opts.SourceRoot, home, opts.Force)
 		if err != nil {
 			return result, err
@@ -87,19 +107,74 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 			return result, fmt.Errorf("remove %s: %w", action.Target, err)
 		}
 		result.Removed = append(result.Removed, action.Target)
+		restorableRemoved = append(restorableRemoved, action.Target)
 	}
 
 	if opts.RestoreBackups {
-		if err := restoreBackups(&result, opts, home); err != nil {
+		if err := restoreBackups(&result, restorableRemoved, opts, home); err != nil {
 			return result, err
 		}
 	}
 
-	if err := pruneMetadata(opts.StateRoot, meta, result.Removed); err != nil {
+	prunedTargets := append(append([]string(nil), result.Removed...), result.Updated...)
+	if err := pruneMetadata(opts.StateRoot, meta, prunedTargets); err != nil {
 		return result, err
 	}
 
 	return result, nil
+}
+
+// removeOwnedJSON revalidates and subtracts a partial contribution at apply
+// time. It preserves the physical target when external content remains and
+// reports false without mutation when any formerly owned value changed.
+func removeOwnedJSON(rec state.Record, home string) (applied, deleted bool, err error) {
+	if err := plan.ValidateResolvedTarget(rec.Target, home); err != nil {
+		return false, false, err
+	}
+	if err := plan.ValidateTargetParentInsideHome(rec.Target, home); err != nil {
+		return false, false, err
+	}
+	if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(rec.Target, home, "owned JSON target"); err != nil {
+		return false, false, err
+	}
+	leaf, err := os.Lstat(rec.Target)
+	if os.IsNotExist(err) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, fmt.Errorf("stat owned JSON target %s: %w", rec.Target, err)
+	}
+	if !leaf.Mode().IsRegular() {
+		return false, false, nil
+	}
+	targetData, err := os.ReadFile(rec.Target)
+	if err != nil {
+		return false, false, fmt.Errorf("read owned JSON target %s: %w", rec.Target, err)
+	}
+	info, err := os.Stat(rec.Target)
+	if err != nil {
+		return false, false, fmt.Errorf("stat owned JSON target %s: %w", rec.Target, err)
+	}
+	content, changed, empty, compatible, err := configsubset.RemoveJSON(targetData, rec.OwnedContent)
+	if err != nil {
+		return false, false, fmt.Errorf("remove owned JSON from %s: %w", rec.Target, err)
+	}
+	if !compatible {
+		return false, false, nil
+	}
+	if empty {
+		if err := removeTarget(rec.Target); err != nil {
+			return false, false, fmt.Errorf("remove emptied JSON target %s: %w", rec.Target, err)
+		}
+		return true, true, nil
+	}
+	if !changed {
+		return true, false, nil
+	}
+	if err := os.WriteFile(rec.Target, content, info.Mode().Perm()); err != nil {
+		return false, false, fmt.Errorf("write JSON target %s after removing owned content: %w", rec.Target, err)
+	}
+	return true, false, nil
 }
 
 // stillRemovable re-derives the record's status from current disk state using the
@@ -117,6 +192,9 @@ func stillRemovable(rec state.Record, sourceRoot, home string, force bool) (bool
 	case plan.UninstallRemove:
 		return true, nil
 	case plan.UninstallModified:
+		if rec.Ownership != "whole" {
+			return false, nil
+		}
 		return force, nil
 	default:
 		return false, nil
@@ -147,14 +225,14 @@ func removeTarget(target string) error {
 // target. Install records single-target pre-install Backup Sets, so this returns
 // each target to the file that existed before dots managed it. A set is restored
 // at most once even when it covers several removed targets.
-func restoreBackups(result *Result, opts Options, home string) error {
+func restoreBackups(result *Result, targets []string, opts Options, home string) error {
 	meta, err := backups.Load(backups.Path(opts.StateRoot))
 	if err != nil {
 		return err
 	}
 
 	restored := map[string]struct{}{}
-	for _, target := range result.Removed {
+	for _, target := range targets {
 		set, ok := latestSetContaining(meta, target)
 		if !ok {
 			continue

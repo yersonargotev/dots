@@ -263,6 +263,29 @@ func TestBuildReportsDriftedForChangedDotsOwnedClaudeSettingsValues(t *testing.T
 	}
 }
 
+func TestBuildReportsDriftedWhenRecordedJSONContributionNeedsRetirement(t *testing.T) {
+	f := newFixture(manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+	writeSource(t, f.sourceRoot, "configs/shared.json", `{"owned":{"keep":true}}`)
+	target := filepath.Join(f.home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":{"keep":true,"retired":"old"},"external":true}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	meta := state.Metadata{Entries: []state.Record{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: []byte(`{"owned":{"keep":true,"retired":"old"}}`),
+	}}}
+
+	if got := onlyEntry(t, f.build(t, meta)).State; got != status.StateDrifted {
+		t.Fatalf("state = %q, want drifted until retired owned value is reconciled", got)
+	}
+}
+
 func TestBuildReportsConflictForClaudeSettingsSubsetWithoutInstallMetadata(t *testing.T) {
 	f := newFixture(manifest.Entry{
 		Source:    "configs/claude/settings.json",
@@ -539,6 +562,27 @@ func TestBuildRejectsTargetParentSymlinkEscapeBeforeReadingTarget(t *testing.T) 
 	})
 	if err == nil {
 		t.Fatal("Build() error = nil, want target parent symlink escape error")
+	}
+}
+
+func TestBuildRejectsJSONSubsetParentSymlinkEscapeBeforeCollectingContributions(t *testing.T) {
+	f := newFixture(manifest.Entry{Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"}})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+	outsideHome := t.TempDir()
+	writeSource(t, f.sourceRoot, "configs/shared.json", `{"owned":true}`)
+	if err := os.Symlink(outsideHome, filepath.Join(f.home, ".config")); err != nil {
+		t.Fatalf("symlink escaped target parent: %v", err)
+	}
+
+	_, err := status.Build(f.manifest, state.Metadata{}, status.Options{
+		Profile:    "default",
+		OS:         "linux",
+		SourceRoot: f.sourceRoot,
+		Home:       f.home,
+	})
+	if err == nil {
+		t.Fatal("Build() error = nil, want JSON contribution target parent symlink escape error")
 	}
 }
 

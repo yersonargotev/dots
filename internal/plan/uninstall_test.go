@@ -35,6 +35,63 @@ func TestBuildUninstallPlansOneRemovalForCompositeTarget(t *testing.T) {
 	}
 }
 
+func TestBuildUninstallPlansPartialJSONRemovalFromRecordedContribution(t *testing.T) {
+	f := newUninstallFixture(t)
+	target := f.target(".config/shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":true,"external":"keep"}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	p := f.build(t, state.Record{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: []byte(`{"owned":true}`),
+	})
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.UninstallRemove || p.Actions[0].Ownership != "json-subset" {
+		t.Fatalf("action = %+v, want safe partial remove", p.Actions)
+	}
+}
+
+func TestBuildUninstallClassifiesChangedPartialJSONAsModified(t *testing.T) {
+	f := newUninstallFixture(t)
+	target := f.target(".config/shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":"locally-changed","external":true}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	p := f.build(t, state.Record{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: []byte(`{"owned":"recorded"}`),
+	})
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.UninstallModified {
+		t.Fatalf("action = %+v, want modified partial ownership", p.Actions)
+	}
+	if p.Removable() {
+		t.Fatal("Removable() = true, want false for modified partial ownership")
+	}
+}
+
+func TestUninstallPlanRemovableRequiresExplicitWholeOwnershipForModifiedTarget(t *testing.T) {
+	tests := []struct {
+		name string
+		plan plan.UninstallPlan
+		want bool
+	}{
+		{name: "owned remove", plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{Status: plan.UninstallRemove}}}, want: true},
+		{name: "whole modified", plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{Status: plan.UninstallModified, ForceRemovable: true}}}, want: true},
+		{name: "legacy modified", plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{Status: plan.UninstallModified}}}, want: false},
+		{name: "partial modified", plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{Status: plan.UninstallModified, Ownership: "json-subset"}}}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.plan.Removable(); got != tt.want {
+				t.Fatalf("Removable() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateBackupableTargetAcceptsFileDirAndSymlink(t *testing.T) {
 	dir := t.TempDir()
 

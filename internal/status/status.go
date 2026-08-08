@@ -96,6 +96,10 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 		resolved = &selection
 	}
 	tags := resolved.Tags
+	jsonContentByTarget, jsonSourcesByTarget, err := selectedJSONContributions(m, tags, opts)
+	if err != nil {
+		return Report{}, err
+	}
 
 	report := Report{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
 	for _, entry := range m.Entries {
@@ -122,7 +126,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 		}
 
 		entry.Source = source
-		st, err := evaluate(entry, target, meta, opts.SourceRoot, defaultSource)
+		st, err := evaluate(entry, target, meta, opts.SourceRoot, defaultSource, jsonContentByTarget[target], jsonSourcesByTarget[target])
 		if err != nil {
 			return Report{}, err
 		}
@@ -143,7 +147,50 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 	return report, nil
 }
 
-func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRoot string, defaultSource string) (State, error) {
+func selectedJSONContributions(m manifest.Manifest, tags []string, opts Options) (map[string][]byte, map[string][]string, error) {
+	pathsByTarget := map[string][]string{}
+	sourcesByTarget := map[string][]string{}
+	for _, entry := range m.Entries {
+		if entry.Strategy != "copy" || entry.Ownership != "json-subset" || !manifest.SharesTag(entry.Tags, tags) || !manifest.MatchesOS(entry.OS, opts.OS) {
+			continue
+		}
+		source := manifest.EntrySource(entry, tags)
+		target, err := plan.ResolveTarget(entry.Target, opts.Home)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := plan.ValidateResolvedTarget(target, opts.Home); err != nil {
+			return nil, nil, err
+		}
+		if err := plan.ValidateTargetParentInsideHome(target, opts.Home); err != nil {
+			return nil, nil, err
+		}
+		if _, err := os.Lstat(target); os.IsNotExist(err) {
+			continue
+		}
+		sourcePath, err := plan.ResolveSource(source, opts.SourceRoot)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := plan.ValidateResolvedSource(sourcePath, opts.SourceRoot); err != nil {
+			return nil, nil, err
+		}
+		pathsByTarget[target] = append(pathsByTarget[target], sourcePath)
+		sourcesByTarget[target] = append(sourcesByTarget[target], source)
+	}
+
+	contentByTarget := make(map[string][]byte, len(pathsByTarget))
+	for target, paths := range pathsByTarget {
+		content, err := configsubset.ComposeJSONFiles(paths)
+		if err != nil {
+			return nil, nil, fmt.Errorf("compose JSON ownership for %s: %w", target, err)
+		}
+		contentByTarget[target] = content
+	}
+	return contentByTarget, sourcesByTarget, nil
+}
+
+func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRoot string, defaultSource string, currentJSON []byte, currentSources []string) (State, error) {
 	if _, err := os.Lstat(target); err != nil {
 		if os.IsNotExist(err) {
 			return StateMissing, nil
@@ -165,13 +212,80 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 	if err := plan.ValidateResolvedSource(sourceAbs, sourceRoot); err != nil {
 		return "", err
 	}
-
 	aligned, err := matchesSource(entry.Strategy, target, sourceAbs)
 	if err != nil {
 		return "", err
 	}
 	if aligned {
 		return StateOK, nil
+	}
+	if entry.Ownership == "json-subset" && len(currentJSON) > 0 {
+		info, err := os.Lstat(target)
+		if err != nil {
+			return "", fmt.Errorf("stat target %s: %w", target, err)
+		}
+		if !info.Mode().IsRegular() {
+			if trustedJSONRecord(meta, target, entry.Strategy, currentSources) {
+				return StateDrifted, nil
+			}
+			return StateConflict, nil
+		}
+		targetData, err := os.ReadFile(target)
+		if err != nil {
+			return "", fmt.Errorf("read JSON target %s: %w", target, err)
+		}
+		if bytes.Equal(targetData, currentJSON) {
+			return StateOK, nil
+		}
+		rec, recorded := meta.FindByTarget(target)
+		if trustedJSONRecord(meta, target, entry.Strategy, currentSources) {
+			if rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+				reconciliation, err := configsubset.ReconcileJSON(targetData, rec.OwnedContent, currentJSON)
+				if err != nil {
+					return "", fmt.Errorf("reconcile JSON target %s: %w", target, err)
+				}
+				if reconciliation.Compatible && !reconciliation.Changed {
+					return StateOK, nil
+				}
+				overall, err := configsubset.AnalyzeJSON(targetData, currentJSON)
+				if err != nil {
+					return "", fmt.Errorf("analyze current JSON ownership for %s: %w", target, err)
+				}
+				if overall.Contains {
+					if len(currentSources) > 0 && entry.Source != currentSources[0] {
+						return StateOK, nil
+					}
+					return StateDrifted, nil
+				}
+				entryRelation, err := configsubset.AnalyzeJSONFiles(target, sourceAbs)
+				if err != nil {
+					return "", err
+				}
+				if entryRelation.Contains {
+					return StateOK, nil
+				}
+				return StateDrifted, nil
+			}
+			relation, err := configsubset.AnalyzeJSON(targetData, currentJSON)
+			if err != nil {
+				return "", fmt.Errorf("analyze JSON target %s: %w", target, err)
+			}
+			if relation.Contains {
+				return StateOK, nil
+			}
+			entryRelation, err := configsubset.AnalyzeJSONFiles(target, sourceAbs)
+			if err != nil {
+				return "", err
+			}
+			if entryRelation.Contains {
+				return StateOK, nil
+			}
+			return StateDrifted, nil
+		}
+		if recorded && rec.Strategy == entry.Strategy {
+			return StateDrifted, nil
+		}
+		return StateConflict, nil
 	}
 
 	if isSubsetOwned(entry.Ownership) && meta.MatchesEntry(target, entry.Source, entry.Strategy) {
@@ -194,6 +308,23 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		return StateDrifted, nil
 	}
 	return StateConflict, nil
+}
+
+func trustedJSONRecord(meta state.Metadata, target, strategy string, currentSources []string) bool {
+	rec, ok := meta.FindByTarget(target)
+	if !ok || rec.Strategy != strategy || len(rec.SourceList()) == 0 {
+		return false
+	}
+	selected := make(map[string]struct{}, len(currentSources))
+	for _, source := range currentSources {
+		selected[source] = struct{}{}
+	}
+	for _, source := range rec.SourceList() {
+		if _, ok := selected[source]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func targetContainsCompatibleRecordedSource(entry manifest.Entry, target, sourceRoot string, meta state.Metadata, defaultSource string) bool {

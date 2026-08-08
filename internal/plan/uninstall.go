@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/state"
 )
 
@@ -21,8 +22,8 @@ const (
 	// UninstallSkip means there is nothing to remove: a copied target that is
 	// already absent.
 	UninstallSkip UninstallStatus = "skip"
-	// UninstallModified means a copied target's content drifted from the recorded
-	// hash, so it is preserved unless the caller forces removal.
+	// UninstallModified means recorded content drifted. Only explicitly
+	// whole-owned targets may become removable when the caller forces removal.
 	UninstallModified UninstallStatus = "modified"
 	// UninstallNotOwned means the target no longer matches what dots recorded (a
 	// symlink that is missing or points elsewhere, or a path whose type changed),
@@ -32,11 +33,13 @@ const (
 
 // UninstallAction is a single planned removal for a recorded Managed Entry.
 type UninstallAction struct {
-	Target   string          `json:"target"`
-	Source   string          `json:"source"`
-	Sources  []string        `json:"sources,omitempty"`
-	Strategy string          `json:"strategy"`
-	Status   UninstallStatus `json:"status"`
+	Target         string          `json:"target"`
+	Source         string          `json:"source"`
+	Sources        []string        `json:"sources,omitempty"`
+	Strategy       string          `json:"strategy"`
+	Ownership      string          `json:"ownership,omitempty"`
+	ForceRemovable bool            `json:"-"`
+	Status         UninstallStatus `json:"status"`
 }
 
 // UninstallPlan is the preview of removals an uninstall would apply.
@@ -48,7 +51,7 @@ type UninstallPlan struct {
 // would delete: an owned target, or a drifted copy that --force would remove.
 func (p UninstallPlan) Removable() bool {
 	for _, a := range p.Actions {
-		if a.Status == UninstallRemove || a.Status == UninstallModified {
+		if a.Status == UninstallRemove || (a.Status == UninstallModified && a.ForceRemovable) {
 			return true
 		}
 	}
@@ -86,11 +89,13 @@ func BuildUninstall(meta state.Metadata, opts UninstallOptions) (UninstallPlan, 
 			return UninstallPlan{}, err
 		}
 		plan.Actions = append(plan.Actions, UninstallAction{
-			Target:   rec.Target,
-			Source:   rec.Source,
-			Strategy: rec.Strategy,
-			Status:   status,
+			Target:    rec.Target,
+			Source:    rec.Source,
+			Strategy:  rec.Strategy,
+			Ownership: rec.Ownership,
+			Status:    status,
 		})
+		plan.Actions[len(plan.Actions)-1].ForceRemovable = rec.Ownership == "whole"
 		if len(rec.Sources) > 0 {
 			plan.Actions[len(plan.Actions)-1].Sources = rec.SourceList()
 		}
@@ -144,6 +149,20 @@ func uninstallStatus(rec state.Record, sourceRoot, home string) (UninstallStatus
 	case "copy":
 		if !info.Mode().IsRegular() {
 			return UninstallNotOwned, nil
+		}
+		if rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+			targetData, err := os.ReadFile(rec.Target)
+			if err != nil {
+				return "", fmt.Errorf("read uninstall target %s: %w", rec.Target, err)
+			}
+			_, _, _, compatible, err := configsubset.RemoveJSON(targetData, rec.OwnedContent)
+			if err != nil {
+				return "", fmt.Errorf("analyze owned JSON for %s: %w", rec.Target, err)
+			}
+			if compatible {
+				return UninstallRemove, nil
+			}
+			return UninstallModified, nil
 		}
 		hash, err := state.HashFile(rec.Target)
 		if err != nil {

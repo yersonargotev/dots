@@ -36,6 +36,16 @@ type JSONFileRelation struct {
 	Mergeable bool
 }
 
+// JSONReconciliation describes a safe three-state update from a previously
+// recorded dots-owned contribution to the current Source of Truth. Compatible
+// is false when the live target changed a formerly owned value. Changed reports
+// whether applying Content would mutate the live target.
+type JSONReconciliation struct {
+	Content    []byte
+	Changed    bool
+	Compatible bool
+}
+
 // ComposeJSONFiles reads source-owned JSON fragments and composes them in
 // manifest order. Compatible object and array values are merged using the same
 // subset semantics as MergeJSONFile. The returned JSON is deterministic and
@@ -110,6 +120,64 @@ func MergeJSON(targetData, sourceData []byte) ([]byte, error) {
 		return nil, fmt.Errorf("encode merged JSON: %w", err)
 	}
 	return append(data, '\n'), nil
+}
+
+// ReconcileJSON compares the live target with the previously recorded and
+// current dots-owned JSON contributions. It adds new owned values, removes
+// retired values only while they remain unchanged, and preserves target-only
+// content. Invalid target JSON is incompatible; invalid owned content is an
+// error because both snapshots are dots-controlled evidence.
+func ReconcileJSON(targetData, previousData, currentData []byte) (JSONReconciliation, error) {
+	var targetValue, previousValue, currentValue any
+	if err := decodeJSON(previousData, &previousValue); err != nil {
+		return JSONReconciliation{}, fmt.Errorf("parse previous owned JSON: %w", err)
+	}
+	if err := decodeJSON(currentData, &currentValue); err != nil {
+		return JSONReconciliation{}, fmt.Errorf("parse current owned JSON: %w", err)
+	}
+	if err := decodeJSON(targetData, &targetValue); err != nil {
+		return JSONReconciliation{}, nil
+	}
+
+	result := reconcileJSONValue(targetValue, previousValue, currentValue)
+	if !result.compatible {
+		return JSONReconciliation{}, nil
+	}
+	data, err := json.MarshalIndent(result.value, "", "  ")
+	if err != nil {
+		return JSONReconciliation{}, fmt.Errorf("encode reconciled JSON: %w", err)
+	}
+	return JSONReconciliation{
+		Content:    append(data, '\n'),
+		Changed:    result.changed,
+		Compatible: true,
+	}, nil
+}
+
+// RemoveJSON subtracts a recorded dots-owned contribution from a live target.
+// It removes only values that still match the ownership evidence and preserves
+// target-only content. Empty reports whether no content remains in the root
+// container, allowing uninstall to remove the physical target safely.
+func RemoveJSON(targetData, ownedData []byte) (content []byte, changed, empty, compatible bool, err error) {
+	var targetValue, ownedValue any
+	if decodeErr := decodeJSON(ownedData, &ownedValue); decodeErr != nil {
+		err = fmt.Errorf("parse owned JSON: %w", decodeErr)
+		return
+	}
+	if decodeErr := decodeJSON(targetData, &targetValue); decodeErr != nil {
+		return nil, false, false, false, nil
+	}
+
+	result := subtractJSONValue(targetValue, ownedValue)
+	if !result.compatible {
+		return nil, false, false, false, nil
+	}
+	empty = jsonValueEmpty(result.value)
+	data, encodeErr := json.MarshalIndent(result.value, "", "  ")
+	if encodeErr != nil {
+		return nil, false, false, false, fmt.Errorf("encode JSON after removing owned content: %w", encodeErr)
+	}
+	return append(data, '\n'), result.changed, empty, true, nil
 }
 
 // AnalyzeJSONFiles compares target with source in one read and parse pass.
@@ -263,6 +331,199 @@ type jsonMergeResult struct {
 	value      any
 	changed    bool
 	compatible bool
+}
+
+func reconcileJSONValue(target, previous, current any) jsonMergeResult {
+	previousObject, previousIsObject := previous.(map[string]any)
+	currentObject, currentIsObject := current.(map[string]any)
+	if previousIsObject && currentIsObject {
+		targetObject, ok := target.(map[string]any)
+		if !ok {
+			return jsonMergeResult{value: target}
+		}
+		result := make(map[string]any, len(targetObject)+len(currentObject))
+		for key, value := range targetObject {
+			result[key] = value
+		}
+		changed := false
+		for key, previousChild := range previousObject {
+			targetChild, targetExists := targetObject[key]
+			currentChild, currentExists := currentObject[key]
+			if !currentExists {
+				if !targetExists {
+					return jsonMergeResult{value: target}
+				}
+				removed := subtractJSONValue(targetChild, previousChild)
+				if !removed.compatible {
+					return jsonMergeResult{value: target}
+				}
+				if jsonValueEmpty(removed.value) {
+					delete(result, key)
+					changed = true
+				} else {
+					result[key] = removed.value
+					changed = changed || removed.changed
+				}
+				continue
+			}
+			if !targetExists {
+				result[key] = currentChild
+				changed = true
+				continue
+			}
+			child := reconcileJSONValue(targetChild, previousChild, currentChild)
+			if !child.compatible {
+				return jsonMergeResult{value: target}
+			}
+			if child.changed {
+				result[key] = child.value
+				changed = true
+			}
+		}
+		for key, currentChild := range currentObject {
+			if _, existed := previousObject[key]; existed {
+				continue
+			}
+			targetChild, exists := targetObject[key]
+			if !exists {
+				result[key] = currentChild
+				changed = true
+				continue
+			}
+			merged := mergeJSONValue(targetChild, currentChild)
+			if !merged.compatible {
+				return jsonMergeResult{value: target}
+			}
+			if merged.changed {
+				result[key] = merged.value
+				changed = true
+			}
+		}
+		return jsonMergeResult{value: result, changed: changed, compatible: true}
+	}
+
+	previousArray, previousIsArray := previous.([]any)
+	currentArray, currentIsArray := current.([]any)
+	if previousIsArray && currentIsArray {
+		targetArray, ok := target.([]any)
+		if !ok {
+			return jsonMergeResult{value: target}
+		}
+		result := append([]any(nil), targetArray...)
+		changed := false
+		for _, previousItem := range multisetDifference(previousArray, currentArray) {
+			index := equalJSONIndex(result, previousItem)
+			if index < 0 {
+				return jsonMergeResult{value: target}
+			}
+			result = append(result[:index], result[index+1:]...)
+			changed = true
+		}
+		merged := mergeJSONValue(result, currentArray)
+		if !merged.compatible {
+			return jsonMergeResult{value: target}
+		}
+		return jsonMergeResult{value: merged.value, changed: changed || merged.changed, compatible: true}
+	}
+
+	if reflect.DeepEqual(previous, current) {
+		return jsonMergeResult{value: target, compatible: reflect.DeepEqual(target, current)}
+	}
+	if reflect.DeepEqual(target, current) {
+		return jsonMergeResult{value: target, compatible: true}
+	}
+	if reflect.DeepEqual(target, previous) {
+		return jsonMergeResult{value: current, changed: true, compatible: true}
+	}
+	return jsonMergeResult{value: target}
+}
+
+func subtractJSONValue(target, owned any) jsonMergeResult {
+	switch ownedTyped := owned.(type) {
+	case map[string]any:
+		targetTyped, ok := target.(map[string]any)
+		if !ok {
+			return jsonMergeResult{value: target}
+		}
+		result := make(map[string]any, len(targetTyped))
+		for key, value := range targetTyped {
+			result[key] = value
+		}
+		changed := false
+		for key, ownedChild := range ownedTyped {
+			targetChild, exists := targetTyped[key]
+			if !exists {
+				return jsonMergeResult{value: target}
+			}
+			removed := subtractJSONValue(targetChild, ownedChild)
+			if !removed.compatible {
+				return jsonMergeResult{value: target}
+			}
+			if jsonValueEmpty(removed.value) {
+				delete(result, key)
+				changed = true
+			} else {
+				result[key] = removed.value
+				changed = changed || removed.changed
+			}
+		}
+		return jsonMergeResult{value: result, changed: changed, compatible: true}
+	case []any:
+		targetTyped, ok := target.([]any)
+		if !ok {
+			return jsonMergeResult{value: target}
+		}
+		result := append([]any(nil), targetTyped...)
+		for _, ownedItem := range ownedTyped {
+			index := equalJSONIndex(result, ownedItem)
+			if index < 0 {
+				return jsonMergeResult{value: target}
+			}
+			result = append(result[:index], result[index+1:]...)
+		}
+		return jsonMergeResult{value: result, changed: len(ownedTyped) > 0, compatible: true}
+	default:
+		if !reflect.DeepEqual(target, owned) {
+			return jsonMergeResult{value: target}
+		}
+		return jsonMergeResult{changed: true, compatible: true}
+	}
+}
+
+func multisetDifference(left, right []any) []any {
+	remaining := append([]any(nil), right...)
+	var difference []any
+	for _, item := range left {
+		index := equalJSONIndex(remaining, item)
+		if index < 0 {
+			difference = append(difference, item)
+			continue
+		}
+		remaining = append(remaining[:index], remaining[index+1:]...)
+	}
+	return difference
+}
+
+func equalJSONIndex(values []any, want any) int {
+	for i, value := range values {
+		if reflect.DeepEqual(value, want) {
+			return i
+		}
+	}
+	return -1
+}
+
+func jsonValueEmpty(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case map[string]any:
+		return len(typed) == 0
+	case []any:
+		return len(typed) == 0
+	default:
+		return false
+	}
 }
 
 func mergeJSONValue(target, source any) jsonMergeResult {

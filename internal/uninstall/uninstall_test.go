@@ -3,6 +3,7 @@ package uninstall_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/backups"
@@ -26,7 +27,7 @@ func newEnv(t *testing.T) *env {
 		sourceRoot: t.TempDir(),
 		home:       t.TempDir(),
 		stateRoot:  t.TempDir(),
-		meta:       state.Metadata{Version: 1},
+		meta:       state.Metadata{Version: state.CurrentVersion},
 	}
 }
 
@@ -69,7 +70,23 @@ func (e *env) installCopy(t *testing.T, rel, name string) string {
 	if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
 		t.Fatalf("write target: %v", err)
 	}
-	e.meta.Entries = append(e.meta.Entries, state.Record{Target: target, Source: rel, Strategy: "copy", Hash: hash})
+	e.meta.Entries = append(e.meta.Entries, state.Record{Target: target, Source: rel, Strategy: "copy", Ownership: "whole", Hash: hash})
+	return target
+}
+
+func (e *env) installOwnedJSON(t *testing.T, rel, name, owned, targetContent string) string {
+	t.Helper()
+	e.writeSource(t, rel, owned)
+	target := filepath.Join(e.home, name)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(targetContent), 0o640); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	e.meta.Entries = append(e.meta.Entries, state.Record{
+		Target: target, Source: rel, Strategy: "copy", Ownership: "json-subset", OwnedContent: []byte(owned),
+	})
 	return target
 }
 
@@ -220,6 +237,117 @@ func TestApplyRemovesModifiedCopyWithForce(t *testing.T) {
 	}
 }
 
+func TestApplyJSONSubsetUninstallPreservesExternalContentAndPrunesMetadata(t *testing.T) {
+	e := newEnv(t)
+	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
+		`{"owned":{"remove":true},"items":["owned"]}`,
+		`{"owned":{"remove":true,"external":"keep"},"items":["owned","external"],"targetOnly":true}`,
+	)
+	e.saveMeta(t)
+
+	res := e.apply(t, uninstall.Options{Force: true})
+	if len(res.Removed) != 0 || len(res.Updated) != 1 || res.Updated[0] != target {
+		t.Fatalf("result = %+v, want preserved target with recorded contribution removed", res)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read preserved target: %v", err)
+	}
+	for _, want := range []string{`"external": "keep"`, `"external"`, `"targetOnly": true`} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("target missing external content %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(string(got), `"remove"`) {
+		t.Fatalf("target retained dots-owned content:\n%s", got)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); ok {
+		t.Fatal("metadata record not pruned after partial uninstall")
+	}
+}
+
+func TestApplyJSONSubsetForcePreservesChangedOwnedContentAndMetadata(t *testing.T) {
+	e := newEnv(t)
+	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
+		`{"owned":"recorded"}`,
+		`{"owned":"locally-changed","external":true}`,
+	)
+	e.saveMeta(t)
+
+	res := e.apply(t, uninstall.Options{Force: true})
+	if len(res.Removed) != 0 {
+		t.Fatalf("Removed = %v, want none for changed partial ownership", res.Removed)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read preserved target: %v", err)
+	}
+	if string(got) != `{"owned":"locally-changed","external":true}` {
+		t.Fatalf("force changed partial target to %s", got)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("metadata record pruned despite changed owned content")
+	}
+}
+
+func TestApplyJSONSubsetPreservesMissingOwnedKeyAndMetadata(t *testing.T) {
+	e := newEnv(t)
+	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
+		`{"owned":"recorded"}`,
+		`{"external":true}`,
+	)
+	e.saveMeta(t)
+
+	res := e.apply(t, uninstall.Options{Force: true})
+	if len(res.Removed) != 0 || len(res.Updated) != 0 {
+		t.Fatalf("result = %+v, want no mutation for missing owned key", res)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read preserved target: %v", err)
+	}
+	if string(got) != `{"external":true}` {
+		t.Fatalf("missing-owned-key target changed to %s", got)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("metadata record pruned despite missing owned key")
+	}
+}
+
+func TestApplyJSONSubsetRevalidatesStaleRemovalBeforeMutation(t *testing.T) {
+	e := newEnv(t)
+	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
+		`{"owned":"recorded"}`,
+		`{"owned":"recorded","external":true}`,
+	)
+	e.saveMeta(t)
+	stalePlan := e.buildPlan(t)
+	changed := `{"owned":"changed-after-preview","external":true}`
+	if err := os.WriteFile(target, []byte(changed), 0o640); err != nil {
+		t.Fatalf("change target after preview: %v", err)
+	}
+
+	res, err := uninstall.Apply(stalePlan, uninstall.Options{
+		SourceRoot: e.sourceRoot, Home: e.home, StateRoot: e.stateRoot, Force: true,
+	})
+	if err != nil {
+		t.Fatalf("Apply(stale plan) error = %v", err)
+	}
+	if len(res.Removed) != 0 || len(res.Updated) != 0 {
+		t.Fatalf("result = %+v, want no stale-plan mutation", res)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != changed {
+		t.Fatalf("stale plan changed target to %s", got)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("stale plan pruned metadata")
+	}
+}
+
 func TestApplyRestoreBackupsRestoresLatestSetAfterRemoval(t *testing.T) {
 	e := newEnv(t)
 	target := e.installSymlink(t, "shell/zshrc", ".zshrc")
@@ -321,5 +449,72 @@ func TestApplyIgnoresForgedRemovableActionOutsideHome(t *testing.T) {
 	}
 	if string(got) != "do not touch\n" {
 		t.Fatalf("forged action modified out-of-home target: %q", got)
+	}
+}
+
+func TestApplyDoesNotPruneMissingJSONTargetBehindEscapedParent(t *testing.T) {
+	e := newEnv(t)
+	outside := t.TempDir()
+	parent := filepath.Join(e.home, ".config")
+	if err := os.Symlink(outside, parent); err != nil {
+		t.Fatalf("symlink escaped target parent: %v", err)
+	}
+	target := filepath.Join(parent, "shared.json")
+	e.meta.Entries = append(e.meta.Entries, state.Record{
+		Target:       target,
+		Source:       "configs/shared.json",
+		Strategy:     "copy",
+		Ownership:    "json-subset",
+		OwnedContent: []byte(`{"owned":true}`),
+	})
+	e.saveMeta(t)
+
+	forged := plan.UninstallPlan{Actions: []plan.UninstallAction{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", Status: plan.UninstallRemove,
+	}}}
+	_, err := uninstall.Apply(forged, uninstall.Options{
+		SourceRoot: e.sourceRoot,
+		Home:       e.home,
+		StateRoot:  e.stateRoot,
+	})
+	if err == nil {
+		t.Fatal("Apply() error = nil, want escaped JSON target parent error")
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("escaped missing JSON target record should be kept, not pruned")
+	}
+}
+
+func TestApplyDoesNotPruneJSONTargetMissingSincePreview(t *testing.T) {
+	e := newEnv(t)
+	target := filepath.Join(e.home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	e.meta.Entries = append(e.meta.Entries, state.Record{
+		Target:       target,
+		Source:       "configs/shared.json",
+		Strategy:     "copy",
+		Ownership:    "json-subset",
+		OwnedContent: []byte(`{"owned":true}`),
+	})
+	e.saveMeta(t)
+
+	stale := plan.UninstallPlan{Actions: []plan.UninstallAction{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", Status: plan.UninstallRemove,
+	}}}
+	res, err := uninstall.Apply(stale, uninstall.Options{
+		SourceRoot: e.sourceRoot,
+		Home:       e.home,
+		StateRoot:  e.stateRoot,
+	})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if len(res.Removed) != 0 || len(res.Updated) != 0 {
+		t.Fatalf("result = %+v, want no mutation for target missing since preview", res)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("missing JSON target record should be kept, not pruned")
 	}
 }

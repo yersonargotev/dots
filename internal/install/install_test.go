@@ -1,6 +1,7 @@
 package install_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -116,8 +117,8 @@ func TestApplyComposedJSONSubsetCreatesAndUpdatesOneSharedTarget(t *testing.T) {
 			break
 		}
 	}
-	if shared == nil || shared.Status != plan.UninstallModified {
-		t.Fatalf("shared uninstall action = %+v, want modified so target-only state is preserved by default", shared)
+	if shared == nil || shared.Status != plan.UninstallRemove || shared.Ownership != "json-subset" {
+		t.Fatalf("shared uninstall action = %+v, want partial removal that preserves target-only state", shared)
 	}
 }
 
@@ -631,6 +632,79 @@ func TestApplyStatusUpdateMergesJSONSubsetAndRecordsMetadata(t *testing.T) {
 	}
 	if len(backupMeta.Sets) != 1 {
 		t.Fatalf("backup sets = %d, want 1", len(backupMeta.Sets))
+	}
+}
+
+func TestApplyReconcilesRecordedJSONContributionAndPreservesExternalContent(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	previous := []byte(`{"owned":{"keep":true,"retired":"old"},"items":["old"]}`)
+	current := []byte(`{"owned":{"keep":true,"added":"new"},"items":["new"]}`)
+	if err := os.WriteFile(source, current, 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":{"keep":true,"retired":"old","external":"preserve"},"items":["old","external"],"targetOnly":true}`), 0o640); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: previous,
+	}}}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+	m := manifest.Manifest{
+		Version: 1, Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{{Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"}}},
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	p, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home, Metadata: meta})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.StatusUpdate {
+		t.Fatalf("actions = %+v, want reversible update", p.Actions)
+	}
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	for _, want := range []string{`"added": "new"`, `"external": "preserve"`, `"targetOnly": true`, `"external"`} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("reconciled target missing %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(string(got), `"retired"`) || strings.Contains(string(got), `"old"`) {
+		t.Fatalf("reconciled target retained retired contribution:\n%s", got)
+	}
+	meta, err = state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("reload metadata: %v", err)
+	}
+	rec, ok := meta.FindByTarget(target)
+	if !ok || rec.Ownership != "json-subset" || !json.Valid(rec.OwnedContent) {
+		t.Fatalf("metadata record = %+v, want valid owned JSON evidence", rec)
+	}
+	if meta.Version != state.CurrentVersion {
+		t.Fatalf("metadata version = %d, want %d", meta.Version, state.CurrentVersion)
+	}
+	backupMeta, err := backups.Load(backups.Path(stateRoot))
+	if err != nil || len(backupMeta.Sets) != 1 {
+		t.Fatalf("Backup Sets = %+v, err = %v; want one", backupMeta.Sets, err)
 	}
 }
 

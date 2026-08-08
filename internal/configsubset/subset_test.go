@@ -124,6 +124,128 @@ func TestAnalyzeAndMergeJSONContent(t *testing.T) {
 	}
 }
 
+func TestReconcileJSONAddsAndRemovesOwnedValuesWhilePreservingTargetOnlyContent(t *testing.T) {
+	target := []byte(`{"settings":{"keep":true,"retired":"old","external":"local"},"items":["old","external"]}`)
+	previous := []byte(`{"settings":{"keep":true,"retired":"old"},"items":["old"]}`)
+	current := []byte(`{"settings":{"keep":true,"added":"new"},"items":["new"]}`)
+
+	got, err := ReconcileJSON(target, previous, current)
+	if err != nil {
+		t.Fatalf("ReconcileJSON() error = %v", err)
+	}
+	if !got.Compatible || !got.Changed {
+		t.Fatalf("ReconcileJSON() = %#v, want compatible change", got)
+	}
+	want := `{
+  "items": [
+    "external",
+    "new"
+  ],
+  "settings": {
+    "added": "new",
+    "external": "local",
+    "keep": true
+  }
+}
+`
+	if string(got.Content) != want {
+		t.Fatalf("ReconcileJSON() content =\n%s\nwant:\n%s", got.Content, want)
+	}
+}
+
+func TestReconcileJSONRejectsChangedRetiredValue(t *testing.T) {
+	target := []byte(`{"settings":{"retired":"locally-changed","external":true}}`)
+	previous := []byte(`{"settings":{"retired":"old"}}`)
+	current := []byte(`{"settings":{}}`)
+
+	got, err := ReconcileJSON(target, previous, current)
+	if err != nil {
+		t.Fatalf("ReconcileJSON() error = %v", err)
+	}
+	if got.Compatible || got.Changed || got.Content != nil {
+		t.Fatalf("ReconcileJSON() = %#v, want incompatible without content", got)
+	}
+}
+
+func TestReconcileJSONRejectsMissingRetiredObjectKey(t *testing.T) {
+	target := []byte(`{"settings":{"external":true}}`)
+	previous := []byte(`{"settings":{"retired":"old"}}`)
+	current := []byte(`{"settings":{}}`)
+
+	got, err := ReconcileJSON(target, previous, current)
+	if err != nil {
+		t.Fatalf("ReconcileJSON() error = %v", err)
+	}
+	if got.Compatible || got.Changed || got.Content != nil {
+		t.Fatalf("ReconcileJSON() = %#v, want missing retired key to be incompatible", got)
+	}
+}
+
+func TestReconcileJSONRejectsMissingRetiredArrayItem(t *testing.T) {
+	target := []byte(`{"items":["locally-changed"]}`)
+	previous := []byte(`{"items":["old"]}`)
+	current := []byte(`{"items":[]}`)
+
+	got, err := ReconcileJSON(target, previous, current)
+	if err != nil {
+		t.Fatalf("ReconcileJSON() error = %v", err)
+	}
+	if got.Compatible {
+		t.Fatalf("ReconcileJSON() = %#v, want conservative array conflict", got)
+	}
+}
+
+func TestRemoveJSONSubtractsOnlyOwnedContribution(t *testing.T) {
+	target := []byte(`{"settings":{"owned":true,"external":"keep"},"items":["owned","external"]}`)
+	owned := []byte(`{"settings":{"owned":true},"items":["owned"]}`)
+
+	content, changed, empty, compatible, err := RemoveJSON(target, owned)
+	if err != nil {
+		t.Fatalf("RemoveJSON() error = %v", err)
+	}
+	if !compatible || !changed || empty {
+		t.Fatalf("RemoveJSON() = changed %t, empty %t, compatible %t", changed, empty, compatible)
+	}
+	want := `{
+  "items": [
+    "external"
+  ],
+  "settings": {
+    "external": "keep"
+  }
+}
+`
+	if string(content) != want {
+		t.Fatalf("RemoveJSON() content =\n%s\nwant:\n%s", content, want)
+	}
+}
+
+func TestRemoveJSONRejectsChangedOwnedValue(t *testing.T) {
+	target := []byte(`{"owned":"changed","external":true}`)
+	owned := []byte(`{"owned":"recorded"}`)
+
+	content, changed, empty, compatible, err := RemoveJSON(target, owned)
+	if err != nil {
+		t.Fatalf("RemoveJSON() error = %v", err)
+	}
+	if compatible || changed || empty || content != nil {
+		t.Fatalf("RemoveJSON() = content %s, changed %t, empty %t, compatible %t", content, changed, empty, compatible)
+	}
+}
+
+func TestRemoveJSONRejectsMissingOwnedObjectKey(t *testing.T) {
+	target := []byte(`{"external":true}`)
+	owned := []byte(`{"owned":"recorded"}`)
+
+	content, changed, empty, compatible, err := RemoveJSON(target, owned)
+	if err != nil {
+		t.Fatalf("RemoveJSON() error = %v", err)
+	}
+	if compatible || changed || empty || content != nil {
+		t.Fatalf("RemoveJSON() = content %s, changed %t, empty %t, compatible %t", content, changed, empty, compatible)
+	}
+}
+
 func TestMergeJSONFileAddsMissingValuesAndPreservesTargetState(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "source.json")
