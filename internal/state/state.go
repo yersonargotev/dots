@@ -18,7 +18,7 @@ import (
 )
 
 // CurrentVersion is the current Installation Metadata schema version.
-const CurrentVersion = 3
+const CurrentVersion = 4
 
 // Metadata is the machine-readable record of installed managed targets.
 type Metadata struct {
@@ -55,14 +55,16 @@ func (p Provenance) Empty() bool {
 // strategies may record a source content hash; symlink records leave Hash empty
 // because drift is detected from the link destination.
 type Record struct {
-	Target      string   `json:"target"`
-	Source      string   `json:"source"`
-	Sources     []string `json:"sources,omitempty"`
-	Strategy    string   `json:"strategy"`
-	Hash        string   `json:"hash"`
-	InstalledAt string   `json:"installedAt"`
-	Profiles    []string `json:"profiles,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
+	Target       string          `json:"target"`
+	Source       string          `json:"source"`
+	Sources      []string        `json:"sources,omitempty"`
+	Strategy     string          `json:"strategy"`
+	Ownership    string          `json:"ownership,omitempty"`
+	OwnedContent json.RawMessage `json:"owned_content,omitempty"`
+	Hash         string          `json:"hash"`
+	InstalledAt  string          `json:"installedAt"`
+	Profiles     []string        `json:"profiles,omitempty"`
+	Tags         []string        `json:"tags,omitempty"`
 }
 
 // SourceList returns every Source of Truth contribution for the managed target.

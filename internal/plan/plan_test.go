@@ -453,6 +453,64 @@ func TestBuildCopyJSONSubsetOwnership(t *testing.T) {
 	}
 }
 
+func TestBuildJSONSubsetUsesRecordedContributionForReversibleRemoval(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "configs/shared.json", `{"owned":{"keep":true,"added":"new"}}`)
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":{"keep":true,"retired":"old"},"external":"preserve"}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	previous := []byte(`{"owned":{"keep":true,"retired":"old"}}`)
+	meta := state.Metadata{Entries: []state.Record{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: previous,
+	}}}
+
+	action := buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	}, meta)
+	if action.Status != plan.StatusUpdate {
+		t.Fatalf("Status = %q, want update", action.Status)
+	}
+	if !reflect.DeepEqual(action.PreviousContent, previous) {
+		t.Fatalf("PreviousContent = %s, want %s", action.PreviousContent, previous)
+	}
+
+	if err := os.WriteFile(target, []byte(`{"owned":{"keep":true,"retired":"locally-changed"},"external":"preserve"}`), 0o600); err != nil {
+		t.Fatalf("rewrite target: %v", err)
+	}
+	action = buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	}, meta)
+	if action.Status != plan.StatusConflict {
+		t.Fatalf("Status = %q, want conflict for changed retired value", action.Status)
+	}
+}
+
+func TestBuildJSONSubsetLegacyMetadataDoesNotAuthorizeRemoval(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "configs/shared.json", `{"owned":{"keep":true}}`)
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":{"keep":true,"retired":"old"},"external":"preserve"}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	meta := state.Metadata{Version: 3, Entries: []state.Record{{Target: target, Source: "configs/shared.json", Strategy: "copy"}}}
+
+	action := buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	}, meta)
+	if action.Status != plan.StatusUnchanged || len(action.PreviousContent) != 0 {
+		t.Fatalf("action = %+v, want unchanged without removal evidence", action)
+	}
+}
+
 func TestBuildCopyTOMLSubsetOwnership(t *testing.T) {
 	tests := []struct {
 		name          string

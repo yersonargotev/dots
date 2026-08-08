@@ -92,9 +92,7 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 	if err != nil {
 		return err
 	}
-	if meta.Version < 2 {
-		meta.Version = 2
-	}
+	meta.Version = state.CurrentVersion
 	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -103,26 +101,38 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 			continue
 		}
 		hash := ""
+		var ownedContent []byte
 		if action.Strategy != "symlink" {
 			if len(action.Sources) > 0 {
 				hash = state.HashBytes(action.Content)
+				if action.Ownership == "json-subset" {
+					ownedContent = append([]byte(nil), action.Content...)
+				}
 			} else {
 				var err error
 				hash, err = state.HashFile(resolvedSources[i][0])
 				if err != nil {
 					return err
 				}
+				if action.Ownership == "json-subset" {
+					ownedContent, err = os.ReadFile(resolvedSources[i][0])
+					if err != nil {
+						return fmt.Errorf("read owned JSON contribution %s: %w", resolvedSources[i][0], err)
+					}
+				}
 			}
 		}
 		upsertRecord(&meta, state.Record{
-			Target:      action.Target,
-			Source:      action.Source,
-			Sources:     append([]string(nil), action.Sources...),
-			Strategy:    action.Strategy,
-			Hash:        hash,
-			InstalledAt: now,
-			Profiles:    append([]string(nil), p.Profiles...),
-			Tags:        append([]string(nil), p.Tags...),
+			Target:       action.Target,
+			Source:       action.Source,
+			Sources:      append([]string(nil), action.Sources...),
+			Strategy:     action.Strategy,
+			Ownership:    action.Ownership,
+			OwnedContent: ownedContent,
+			Hash:         hash,
+			InstalledAt:  now,
+			Profiles:     append([]string(nil), p.Profiles...),
+			Tags:         append([]string(nil), p.Tags...),
 		})
 	}
 
@@ -464,6 +474,20 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 	}
 	switch action.Ownership {
 	case "json-subset":
+		if len(action.PreviousContent) > 0 {
+			current := action.Content
+			if len(current) == 0 {
+				var err error
+				current, err = os.ReadFile(source)
+				if err != nil {
+					return fmt.Errorf("read current owned JSON %s: %w", source, err)
+				}
+			}
+			if err := reconcileJSONContentFile(action.Target, action.PreviousContent, current); err != nil {
+				return fmt.Errorf("reconcile JSON update for %s: %w", action.Target, err)
+			}
+			return nil
+		}
 		if len(action.Content) > 0 {
 			if err := mergeJSONContentFile(action.Target, action.Content); err != nil {
 				return fmt.Errorf("merge composed JSON update for %s: %w", action.Target, err)
@@ -637,4 +661,26 @@ func mergeJSONContentFile(target string, sourceData []byte) error {
 		return err
 	}
 	return os.WriteFile(target, merged, info.Mode().Perm())
+}
+
+func reconcileJSONContentFile(target string, previousData, currentData []byte) error {
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return err
+	}
+	reconciliation, err := configsubset.ReconcileJSON(targetData, previousData, currentData)
+	if err != nil {
+		return err
+	}
+	if !reconciliation.Compatible {
+		return fmt.Errorf("live target changed a previously owned JSON value")
+	}
+	if !reconciliation.Changed {
+		return nil
+	}
+	return os.WriteFile(target, reconciliation.Content, info.Mode().Perm())
 }

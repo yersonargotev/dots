@@ -35,6 +35,40 @@ func TestBuildUninstallPlansOneRemovalForCompositeTarget(t *testing.T) {
 	}
 }
 
+func TestBuildUninstallPlansPartialJSONRemovalFromRecordedContribution(t *testing.T) {
+	f := newUninstallFixture(t)
+	target := f.target(".config/shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":true,"external":"keep"}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	p := f.build(t, state.Record{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: []byte(`{"owned":true}`),
+	})
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.UninstallRemove || p.Actions[0].Ownership != "json-subset" {
+		t.Fatalf("action = %+v, want safe partial remove", p.Actions)
+	}
+}
+
+func TestBuildUninstallClassifiesChangedPartialJSONAsModified(t *testing.T) {
+	f := newUninstallFixture(t)
+	target := f.target(".config/shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":"locally-changed","external":true}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	p := f.build(t, state.Record{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: []byte(`{"owned":"recorded"}`),
+	})
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.UninstallModified {
+		t.Fatalf("action = %+v, want modified partial ownership", p.Actions)
+	}
+}
+
 func TestValidateBackupableTargetAcceptsFileDirAndSymlink(t *testing.T) {
 	dir := t.TempDir()
 

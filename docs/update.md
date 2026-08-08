@@ -42,12 +42,13 @@ Non-interactive runs (`--yes`) default every conflict to `skip`, so an unattende
 
 Some co-owned copied configuration can be updated without treating the target as
 a Conflict. When Installation Metadata proves dots installed the previous
-Source of Truth and the target still contains that dots-owned subset, the Install
-Plan may report an `update` action. Today this is used for TOML subset-owned
-Codex config migrations such as adding the CodeGraph `SessionStart` hook while
-preserving Codex- or user-owned settings. An `update` creates a Backup Set before
-mutating the target, and it is safe for Confirmed Install mode because unmanaged
-or incompatible targets still remain Conflicts.
+Source of Truth, the Install Plan may report an `update` action. Strict-JSON
+subset targets use the prior contribution recorded in Installation Metadata to
+add new values and remove unchanged retired values while preserving target-only
+content; an externally changed former value remains a Conflict. Legacy metadata
+without that evidence stays additive-only until a safe run records the current
+baseline. TOML subset updates remain additive. Every `update` creates a Backup
+Set before mutation, and unmanaged or incompatible targets remain Conflicts.
 
 ## Flags
 

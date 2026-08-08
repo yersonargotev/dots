@@ -99,7 +99,12 @@ func newUninstallCommand() *cobra.Command {
 			if wantsJSON(cmd) {
 				return emitOK(cmd, uninstallReport{DryRun: false, StateRoot: paths.StateRoot, Plan: p, Result: res})
 			}
-			fmt.Fprintf(out, "\nRemoved %s.\n", pluralizeTargets(len(res.Removed)))
+			if len(res.Removed) > 0 {
+				fmt.Fprintf(out, "\nRemoved %s.\n", pluralizeTargets(len(res.Removed)))
+			}
+			if len(res.Updated) > 0 {
+				fmt.Fprintf(out, "\nRemoved dots-owned content from %s.\n", pluralizeTargets(len(res.Updated)))
+			}
 			if restoreBackups && len(res.RestoredSets) > 0 {
 				fmt.Fprintf(out, "Restored %s from preserved Backup Sets.\n", pluralizeBackupSets(len(res.RestoredSets)))
 			}
@@ -126,7 +131,7 @@ func willRemove(p plan.UninstallPlan, force bool) bool {
 		case plan.UninstallRemove:
 			return true
 		case plan.UninstallModified:
-			if force {
+			if force && action.Ownership == "" {
 				return true
 			}
 		}
@@ -139,19 +144,27 @@ func willRemove(p plan.UninstallPlan, force bool) bool {
 // none so a clean plan reads without noise.
 func renderModifiedHint(w io.Writer, p plan.UninstallPlan, force bool) {
 	modified := 0
+	partial := 0
 	for _, action := range p.Actions {
 		if action.Status == plan.UninstallModified {
-			modified++
+			if action.Ownership == "" {
+				modified++
+			} else {
+				partial++
+			}
 		}
 	}
-	if modified == 0 {
+	if modified == 0 && partial == 0 {
 		return
 	}
-	if force {
+	if modified > 0 && force {
 		fmt.Fprintf(w, "\nNote: --force will remove %d modified target(s) whose content drifted from the recorded hash.\n", modified)
-		return
+	} else if modified > 0 {
+		fmt.Fprintf(w, "\nNote: %d modified target(s) will be skipped; re-run with --force to remove them.\n", modified)
 	}
-	fmt.Fprintf(w, "\nNote: %d modified target(s) will be skipped; re-run with --force to remove them.\n", modified)
+	if partial > 0 {
+		fmt.Fprintf(w, "\nNote: %d partially owned target(s) will be preserved because recorded owned content changed; --force never broadens partial ownership.\n", partial)
+	}
 }
 
 func confirmUninstall(r io.Reader, w io.Writer) (bool, error) {

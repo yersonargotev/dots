@@ -143,10 +143,13 @@ home directory.
 | `dependencies` | No | Entry-level Dependencies. |
 
 For a `json-subset` target already trusted by matching Installation Metadata,
-missing source-owned object keys and array elements are applied as a conservative
-update: target-only values are preserved, a Backup Set is created, and existing
-incompatible scalar or object/array values remain a Conflict. A compatible
-pre-existing target without matching metadata is still a Conflict.
+the recorded prior contribution enables a three-state update: new owned values
+are added, unchanged retired values are removed, and target-only values are
+preserved. A changed former contribution or incompatible scalar/object/array
+value remains a Conflict. Every applied update creates a Backup Set. Legacy
+metadata without prior-contribution evidence may establish a new baseline after
+a safe additive or unchanged install, but never authorizes removal retroactively;
+a compatible pre-existing target without matching metadata is still a Conflict.
 
 Current Managed Entries:
 

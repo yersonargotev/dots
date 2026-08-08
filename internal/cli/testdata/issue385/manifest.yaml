@@ -1,0 +1,11 @@
+version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/shared.json
+    target: ~/.config/shared.json
+    strategy: copy
+    ownership: json-subset
+    tags: [core]
+    os: [darwin, linux]

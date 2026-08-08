@@ -3,6 +3,7 @@ package uninstall_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/backups"
@@ -70,6 +71,22 @@ func (e *env) installCopy(t *testing.T, rel, name string) string {
 		t.Fatalf("write target: %v", err)
 	}
 	e.meta.Entries = append(e.meta.Entries, state.Record{Target: target, Source: rel, Strategy: "copy", Hash: hash})
+	return target
+}
+
+func (e *env) installOwnedJSON(t *testing.T, rel, name, owned, targetContent string) string {
+	t.Helper()
+	e.writeSource(t, rel, owned)
+	target := filepath.Join(e.home, name)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(targetContent), 0o640); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	e.meta.Entries = append(e.meta.Entries, state.Record{
+		Target: target, Source: rel, Strategy: "copy", Ownership: "json-subset", OwnedContent: []byte(owned),
+	})
 	return target
 }
 
@@ -217,6 +234,93 @@ func TestApplyRemovesModifiedCopyWithForce(t *testing.T) {
 	}
 	if _, err := os.Lstat(target); !os.IsNotExist(err) {
 		t.Fatalf("modified copy should be removed with force, err = %v", err)
+	}
+}
+
+func TestApplyJSONSubsetUninstallPreservesExternalContentAndPrunesMetadata(t *testing.T) {
+	e := newEnv(t)
+	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
+		`{"owned":{"remove":true},"items":["owned"]}`,
+		`{"owned":{"remove":true,"external":"keep"},"items":["owned","external"],"targetOnly":true}`,
+	)
+	e.saveMeta(t)
+
+	res := e.apply(t, uninstall.Options{Force: true})
+	if len(res.Removed) != 0 || len(res.Updated) != 1 || res.Updated[0] != target {
+		t.Fatalf("result = %+v, want preserved target with recorded contribution removed", res)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read preserved target: %v", err)
+	}
+	for _, want := range []string{`"external": "keep"`, `"external"`, `"targetOnly": true`} {
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("target missing external content %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(string(got), `"remove"`) {
+		t.Fatalf("target retained dots-owned content:\n%s", got)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); ok {
+		t.Fatal("metadata record not pruned after partial uninstall")
+	}
+}
+
+func TestApplyJSONSubsetForcePreservesChangedOwnedContentAndMetadata(t *testing.T) {
+	e := newEnv(t)
+	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
+		`{"owned":"recorded"}`,
+		`{"owned":"locally-changed","external":true}`,
+	)
+	e.saveMeta(t)
+
+	res := e.apply(t, uninstall.Options{Force: true})
+	if len(res.Removed) != 0 {
+		t.Fatalf("Removed = %v, want none for changed partial ownership", res.Removed)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read preserved target: %v", err)
+	}
+	if string(got) != `{"owned":"locally-changed","external":true}` {
+		t.Fatalf("force changed partial target to %s", got)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("metadata record pruned despite changed owned content")
+	}
+}
+
+func TestApplyJSONSubsetRevalidatesStaleRemovalBeforeMutation(t *testing.T) {
+	e := newEnv(t)
+	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
+		`{"owned":"recorded"}`,
+		`{"owned":"recorded","external":true}`,
+	)
+	e.saveMeta(t)
+	stalePlan := e.buildPlan(t)
+	changed := `{"owned":"changed-after-preview","external":true}`
+	if err := os.WriteFile(target, []byte(changed), 0o640); err != nil {
+		t.Fatalf("change target after preview: %v", err)
+	}
+
+	res, err := uninstall.Apply(stalePlan, uninstall.Options{
+		SourceRoot: e.sourceRoot, Home: e.home, StateRoot: e.stateRoot, Force: true,
+	})
+	if err != nil {
+		t.Fatalf("Apply(stale plan) error = %v", err)
+	}
+	if len(res.Removed) != 0 || len(res.Updated) != 0 {
+		t.Fatalf("result = %+v, want no stale-plan mutation", res)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != changed {
+		t.Fatalf("stale plan changed target to %s", got)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("stale plan pruned metadata")
 	}
 }
 

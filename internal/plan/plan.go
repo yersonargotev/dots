@@ -42,13 +42,16 @@ type Action struct {
 	ResolvedSources []string `json:"-"`
 	// Content is the conservatively composed baseline for a shared json-subset
 	// target. Apply writes or merges it once instead of mutating per contributor.
-	Content      []byte   `json:"-"`
-	Target       string   `json:"target"`
-	Strategy     string   `json:"strategy"`
-	Status       Status   `json:"status"`
-	Reason       string   `json:"reason,omitempty"`
-	MatchingTags []string `json:"matching_tags,omitempty"`
-	Ownership    string   `json:"-"`
+	Content []byte `json:"-"`
+	// PreviousContent is the last recorded dots-owned JSON contribution. It is
+	// used only to revalidate a reversible update at apply time.
+	PreviousContent []byte   `json:"-"`
+	Target          string   `json:"target"`
+	Strategy        string   `json:"strategy"`
+	Status          Status   `json:"status"`
+	Reason          string   `json:"reason,omitempty"`
+	MatchingTags    []string `json:"matching_tags,omitempty"`
+	Ownership       string   `json:"-"`
 }
 
 // Plan is the preview of changes the installer would apply for a Profile.
@@ -159,6 +162,9 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			MatchingTags:   matchingTags,
 			Ownership:      entry.Ownership,
 		}
+		if rec, ok := opts.Metadata.FindByTarget(target); ok && rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+			action.PreviousContent = append([]byte(nil), rec.OwnedContent...)
+		}
 		targetKey := filepath.Clean(target)
 		if index, ok := actionByTarget[targetKey]; ok {
 			existing := &plan.Actions[index]
@@ -180,6 +186,9 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 				return Plan{}, fmt.Errorf("compose shared target %s: %w", targetKey, err)
 			}
 			existing.Content = composed
+			if rec, ok := opts.Metadata.FindByTarget(existing.Target); ok && rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+				existing.PreviousContent = append([]byte(nil), rec.OwnedContent...)
+			}
 			existing.Status, err = composedJSONStatus(*existing, opts.Metadata)
 			if err != nil {
 				return Plan{}, err
@@ -224,6 +233,19 @@ func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
 	}
 	if !trusted {
 		return StatusConflict, nil
+	}
+	if rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+		reconciliation, err := configsubset.ReconcileJSON(targetData, rec.OwnedContent, action.Content)
+		if err != nil {
+			return "", fmt.Errorf("reconcile shared JSON target %s: %w", action.Target, err)
+		}
+		if !reconciliation.Compatible {
+			return StatusConflict, nil
+		}
+		if reconciliation.Changed {
+			return StatusUpdate, nil
+		}
+		return StatusUnchanged, nil
 	}
 	relation, err := configsubset.AnalyzeJSON(targetData, action.Content)
 	if err != nil {
@@ -518,6 +540,27 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
 			if isSubsetOwned(entry.Ownership) && meta.MatchesEntry(target, entry.Source, entry.Strategy) {
 				if entry.Ownership == "json-subset" {
+					if rec, ok := meta.FindByTarget(target); ok && rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+						targetData, readErr := os.ReadFile(target)
+						if readErr != nil {
+							return "", fmt.Errorf("read JSON target %s: %w", target, readErr)
+						}
+						currentData, readErr := os.ReadFile(sourceAbs)
+						if readErr != nil {
+							return "", fmt.Errorf("read source JSON %s: %w", sourceAbs, readErr)
+						}
+						reconciliation, reconcileErr := configsubset.ReconcileJSON(targetData, rec.OwnedContent, currentData)
+						if reconcileErr != nil {
+							return "", fmt.Errorf("reconcile JSON target %s: %w", target, reconcileErr)
+						}
+						if reconciliation.Compatible {
+							if reconciliation.Changed {
+								return StatusUpdate, nil
+							}
+							return StatusUnchanged, nil
+						}
+						return StatusConflict, nil
+					}
 					relation, relationErr := configsubset.AnalyzeJSONFiles(target, sourceAbs)
 					if relationErr != nil {
 						return "", relationErr
