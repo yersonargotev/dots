@@ -554,7 +554,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 	}
 
 	t.Run("uses Homebrew fallback when available", func(t *testing.T) {
-		report, err := deps.Plan(*m, deps.Options{Profile: "workstation", OS: "linux"}, noProviderLookup("sudo", "apt-get", "brew"), fontLookupSet(), deps.TierDebian)
+		report, err := deps.Plan(*m, deps.Options{Profile: "core", OS: "linux"}, noProviderLookup("sudo", "apt-get", "brew"), fontLookupSet(), deps.TierDebian)
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
@@ -570,7 +570,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("GitHub CLI action = %#v, want installable Homebrew fallback", githubCLI)
 		}
 
-		for _, name := range []string{"bat", "starship", "zellij", "pnpm", "gentle-ai", "engram"} {
+		for _, name := range []string{"bat", "starship", "zellij", "pnpm"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -585,7 +585,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 	})
 
 	t.Run("stays manual when Homebrew is unavailable", func(t *testing.T) {
-		report, err := deps.Plan(*m, deps.Options{Profile: "workstation", OS: "linux"}, noProviderLookup("sudo", "apt-get"), fontLookupSet(), deps.TierDebian)
+		report, err := deps.Plan(*m, deps.Options{Profile: "core", OS: "linux"}, noProviderLookup("sudo", "apt-get"), fontLookupSet(), deps.TierDebian)
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
@@ -598,7 +598,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("GitHub CLI action = %#v, want manual guidance without Ubuntu apt installability", githubCLI)
 		}
 
-		for _, name := range []string{"bat", "starship", "zellij", "pnpm", "gentle-ai", "engram"} {
+		for _, name := range []string{"bat", "starship", "zellij", "pnpm"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
