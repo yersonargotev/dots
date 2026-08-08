@@ -56,13 +56,13 @@ Current Profiles:
 
 | Profile | Tags | Intent | Profile Dependencies |
 |---------|------|--------|----------------------|
-| `core` | `core` | Core dotfiles without agent/web/mobile provisioners. | Core Development Baseline via the `core` tag-scoped Dependency Set |
+| `core` | `core` | Core dotfiles and general developer tooling without agent/web/mobile provisioners. | Core Development Baseline plus GitHub CLI and `jq` via the `core` tag-scoped Dependency Set |
 | `desktop` | `desktop` | Desktop-only configuration and integrations; compose with `--profile core` when core dotfiles are desired too. | `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
-| `agents` | `agents` | gentle-ai memory/context setup, cleanup, shared engineering skills, the dots-owned `delegation` skill, and compact dots-owned global rules for supported agents. Add `--profile core` separately for core dotfiles. | `GitHub CLI` via the `agents` tag-scoped Dependency Set |
+| `agents` | `agents` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. Add `--profile core` separately for core dotfiles. | The five Agent CLIs through Rolling User-Local Providers plus shared `jq` |
 | `codex-delegation` | `codex-delegation` | Codex-only delegation skill, generic delegation overlay, and dots-owned native explorer/worker agents without the broader agent baseline. | `npx` via the selected Provisioner Dependency |
 | `web` | `web` | Optional frontend/browser workbench: web design skills plus Chrome DevTools integrations. | `Playwright CLI` via Homebrew formula `playwright-cli` |
 | `mobile` | `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | — |
-| `workstation` | `core`, `desktop`, `agents` | Opinionated composite when core, desktop integrations, and agent setup are desired; web and mobile remain explicit opt-ins. | Core Development Baseline via the `core` tag-scoped Dependency Set; `GitHub CLI` via the `agents` tag-scoped Dependency Set; `Desktop Nerd Font` via Homebrew cask `font-cascadia-code-nf`, detected with `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` |
+| `workstation` | `core`, `desktop`, `agents` | Opinionated composite when core, desktop integrations, and the native Agent CLI Baseline are desired; web and mobile remain explicit opt-ins. | Core Development Baseline, GitHub CLI, shared `jq`, the five Agent CLIs, and the Desktop Nerd Font |
 
 ## Tag-scoped Dependency Sets
 
@@ -74,8 +74,9 @@ tag-scoped Dependency Set when they are useful across shell, editor, Git, or CLI
 workflows, even when a tool has no Managed Entry of its own. This includes
 runtime/package tools such as `fnm`, `rustup`, `go`, `uv`, `pnpm`, and `bun`,
 plus terminal/developer tools such as `fzf`, `zoxide`, `lazygit`, `eza`,
-`ripgrep`, `delta`, `unzip`, and `fd`. The `agents` set adds `GitHub CLI` (`gh`)
-for issue and PR automation. Linux Homebrew fallback is explicit with
+`ripgrep`, `delta`, `unzip`, `fd`, GitHub CLI (`gh`), and `jq`. The `agents`
+set requires Codex, Claude Code, OpenCode, Antigravity, Copilot CLI, and shares
+`jq` intentionally with `core`. Linux Homebrew fallback is explicit with
 `linux_homebrew: true`; GUI apps and fonts stay manual unless they have
 validated Linux support. Node and Rust use constrained built-in toolchain
 bootstrap commands after manager installation:
@@ -175,8 +176,8 @@ Current Managed Entries:
 | `configs/zed/settings.json` | `~/.config/zed/settings.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
-| `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `core` | `darwin`, `linux` | None; owns JSON subset |
-| `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `core` | `darwin`, `linux` | None |
+| `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
+| `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
 | `configs/codex/config.toml` (`codegraph` override: `configs/codex/config-codegraph.toml`) | `~/.codex/config.toml` | `copy` | `agents` | `darwin`, `linux` | None; owns TOML subset; CodeGraph tag adds a Codex SessionStart hook |
 | `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
@@ -184,7 +185,8 @@ Current Managed Entries:
 | `configs/antigravity/mobile-mcp-settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `mobile` | `darwin`, `linux` | None; owns only the Dart/Flutter MCP JSON subset |
 | `configs/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` | `copy` | `mobile` | `darwin` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
 | `configs/vscode/settings.json` | `~/.config/Code/User/settings.json` | `copy` | `mobile` | `linux` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
-| `configs/opencode/mcp.json` | `~/.config/opencode-dots.json` | `symlink` | `web` | `darwin`, `linux` | `opencode` |
+| `configs/opencode/opencode.json` | `~/.config/opencode/opencode.json` | `copy` | `agents` | `darwin`, `linux` | None; owns only the native JSON baseline subset |
+| `configs/opencode/mcp.json` | `~/.config/opencode/opencode.json` | `copy` | `web` | `darwin`, `linux` | `opencode`; contributes the Chrome DevTools JSON subset alongside the native baseline |
 
 ## Dependencies
 
@@ -268,11 +270,14 @@ Current dependency package coverage:
 | `bat` | `bat` | `bat` | User-local / Linuxbrew opt-in/manual | `bat` | `bat` |
 | `neovim` | `nvim` | `neovim` | User-local / Linuxbrew opt-in/manual | `neovim` | `neovim` |
 | `zed` | `zed` | `zed` | Manual | Manual | Manual |
-| `opencode` | `opencode` | Manual | Manual | Manual | Manual |
+| `jq` | `jq` | `jq` | `jq` | `jq` | `jq` |
+| `OpenCode` | `opencode` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
+| `Antigravity` | `agy` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
+| `Copilot CLI` | `copilot` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `gentle-ai` | `gentle-ai` | `gentleman-programming/tap/gentle-ai` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `engram` | `engram` | `gentleman-programming/tap/engram` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
-| `claude` | `claude` | Manual | Manual | Manual | Manual |
-| `codex` | `codex` | Manual | Manual | Manual | Manual |
+| `Claude Code` | `claude` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
+| `Codex` | `codex` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `dart` | `dart` | Manual | Manual; Ubuntu guidance points to Flutter SDK installation because `dart mcp-server` ships with Dart/Flutter tooling, then asks users to verify `dart --version` | Manual | Manual |
 | `curl` | `curl` | `curl` | `curl` | `curl` | `curl` |
 | `npx` | `npx` | Manual | Manual | Manual | Manual |
@@ -408,13 +413,7 @@ Current Provisioners:
 | Tool | Tags | OS | Rendered intent | Dependencies |
 |------|------|----|-----------------|--------------|
 | `zimfw` | `core` | all | Install the ZimFW runtime under `~/.zim` when missing and run `zimfw init -q` using the dots-managed `~/.zimrc`. | `zsh`, `git`, `curl` |
-| `gentle-ai` | `agents` | all | Uninstall `sdd` and `persona` for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot` with `--yes`. | `gentle-ai` |
-| `gentle-ai` | `sdd` | all | Install global stable custom SDD setup in multi-agent mode for `codex`, `claude-code`, `opencode`, `antigravity`, and `vscode-copilot`, without installing persona. Select with `--profile agents --tag sdd`. | `gentle-ai` |
-| `gentle-ai` | `agents` | all | Install global stable custom baseline for `codex` with `engram` and `context7`; persona prompt Regenerated Content is not installed by default. | `gentle-ai`, `engram` |
-| `gentle-ai` | `agents` | all | Install global stable custom baseline for `claude-code` with `engram`, `context7`, and `permissions`; persona prompt Regenerated Content is not installed by default. | `gentle-ai`, `engram` |
-| `gentle-ai` | `agents` | all | Install global stable custom baseline for `antigravity` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt Regenerated Content. | `gentle-ai`, `engram` |
-| `gentle-ai` | `agents` | all | Install global stable custom baseline for `opencode` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt Regenerated Content. | `gentle-ai`, `engram` |
-| `gentle-ai` | `agents` | all | Install global stable custom baseline for `vscode-copilot` with `engram` and `context7` only; no `sdd`, `permissions`, or persona prompt Regenerated Content. | `gentle-ai`, `engram` |
+| `gentle-ai` | `retired-gentle-ai`, `sdd` | all | Retained temporarily for migration compatibility and implementation removal in #371; no production Profile selects these tags. | `gentle-ai`, `engram` |
 | `skills` | `web` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
 | `skills` | `web` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `web` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
@@ -423,25 +422,20 @@ Current Provisioners:
 | `skills` | `mobile` | all | Install `android-cli` from `android/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `claude mcp add --transport stdio dart -- dart mcp-server`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `claude`, `dart` |
 | `codex` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `codex mcp add dart -- dart mcp-server --force-roots-fallback`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `codex`, `dart` |
-| `skills` | `agents` | all | Install the reviewed Matt Pocock engineering skill set from `mattpocock/skills/skills/engineering` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
-| `skills` | `agents` | all | Install `grilling`, `loop-me`, `review`, and `writing-great-skills` from `mattpocock/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skills into agent skill roots. | `npx` |
-| `skills` | `agents`, `codex-delegation` | all | Install the dots-owned `delegation` skill from `yersonargotev/dots/skills/delegation` globally for `codex` through pinned `skills@1.5.12`, copying the skill into the Codex skill root. | `npx` |
-| `skills` | `agents` | all | Install the dots-owned `delegation` skill globally for `claude-code`, `antigravity`, `opencode`, and `github-copilot`; splitting this Provisioner keeps `codex-delegation` narrow while preserving the `agents` Profile behavior. | `npx` |
+| `skills` | `retired-gentle-ai` | all | Retained temporarily for migration compatibility; the `agents` Profile no longer installs third-party engineering skills or delegation. | `npx` |
+| `skills` | `codex-delegation` | all | Install the dots-owned `delegation` skill for Codex only, independently of the Agent CLI Baseline. | `npx` |
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
 | `codegraph` | `codegraph` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. Select with `--tag codegraph`. | `curl` |
 
-After any `gentle-ai` provisioner runs, `dots` converges supported agent
-instruction files by removing `<!-- gentle-ai:trigger-rules -->` and
-`<!-- gentle-ai:persona -->` marker sections, cleaning known legacy markerless
-persona prose, and upserting a compact `<!-- dots:rules -->` block with
-critical dots-owned behavioral rules plus a pointer to the installed
-`delegation` skill. The upstream 4R identifiers referenced by the trigger-rules
-block (`review-readability`, `review-risk`, `review-resilience`, and
-`review-reliability`) are not portable `gentle-ai` skills that the dots-managed
-baseline can install for every supported agent, so keeping the recommendation
-would leave agents pointing at commands that may not exist.
+When `agents` is selected, dots removes only known marker-delimited legacy
+instruction blocks: gentle-ai trigger rules, persona, and Engram protocol, plus
+the dots-owned global rules block. It preserves complete files, unmarked prose,
+Codex delegation markers, authentication, external installations, and historical
+Dependency/Provisioner receipts. The retired Provisioner implementation remains
+temporarily under non-Profile tags for #371 to remove after migration support is
+available.
 
 ## Selection rules
 

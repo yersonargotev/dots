@@ -144,16 +144,48 @@ dependencies:
         linux_homebrew: true
         dnf: fd-find
         pacman: fd
+      - name: GitHub CLI
+        command: gh
+        brew: gh
+        linux_homebrew: true
+      - name: jq
+        command: jq
+        brew: jq
+        apt: jq
+        dnf: jq
+        pacman: jq
   - tags:
       - agents
     os:
       - darwin
       - linux
     dependencies:
-      - name: GitHub CLI
-        command: gh
-        brew: gh
-        linux_homebrew: true
+      - name: Codex
+        command: codex
+        rolling_user_local:
+          recipe: codex
+      - name: Claude Code
+        command: claude
+        rolling_user_local:
+          recipe: claude
+      - name: OpenCode
+        command: opencode
+        rolling_user_local:
+          recipe: opencode
+      - name: Antigravity
+        command: agy
+        rolling_user_local:
+          recipe: antigravity
+      - name: Copilot CLI
+        command: copilot
+        rolling_user_local:
+          recipe: copilot
+      - name: jq
+        command: jq
+        brew: jq
+        apt: jq
+        dnf: jq
+        pacman: jq
 entries:
   - source: configs/zsh/zshrc
     target: ~/.zshrc
@@ -498,7 +530,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - core
+      - agents
     os:
       - darwin
       - linux
@@ -506,7 +538,7 @@ entries:
     target: ~/.claude/statusline-command.sh
     strategy: copy
     tags:
-      - core
+      - agents
     os:
       - darwin
       - linux
@@ -572,13 +604,21 @@ entries:
       - mobile
     os:
       - linux
-  # OpenCode has no MCP install CLI and its global opencode.json is co-owned by
-  # gentle-ai, so dots owns a separate fragment that OpenCode merges (not
-  # replaces) via the OPENCODE_CONFIG env var set in zshenv. This keeps the
-  # chrome-devtools MCP server out of gentle-ai's file.
+  - source: configs/opencode/opencode.json
+    target: ~/.config/opencode/opencode.json
+    strategy: copy
+    ownership: json-subset
+    tags:
+      - agents
+    os:
+      - darwin
+      - linux
+  # The optional web integration contributes a second JSON subset to the same
+  # native global target without replacing baseline or user-owned keys.
   - source: configs/opencode/mcp.json
-    target: ~/.config/opencode-dots.json
-    strategy: symlink
+    target: ~/.config/opencode/opencode.json
+    strategy: copy
+    ownership: json-subset
     tags:
       - web
     os:
@@ -614,7 +654,7 @@ provisioners:
         pacman: curl
   - tool: gentle-ai
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       action: uninstall
       agents:
@@ -667,7 +707,7 @@ provisioners:
             linux_arm64: 62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a
   - tool: gentle-ai
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       scope: global
       channel: stable
@@ -700,7 +740,7 @@ provisioners:
             linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       scope: global
       channel: stable
@@ -734,7 +774,7 @@ provisioners:
             linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       scope: global
       channel: stable
@@ -767,7 +807,7 @@ provisioners:
             linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       scope: global
       channel: stable
@@ -800,7 +840,7 @@ provisioners:
             linux_arm64: 64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d
   - tool: gentle-ai
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       scope: global
       channel: stable
@@ -980,7 +1020,7 @@ provisioners:
           install --profile mobile.
   - tool: skills
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       package: mattpocock/skills/skills/engineering
       agents:
@@ -1011,7 +1051,7 @@ provisioners:
         command: npx
   - tool: skills
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       package: mattpocock/skills
       agents:
@@ -1032,7 +1072,6 @@ provisioners:
         command: npx
   - tool: skills
     tags:
-      - agents
       - codex-delegation
     spec:
       package: yersonargotev/dots/skills/delegation
@@ -1047,7 +1086,7 @@ provisioners:
         command: npx
   - tool: skills
     tags:
-      - agents
+      - retired-gentle-ai
     spec:
       package: yersonargotev/dots/skills/delegation
       agents:

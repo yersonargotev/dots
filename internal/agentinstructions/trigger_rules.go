@@ -158,6 +158,25 @@ func SyncCopilotCLIEngramProtocol(home string) error {
 	return nil
 }
 
+// RetireGentleAIState removes only marker-delimited instruction content whose
+// ownership is explicit. It preserves instruction files, unmarked content, and
+// independently selected Codex delegation guidance.
+func RetireGentleAIState(home string) error {
+	var errs []error
+	for _, path := range instructionPaths(home, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
+		if err := removeMarkedBlocks(
+			path,
+			textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd},
+			textblock.Markers{Start: gentleAIPersonaStart, End: gentleAIPersonaEnd},
+			textblock.Markers{Start: gentleAIEngramStart, End: gentleAIEngramEnd},
+			textblock.Markers{Start: dotsRulesStart, End: dotsRulesEnd},
+		); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // ConvergeCodexDelegation injects opt-in delegation guidance into Codex
 // instructions only. Legacy Spark-specific and argote-owned marker pairs are
 // migrated to the generic dots-owned marker pair during the upsert.
@@ -247,6 +266,10 @@ func addCopilotPortablePolicyTargets(add func(agent, path string), agent, home s
 }
 
 func removeTriggerRules(path string) error {
+	return removeMarkedBlocks(path, textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd})
+}
+
+func removeMarkedBlocks(path string, markers ...textblock.Markers) error {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -258,9 +281,9 @@ func removeTriggerRules(path string) error {
 	if err != nil {
 		return fmt.Errorf("stat agent instructions %s: %w", path, err)
 	}
-	updated, err := textblock.Remove(string(content), textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd})
+	updated, err := textblock.Remove(string(content), markers...)
 	if err != nil {
-		return fmt.Errorf("remove gentle-ai trigger rules from %s: %w", path, err)
+		return fmt.Errorf("remove marked agent instruction blocks from %s: %w", path, err)
 	}
 	if updated == string(content) {
 		return nil

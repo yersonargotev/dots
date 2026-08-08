@@ -522,6 +522,11 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 		}
 	}
 	selectedTags := report.Tags
+	if containsString(selectedTags, "agents") {
+		if cleanupErr := agentinstructions.RetireGentleAIState(home); cleanupErr != nil {
+			return report, errors.Join(err, cleanupErr)
+		}
+	}
 	if containsString(selectedTags, "without-codex-delegation") || containsString(selectedTags, "without-codex-spark-delegation") {
 		if cleanupErr := agentinstructions.RemoveCodexDelegation(home); cleanupErr != nil {
 			return report, errors.Join(err, cleanupErr)

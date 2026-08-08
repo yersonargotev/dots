@@ -721,7 +721,7 @@ func TestRepositoryManifestWebProfileIncludesPlaywrightCLI(t *testing.T) {
 	}
 }
 
-func TestRepositoryManifestAgentsProfileIncludesGitHubCLI(t *testing.T) {
+func TestRepositoryManifestDefinesNativeAgentCLIBaseline(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -730,14 +730,14 @@ func TestRepositoryManifestAgentsProfileIncludesGitHubCLI(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	var agents *manifest.DependencySet
+	sets := make(map[string]*manifest.DependencySet)
 	for i := range got.Dependencies {
 		candidate := &got.Dependencies[i]
-		if hasString(candidate.Tags, "agents") {
-			agents = candidate
-			break
+		for _, tag := range candidate.Tags {
+			sets[tag] = candidate
 		}
 	}
+	agents := sets["agents"]
 	if agents == nil {
 		t.Fatal("repository manifest missing agents dependency set")
 	}
@@ -745,22 +745,65 @@ func TestRepositoryManifestAgentsProfileIncludesGitHubCLI(t *testing.T) {
 		t.Fatalf("agents dependency set OS = %#v, want [darwin linux]", agents.OS)
 	}
 
-	var dep *manifest.Dependency
-	for i := range agents.Dependencies {
-		candidate := &agents.Dependencies[i]
-		if candidate.Name == "GitHub CLI" {
-			dep = candidate
-			break
+	wantAgents := map[string]struct {
+		command string
+		recipe  string
+	}{
+		"Codex":       {command: "codex", recipe: "codex"},
+		"Claude Code": {command: "claude", recipe: "claude"},
+		"OpenCode":    {command: "opencode", recipe: "opencode"},
+		"Antigravity": {command: "agy", recipe: "antigravity"},
+		"Copilot CLI": {command: "copilot", recipe: "copilot"},
+		"jq":          {command: "jq"},
+	}
+	for name, want := range wantAgents {
+		dep := findDependency(agents.Dependencies, name)
+		if dep == nil {
+			t.Errorf("agents dependency set missing %s: %#v", name, agents.Dependencies)
+			continue
+		}
+		if dep.Command != want.command {
+			t.Errorf("agents dependency %s command = %q, want %q", name, dep.Command, want.command)
+		}
+		if want.recipe == "" {
+			continue
+		}
+		if dep.RollingUserLocal == nil || dep.RollingUserLocal.Recipe != want.recipe {
+			t.Errorf("agents dependency %s rolling provider = %#v, want recipe %q", name, dep.RollingUserLocal, want.recipe)
 		}
 	}
-	if dep == nil {
-		t.Fatalf("agents dependency set missing GitHub CLI: %#v", agents.Dependencies)
+	if dep := findDependency(agents.Dependencies, "GitHub CLI"); dep != nil {
+		t.Errorf("agents dependency set includes GitHub CLI: %#v", *dep)
 	}
-	if dep.Command != "gh" || dep.Brew != "gh" || !dep.LinuxHomebrew {
-		t.Fatalf("GitHub CLI dependency = %#v, want command/brew gh with linux_homebrew", *dep)
+
+	core := sets["core"]
+	if core == nil {
+		t.Fatal("repository manifest missing core dependency set")
 	}
-	if dep.Apt != "" || dep.Dnf != "" || dep.Pacman != "" {
-		t.Fatalf("GitHub CLI dependency = %#v, want Homebrew/manual Linux handling until distro setup is modeled", *dep)
+	for _, name := range []string{"GitHub CLI", "jq"} {
+		if dep := findDependency(core.Dependencies, name); dep == nil {
+			t.Errorf("core dependency set missing %s", name)
+		}
+	}
+	githubCLI := findDependency(core.Dependencies, "GitHub CLI")
+	if githubCLI != nil && (githubCLI.Command != "gh" || githubCLI.Brew != "gh" || !githubCLI.LinuxHomebrew) {
+		t.Errorf("GitHub CLI dependency = %#v, want command/brew gh with linux_homebrew", *githubCLI)
+	}
+
+	opencodeEntry := findEntry(got.Entries, "~/.config/opencode/opencode.json")
+	if opencodeEntry == nil {
+		t.Fatal("agents profile missing native OpenCode Managed Entry")
+	}
+	if opencodeEntry.Source != "configs/opencode/opencode.json" || opencodeEntry.Ownership != "json-subset" || !sameStrings(opencodeEntry.Tags, []string{"agents"}) {
+		t.Errorf("OpenCode Managed Entry = %#v, want agents-tagged configs/opencode/opencode.json with JSON Subset Ownership", *opencodeEntry)
+	}
+
+	selected, err := provision.Select(*got, provision.Options{Profile: "agents", OS: "darwin"})
+	if err != nil {
+		t.Fatalf("provision.Select(agents) error = %v", err)
+	}
+	if len(selected) != 0 {
+		t.Errorf("agents selected legacy Provisioners = %#v, want none", selected)
 	}
 }
 
@@ -1037,8 +1080,8 @@ func TestRepositoryManifestIncludesMattPocockEngineeringSkillsProvisioner(t *tes
 	if skills == nil {
 		t.Fatal("repository manifest missing skills provisioner for mattpocock/skills/skills/engineering")
 	}
-	if !hasString(skills.Tags, "agents") {
-		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
+	if !hasString(skills.Tags, "retired-gentle-ai") {
+		t.Errorf("skills provisioner %#v missing retired-gentle-ai tag", skills.Spec)
 	}
 	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
 		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
@@ -1075,8 +1118,8 @@ func TestRepositoryManifestIncludesMattPocockReviewSkillProvisioner(t *testing.T
 	if skills == nil {
 		t.Fatal("repository manifest missing skills provisioner for mattpocock/skills review bundle")
 	}
-	if !hasString(skills.Tags, "agents") {
-		t.Errorf("skills provisioner %#v missing agents tag", skills.Spec)
+	if !hasString(skills.Tags, "retired-gentle-ai") {
+		t.Errorf("skills provisioner %#v missing retired-gentle-ai tag", skills.Spec)
 	}
 	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
 		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
@@ -1132,9 +1175,9 @@ func TestRepositoryManifestScopesDelegationSkillProvisioners(t *testing.T) {
 		t.Errorf("codex-delegation agents = %#v, want [codex]", codexOnly[0].Spec.Agents)
 	}
 
-	agents := delegationProvisioners(selectProvisioners(provision.Options{Profile: "agents", OS: "darwin"}))
-	if len(agents) != 2 {
-		t.Fatalf("agents selected %d delegation provisioners, want 2 scoped provisioners", len(agents))
+	agents := delegationProvisioners(selectProvisioners(provision.Options{Profile: "agents", ExtraTags: []string{"retired-gentle-ai"}, OS: "darwin"}))
+	if len(agents) != 1 {
+		t.Fatalf("retired gentle-ai tag selected %d delegation provisioners, want 1 non-Codex legacy provisioner", len(agents))
 	}
 	var selectedAgents []string
 	for _, skills := range agents {
@@ -1149,11 +1192,11 @@ func TestRepositoryManifestScopesDelegationSkillProvisioners(t *testing.T) {
 			t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
 		}
 	}
-	if !sameStrings(selectedAgents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
-		t.Errorf("agents delegation targets = %#v, want [codex claude-code antigravity opencode github-copilot]", selectedAgents)
+	if !sameStrings(selectedAgents, []string{"claude-code", "antigravity", "opencode", "github-copilot"}) {
+		t.Errorf("retired delegation targets = %#v, want [claude-code antigravity opencode github-copilot]", selectedAgents)
 	}
 
-	combined := delegationProvisioners(selectProvisioners(provision.Options{Profiles: []string{"agents", "codex-delegation"}, OS: "darwin"}))
+	combined := delegationProvisioners(selectProvisioners(provision.Options{Profiles: []string{"agents", "codex-delegation"}, ExtraTags: []string{"retired-gentle-ai"}, OS: "darwin"}))
 	if len(combined) != 2 {
 		t.Fatalf("agents + codex-delegation selected %d delegation provisioners, want the same 2 without duplicate Codex provisioning", len(combined))
 	}
@@ -1216,8 +1259,8 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 		t.Fatal("repository manifest missing gentle-ai vscode-copilot basic install provisioner")
 	}
 	for _, prov := range []*manifest.Provisioner{cleanup, codexInstall, claudeInstall, antigravityInstall, opencodeInstall, copilotInstall} {
-		if !sameStrings(prov.Tags, []string{"agents"}) {
-			t.Fatalf("gentle-ai provisioner tags = %#v, want [agents] so desktop installs do not apply SDD/gentle-dev agent setup", prov.Tags)
+		if !sameStrings(prov.Tags, []string{"retired-gentle-ai"}) {
+			t.Fatalf("gentle-ai provisioner tags = %#v, want [retired-gentle-ai] so production Profiles do not apply retired setup", prov.Tags)
 		}
 	}
 	if cleanup.Spec.Yes != true {
@@ -1284,7 +1327,7 @@ func TestRepositoryManifestIncludesGentleAICleanupBeforeBasicInstall(t *testing.
 	}
 }
 
-func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *testing.T) {
+func TestRepositoryManifestRetiredGentleAIProvisionersRemainOutsideProductionProfiles(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -1303,7 +1346,7 @@ func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *te
 		}
 	}
 
-	agents, err := provision.Build(*got, provision.Options{Profile: "agents", OS: "darwin"})
+	agents, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"retired-gentle-ai"}, OS: "darwin"})
 	if err != nil {
 		t.Fatalf("provision.Build(agents) error = %v", err)
 	}
@@ -1335,7 +1378,7 @@ func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *te
 		}
 	}
 
-	agentsWithSDD, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"sdd"}, OS: "darwin"})
+	agentsWithSDD, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"retired-gentle-ai", "sdd"}, OS: "darwin"})
 	if err != nil {
 		t.Fatalf("provision.Build(agents --tag sdd) error = %v", err)
 	}
@@ -1365,7 +1408,7 @@ func TestRepositoryManifestDesktopProfileDoesNotSelectGentleAIProvisioners(t *te
 		}
 	}
 
-	agentsWithPersona, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"persona"}, OS: "darwin"})
+	agentsWithPersona, err := provision.Build(*got, provision.Options{Profile: "agents", ExtraTags: []string{"retired-gentle-ai", "persona"}, OS: "darwin"})
 	if err != nil {
 		t.Fatalf("provision.Build(agents --tag persona) error = %v", err)
 	}
@@ -2619,6 +2662,24 @@ func hasDependency(deps []manifest.Dependency, want string) bool {
 		}
 	}
 	return false
+}
+
+func findDependency(deps []manifest.Dependency, want string) *manifest.Dependency {
+	for i := range deps {
+		if deps[i].Name == want {
+			return &deps[i]
+		}
+	}
+	return nil
+}
+
+func findEntry(entries []manifest.Entry, target string) *manifest.Entry {
+	for i := range entries {
+		if entries[i].Target == target {
+			return &entries[i]
+		}
+	}
+	return nil
 }
 
 func TestRepositoryManagedConfigsExposeLocalExtensionPoints(t *testing.T) {
