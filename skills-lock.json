@@ -11,7 +11,7 @@
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-security/SKILL.md",
-      "computedHash": "17e084e4af6c8a18a944ce789ae6546dbcceca4a58ab9bf0a2ed6e18c28ec950b"
+      "computedHash": "17e084e4af6c8a18a944ce789ae6546dbcceca4a58ab9bf0a2ed6e18c28ec950"
     },
     "golang-spf13-cobra": {
       "source": "samber/cc-skills-golang",
