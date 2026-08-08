@@ -167,6 +167,20 @@ func TestReconcileJSONRejectsChangedRetiredValue(t *testing.T) {
 	}
 }
 
+func TestReconcileJSONRejectsMissingRetiredObjectKey(t *testing.T) {
+	target := []byte(`{"settings":{"external":true}}`)
+	previous := []byte(`{"settings":{"retired":"old"}}`)
+	current := []byte(`{"settings":{}}`)
+
+	got, err := ReconcileJSON(target, previous, current)
+	if err != nil {
+		t.Fatalf("ReconcileJSON() error = %v", err)
+	}
+	if got.Compatible || got.Changed || got.Content != nil {
+		t.Fatalf("ReconcileJSON() = %#v, want missing retired key to be incompatible", got)
+	}
+}
+
 func TestReconcileJSONRejectsMissingRetiredArrayItem(t *testing.T) {
 	target := []byte(`{"items":["locally-changed"]}`)
 	previous := []byte(`{"items":["old"]}`)
@@ -208,6 +222,19 @@ func TestRemoveJSONSubtractsOnlyOwnedContribution(t *testing.T) {
 
 func TestRemoveJSONRejectsChangedOwnedValue(t *testing.T) {
 	target := []byte(`{"owned":"changed","external":true}`)
+	owned := []byte(`{"owned":"recorded"}`)
+
+	content, changed, empty, compatible, err := RemoveJSON(target, owned)
+	if err != nil {
+		t.Fatalf("RemoveJSON() error = %v", err)
+	}
+	if compatible || changed || empty || content != nil {
+		t.Fatalf("RemoveJSON() = content %s, changed %t, empty %t, compatible %t", content, changed, empty, compatible)
+	}
+}
+
+func TestRemoveJSONRejectsMissingOwnedObjectKey(t *testing.T) {
+	target := []byte(`{"external":true}`)
 	owned := []byte(`{"owned":"recorded"}`)
 
 	content, changed, empty, compatible, err := RemoveJSON(target, owned)

@@ -139,7 +139,7 @@ func removeOwnedJSON(rec state.Record, home string) (applied, deleted bool, err 
 	}
 	leaf, err := os.Lstat(rec.Target)
 	if os.IsNotExist(err) {
-		return true, true, nil
+		return false, false, nil
 	}
 	if err != nil {
 		return false, false, fmt.Errorf("stat owned JSON target %s: %w", rec.Target, err)

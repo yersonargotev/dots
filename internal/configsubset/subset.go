@@ -351,7 +351,7 @@ func reconcileJSONValue(target, previous, current any) jsonMergeResult {
 			currentChild, currentExists := currentObject[key]
 			if !currentExists {
 				if !targetExists {
-					continue
+					return jsonMergeResult{value: target}
 				}
 				removed := subtractJSONValue(targetChild, previousChild)
 				if !removed.compatible {
@@ -453,7 +453,7 @@ func subtractJSONValue(target, owned any) jsonMergeResult {
 		for key, ownedChild := range ownedTyped {
 			targetChild, exists := targetTyped[key]
 			if !exists {
-				continue
+				return jsonMergeResult{value: target}
 			}
 			removed := subtractJSONValue(targetChild, ownedChild)
 			if !removed.compatible {

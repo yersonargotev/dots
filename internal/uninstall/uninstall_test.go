@@ -290,6 +290,30 @@ func TestApplyJSONSubsetForcePreservesChangedOwnedContentAndMetadata(t *testing.
 	}
 }
 
+func TestApplyJSONSubsetPreservesMissingOwnedKeyAndMetadata(t *testing.T) {
+	e := newEnv(t)
+	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
+		`{"owned":"recorded"}`,
+		`{"external":true}`,
+	)
+	e.saveMeta(t)
+
+	res := e.apply(t, uninstall.Options{Force: true})
+	if len(res.Removed) != 0 || len(res.Updated) != 0 {
+		t.Fatalf("result = %+v, want no mutation for missing owned key", res)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read preserved target: %v", err)
+	}
+	if string(got) != `{"external":true}` {
+		t.Fatalf("missing-owned-key target changed to %s", got)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("metadata record pruned despite missing owned key")
+	}
+}
+
 func TestApplyJSONSubsetRevalidatesStaleRemovalBeforeMutation(t *testing.T) {
 	e := newEnv(t)
 	target := e.installOwnedJSON(t, "configs/shared.json", ".config/shared.json",
@@ -458,5 +482,39 @@ func TestApplyDoesNotPruneMissingJSONTargetBehindEscapedParent(t *testing.T) {
 	}
 	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
 		t.Fatal("escaped missing JSON target record should be kept, not pruned")
+	}
+}
+
+func TestApplyDoesNotPruneJSONTargetMissingSincePreview(t *testing.T) {
+	e := newEnv(t)
+	target := filepath.Join(e.home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	e.meta.Entries = append(e.meta.Entries, state.Record{
+		Target:       target,
+		Source:       "configs/shared.json",
+		Strategy:     "copy",
+		Ownership:    "json-subset",
+		OwnedContent: []byte(`{"owned":true}`),
+	})
+	e.saveMeta(t)
+
+	stale := plan.UninstallPlan{Actions: []plan.UninstallAction{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset", Status: plan.UninstallRemove,
+	}}}
+	res, err := uninstall.Apply(stale, uninstall.Options{
+		SourceRoot: e.sourceRoot,
+		Home:       e.home,
+		StateRoot:  e.stateRoot,
+	})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if len(res.Removed) != 0 || len(res.Updated) != 0 {
+		t.Fatalf("result = %+v, want no mutation for target missing since preview", res)
+	}
+	if _, ok := loadMeta(t, e.stateRoot).FindByTarget(target); !ok {
+		t.Fatal("missing JSON target record should be kept, not pruned")
 	}
 }

@@ -488,6 +488,16 @@ func TestBuildJSONSubsetUsesRecordedContributionForReversibleRemoval(t *testing.
 	if action.Status != plan.StatusConflict {
 		t.Fatalf("Status = %q, want conflict for changed retired value", action.Status)
 	}
+
+	if err := os.WriteFile(target, []byte(`{"owned":{"keep":true},"external":"preserve"}`), 0o600); err != nil {
+		t.Fatalf("rewrite target without retired key: %v", err)
+	}
+	action = buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	}, meta)
+	if action.Status != plan.StatusConflict {
+		t.Fatalf("Status = %q, want conflict for missing retired key", action.Status)
+	}
 }
 
 func TestBuildJSONSubsetLegacyMetadataDoesNotAuthorizeRemoval(t *testing.T) {
