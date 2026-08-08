@@ -291,7 +291,7 @@ func TestDeliverySkillIsExplicitThinAdapter(t *testing.T) {
 func TestReadinessProducersRequireAgentBrief(t *testing.T) {
 	root := filepath.Join("..", "..", ".agents", "skills")
 	cases := map[string]string{
-		filepath.Join(root, "triage", "SKILL.md"):              "an Agent Brief is never optional",
+		filepath.Join(root, "triage", "SKILL.md"):              "find the existing `## Agent Brief` comment; create it if absent, otherwise update it in place",
 		filepath.Join(root, "to-prd", "SKILL.md"):              "one complete Agent Brief",
 		filepath.Join(root, "to-issues", "SKILL.md"):           "one complete Agent Brief",
 		filepath.Join(root, "dots-issue-creation", "SKILL.md"): "one complete Agent Brief",
