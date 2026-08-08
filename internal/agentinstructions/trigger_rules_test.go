@@ -214,22 +214,21 @@ func TestRetireGentleAIStateRemovesOnlyOwnedMarkerBlocks(t *testing.T) {
 	}
 }
 
-func TestDelegationWorkflowDocumentsPreflightAndToolLevelConflict(t *testing.T) {
-	workflowPath := filepath.Join("..", "..", "workflows", "dots-development-loop.md")
+func TestDeliveryWorkflowDocumentsDelegationPreflight(t *testing.T) {
+	workflowPath := filepath.Join("..", "..", "workflows", "delivery-issue.md")
 	got, err := os.ReadFile(workflowPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", workflowPath, err)
 	}
 	workflow := string(got)
 	for _, want := range []string{
-		"Starting this workflow counts as repo-level authorization",
+		"explicit trigger plus successful admission authorizes",
 		"tool-level permission required",
 		"`delegation` skill",
 		"Delegation Preflight",
-		"~/.codex/AGENTS.md",
-		"dots:delegation",
-		"dots-explorer.toml",
-		"dots-worker.toml",
+		"docs/agents/delegation.md",
+		"Subagents never change labels",
+		"Independent review remains mandatory",
 	} {
 		if !strings.Contains(workflow, want) {
 			t.Fatalf("workflow delegation docs missing %q", want)
@@ -252,6 +251,58 @@ func TestDelegationWorkflowDocumentsPreflightAndToolLevelConflict(t *testing.T) 
 	} {
 		if !strings.Contains(delegationDoc, want) {
 			t.Fatalf("delegation docs missing %q", want)
+		}
+	}
+}
+
+func TestDeliverySkillIsExplicitThinAdapter(t *testing.T) {
+	root := filepath.Join("..", "..")
+	skillPath := filepath.Join(root, ".agents", "skills", "delivery-issue", "SKILL.md")
+	got, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", skillPath, err)
+	}
+	content := string(got)
+	for _, want := range []string{
+		"name: delivery-issue",
+		"disable-model-invocation: true",
+		"<issue-number-or-url>",
+		"workflows/delivery-issue.md",
+		"normative workflow specification",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("delivery skill missing %q", want)
+		}
+	}
+
+	linkPath := filepath.Join(root, ".claude", "skills", "delivery-issue")
+	if target, err := os.Readlink(linkPath); err != nil || target != "../../.agents/skills/delivery-issue" {
+		t.Fatalf("delivery skill link = %q, %v", target, err)
+	}
+
+	for _, legacy := range []string{"dots-pr-creation", "dots-pr-fast-path"} {
+		path := filepath.Join(root, ".agents", "skills", legacy)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("legacy skill %s should be absent; stat err = %v", legacy, err)
+		}
+	}
+}
+
+func TestReadinessProducersRequireAgentBrief(t *testing.T) {
+	root := filepath.Join("..", "..", ".agents", "skills")
+	cases := map[string]string{
+		filepath.Join(root, "triage", "SKILL.md"):              "find the existing `## Agent Brief` comment; create it if absent, otherwise update it in place",
+		filepath.Join(root, "to-prd", "SKILL.md"):              "one complete Agent Brief",
+		filepath.Join(root, "to-issues", "SKILL.md"):           "one complete Agent Brief",
+		filepath.Join(root, "dots-issue-creation", "SKILL.md"): "one complete Agent Brief",
+	}
+	for path, want := range cases {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if !strings.Contains(string(got), want) {
+			t.Fatalf("readiness producer %s missing %q", path, want)
 		}
 	}
 }

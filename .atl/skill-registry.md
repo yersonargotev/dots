@@ -2,7 +2,7 @@
 
 <!-- Generated skill registry. -->
 
-Last updated: 2026-06-24
+Last updated: 2026-08-07
 
 ## Sources scanned
 
@@ -68,6 +68,7 @@ Last updated: 2026-06-24
 | `comment-writer` | Write warm, direct collaboration comments. Trigger: PR feedback, issue replies, reviews, Slack messages, or GitHub comments. | user | `/Users/argote/.agents/skills/comment-writer/SKILL.md` |
 | `debug-optimize-lcp` | Guides debugging and optimizing Largest Contentful Paint (LCP) using Chrome DevTools MCP tools. Use this skill whenever the user asks about LCP performance, slow page loads, Core Web Vitals optimization, or wants to understand why their page's main content takes too long to appear. Also use when the user mentions "largest contentful paint", "page load speed", "CWV", or wants to improve how fast their hero image or main content renders. | user | `/Users/argote/.codex/skills/debug-optimize-lcp/SKILL.md` |
 | `debugging-hermes-tui-commands` | Debug Hermes TUI slash commands: Python, gateway, Ink UI. | user | `/Users/argote/.hermes/skills/software-development/debugging-hermes-tui-commands/SKILL.md` |
+| `delivery-issue` | Delivers one approved dots GitHub issue through implementation, validation, independent review, squash merge, and green post-merge CI. Use only when the user explicitly invokes delivery-issue with one issue number or same-repository issue URL. | project | `/Users/argote/Documents/dev/yersonargotev/dots/.agents/skills/delivery-issue/SKILL.md` |
 | `deploy-to-vercel` | Deploy applications and websites to Vercel. Use when the user requests deployment actions like "deploy my app", "deploy and give me the link", "push this live", or "create a preview deployment". | user | `/Users/argote/.agents/skills/deploy-to-vercel/SKILL.md` |
 | `design-md` | Author/validate/export Google's DESIGN.md token spec files. | user | `/Users/argote/.hermes/skills/creative/design-md/SKILL.md` |
 | `diagnose` | Disciplined diagnosis loop for hard bugs and performance regressions. Reproduce → minimise → hypothesise → instrument → fix → regression-test. Use when user says "diagnose this" / "debug this", reports a bug, says something is broken/throwing/failing, or describes a performance regression. | project | `/Users/argote/Documents/dev/yersonargotev/dots/.agents/skills/diagnose/SKILL.md` |
@@ -76,8 +77,6 @@ Last updated: 2026-06-24
 | `dogfood` | Exploratory QA of web apps: find bugs, evidence, reports. | user | `/Users/argote/.hermes/skills/dogfood/SKILL.md` |
 | `domain-modeling` | Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model. | user | `/Users/argote/.agents/skills/domain-modeling/SKILL.md` |
 | `dots-issue-creation` | Create one or more GitHub Issues for the dots repository using its real templates, labels, and agent-ready workflow. Use when creating dots issues, linking work before PRs, converting plans into GitHub issues, or publishing tracer-bullet implementation slices for yersonargotev/dots. | project | `/Users/argote/Documents/dev/yersonargotev/dots/.agents/skills/dots-issue-creation/SKILL.md` |
-| `dots-pr-creation` | Create pull requests for the dots repository using its issue-first workflow, labels, template, validation, and dotfiles safety rules. Use when opening, preparing, or reviewing a PR for yersonargotev/dots, especially after implementing an issue or before running branch-pr. | project | `/Users/argote/Documents/dev/yersonargotev/dots/.agents/skills/dots-pr-creation/SKILL.md` |
-| `dots-pr-fast-path` | Compact issue-first PR workflow for small or already-implemented changes in yersonargotev/dots. Use when shipping a focused dots change needs duplicate search, issue linkage, validation, commit, PR, and CI with minimal context/output. | project | `/Users/argote/Documents/dev/yersonargotev/dots/.agents/skills/dots-pr-fast-path/SKILL.md` |
 | `dots-release` | Release workflow for the dots repository. Use when asked to publish a new dots release, create or verify a v0.x tag, clean up a merged release branch, inspect release workflow status, verify GitHub Release assets, or confirm the Homebrew tap formula after a release. | project | `/Users/argote/Documents/dev/yersonargotev/dots/.agents/skills/dots-release/SKILL.md` |
 | `dspy` | DSPy: declarative LM programs, auto-optimize prompts, RAG. | user | `/Users/argote/.hermes/skills/mlops/research/dspy/SKILL.md` |
 | `email-and-password-best-practices` | Configure email verification, implement password reset flows, set password policies, and customise hashing algorithms for Better Auth email/password authentication. Use when users need to set up login, sign-in, sign-up, credential authentication, or password security with Better Auth. | user | `/Users/argote/.agents/skills/email-and-password-best-practices/SKILL.md` |

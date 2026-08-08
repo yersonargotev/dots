@@ -29,7 +29,7 @@ Five **state** roles:
 
 - `needs-triage` — maintainer needs to evaluate
 - `needs-info` — waiting on reporter for more information
-- `ready-for-agent` — fully specified, ready for an AFK agent
+- `ready-for-agent` — fully specified with exactly one valid Agent Brief, ready for an AFK agent
 - `ready-for-human` — needs human implementation
 - `wontfix` — will not be actioned
 
@@ -69,7 +69,7 @@ Show counts and a one-line summary per issue. Let the maintainer pick.
 4. **Grill (if needed).** If the issue needs fleshing out, run a `/grill-with-docs` session.
 
 5. **Apply the outcome:**
-   - `ready-for-agent` — post an agent brief comment ([AGENT-BRIEF.md](AGENT-BRIEF.md)).
+   - `ready-for-agent` — find the existing `## Agent Brief` comment; create it if absent, otherwise update it in place. Verify it is the issue's only complete Agent Brief ([AGENT-BRIEF.md](AGENT-BRIEF.md)), then apply the label.
    - `ready-for-human` — same structure as an agent brief, but note why it can't be delegated (judgment calls, external access, design decisions, manual testing).
    - `needs-info` — post triage notes (template below).
    - `wontfix` (bug) — polite explanation, then close.
@@ -78,7 +78,11 @@ Show counts and a one-line summary per issue. Let the maintainer pick.
 
 ## Quick state override
 
-If the maintainer says "move #42 to ready-for-agent", trust them and apply the role directly. Confirm what you're about to do (role changes, comment, close), then act. Skip grilling. If moving to `ready-for-agent` without a grilling session, ask whether they want to write an agent brief.
+If the maintainer says "move #42 to ready-for-agent", trust the requested state
+but still enforce its contract. Skip grilling, create or update exactly one
+complete Agent Brief, then apply `ready-for-agent`. If the available context
+cannot produce a complete brief, keep `needs-triage` and report the concrete
+gaps; an Agent Brief is never optional.
 
 ## Needs-info template
 

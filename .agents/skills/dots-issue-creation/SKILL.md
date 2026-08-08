@@ -22,11 +22,11 @@ Read these when context is stale or the workflow may have changed:
 - The generic `issue-creation` skill is only a rough reference here: this repo uses `needs-triage` and `ready-for-agent`, not `status:needs-review` / `status:approved`.
 - `gh issue create --template ... --body-file ...` does not work. Use a template-shaped body file plus explicit labels.
 
-## Fast path
+## Delivery handoff
 
-Use `dots-pr-fast-path` when a small change is already implemented and only
-needs the standard issue + commit + PR path. Use this full issue workflow for
-planning, multiple slices, unclear requirements, or duplicate-heavy triage.
+Every issue handed to `delivery-issue` requires exactly one complete Agent Brief
+before it receives `ready-for-agent`. There is no delivery fast path around that
+contract. Use the format in `../triage/AGENT-BRIEF.md`.
 
 ## Workflow
 
@@ -42,8 +42,11 @@ planning, multiple slices, unclear requirements, or duplicate-heavy triage.
    - Sliced plan: multiple PRD-style vertical slices.
 3. Draft a body using the headings in [REFERENCE.md](REFERENCE.md).
 4. Create with `--body-file` and explicit labels.
-5. Add `ready-for-agent` only when the issue is sufficiently specified for an agent to implement without extra product context.
-6. Return issue URL(s), labels, duplicate search result, and dependency notes.
+5. Create new issues with `needs-triage`. For agent-ready work, post exactly one
+   complete Agent Brief, then replace `needs-triage` with `ready-for-agent`.
+   If the brief is incomplete, leave the issue in `needs-triage`.
+6. Return issue URL(s), labels, Agent Brief evidence, duplicate search result,
+   and dependency notes.
 
 ## CLI patterns
 
@@ -65,7 +68,10 @@ Agent-ready PRD or approved implementation issue:
 ```bash
 gh issue create --title "feat(scope): concise outcome" \
   --body-file /tmp/dots-issue.md \
-  --label needs-triage --label ready-for-agent
+  --label enhancement --label needs-triage
+
+gh issue comment <N> --body-file /tmp/dots-agent-brief.md
+gh issue edit <N> --remove-label needs-triage --add-label ready-for-agent
 ```
 
 ## Slicing rules

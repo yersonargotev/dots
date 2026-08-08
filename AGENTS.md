@@ -110,6 +110,11 @@ network.
 - **Triage labels.** This repo uses `needs-triage`, `needs-info`, `ready-for-agent`,
   `ready-for-human`, and `wontfix`. See
   [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md).
+- **Delivery.** Explicitly invoke `delivery-issue` with one approved issue to
+  take it through implementation, independent review, squash merge, and green
+  post-merge CI. [`workflows/delivery-issue.md`](workflows/delivery-issue.md) is
+  the sole delivery workflow source of truth; there is no fast path around the
+  Agent Brief contract.
 - **Conventional Commits.** Commit messages follow `type(scope): summary`
   (e.g. `feat(cli): ...`, `fix(doctor): ...`, `docs(adr): ...`).
 - **Pull requests.** Use [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
