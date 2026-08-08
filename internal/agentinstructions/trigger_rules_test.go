@@ -314,3 +314,32 @@ func TestReadinessProducerRequiresRepositoryAgentBrief(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueCreationDocumentsNativeRelationshipsAndReadiness(t *testing.T) {
+	root := filepath.Join("..", "..")
+	cases := map[string][]string{
+		filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md"): {
+			"--parent <parent-number>",
+			"--add-sub-issue <child-number>",
+			"--add-blocked-by <blocker-number>",
+			"parent,subIssues,blockedBy,blocking,labels,comments",
+			"`to-spec` or `to-tickets`",
+		},
+		filepath.Join(root, "docs", "agents", "triage-labels.md"): {
+			"Fully specified with one complete Agent Brief, but with an open native blocker",
+			"Sliced tracking parent",
+			"Do not use `needs-triage` as a blocked-work label",
+		},
+	}
+	for path, wants := range cases {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for _, want := range wants {
+			if !strings.Contains(string(got), want) {
+				t.Fatalf("native relationship contract %s missing %q", path, want)
+			}
+		}
+	}
+}

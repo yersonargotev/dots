@@ -11,6 +11,10 @@ This repository tracks work in GitHub Issues.
 ## Workflow
 
 - Product requirements and implementation-ready work should be published as GitHub Issues.
+- Sliced work uses GitHub's native parent/sub-issue and blocking relationships
+  whenever the supported CLI exposes them. Textual relationship sections are
+  only readable mirrors or an explicitly reported unsupported-platform
+  fallback, never the source of truth.
 - `dots-issue-creation` is the sole producer of `ready-for-agent` issues. It applies the label only after creating or updating exactly one complete Agent Brief.
 - `ready-for-agent` requires both the label and exactly one complete, internally consistent Agent Brief. See [`docs/agents/agent-brief.md`](agent-brief.md) for the repository-owned contract.
 - [`workflows/delivery-issue.md`](../../workflows/delivery-issue.md) is the single source of truth for taking one approved issue through squash merge and green post-merge CI on `main`. There is no separate delivery fast path.
@@ -18,6 +22,9 @@ This repository tracks work in GitHub Issues.
 - Public issue templates intentionally do not auto-apply labels; maintainers/admins apply triage labels after creation.
 - The `Maintainer governance` workflow removes issue/PR labels added by non-maintainers and reopens PRs closed without merge by non-maintainers.
 - Use the GitHub CLI (`gh`) when creating or updating issues from automation.
+- Generic planning skills such as `to-spec` and `to-tickets` may supply issue
+  content or slices, but must defer to `dots-issue-creation` for native
+  relationships, Agent Briefs, and readiness labels.
 - Authenticate before agent work that touches GitHub: run `gh auth login` for an interactive workstation, or export `GH_TOKEN`/`GITHUB_TOKEN` in non-interactive environments.
 
 ## Notes
