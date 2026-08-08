@@ -22,8 +22,8 @@ const (
 	// UninstallSkip means there is nothing to remove: a copied target that is
 	// already absent.
 	UninstallSkip UninstallStatus = "skip"
-	// UninstallModified means a copied target's content drifted from the recorded
-	// hash, so it is preserved unless the caller forces removal.
+	// UninstallModified means recorded content drifted. Only explicitly
+	// whole-owned targets may become removable when the caller forces removal.
 	UninstallModified UninstallStatus = "modified"
 	// UninstallNotOwned means the target no longer matches what dots recorded (a
 	// symlink that is missing or points elsewhere, or a path whose type changed),
@@ -51,7 +51,7 @@ type UninstallPlan struct {
 // would delete: an owned target, or a drifted copy that --force would remove.
 func (p UninstallPlan) Removable() bool {
 	for _, a := range p.Actions {
-		if a.Status == UninstallRemove || a.Status == UninstallModified {
+		if a.Status == UninstallRemove || (a.Status == UninstallModified && a.ForceRemovable) {
 			return true
 		}
 	}

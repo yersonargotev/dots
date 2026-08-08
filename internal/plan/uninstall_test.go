@@ -67,6 +67,29 @@ func TestBuildUninstallClassifiesChangedPartialJSONAsModified(t *testing.T) {
 	if len(p.Actions) != 1 || p.Actions[0].Status != plan.UninstallModified {
 		t.Fatalf("action = %+v, want modified partial ownership", p.Actions)
 	}
+	if p.Removable() {
+		t.Fatal("Removable() = true, want false for modified partial ownership")
+	}
+}
+
+func TestUninstallPlanRemovableRequiresExplicitWholeOwnershipForModifiedTarget(t *testing.T) {
+	tests := []struct {
+		name string
+		plan plan.UninstallPlan
+		want bool
+	}{
+		{name: "owned remove", plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{Status: plan.UninstallRemove}}}, want: true},
+		{name: "whole modified", plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{Status: plan.UninstallModified, ForceRemovable: true}}}, want: true},
+		{name: "legacy modified", plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{Status: plan.UninstallModified}}}, want: false},
+		{name: "partial modified", plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{Status: plan.UninstallModified, Ownership: "json-subset"}}}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.plan.Removable(); got != tt.want {
+				t.Fatalf("Removable() = %t, want %t", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestValidateBackupableTargetAcceptsFileDirAndSymlink(t *testing.T) {
