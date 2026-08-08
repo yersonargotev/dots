@@ -48,7 +48,7 @@ func RefPreview(dir, ref string) (Update, error) {
 	if _, err := run(dir, "fetch", "--depth", "1", "origin", ref); err != nil {
 		return Update{}, fmt.Errorf("fetch Installed Repository ref %s: %w", ref, err)
 	}
-	newRev, err := revision(dir, "FETCH_HEAD")
+	newRev, err := resolveRevision(dir, "FETCH_HEAD")
 	if err != nil {
 		return Update{}, fmt.Errorf("resolve Installed Repository ref %s: %w", ref, err)
 	}
@@ -119,6 +119,17 @@ func ReadFileAtRevision(dir, revision, filePath string) ([]byte, error) {
 		return nil, fmt.Errorf("read %s at %s: %w", cleanPath, revision, err)
 	}
 	return []byte(content), nil
+}
+
+// ResolveRevision resolves one full or abbreviated hexadecimal commit name.
+// Ambiguous or missing abbreviations fail instead of authorizing callers to
+// treat a textual prefix as repository provenance.
+func ResolveRevision(dir, revision string) (string, error) {
+	revision = strings.TrimSpace(revision)
+	if !validRevision(revision) {
+		return "", fmt.Errorf("resolve repository revision: invalid revision %q", revision)
+	}
+	return resolveRevision(dir, revision)
 }
 
 // ExportRevision materializes a read-only snapshot of one resolved revision in
@@ -208,7 +219,7 @@ func validRevision(revision string) bool {
 	return revision != "" && strings.Trim(revision, "0123456789abcdefABCDEF") == ""
 }
 
-func revision(dir, ref string) (string, error) {
+func resolveRevision(dir, ref string) (string, error) {
 	out, err := run(dir, "rev-parse", "--verify", ref+"^{commit}")
 	if err != nil {
 		return "", err

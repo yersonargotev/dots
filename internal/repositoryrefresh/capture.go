@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -68,7 +67,7 @@ func CaptureLegacyTargets(oldManifest manifest.Manifest, meta state.Metadata, so
 }
 
 func provenanceMatches(provenance state.Provenance, sourceRoot, revision string) bool {
-	if provenance.SourceRoot == "" || provenance.SourceRevision == "" || revision == "" {
+	if provenance.SourceRoot == "" || len(provenance.SourceRevision) < 7 || revision == "" {
 		return false
 	}
 	wantRoot, err := filepath.Abs(sourceRoot)
@@ -79,7 +78,12 @@ func provenanceMatches(provenance state.Provenance, sourceRoot, revision string)
 	if err != nil || filepath.Clean(gotRoot) != filepath.Clean(wantRoot) {
 		return false
 	}
-	return strings.HasPrefix(revision, provenance.SourceRevision)
+	recordedRevision, err := gitrepo.ResolveRevision(sourceRoot, provenance.SourceRevision)
+	if err != nil {
+		return false
+	}
+	currentRevision, err := gitrepo.ResolveRevision(sourceRoot, revision)
+	return err == nil && recordedRevision == currentRevision
 }
 
 func declaredLegacySymlink(m manifest.Manifest, rec state.Record, sourceRoot, home string) (target, source string, ok bool, err error) {

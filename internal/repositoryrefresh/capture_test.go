@@ -56,6 +56,15 @@ func TestCaptureLegacyTargetsRequiresMatchingProvenanceAndDeclaredSymlink(t *tes
 	if len(captures) != 0 {
 		t.Fatalf("stale provenance captured targets: %#v", captures)
 	}
+
+	meta.Provenance.SourceRevision = revision[:1]
+	captures, err = repositoryrefresh.CaptureLegacyTargets(m, meta, sourceRoot, home, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(captures) != 0 {
+		t.Fatalf("ambiguous short provenance captured targets: %#v", captures)
+	}
 }
 
 func runGit(t *testing.T, dir string, args ...string) {
