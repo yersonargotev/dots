@@ -236,8 +236,6 @@ Plans can therefore perform read-only network access, while a present command pe
 
 `neovim` uses the upstream multi-file Linux tarball through its User-Local Provider. The bundle is extracted under `~/.local/opt/nvim/<version>` and `~/.local/bin/nvim` points at the bundled executable.
 
-`gentle-ai` and `engram` use pinned upstream GitHub release tarballs through their User-Local Providers. They are Dependency providers only: they make the reviewed executables available for later probes, while Provisioners still own agent configuration changes. These providers do not run `npm install -g`, use `npx`, require `sudo`, or execute arbitrary package scripts.
-
 Current dependency package coverage:
 
 | Dependency | Detection | macOS/Homebrew | Debian/Ubuntu | Fedora | Arch |
@@ -274,8 +272,6 @@ Current dependency package coverage:
 | `OpenCode` | `opencode` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `Antigravity` | `agy` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `Copilot CLI` | `copilot` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
-| `gentle-ai` | `gentle-ai` | `gentleman-programming/tap/gentle-ai` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
-| `engram` | `engram` | `gentleman-programming/tap/engram` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `Claude Code` | `claude` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `Codex` | `codex` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `dart` | `dart` | Manual | Manual; Ubuntu guidance points to Flutter SDK installation because `dart mcp-server` ships with Dart/Flutter tooling, then asks users to verify `dart --version` | Manual | Manual |
@@ -284,17 +280,13 @@ Current dependency package coverage:
 
 Reviewed Linuxbrew opt-ins include CLI/runtime tools whose Homebrew formulas are
 expected to work on Linuxbrew: Starship, the core runtimes/package tools, GitHub CLI,
-Playwright CLI, lazygit, delta, fd, atuin, gentle-ai, and engram. On Linux, gentle-ai and engram also
-have reviewed User-Local Providers from pinned release tarballs, so Linuxbrew is
-only a fallback when that opt-in is absent or unavailable. Brew-only GUI apps such
+Playwright CLI, lazygit, delta, fd, and atuin. Brew-only GUI apps such
 as Ghostty and Zed remain manual on Linux.
 
-Homebrew dependencies declared with a fully-qualified tap formula such as
-`gentleman-programming/tap/gentle-ai` may require explicit Homebrew Tap Trust on
-fresh macOS machines. `dots deps plan` and `dots deps install --dry-run` surface
-the formula-level trust command, for example
-`brew trust --formula gentleman-programming/tap/gentle-ai`, but `dots` does not
-run trust commands automatically.
+Homebrew dependencies declared with a fully-qualified tap formula may require
+explicit Homebrew Tap Trust on fresh macOS machines. `dots deps plan` and
+`dots deps install --dry-run` surface the formula-level trust command, but
+`dots` does not run trust commands automatically.
 
 ## Provisioners
 
@@ -306,24 +298,11 @@ reuse user-local tools without requiring sudo in non-interactive runs.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
-| `tool` | Yes | `gentle-ai`, `claude`, `codex`, `codegraph`, `skills`, or `zimfw`. |
+| `tool` | Yes | `claude`, `codex`, `codegraph`, `skills`, or `zimfw`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `spec` | Yes | Tool-specific declaration. Each spec must speak exactly one tool dialect. |
 | `dependencies` | No | Dependencies required before running the Provisioner. |
-
-### `gentle-ai` spec
-
-Supported fields: `action`, `scope`, `channel`, `persona`, `preset`, `sdd-mode`,
-`agents`, `components`, `skills`, and `yes`.
-
-Constraints:
-
-- `action` may be `install`, `uninstall`, or omitted. Omitted defaults to `install`.
-- `persona` may be `gentleman` or `neutral`.
-- `yes` is only valid with `action: uninstall`.
-- `uninstall` must not set install-only fields: `scope`, `channel`, `persona`,
-  `preset`, `sdd-mode`, or `skills`.
 
 ### `claude` spec
 
@@ -333,7 +312,8 @@ Supported shapes:
 - `plugin: <name>` plus `from: <marketplace>` renders a plugin install.
 - `mcp: <name>` plus `command: [...]` renders a stdio MCP server registration.
 
-Claude specs must not mix gentle-ai fields, skills fields, or multiple Claude shapes. `env` remains Codex-only.
+Claude specs must not mix shared CodeGraph/skills fields, skills-specific fields,
+or multiple Claude shapes. `env` remains Codex-only.
 
 ### `codex` spec
 
@@ -344,7 +324,7 @@ Constraints:
 - `mcp` is required.
 - `command` must contain at least one non-empty argument.
 - `env` keys must not be empty.
-- Codex specs must not mix gentle-ai or Claude fields.
+- Codex specs must not mix shared CodeGraph/skills fields or Claude fields.
 
 ### `codegraph` spec
 
@@ -368,8 +348,8 @@ Constraints:
 - `scope`, when set, must be `global` or `local` and renders `--location`.
 - `yes` is required and must be `true`; it renders CodeGraph's non-interactive
   `--yes` flag.
-- CodeGraph specs must not mix gentle-ai action/channel/persona/preset/sdd,
-  Claude plugin fields, MCP fields, or skills.sh fields.
+- CodeGraph specs must not mix skill names, Claude plugin fields, MCP fields, or
+  skills.sh-specific fields.
 
 ### `skills` spec
 
@@ -390,8 +370,8 @@ Constraints:
 - `global` is required and must be `true`; local skills installs are not modeled
   yet because they write relative to the process working directory.
 - `copy` renders `--copy`.
-- Skills specs must not mix gentle-ai scalar/action fields, Claude fields, or
-  Codex MCP fields.
+- Skills specs must not mix CodeGraph scalar fields, Claude fields, or Codex MCP
+  fields.
 
 ### `zimfw` spec
 
@@ -405,7 +385,7 @@ runtime stays under `~/.zim/`; `~/.zimrc` remains the managed Source of Truth.
 Constraints:
 
 - `yes` is required and must be `true`.
-- ZimFW specs must not mix gentle-ai fields, Claude fields, MCP fields, or
+- ZimFW specs must not mix CodeGraph/skills fields, Claude fields, MCP fields, or
   skills.sh fields.
 
 Current Provisioners:
@@ -413,7 +393,6 @@ Current Provisioners:
 | Tool | Tags | OS | Rendered intent | Dependencies |
 |------|------|----|-----------------|--------------|
 | `zimfw` | `core` | all | Install the ZimFW runtime under `~/.zim` when missing and run `zimfw init -q` using the dots-managed `~/.zimrc`. | `zsh`, `git`, `curl` |
-| `gentle-ai` | `retired-gentle-ai`, `sdd` | all | Retained temporarily for migration compatibility and implementation removal in #371; no production Profile selects these tags. | `gentle-ai`, `engram` |
 | `skills` | `web` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
 | `skills` | `web` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `web` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
@@ -422,20 +401,11 @@ Current Provisioners:
 | `skills` | `mobile` | all | Install `android-cli` from `android/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `claude mcp add --transport stdio dart -- dart mcp-server`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `claude`, `dart` |
 | `codex` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `codex mcp add dart -- dart mcp-server --force-roots-fallback`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `codex`, `dart` |
-| `skills` | `retired-gentle-ai` | all | Retained temporarily for migration compatibility; the `agents` Profile no longer installs third-party engineering skills or delegation. | `npx` |
 | `skills` | `codex-delegation` | all | Install the dots-owned `delegation` skill for Codex only, independently of the Agent CLI Baseline. | `npx` |
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
 | `codegraph` | `codegraph` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. Select with `--tag codegraph`. | `curl` |
-
-When `agents` is selected, dots removes only known marker-delimited legacy
-instruction blocks: gentle-ai trigger rules, persona, and Engram protocol, plus
-the dots-owned global rules block. It preserves complete files, unmarked prose,
-Codex delegation markers, authentication, external installations, and historical
-Dependency/Provisioner receipts. The retired Provisioner implementation remains
-temporarily under non-Profile tags for #371 to remove after migration support is
-available.
 
 ## Selection rules
 

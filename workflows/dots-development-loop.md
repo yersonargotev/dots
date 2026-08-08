@@ -159,8 +159,8 @@ Goal: produce the smallest correct diff for the approved issue scope.
    - remove the
      `<!-- dots:delegation -->...<!-- /dots:delegation -->`
      block and the two dots-owned native agent files during cleanup;
-   - preserve `dots:rules`, Engram, CodeGraph, Codex config, user-owned custom
-     agents, and the rest of the agent baseline;
+   - preserve CodeGraph, Codex config, user-owned custom agents, and the rest of
+     the native agent baseline;
    - if both `codex-delegation` and `without-codex-delegation` are
      selected, `without-*` wins because explicit exclusion expresses the desired
      final state.

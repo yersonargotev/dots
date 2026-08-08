@@ -14,7 +14,7 @@ func healthyReport() Report {
 		Platform:      Platform{Supported: true},
 		Dependencies:  deps.CheckReport{Results: []deps.Result{{Name: "git", Present: true}}},
 		Configuration: status.Report{Entries: []status.Entry{{State: status.StateOK}}},
-		Provisioners:  provision.CheckReport{Items: []provision.Readiness{{Tool: "gentle-ai"}}},
+		Provisioners:  provision.CheckReport{Items: []provision.Readiness{{Tool: "claude"}}},
 		SecretScan:    SecretReport{},
 	}
 }

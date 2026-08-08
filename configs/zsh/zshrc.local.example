@@ -5,7 +5,6 @@
 # paths here.
 
 # --- Secrets ---------------------------------------------------------------
-# export ENGRAM_CLOUD_TOKEN="your-token-here"
 
 # --- Machine-specific PATH -------------------------------------------------
 # export PATH="${HOME}/.antigravity/antigravity/bin:${PATH}"

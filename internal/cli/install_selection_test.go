@@ -88,8 +88,7 @@ func TestInstallFailurePreservesPreviousInstalledSelection(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nexit 7\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 7\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	previous := state.InstalledSelection{
@@ -117,15 +116,12 @@ entries:
     strategy: symlink
     tags: [core]
 provisioners:
-  - tool: gentle-ai
+  - tool: claude
     tags: [core]
     spec:
-      scope: global
-      persona: neutral
-      agents: [codex]
+      marketplace: example/tools
     dependencies:
-      - name: gentle-ai
-      - name: engram
+      - name: claude
 `)
 
 	cmd := cli.NewRootCommand()
@@ -302,12 +298,10 @@ entries:
       - name: must-not-run
         command: definitely-missing-profile-guard-probe
 provisioners:
-  - tool: gentle-ai
+  - tool: claude
     tags: [core]
     spec:
-      scope: global
-      persona: neutral
-      agents: [codex]
+      marketplace: example/tools
 `)
 
 	cmd := cli.NewRootCommand()

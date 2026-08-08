@@ -10,8 +10,8 @@ import (
 
 func TestSkippedProvisioners(t *testing.T) {
 	coreProv := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global"},
+		Tool: "zimfw", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Yes: true},
 	}
 	desktopMarketplace := manifest.Provisioner{
 		Tool: "claude", Tags: []string{"desktop"}, OS: []string{"darwin", "linux"},
@@ -83,8 +83,8 @@ func TestSkippedProvisioners(t *testing.T) {
 // promises more than S delivers when no single profile is a superset.
 func TestSkippedProvisionersCountReflectsSuggestedCoverage(t *testing.T) {
 	coreProv := manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"},
-		Spec: manifest.ProvisionerSpec{Scope: "global"},
+		Tool: "zimfw", Tags: []string{"core"},
+		Spec: manifest.ProvisionerSpec{Yes: true},
 	}
 	onlyAProv := manifest.Provisioner{
 		Tool: "claude", Tags: []string{"a"},
@@ -127,7 +127,7 @@ func TestSkippedProvisionersCountReflectsSuggestedCoverage(t *testing.T) {
 
 func TestSkippedProvisionersUnknownProfileErrors(t *testing.T) {
 	m := manifestWithProvisioners(manifest.Provisioner{
-		Tool: "gentle-ai", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Scope: "global"},
+		Tool: "zimfw", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Yes: true},
 	})
 	if _, _, err := provision.SkippedProvisioners(m, provision.Options{Profile: "ghost", OS: "darwin"}); err == nil {
 		t.Fatal("SkippedProvisioners() error = nil, want unknown-profile error")
@@ -135,7 +135,7 @@ func TestSkippedProvisionersUnknownProfileErrors(t *testing.T) {
 }
 
 func TestSkippedProvisionersComposedSelectionSuggestsAddingProfile(t *testing.T) {
-	coreProv := manifest.Provisioner{Tool: "gentle-ai", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Scope: "global"}}
+	coreProv := manifest.Provisioner{Tool: "zimfw", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Yes: true}}
 	webProv := manifest.Provisioner{Tool: "codex", Tags: []string{"web"}, Spec: manifest.ProvisionerSpec{MCP: "web", Command: []string{"npx"}}}
 	desktopProv := manifest.Provisioner{Tool: "claude", Tags: []string{"desktop"}, Spec: manifest.ProvisionerSpec{Marketplace: "owner/repo"}}
 	m := manifest.Manifest{

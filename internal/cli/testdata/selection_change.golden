@@ -2,6 +2,6 @@ Installed Selection change:
   Previous: profiles=core,work extra-tags=adaptive-theme effective-tags=core,work,adaptive-theme
   Requested: profiles=core extra-tags=(none) effective-tags=core
   Added: profiles=(none) extra-tags=(none) effective-tags=(none) managed-entries=(none) dependencies=(none) provisioners=(none)
-  Removed: profiles=work extra-tags=adaptive-theme effective-tags=work,adaptive-theme managed-entries=~/.work dependencies=work-tool provisioners=gentle-ai
+  Removed: profiles=work extra-tags=adaptive-theme effective-tags=work,adaptive-theme managed-entries=~/.work dependencies=work-tool provisioners=claude
   Acknowledgement: required=true accepted=true
 

@@ -33,8 +33,8 @@ func TestStatusListsDeclaredProvisioners(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		`Declared provisioners for profile "default"`,
-		"gentle-ai install --scope global --persona neutral --agents codex",
-		"affects: ~/.codex, ~/.gentle-ai",
+		"claude plugin marketplace add example/tools",
+		"affects: ~/.claude, ~/.claude.json",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status output missing %q\noutput:\n%s", want, got)

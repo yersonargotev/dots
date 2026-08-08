@@ -509,18 +509,6 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 	if recordErr := recordProvisionerMetadata(stateRoot, sourceRoot, report); recordErr != nil {
 		return report, recordErr
 	}
-	if gentleAIProvisionerRan(report) {
-		if agents := selectedGentleAIAgents(selected); len(agents) > 0 {
-			if cleanupErr := agentinstructions.ConvergeDotsAgentRules(home, agents...); cleanupErr != nil {
-				return report, errors.Join(err, cleanupErr)
-			}
-			if containsString(agents, "vscode-copilot") {
-				if syncErr := agentinstructions.SyncCopilotCLIEngramProtocol(home); syncErr != nil {
-					return report, errors.Join(err, syncErr)
-				}
-			}
-		}
-	}
 	selectedTags := report.Tags
 	if containsString(selectedTags, "agents") {
 		if cleanupErr := agentinstructions.RetireGentleAIState(home); cleanupErr != nil {
@@ -552,33 +540,6 @@ func containsString(values []string, want string) bool {
 		}
 	}
 	return false
-}
-
-func gentleAIProvisionerRan(report provision.Report) bool {
-	for _, item := range report.Items {
-		if item.Tool == "gentle-ai" && item.Status != provision.RunStatusMissingDeps {
-			return true
-		}
-	}
-	return false
-}
-
-func selectedGentleAIAgents(selected []manifest.Provisioner) []string {
-	var agents []string
-	seen := map[string]bool{}
-	for _, prov := range selected {
-		if prov.Tool != "gentle-ai" {
-			continue
-		}
-		for _, agent := range prov.Spec.Agents {
-			if seen[agent] {
-				continue
-			}
-			seen[agent] = true
-			agents = append(agents, agent)
-		}
-	}
-	return agents
 }
 
 func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {

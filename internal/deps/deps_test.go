@@ -579,25 +579,25 @@ func TestCheckIncludesSelectedProvisionerDependencies(t *testing.T) {
 		},
 		Provisioners: []manifest.Provisioner{
 			{
-				Tool: "gentle-ai",
+				Tool: "claude",
 				Tags: []string{"core"},
 				Dependencies: []manifest.Dependency{
-					{Name: "gentle-ai", Brew: "gentleman-programming/tap/gentle-ai"},
-					{Name: "engram", Brew: "gentleman-programming/tap/engram"},
+					{Name: "claude", Brew: "example/tools/claude"},
+					{Name: "npx", Brew: "node"},
 				},
 			},
 		},
 	}
 
-	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("zsh", "engram"), fontLookupSet())
+	report, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("zsh", "npx"), fontLookupSet())
 	if err != nil {
 		t.Fatalf("Check() error = %v", err)
 	}
 
 	want := []deps.Result{
 		{Name: "zsh", Requirement: manifest.DependencyRequirementRequired, Command: "zsh", Present: true},
-		{Name: "gentle-ai", Requirement: manifest.DependencyRequirementRequired, Command: "gentle-ai", Present: false},
-		{Name: "engram", Requirement: manifest.DependencyRequirementRequired, Command: "engram", Present: true},
+		{Name: "claude", Requirement: manifest.DependencyRequirementRequired, Command: "claude", Present: false},
+		{Name: "npx", Requirement: manifest.DependencyRequirementRequired, Command: "npx", Present: true},
 	}
 	if len(report.Results) != len(want) {
 		t.Fatalf("Results len = %d, want %d (%#v)", len(report.Results), len(want), report.Results)
@@ -614,7 +614,7 @@ func TestCheckFiltersProvisionerDependenciesByProfileAndOS(t *testing.T) {
 		Version:  1,
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
 		Provisioners: []manifest.Provisioner{
-			{Tool: "gentle-ai", Tags: []string{"core"}, OS: []string{"darwin"}, Dependencies: []manifest.Dependency{{Name: "gentle-ai"}}},
+			{Tool: "codex", Tags: []string{"core"}, OS: []string{"darwin"}, Dependencies: []manifest.Dependency{{Name: "codex"}}},
 			{Tool: "opencode", Tags: []string{"work"}, Dependencies: []manifest.Dependency{{Name: "opencode"}}},
 			{Tool: "claude", Tags: []string{"core"}, OS: []string{"linux"}, Dependencies: []manifest.Dependency{{Name: "claude"}}},
 		},
@@ -628,8 +628,8 @@ func TestCheckFiltersProvisionerDependenciesByProfileAndOS(t *testing.T) {
 	if len(report.Results) != 1 {
 		t.Fatalf("Results len = %d, want 1 (%#v)", len(report.Results), report.Results)
 	}
-	if report.Results[0].Name != "gentle-ai" {
-		t.Fatalf("Results[0].Name = %q, want gentle-ai", report.Results[0].Name)
+	if report.Results[0].Name != "codex" {
+		t.Fatalf("Results[0].Name = %q, want codex", report.Results[0].Name)
 	}
 }
 
@@ -640,14 +640,14 @@ func TestCheckDedupesProvisionerDependenciesWithEntries(t *testing.T) {
 		Entries: []manifest.Entry{
 			{
 				Source: "configs/a", Target: "~/.a", Strategy: "symlink", Tags: []string{"core"},
-				Dependencies: []manifest.Dependency{{Name: "gentle-ai", Brew: "gentleman-programming/tap/gentle-ai"}},
+				Dependencies: []manifest.Dependency{{Name: "claude", Brew: "example/tools/claude"}},
 			},
 		},
 		Provisioners: []manifest.Provisioner{
 			{
-				Tool:         "gentle-ai",
+				Tool:         "claude",
 				Tags:         []string{"core"},
-				Dependencies: []manifest.Dependency{{Name: " gentle-ai "}, {Name: "engram"}},
+				Dependencies: []manifest.Dependency{{Name: " claude "}, {Name: "npx"}},
 			},
 		},
 	}
@@ -661,7 +661,7 @@ func TestCheckDedupesProvisionerDependenciesWithEntries(t *testing.T) {
 	for _, result := range report.Results {
 		got = append(got, result.Name)
 	}
-	want := []string{"gentle-ai", "engram"}
+	want := []string{"claude", "npx"}
 	if len(got) != len(want) {
 		t.Fatalf("dependency names = %v, want %v", got, want)
 	}

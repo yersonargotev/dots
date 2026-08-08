@@ -288,8 +288,7 @@ func TestInstallBackupAndReplaceCreatesBackupSetAndRunsProvisioner(t *testing.T)
 	t.Setenv("HOME", fakeRealHome)
 
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "gentle-ai"), "#!/bin/sh\nprintf 'ran' > \"$HOME/gentle-ai-ran\"\n")
-	writeExecStub(t, filepath.Join(stubDir, "engram"), "#!/bin/sh\nexit 0\n")
+	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nprintf 'ran' > \"$HOME/claude-ran\"\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	writeCLISource(t, sourceRoot, "configs/git/gitconfig", "managed\n")
@@ -306,15 +305,12 @@ entries:
     strategy: copy
     tags: [core]
 provisioners:
-  - tool: gentle-ai
+  - tool: claude
     tags: [core]
     spec:
-      scope: global
-      persona: neutral
-      agents: [codex]
+      marketplace: example/tools
     dependencies:
-      - name: gentle-ai
-      - name: engram
+      - name: claude
 `)
 
 	cmd := cli.NewRootCommand()
@@ -347,7 +343,7 @@ provisioners:
 	if string(preserved) != "local\n" {
 		t.Fatalf("preserved backup = %q, want local content", preserved)
 	}
-	if _, err := os.Stat(filepath.Join(home, "gentle-ai-ran")); err != nil {
+	if _, err := os.Stat(filepath.Join(home, "claude-ran")); err != nil {
 		t.Fatalf("provisioner did not run in sandbox HOME after backup-and-replace: %v", err)
 	}
 }

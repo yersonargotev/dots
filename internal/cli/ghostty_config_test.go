@@ -21,7 +21,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
-	stubGentleAIProvisionerTools(t)
+	stubManifestProvisionerTools(t)
 	seedDesktopNerdFont(t, home)
 
 	install := cli.NewRootCommand()
@@ -160,7 +160,7 @@ func TestAdaptiveThemeTagInstallsMarkerAndGhosttyFragmentInSandbox(t *testing.T)
 	home := t.TempDir()
 	stateRoot := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
-	stubGentleAIProvisionerTools(t)
+	stubManifestProvisionerTools(t)
 	seedDesktopNerdFont(t, home)
 
 	install := cli.NewRootCommand()

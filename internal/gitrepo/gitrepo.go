@@ -6,11 +6,15 @@
 package gitrepo
 
 import (
+	"archive/tar"
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	pathpkg "path"
+	"path/filepath"
 	"strings"
 )
 
@@ -39,6 +43,116 @@ type upstreamTarget struct {
 // Changed reports whether the update moves (or would move) HEAD.
 func (u Update) Changed() bool {
 	return u.OldRev != u.NewRev
+}
+
+// ReadFileAtRevision returns one repository file exactly as stored at a
+// previously resolved Git revision without changing the index or work tree.
+func ReadFileAtRevision(dir, revision, filePath string) ([]byte, error) {
+	revision = strings.TrimSpace(revision)
+	if !validRevision(revision) {
+		return nil, fmt.Errorf("read repository file: invalid revision %q", revision)
+	}
+	cleanPath := pathpkg.Clean(strings.ReplaceAll(filePath, `\`, "/"))
+	if cleanPath == "." || cleanPath == ".." || strings.HasPrefix(cleanPath, "../") || pathpkg.IsAbs(cleanPath) {
+		return nil, fmt.Errorf("read repository file: invalid path %q", filePath)
+	}
+	content, err := run(dir, "show", revision+":"+cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("read %s at %s: %w", cleanPath, revision, err)
+	}
+	return []byte(content), nil
+}
+
+// ExportRevision materializes a read-only snapshot of one resolved revision in
+// destination without changing the repository's index or work tree.
+func ExportRevision(dir, revision, destination string) error {
+	revision = strings.TrimSpace(revision)
+	if !validRevision(revision) {
+		return fmt.Errorf("export repository: invalid revision %q", revision)
+	}
+	destination, err := filepath.Abs(destination)
+	if err != nil {
+		return fmt.Errorf("export repository: resolve destination: %w", err)
+	}
+	info, err := os.Lstat(destination)
+	if err != nil {
+		return fmt.Errorf("export repository: inspect destination: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("export repository: destination %s must be a directory, not a symlink", destination)
+	}
+	entries, err := os.ReadDir(destination)
+	if err != nil {
+		return fmt.Errorf("export repository: inspect destination: %w", err)
+	}
+	if len(entries) != 0 {
+		return fmt.Errorf("export repository: destination %s must be empty", destination)
+	}
+	archive, err := run(dir, "archive", "--format=tar", revision)
+	if err != nil {
+		return fmt.Errorf("export repository at %s: %w", revision, err)
+	}
+	reader := tar.NewReader(strings.NewReader(archive))
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("export repository at %s: read archive: %w", revision, err)
+		}
+		target := filepath.Join(destination, filepath.FromSlash(header.Name))
+		if !pathInside(target, destination) {
+			return fmt.Errorf("export repository at %s: unsafe archive path %q", revision, header.Name)
+		}
+		mode := os.FileMode(header.Mode) & os.ModePerm
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, mode); err != nil {
+				return fmt.Errorf("export repository directory %s: %w", target, err)
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return fmt.Errorf("export repository directory %s: %w", filepath.Dir(target), err)
+			}
+			file, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+			if err != nil {
+				return fmt.Errorf("export repository file %s: %w", target, err)
+			}
+			_, copyErr := io.Copy(file, reader)
+			closeErr := file.Close()
+			if copyErr != nil {
+				return fmt.Errorf("export repository file %s: %w", target, copyErr)
+			}
+			if closeErr != nil {
+				return fmt.Errorf("export repository file %s: %w", target, closeErr)
+			}
+		case tar.TypeSymlink:
+			linkTarget := filepath.Clean(filepath.Join(filepath.Dir(target), filepath.FromSlash(header.Linkname)))
+			if filepath.IsAbs(header.Linkname) || !pathInside(linkTarget, destination) {
+				return fmt.Errorf("export repository at %s: unsafe symlink %q", revision, header.Name)
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return fmt.Errorf("export repository directory %s: %w", filepath.Dir(target), err)
+			}
+			if err := os.Symlink(filepath.FromSlash(header.Linkname), target); err != nil {
+				return fmt.Errorf("export repository symlink %s: %w", target, err)
+			}
+		case tar.TypeXHeader, tar.TypeXGlobalHeader:
+			continue
+		default:
+			return fmt.Errorf("export repository at %s: unsupported archive entry %q", revision, header.Name)
+		}
+	}
+}
+
+func validRevision(revision string) bool {
+	return revision != "" && strings.Trim(revision, "0123456789abcdefABCDEF") == ""
+}
+
+func pathInside(path, root string) bool {
+	relative, err := filepath.Rel(root, path)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 // IsRepo reports whether dir is inside a Git work tree.

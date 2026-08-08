@@ -63,24 +63,17 @@ type Provisioner struct {
 }
 
 // ProvisionerSpec carries the declarative values dots owns for an allowlisted
-// tool; the tool owns how they render into agent config. The scalar/list flags
-// map 1:1 to gentle-ai's install/uninstall flags. The Claude fields (Marketplace, Plugin,
-// From) describe a single idempotent `claude` invocation, the MCP fields
+// tool; the tool owns how they render into agent config. The Claude fields
+// (Marketplace, Plugin, From) describe a single idempotent `claude` invocation, the MCP fields
 // (MCP, Command, Env) a single MCP-server add invocation, Package drives
 // one `npx --yes skills@1.5.12 add` invocation, and the codegraph dialect reuses
 // Agents, Scope, and Yes to render a fixed bootstrap-and-install script. The
 // dialects are mutually exclusive: a spec speaks exactly one of them.
 type ProvisionerSpec struct {
-	Action     string   `yaml:"action,omitempty"`
-	Scope      string   `yaml:"scope,omitempty"`
-	Channel    string   `yaml:"channel,omitempty"`
-	Persona    string   `yaml:"persona,omitempty"`
-	Preset     string   `yaml:"preset,omitempty"`
-	SDDMode    string   `yaml:"sdd-mode,omitempty"`
-	Agents     []string `yaml:"agents,omitempty"`
-	Components []string `yaml:"components,omitempty"`
-	Skills     []string `yaml:"skills,omitempty"`
-	Yes        bool     `yaml:"yes,omitempty"`
+	Scope  string   `yaml:"scope,omitempty"`
+	Agents []string `yaml:"agents,omitempty"`
+	Skills []string `yaml:"skills,omitempty"`
+	Yes    bool     `yaml:"yes,omitempty"`
 	// Marketplace registers a Claude Code plugin marketplace from a source
 	// (GitHub repo, URL, or path), rendering `claude plugin marketplace add
 	// <source>`. The marketplace name is derived by Claude from the source.
@@ -269,7 +262,11 @@ func LoadFile(path string) (*Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read manifest: %w", err)
 	}
+	return Parse(data)
+}
 
+// Parse strictly decodes and validates a current Install Manifest.
+func Parse(data []byte) (*Manifest, error) {
 	var manifest Manifest
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
@@ -281,6 +278,96 @@ func LoadFile(path string) (*Manifest, error) {
 	}
 
 	return &manifest, nil
+}
+
+// LoadPreviousFile reads the pre-update Install Manifest only for selection
+// evolution. Provisioner specs are intentionally discarded before strict
+// decoding because an older dots binary may have accepted a dialect that the
+// current binary has retired. The returned Provisioners retain only inventory
+// fields used to report removed surfaces; callers must never plan or execute
+// them.
+func LoadPreviousFile(path string) (*Manifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read previous manifest: %w", err)
+	}
+
+	var document yaml.Node
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return nil, fmt.Errorf("parse previous manifest: %w", err)
+	}
+	discardPreviousProvisionerSpecs(&document)
+	projected, err := yaml.Marshal(&document)
+	if err != nil {
+		return nil, fmt.Errorf("project previous manifest: %w", err)
+	}
+
+	var previous Manifest
+	decoder := yaml.NewDecoder(bytes.NewReader(projected))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&previous); err != nil {
+		return nil, fmt.Errorf("parse previous manifest: %w", err)
+	}
+	if err := previous.validateEvolutionInventory(); err != nil {
+		return nil, err
+	}
+	return &previous, nil
+}
+
+func discardPreviousProvisionerSpecs(document *yaml.Node) {
+	if document == nil || document.Kind != yaml.DocumentNode || len(document.Content) == 0 {
+		return
+	}
+	root := document.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return
+	}
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value != "provisioners" {
+			continue
+		}
+		for _, provisioner := range root.Content[i+1].Content {
+			if provisioner.Kind != yaml.MappingNode {
+				continue
+			}
+			for j := 0; j+1 < len(provisioner.Content); j += 2 {
+				if provisioner.Content[j].Value == "spec" {
+					provisioner.Content[j+1] = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+				}
+			}
+		}
+		return
+	}
+}
+
+func (m Manifest) validateEvolutionInventory() error {
+	current := m
+	current.Provisioners = nil
+	if err := current.Validate(); err != nil {
+		return err
+	}
+	for i, provisioner := range m.Provisioners {
+		if strings.TrimSpace(provisioner.Tool) == "" {
+			return fmt.Errorf("provisioners[%d].tool is required", i)
+		}
+		if len(provisioner.Tags) == 0 {
+			return fmt.Errorf("provisioners[%d].tags is required", i)
+		}
+		if j, ok := indexOfEmptyTag(provisioner.Tags); ok {
+			return fmt.Errorf("provisioners[%d].tags[%d] must not be empty", i, j)
+		}
+		for j, osName := range provisioner.OS {
+			if !allowedOS(osName) {
+				return fmt.Errorf("provisioners[%d].os[%d] must be one of darwin, linux", i, j)
+			}
+		}
+		for j, dependency := range provisioner.Dependencies {
+			if err := validateDependency(dependency, fmt.Sprintf("provisioners[%d].dependencies[%d]", i, j)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (m Manifest) Validate() error {
@@ -392,7 +479,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of claude, codegraph, codex, gentle-ai, skills, zimfw", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of claude, codegraph, codex, skills, zimfw", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -428,38 +515,6 @@ func (m Manifest) Validate() error {
 		case "zimfw":
 			if err := validateZimFWSpec(prov.Spec, i); err != nil {
 				return err
-			}
-		default:
-			if prov.Spec.usesClaudeFields() {
-				return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the gentle-ai tool", i)
-			}
-			if prov.Spec.usesMCPFields() {
-				return fmt.Errorf("provisioners[%d].spec must not set MCP fields (mcp, command, env) for the gentle-ai tool", i)
-			}
-			if prov.Spec.usesSkillsFields() {
-				return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the gentle-ai tool", i)
-			}
-			action := strings.TrimSpace(prov.Spec.Action)
-			if !allowedGentleAIAction(action) {
-				return fmt.Errorf("provisioners[%d].spec.action must be one of install, uninstall", i)
-			}
-			if prov.Spec.Yes && action != "uninstall" {
-				return fmt.Errorf("provisioners[%d].spec.yes is only valid when action is uninstall", i)
-			}
-			if action == "uninstall" && prov.Spec.usesGentleAIInstallOnlyFlags() {
-				return fmt.Errorf("provisioners[%d].spec uninstall action must not set install-only fields (scope, channel, persona, preset, sdd-mode, skills)", i)
-			}
-			if persona := strings.TrimSpace(prov.Spec.Persona); persona != "" && !allowedPersona(persona) {
-				return fmt.Errorf("provisioners[%d].spec.persona must be one of gentleman, neutral", i)
-			}
-			if j, ok := indexOfEmptyString(prov.Spec.Agents); ok {
-				return fmt.Errorf("provisioners[%d].spec.agents[%d] must not be empty", i, j)
-			}
-			if j, ok := indexOfEmptyString(prov.Spec.Components); ok {
-				return fmt.Errorf("provisioners[%d].spec.components[%d] must not be empty", i, j)
-			}
-			if j, ok := indexOfEmptyString(prov.Spec.Skills); ok {
-				return fmt.Errorf("provisioners[%d].spec.skills[%d] must not be empty", i, j)
 			}
 		}
 		for j, dep := range prov.Dependencies {
@@ -521,7 +576,13 @@ func validateDependency(dep Dependency, path string) error {
 // an empty spec would render a bare command with nothing to do, so validation
 // rejects it.
 func (s ProvisionerSpec) IsEmpty() bool {
-	return !s.usesGentleAIFlags() && !s.usesClaudeFields() && !s.usesMCPFields() && !s.usesSkillsFields()
+	return strings.TrimSpace(s.Scope) == "" &&
+		!hasNonEmptyString(s.Agents) &&
+		!hasNonEmptyString(s.Skills) &&
+		!s.Yes &&
+		!s.usesClaudeFields() &&
+		!s.usesMCPFields() &&
+		!s.usesSkillsFields()
 }
 
 // usesClaudeFields reports whether the spec sets any Claude-specific field. It
@@ -533,56 +594,26 @@ func (s ProvisionerSpec) usesClaudeFields() bool {
 }
 
 // usesMCPFields reports whether the spec sets any MCP-server field. It
-// keeps the MCP dialect disjoint from the gentle-ai and claude dialects.
+// keeps the MCP dialect disjoint from the other tool dialects.
 func (s ProvisionerSpec) usesMCPFields() bool {
 	return strings.TrimSpace(s.MCP) != "" ||
 		hasNonEmptyString(s.Command) ||
 		len(s.Env) > 0
 }
 
-// usesSkillsFields reports whether the spec sets any skills.sh field. Agents
-// and Skills are intentionally shared names between gentle-ai and skills.sh, so
-// they are not counted here; validation decides which tool owns those lists.
+// usesSkillsFields reports whether the spec sets any skills.sh-specific field.
 func (s ProvisionerSpec) usesSkillsFields() bool {
 	return strings.TrimSpace(s.Package) != "" ||
 		s.Global ||
 		s.Copy
 }
 
-// usesGentleAIFlags reports whether the spec sets any gentle-ai install flag.
-func (s ProvisionerSpec) usesGentleAIFlags() bool {
-	return strings.TrimSpace(s.Action) != "" ||
-		strings.TrimSpace(s.Scope) != "" ||
-		strings.TrimSpace(s.Channel) != "" ||
-		strings.TrimSpace(s.Persona) != "" ||
-		strings.TrimSpace(s.Preset) != "" ||
-		strings.TrimSpace(s.SDDMode) != "" ||
-		hasNonEmptyString(s.Agents) ||
-		hasNonEmptyString(s.Components) ||
-		hasNonEmptyString(s.Skills) ||
-		s.Yes
-}
-
-func (s ProvisionerSpec) usesGentleAIInstallOnlyFlags() bool {
-	return strings.TrimSpace(s.Scope) != "" ||
-		strings.TrimSpace(s.Channel) != "" ||
-		strings.TrimSpace(s.Persona) != "" ||
-		strings.TrimSpace(s.Preset) != "" ||
-		strings.TrimSpace(s.SDDMode) != "" ||
-		hasNonEmptyString(s.Skills)
-}
-
-func allowedGentleAIAction(action string) bool {
-	return action == "" || action == "install" || action == "uninstall"
-}
-
 // validateClaudeSpec enforces the claude provisioner contract: it drives exactly
 // one idempotent invocation — a marketplace registration, a plugin install
-// (which needs a From marketplace), or a stdio MCP server registration — and
-// never mixes in gentle-ai flags.
+// (which needs a From marketplace), or a stdio MCP server registration.
 func validateClaudeSpec(s ProvisionerSpec, i int) error {
-	if s.usesGentleAIFlags() {
-		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai install flags for the claude tool", i)
+	if strings.TrimSpace(s.Scope) != "" || hasNonEmptyString(s.Agents) || hasNonEmptyString(s.Skills) || s.Yes {
+		return fmt.Errorf("provisioners[%d].spec must not set scope, agents, skills, or yes for the claude tool", i)
 	}
 	if s.usesSkillsFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the claude tool", i)
@@ -626,10 +657,10 @@ func validateClaudeSpec(s ProvisionerSpec, i int) error {
 
 // validateCodexSpec enforces the codex provisioner contract: it drives exactly
 // one idempotent `codex mcp add` invocation — an MCP server name plus its launch
-// command — and never mixes in the gentle-ai or claude dialects.
+// command — and never mixes in the Claude or skills dialects.
 func validateCodexSpec(s ProvisionerSpec, i int) error {
-	if s.usesGentleAIFlags() {
-		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai install flags for the codex tool", i)
+	if strings.TrimSpace(s.Scope) != "" || hasNonEmptyString(s.Agents) || hasNonEmptyString(s.Skills) || s.Yes {
+		return fmt.Errorf("provisioners[%d].spec must not set scope, agents, skills, or yes for the codex tool", i)
 	}
 	if s.usesClaudeFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the codex tool", i)
@@ -665,14 +696,8 @@ func validateCodeGraphSpec(s ProvisionerSpec, i int) error {
 	if s.usesSkillsFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the codegraph tool", i)
 	}
-	if strings.TrimSpace(s.Action) != "" ||
-		strings.TrimSpace(s.Channel) != "" ||
-		strings.TrimSpace(s.Persona) != "" ||
-		strings.TrimSpace(s.Preset) != "" ||
-		strings.TrimSpace(s.SDDMode) != "" ||
-		hasNonEmptyString(s.Components) ||
-		hasNonEmptyString(s.Skills) {
-		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai fields (action, channel, persona, preset, sdd-mode, components, skills) for the codegraph tool", i)
+	if hasNonEmptyString(s.Skills) {
+		return fmt.Errorf("provisioners[%d].spec must not set skills for the codegraph tool", i)
 	}
 	if !hasNonEmptyString(s.Agents) {
 		return fmt.Errorf("provisioners[%d].spec.agents is required for the codegraph tool", i)
@@ -709,8 +734,7 @@ func allowedCodeGraphAgent(agent string) bool {
 
 // validateSkillsSpec enforces the skills.sh provisioner contract: it drives one
 // exact `npx --yes skills@1.5.12 add <package>` invocation with optional target agents and
-// selected skill names. It does not accept gentle-ai scalar/action fields,
-// Claude plugin fields, or MCP fields.
+// selected skill names. It does not accept unrelated scalar, Claude, or MCP fields.
 func validateSkillsSpec(s ProvisionerSpec, i int) error {
 	if s.usesClaudeFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the skills tool", i)
@@ -718,15 +742,8 @@ func validateSkillsSpec(s ProvisionerSpec, i int) error {
 	if s.usesMCPFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set MCP fields (mcp, command, env) for the skills tool", i)
 	}
-	if strings.TrimSpace(s.Action) != "" ||
-		strings.TrimSpace(s.Scope) != "" ||
-		strings.TrimSpace(s.Channel) != "" ||
-		strings.TrimSpace(s.Persona) != "" ||
-		strings.TrimSpace(s.Preset) != "" ||
-		strings.TrimSpace(s.SDDMode) != "" ||
-		hasNonEmptyString(s.Components) ||
-		s.Yes {
-		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai fields (action, scope, channel, persona, preset, sdd-mode, components, yes) for the skills tool", i)
+	if strings.TrimSpace(s.Scope) != "" || s.Yes {
+		return fmt.Errorf("provisioners[%d].spec must not set scope or yes for the skills tool", i)
 	}
 	if strings.TrimSpace(s.Package) == "" {
 		return fmt.Errorf("provisioners[%d].spec.package is required for the skills tool", i)
@@ -765,16 +782,8 @@ func validateZimFWSpec(s ProvisionerSpec, i int) error {
 	if s.usesSkillsFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the zimfw tool", i)
 	}
-	if strings.TrimSpace(s.Action) != "" ||
-		strings.TrimSpace(s.Scope) != "" ||
-		strings.TrimSpace(s.Channel) != "" ||
-		strings.TrimSpace(s.Persona) != "" ||
-		strings.TrimSpace(s.Preset) != "" ||
-		strings.TrimSpace(s.SDDMode) != "" ||
-		hasNonEmptyString(s.Agents) ||
-		hasNonEmptyString(s.Components) ||
-		hasNonEmptyString(s.Skills) {
-		return fmt.Errorf("provisioners[%d].spec must not set gentle-ai fields (action, scope, channel, persona, preset, sdd-mode, agents, components, skills) for the zimfw tool", i)
+	if strings.TrimSpace(s.Scope) != "" || hasNonEmptyString(s.Agents) || hasNonEmptyString(s.Skills) {
+		return fmt.Errorf("provisioners[%d].spec must not set scope, agents, or skills for the zimfw tool", i)
 	}
 	if !s.Yes {
 		return fmt.Errorf("provisioners[%d].spec.yes must be true for the zimfw tool", i)
@@ -1008,23 +1017,12 @@ func allowedOS(osName string) bool {
 }
 
 // allowedProvisionerTool enforces the provisioner allowlist. dots is never a
-// generic command runner: gentle-ai, claude, codex, codegraph, skills, and zimfw
+// generic command runner: claude, codex, codegraph, skills, and zimfw
 // are the only accepted provisioner tools, each driven through a fixed set of
 // subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "gentle-ai", "claude", "codex", "codegraph", "skills", "zimfw":
-		return true
-	default:
-		return false
-	}
-}
-
-// allowedPersona enforces the persona values gentle-ai ships as flag-driven
-// presets. Any other value is rejected before dots renders the install command.
-func allowedPersona(persona string) bool {
-	switch persona {
-	case "gentleman", "neutral":
+	case "claude", "codex", "codegraph", "skills", "zimfw":
 		return true
 	default:
 		return false

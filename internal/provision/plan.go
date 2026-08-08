@@ -130,10 +130,7 @@ func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Select
 }
 
 // managedRoots returns the well-known HOME-relative roots an allowlisted tool
-// manages, used as the advisory blast radius in the plan. gentle-ai owns its own
-// state under ~/.gentle-ai plus the selected agent-specific configuration roots:
-// ~/.claude for claude-code, ~/.codex for codex, ~/.config/opencode for opencode,
-// ~/.gemini for antigravity, and both macOS/Linux VS Code user config roots for vscode-copilot. claude writes marketplace and plugin state under
+// manages, used as the advisory blast radius in the plan. claude writes marketplace and plugin state under
 // ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
 // servers in ~/.codex/config.toml, under ~/.codex. codegraph writes its own
 // installed versions and shim under ~/.codegraph and ~/.local/bin, plus MCP
@@ -145,24 +142,6 @@ func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Select
 // opencode, and github-copilot write to ~/.agents/skills.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
-	case "gentle-ai":
-		var roots []string
-		if includes(prov.Spec.Agents, "claude-code") {
-			roots = append(roots, "~/.claude")
-		}
-		if includes(prov.Spec.Agents, "codex") {
-			roots = append(roots, "~/.codex")
-		}
-		if includes(prov.Spec.Agents, "opencode") {
-			roots = append(roots, "~/.config/opencode")
-		}
-		if includes(prov.Spec.Agents, "antigravity") {
-			roots = append(roots, "~/.gemini")
-		}
-		if includes(prov.Spec.Agents, "vscode-copilot") {
-			roots = append(roots, "~/Library/Application Support/Code/User", "~/.config/Code/User")
-		}
-		return append(roots, "~/.gentle-ai")
 	case "claude":
 		return []string{"~/.claude", "~/.claude.json"}
 	case "codex":
@@ -180,11 +159,6 @@ func managedRoots(prov manifest.Provisioner) []string {
 
 func globalTools(prov manifest.Provisioner) []string {
 	switch prov.Tool {
-	case "gentle-ai":
-		action := strings.TrimSpace(prov.Spec.Action)
-		if (action == "" || action == "install") && includes(prov.Spec.Agents, "claude-code") {
-			return []string{"claude (~/.local/bin via npm prefix)"}
-		}
 	case "codegraph":
 		return []string{"codegraph (~/.local/bin)"}
 	}

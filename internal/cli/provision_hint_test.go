@@ -21,15 +21,12 @@ entries:
     strategy: symlink
     tags: [core]
 provisioners:
-  - tool: gentle-ai
+  - tool: zimfw
     tags: [core]
     spec:
-      scope: global
-      persona: neutral
-      agents: [codex]
+      yes: true
     dependencies:
-      - name: gentle-ai
-      - name: engram
+      - name: zsh
   - tool: claude
     tags: [desktop]
     os: [darwin, linux]

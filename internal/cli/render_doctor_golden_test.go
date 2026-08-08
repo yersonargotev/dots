@@ -55,10 +55,10 @@ func TestRenderDoctorGolden(t *testing.T) {
 				Configuration: status.Report{Profile: "default"},
 				Provisioners: provision.CheckReport{Profile: "default", Items: []provision.Readiness{
 					{
-						Tool:       "gentle-ai",
-						Executable: "gentle-ai",
-						Args:       []string{"install", "--scope", "global", "--agents", "codex"},
-						Missing:    []string{"engram"},
+						Tool:       "claude",
+						Executable: "claude",
+						Args:       []string{"plugin", "marketplace", "add", "example/tools"},
+						Missing:    []string{"npx"},
 					},
 				}},
 				SecretScan: doctor.SecretReport{},

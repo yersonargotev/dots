@@ -680,17 +680,17 @@ func TestPlanIncludesSelectedProvisionerDependencies(t *testing.T) {
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
 		Provisioners: []manifest.Provisioner{
 			{
-				Tool: "gentle-ai",
+				Tool: "claude",
 				Tags: []string{"core"},
 				Dependencies: []manifest.Dependency{
-					{Name: "gentle-ai", Brew: "gentleman-programming/tap/gentle-ai"},
-					{Name: "engram", Brew: "gentleman-programming/tap/engram"},
+					{Name: "claude", Brew: "example/tools/claude"},
+					{Name: "npx", Brew: "node"},
 				},
 			},
 		},
 	}
 
-	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("engram"), fontLookupSet(), deps.TierHomebrew)
+	report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "darwin"}, lookupSet("npx"), fontLookupSet(), deps.TierHomebrew)
 	if err != nil {
 		t.Fatalf("Plan() error = %v", err)
 	}
@@ -698,13 +698,13 @@ func TestPlanIncludesSelectedProvisionerDependencies(t *testing.T) {
 		t.Fatalf("Actions len = %d, want 1 (%#v)", len(report.Actions), report.Actions)
 	}
 	action := report.Actions[0]
-	if action.Dependency != "gentle-ai" {
-		t.Fatalf("Actions[0].Dependency = %q, want gentle-ai", action.Dependency)
+	if action.Dependency != "claude" {
+		t.Fatalf("Actions[0].Dependency = %q, want claude", action.Dependency)
 	}
-	if action.Package != "gentleman-programming/tap/gentle-ai" {
+	if action.Package != "example/tools/claude" {
 		t.Fatalf("Actions[0].Package = %q, want tap package", action.Package)
 	}
-	if action.TrustCommand != "brew trust --formula gentleman-programming/tap/gentle-ai" {
+	if action.TrustCommand != "brew trust --formula example/tools/claude" {
 		t.Fatalf("Actions[0].TrustCommand = %q, want formula trust guidance", action.TrustCommand)
 	}
 	if report.Items[0].TrustCommand != action.TrustCommand {
@@ -966,84 +966,6 @@ func TestPlanResolvesNeovimUserLocalArtifact(t *testing.T) {
 	}
 	if len(report.Actions) != 0 {
 		t.Fatalf("Actions = %#v, want no install when nvim is present", report.Actions)
-	}
-}
-
-func TestPlanResolvesAgentToolUserLocalArtifacts(t *testing.T) {
-	tests := []struct {
-		name       string
-		dep        manifest.Dependency
-		wantURL    string
-		wantRecipe string
-		wantCmd    string
-	}{
-		{
-			name: "gentle-ai",
-			dep: manifest.Dependency{
-				Name:          "gentle-ai",
-				Command:       "gentle-ai",
-				Brew:          "gentleman-programming/tap/gentle-ai",
-				LinuxHomebrew: true,
-				UserLocal: &manifest.UserLocalProvider{
-					Recipe:  "gentle-ai",
-					Version: "v1.43.2",
-					Checksums: map[string]string{
-						"linux_amd64": "6c957698fd670e04c5124709d2be2ee1582bdd87c3f1fa88b05740e3f1349a65",
-						"linux_arm64": "62335f70a1aff8b5e54608cf2c895235db83a430bbd5368040c58391dcda4c3a",
-					},
-				},
-			},
-			wantURL:    "https://github.com/Gentleman-Programming/gentle-ai/releases/download/v1.43.2/gentle-ai_1.43.2_linux_amd64.tar.gz",
-			wantRecipe: "gentle-ai",
-			wantCmd:    "gentle-ai",
-		},
-		{
-			name: "engram",
-			dep: manifest.Dependency{
-				Name:          "engram",
-				Command:       "engram",
-				Brew:          "gentleman-programming/tap/engram",
-				LinuxHomebrew: true,
-				UserLocal: &manifest.UserLocalProvider{
-					Recipe:  "engram",
-					Version: "v1.17.0",
-					Checksums: map[string]string{
-						"linux_amd64": "16422ec4596ba4007030bd4b589e139d5a3409eb846f2ffb19a147c953f1e0fe",
-						"linux_arm64": "64e1dc3401046078673468fadedbcec5b28056aab29bf02e35774ffb26f8993d",
-					},
-				},
-			},
-			wantURL:    "https://github.com/Gentleman-Programming/engram/releases/download/v1.17.0/engram_1.17.0_linux_amd64.tar.gz",
-			wantRecipe: "engram",
-			wantCmd:    "engram",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := userLocalProviderManifest()
-			m.Entries[0].Dependencies[0] = tt.dep
-
-			report, err := deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet("brew"), fontLookupSet(), deps.TierDebian)
-			if err != nil {
-				t.Fatalf("Plan() error = %v", err)
-			}
-			action := report.Actions[0]
-			if action.Provider != deps.TierUserLocal || action.UserLocal == nil {
-				t.Fatalf("action = %#v, want user-local provider", action)
-			}
-			if action.UserLocal.Recipe != tt.wantRecipe || action.UserLocal.Command != tt.wantCmd || action.UserLocal.Layout != "single-binary" || action.UserLocal.URL != tt.wantURL {
-				t.Fatalf("user-local artifact = %#v, want pinned %s linux amd64 artifact", action.UserLocal, tt.name)
-			}
-
-			report, err = deps.Plan(m, deps.Options{Profile: "default", OS: "linux", Arch: "amd64"}, lookupSet(tt.wantCmd, "brew"), fontLookupSet(), deps.TierDebian)
-			if err != nil {
-				t.Fatalf("Plan() with present %s error = %v", tt.wantCmd, err)
-			}
-			if len(report.Actions) != 0 {
-				t.Fatalf("Actions = %#v, want no install when %s is present", report.Actions, tt.wantCmd)
-			}
-		})
 	}
 }
 

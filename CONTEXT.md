@@ -241,7 +241,7 @@ The ordered construction plan for the Dotfiles CLI, starting with the project sk
 _Avoid_: roadmap, build order, task list
 
 **Provisioner**:
-An allowlisted external agent-configuration tool the Dotfiles CLI drives declaratively after Dependencies and Managed Entries are in place. dots versions only the invocation — the tool plus its declarative spec — and renders it into one exact, idempotent command (such as a `gentle-ai install`, a `gentle-ai uninstall`, a `claude plugin install`, or a `codex mcp add`). It never versions the Regenerated Content the tool owns. The allowlist is closed, so dots is never a generic command runner.
+An allowlisted external configuration tool the Dotfiles CLI drives declaratively after Dependencies and Managed Entries are in place. dots versions only the invocation — the tool plus its declarative spec — and renders it into one exact, idempotent command (such as a `claude plugin install` or a `codex mcp add`). It never versions the Regenerated Content the tool owns. The allowlist is closed, so dots is never a generic command runner.
 _Avoid_: hook, post-install script, command runner
 
 **Provisioner Spec**:
@@ -249,9 +249,9 @@ The declarative values the Dotfiles CLI owns for a single Provisioner, which ren
 _Avoid_: provisioner config, tool arguments
 
 **Regenerated Content**:
-The agent-tool state a Provisioner's tool owns and rewrites on its own — skills, personas, MCP-server entries, plugin registries, and machine-specific values such as absolute project paths or auth tokens (for example most of `~/.codex/config.toml` or `~/.claude.json`). dots keeps it out of the Source of Truth and reproduces it by re-running the invocation, never by versioning the tool's config file. Skills and personas are Regenerated Content owned by `gentle-ai`, not by `dots`.
+The agent-tool state a Provisioner's tool owns and rewrites on its own — skills, MCP-server entries, plugin registries, and machine-specific values such as absolute project paths or auth tokens (for example most of `~/.codex/config.toml` or `~/.claude.json`). dots keeps it out of the Source of Truth and reproduces it by re-running the invocation, never by versioning the tool's config file.
 _Avoid_: generated config, tool output, machine state
 
 **Config Overlay**:
-A dots-owned configuration fragment that a co-owned tool merges over its own config rather than replacing it, so dots adds its piece without versioning or clobbering the other owner's file. Used for the OpenCode `chrome-devtools` MCP server, merged via the `OPENCODE_CONFIG` environment variable over the gentle-ai-rendered `opencode.json`.
+A dots-owned configuration fragment that a co-owned tool merges over its own config rather than replacing it, so dots adds its piece without versioning or clobbering the other owner's file. Used when a supported tool needs a narrow portable addition without replacing user-owned state.
 _Avoid_: include file, partial config, patch

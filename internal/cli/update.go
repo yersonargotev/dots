@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/gitrepo"
@@ -136,7 +138,10 @@ func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
 }
 
 func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resolvedPaths, opts updateOptions) (*manifest.Manifest, selection.Effective, error) {
-	m, err := manifest.LoadFile(manifestPath)
+	// The pre-update manifest is inventory, not an executable contract. Its
+	// Provisioner dialect may have been retired by the newly installed binary,
+	// so load only the fields needed to resolve intent and report evolution.
+	m, err := manifest.LoadPreviousFile(manifestPath)
 	if err != nil {
 		return nil, selection.Effective{}, err
 	}
@@ -216,7 +221,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 	}
 
-	m, err := manifest.LoadFile(manifestPath)
+	m, err := loadUpdatedManifest(manifestPath, paths.SourceRoot, update, opts.dryRun)
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -232,7 +237,19 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	p, err := plan.Build(*m, plan.Options{Selection: &effective.Selection, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, Home: paths.Home, Metadata: meta})
+	sourceReadRoot := paths.SourceRoot
+	if opts.dryRun && update.Changed() {
+		snapshotRoot, err := os.MkdirTemp("", "dots-update-preview-*")
+		if err != nil {
+			return updateReport{}, fmt.Errorf("create update preview snapshot: %w", err)
+		}
+		defer os.RemoveAll(snapshotRoot)
+		if err := gitrepo.ExportRevision(paths.SourceRoot, update.NewRev, snapshotRoot); err != nil {
+			return updateReport{}, err
+		}
+		sourceReadRoot = snapshotRoot
+	}
+	p, err := plan.Build(*m, plan.Options{Selection: &effective.Selection, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, SourceReadRoot: sourceReadRoot, Home: paths.Home, Metadata: meta})
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -282,4 +299,19 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		return report, emitOK(cmd, report)
 	}
 	return report, nil
+}
+
+func loadUpdatedManifest(manifestPath, sourceRoot string, update gitrepo.Update, dryRun bool) (*manifest.Manifest, error) {
+	if !dryRun || !update.Changed() {
+		return manifest.LoadFile(manifestPath)
+	}
+	relativePath, err := filepath.Rel(sourceRoot, manifestPath)
+	if err != nil || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+		return manifest.LoadFile(manifestPath)
+	}
+	data, err := gitrepo.ReadFileAtRevision(sourceRoot, update.NewRev, filepath.ToSlash(relativePath))
+	if err != nil {
+		return nil, err
+	}
+	return manifest.Parse(data)
 }

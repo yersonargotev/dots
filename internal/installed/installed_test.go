@@ -216,7 +216,7 @@ func inventoryManifest() manifest.Manifest {
 			{Source: "configs/zsh/zshrc", Target: "~/.zshrc", Strategy: "symlink", Tags: []string{"core"}},
 			{Source: "configs/ghostty/config", Target: "~/.config/ghostty/config", Strategy: "symlink", Tags: []string{"desktop"}},
 		},
-		Provisioners: []manifest.Provisioner{{Tool: "gentle-ai", Tags: []string{"agents"}, Spec: manifest.ProvisionerSpec{Scope: "global", Agents: []string{"codex"}}}},
+		Provisioners: []manifest.Provisioner{{Tool: "claude", Tags: []string{"agents"}, Spec: manifest.ProvisionerSpec{Marketplace: "example/tools"}}},
 	}
 }
 

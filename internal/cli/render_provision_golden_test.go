@@ -21,11 +21,10 @@ func TestRenderProvisionPlanGolden(t *testing.T) {
 				Profile: "default",
 				Steps: []provision.Step{
 					{
-						Tool:        "gentle-ai",
-						Executable:  "gentle-ai",
-						Args:        []string{"install", "--scope", "global", "--persona", "neutral", "--agents", "claude-code"},
-						Targets:     []string{"~/.claude", "~/.gentle-ai"},
-						GlobalTools: []string{"claude (~/.local/bin via npm prefix)"},
+						Tool:       "claude",
+						Executable: "claude",
+						Args:       []string{"plugin", "marketplace", "add", "example/tools"},
+						Targets:    []string{"~/.claude", "~/.claude.json"},
 					},
 				},
 			},

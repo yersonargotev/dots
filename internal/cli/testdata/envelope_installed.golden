@@ -70,12 +70,13 @@
     ],
     "provisioners": [
       {
-        "tool": "gentle-ai",
-        "executable": "gentle-ai",
+        "tool": "claude",
+        "executable": "claude",
         "args": [
-          "install",
-          "--scope",
-          "global"
+          "plugin",
+          "marketplace",
+          "add",
+          "example/tools"
         ],
         "status": "provisioned",
         "last_run_at": "2026-07-08T12:00:00Z",

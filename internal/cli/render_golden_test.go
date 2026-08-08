@@ -83,7 +83,7 @@ func TestRenderSelectionEvolutionGolden(t *testing.T) {
 					EffectiveTags: []string{"desktop"}, ManagedEntries: []string{"~/.config/ghostty/config"}, Dependencies: []string{"ghostty"}, Provisioners: []string{},
 				},
 				Removed: selection.Changes{
-					EffectiveTags: []string{"retired"}, ManagedEntries: []string{"~/.retired"}, Dependencies: []string{}, Provisioners: []string{"gentle-ai"},
+					EffectiveTags: []string{"retired"}, ManagedEntries: []string{"~/.retired"}, Dependencies: []string{}, Provisioners: []string{"claude"},
 				},
 				MissingProfiles: []string{},
 				StaleExtraTags:  []string{},
@@ -126,7 +126,7 @@ func TestRenderSelectionChangeGolden(t *testing.T) {
 			},
 			Removed: selection.Changes{
 				Profiles: []string{"work"}, ExtraTags: []string{"adaptive-theme"}, EffectiveTags: []string{"work", "adaptive-theme"},
-				ManagedEntries: []string{"~/.work"}, Dependencies: []string{"work-tool"}, Provisioners: []string{"gentle-ai"},
+				ManagedEntries: []string{"~/.work"}, Dependencies: []string{"work-tool"}, Provisioners: []string{"claude"},
 			},
 			MissingProfiles: []string{},
 			StaleExtraTags:  []string{},

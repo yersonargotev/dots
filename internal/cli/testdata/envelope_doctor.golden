@@ -55,15 +55,16 @@
       "profile": "default",
       "items": [
         {
-          "tool": "gentle-ai",
-          "executable": "gentle-ai",
+          "tool": "claude",
+          "executable": "claude",
           "args": [
-            "install",
-            "--scope",
-            "global"
+            "plugin",
+            "marketplace",
+            "add",
+            "example/tools"
           ],
           "missing": [
-            "engram"
+            "npx"
           ]
         }
       ]
