@@ -208,6 +208,26 @@ _Avoid_: minimal shell, everything profile, desktop baseline
 The `agents` Tag's intended workstation role: the supported agent command-line tools plus their dots-owned native Managed Configuration and required support Dependencies. Generated memory, context, skills, global rules, and specialized web, mobile, or delegation capabilities remain outside the baseline.
 _Avoid_: agent setup, AI tools profile, generated agent environment
 
+**Delivery Contract**:
+The complete, normalized, and snapshotted specification that authorizes one Delivery Run. It combines one selected Contract Source with the issue category, readiness state, and native GitHub relationships required to verify scope throughout delivery.
+_Avoid_: Agent Brief, ticket text, issue details
+
+**Contract Source**:
+The authoritative GitHub content selected for a Delivery Contract: a complete historical Agent Brief, a complete standalone issue body, or a delivery ticket composed with its native parent specification and relationships.
+_Avoid_: issue description, generated brief, copied spec
+
+**Delivery Unit**:
+An issue with one complete Delivery Contract that represents a single reviewable implementation outcome. Open native blockers may keep it outside the Execution Frontier without making its specification incomplete.
+_Avoid_: delivery issue, child ticket, work item
+
+**Tracking Issue**:
+A complete specification issue whose implementation is represented by native sub-issues rather than by its own branch and pull request. Invoking delivery on it reports its executable child Delivery Units without mutating Git or GitHub.
+_Avoid_: parent PRD, epic, delivery parent
+
+**Execution Frontier**:
+The set of ready Delivery Units that have no open native blockers and can begin a Delivery Run now. Readiness records specification completeness; native relationships determine frontier membership.
+_Avoid_: ready label, unblocked tickets, current slice
+
 **OS Filter**:
 A manifest constraint that limits a Managed Entry to specific operating systems, such as `darwin` or `linux`. OS Filters complement Profiles but do not replace them.
 _Avoid_: platform condition, system rule, distro flag

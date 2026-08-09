@@ -1,4 +1,4 @@
 interface:
   display_name: "Delivery Issue"
-  short_description: "Deliver one approved dots issue through green main."
-  default_prompt: "Use delivery-issue with exactly one approved yersonargotev/dots issue number or URL and execute its workflow through post-merge CI."
+  short_description: "Process one approved dots Delivery Contract."
+  default_prompt: "Use delivery-issue with exactly one approved yersonargotev/dots issue number or URL and execute its workflow through a tracking result or green post-merge CI."

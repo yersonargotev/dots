@@ -2,7 +2,7 @@
 
 <!-- Generated skill registry. -->
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## Sources scanned
 
@@ -67,7 +67,7 @@ Last updated: 2026-08-08
 | `comment-writer` | Write warm, direct collaboration comments. Trigger: PR feedback, issue replies, reviews, Slack messages, or GitHub comments. | user | `/Users/argote/.agents/skills/comment-writer/SKILL.md` |
 | `debug-optimize-lcp` | Guides debugging and optimizing Largest Contentful Paint (LCP) using Chrome DevTools MCP tools. Use this skill whenever the user asks about LCP performance, slow page loads, Core Web Vitals optimization, or wants to understand why their page's main content takes too long to appear. Also use when the user mentions "largest contentful paint", "page load speed", "CWV", or wants to improve how fast their hero image or main content renders. | user | `/Users/argote/.codex/skills/debug-optimize-lcp/SKILL.md` |
 | `debugging-hermes-tui-commands` | Debug Hermes TUI slash commands: Python, gateway, Ink UI. | user | `/Users/argote/.hermes/skills/software-development/debugging-hermes-tui-commands/SKILL.md` |
-| `delivery-issue` | Delivers one approved dots GitHub issue through implementation, validation, independent review, squash merge, and green post-merge CI. Use only when the user explicitly invokes delivery-issue with one issue number or same-repository issue URL. | project | `/Users/argote/Documents/dev/yersonargotev/dots/.agents/skills/delivery-issue/SKILL.md` |
+| `delivery-issue` | Processes one approved dots GitHub issue from a producer-neutral Delivery Contract through a tracking result or implementation, review, squash merge, and green post-merge CI. Use only when the user explicitly invokes delivery-issue with one issue number or same-repository issue URL. | project | `/Users/argote/Documents/dev/yersonargotev/dots/.agents/skills/delivery-issue/SKILL.md` |
 | `deploy-to-vercel` | Deploy applications and websites to Vercel. Use when the user requests deployment actions like "deploy my app", "deploy and give me the link", "push this live", or "create a preview deployment". | user | `/Users/argote/.agents/skills/deploy-to-vercel/SKILL.md` |
 | `design-md` | Author/validate/export Google's DESIGN.md token spec files. | user | `/Users/argote/.hermes/skills/creative/design-md/SKILL.md` |
 | `diagnosing-bugs` | Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow. | user | `/Users/argote/.agents/skills/diagnosing-bugs/SKILL.md` |

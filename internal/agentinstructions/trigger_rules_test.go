@@ -288,58 +288,173 @@ func TestDeliverySkillIsExplicitThinAdapter(t *testing.T) {
 	}
 }
 
-func TestReadinessProducerRequiresRepositoryAgentBrief(t *testing.T) {
+func TestDeliveryContractVocabularyIsConsistent(t *testing.T) {
 	root := filepath.Join("..", "..")
-	cases := map[string][]string{
-		filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md"): {
-			"one complete Agent Brief",
-			"docs/agents/agent-brief.md",
-		},
-		filepath.Join(root, "docs", "agents", "agent-brief.md"): {
-			"exactly one comment headed `## Agent Brief`",
-			"`Category`, `Summary`, `Current behavior`",
-			"`Desired behavior`, `Key interfaces`, `Acceptance criteria`, and `Out of scope`",
-			"Revise that comment in place",
-		},
+	terms := []string{
+		"Delivery Contract",
+		"Contract Source",
+		"Delivery Unit",
+		"Tracking Issue",
+		"Execution Frontier",
 	}
-	for path, wants := range cases {
-		got, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s: %v", path, err)
+	for _, path := range []string{
+		filepath.Join(root, "CONTEXT.md"),
+		filepath.Join(root, "docs", "agents", "delivery-contract.md"),
+		filepath.Join(root, "workflows", "delivery-issue.md"),
+	} {
+		assertDocumentContainsAll(t, path, terms)
+	}
+}
+
+func TestDeliveryContractAdmissionSupportsProducerNeutralSources(t *testing.T) {
+	root := filepath.Join("..", "..")
+	contractPath := filepath.Join(root, "docs", "agents", "delivery-contract.md")
+	contract := readContractDocument(t, contractPath)
+
+	sources := []string{
+		"complete historical Agent Brief",
+		"complete standalone issue body",
+		"delivery ticket body composed",
+		"native parent specification",
+	}
+	assertDocumentContainsAll(t, contractPath, sources)
+	for i := 1; i < 3; i++ {
+		if strings.Index(contract, sources[i-1]) >= strings.Index(contract, sources[i]) {
+			t.Fatalf("Contract Source precedence is not documented in order: %q before %q", sources[i-1], sources[i])
 		}
-		for _, want := range wants {
-			if !strings.Contains(string(got), want) {
-				t.Fatalf("readiness contract %s missing %q", path, want)
-			}
+	}
+
+	workflowPath := filepath.Join(root, "workflows", "delivery-issue.md")
+	assertDocumentContainsAll(t, workflowPath, []string{
+		"complete historical Agent Brief",
+		"complete standalone issue body",
+		"delivery ticket body composed",
+		"native parent",
+		"issue-level `type:*` label is not part of admission",
+		"historical Agent Brief issues remain deliverable without migration",
+	})
+	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "agent-brief.md"), []string{
+		"historical Agent Brief",
+		"complete Agent Brief",
+	})
+}
+
+func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T) {
+	root := filepath.Join("..", "..")
+	contractPath := filepath.Join(root, "docs", "agents", "delivery-contract.md")
+	workflowPath := filepath.Join(root, "workflows", "delivery-issue.md")
+
+	assertDocumentContainsAll(t, contractPath, []string{
+		"needs-triage",
+		"Incomplete, contradictory, or ambiguous",
+		"readiness-label churn",
+		"Tracking Issue",
+		"non-mutating `tracking` result",
+		"creates no branch, commit, or pull",
+		"SHA-256 digest",
+		"updatedAt",
+		"Revalidate the snapshot immediately before code mutation",
+		"pull-request\ncreation, and merge",
+	})
+	assertDocumentContainsAll(t, workflowPath, []string{
+		"needs-triage",
+		"missing, incomplete, contradictory, or ambiguous",
+		"Open native blockers do not invalidate completeness",
+		"Tracking Issue",
+		"non-mutating `tracking` Delivery Result",
+		"Do not create a branch, commit, or PR",
+		"SHA-256 digest",
+		"updatedAt",
+		"Revalidate the complete snapshot before modifying code",
+		"before opening the PR",
+		"before merge",
+	})
+
+	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "triage-labels.md"), []string{
+		"specification is complete",
+		"Execution Frontier",
+		"Do not use `needs-triage` as a blocked-work label",
+	})
+}
+
+func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t *testing.T) {
+	root := filepath.Join("..", "..")
+	issueCreationPath := filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md")
+	assertDocumentContainsAll(t, issueCreationPath, []string{
+		"--parent <parent-number>",
+		"--add-sub-issue <child-number>",
+		"--add-blocked-by <blocker-number>",
+		"parent,subIssues,blockedBy,blocking,labels",
+		"`to-spec` → `to-tickets` → `delivery-issue`",
+		"mandatory post-processor",
+	})
+	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "issue-tracker.md"), []string{
+		"`to-spec` → `to-tickets` → `delivery-issue`",
+		"unmodified and unvendored",
+		"not a mandatory post-processor",
+	})
+
+	for _, externalSkill := range []string{"grill-with-docs", "to-spec", "to-tickets", "triage"} {
+		path := filepath.Join(root, ".agents", "skills", externalSkill)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("external skill %q must not be vendored at %s; stat error = %v", externalSkill, path, err)
 		}
 	}
 }
 
-func TestIssueCreationDocumentsNativeRelationshipsAndReadiness(t *testing.T) {
+func TestDeliveryContractEvidenceAndRepositoryLanguage(t *testing.T) {
 	root := filepath.Join("..", "..")
-	cases := map[string][]string{
-		filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md"): {
-			"--parent <parent-number>",
-			"--add-sub-issue <child-number>",
-			"--add-blocked-by <blocker-number>",
-			"parent,subIssues,blockedBy,blocking,labels,comments",
-			"`to-spec` or `to-tickets`",
-		},
-		filepath.Join(root, "docs", "agents", "triage-labels.md"): {
-			"Fully specified with one complete Agent Brief, but with an open native blocker",
-			"Sliced tracking parent",
-			"Do not use `needs-triage` as a blocked-work label",
-		},
+	assertDocumentContainsAll(t, filepath.Join(root, ".github", "PULL_REQUEST_TEMPLATE.md"), []string{
+		"exactly one `type:*` label",
+		"Delivery Contract",
+		"Contract Source snapshot",
+		"Acceptance coverage",
+		"Independent review",
+	})
+
+	for _, path := range []string{
+		filepath.Join(root, "AGENTS.md"),
+		filepath.Join(root, "docs", "agents", "agent-brief.md"),
+		filepath.Join(root, "docs", "agents", "issue-tracker.md"),
+		filepath.Join(root, "docs", "agents", "triage-labels.md"),
+		filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md"),
+		filepath.Join(root, "workflows", "delivery-issue.md"),
+	} {
+		assertDocumentOmitsAll(t, path, []string{
+			"sole readiness producer",
+			"sole producer of `ready-for-agent`",
+			"requires both the label and exactly one complete",
+			"Every issue handed to `delivery-issue` requires exactly one complete Agent Brief",
+			"only an in-place Agent Brief revision does",
+		})
 	}
-	for path, wants := range cases {
-		got, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s: %v", path, err)
+}
+
+func readContractDocument(t *testing.T, path string) string {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(got)
+}
+
+func assertDocumentContainsAll(t *testing.T, path string, wants []string) {
+	t.Helper()
+	content := readContractDocument(t, path)
+	for _, want := range wants {
+		if !strings.Contains(content, want) {
+			t.Errorf("delivery contract document %s missing %q", path, want)
 		}
-		for _, want := range wants {
-			if !strings.Contains(string(got), want) {
-				t.Fatalf("native relationship contract %s missing %q", path, want)
-			}
+	}
+}
+
+func assertDocumentOmitsAll(t *testing.T, path string, forbidden []string) {
+	t.Helper()
+	content := readContractDocument(t, path)
+	for _, phrase := range forbidden {
+		if strings.Contains(content, phrase) {
+			t.Errorf("delivery contract document %s retains obsolete language %q", path, phrase)
 		}
 	}
 }

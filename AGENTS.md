@@ -113,8 +113,9 @@ network.
 - **Delivery.** Explicitly invoke `delivery-issue` with one approved issue to
   take it through implementation, independent review, squash merge, and green
   post-merge CI. [`workflows/delivery-issue.md`](workflows/delivery-issue.md) is
-  the sole delivery workflow source of truth; there is no fast path around the
-  Agent Brief contract.
+  the sole delivery workflow source of truth. Admission consumes the
+  producer-neutral Delivery Contract defined in
+  [`docs/agents/delivery-contract.md`](docs/agents/delivery-contract.md).
 - **Conventional Commits.** Commit messages follow `type(scope): summary`
   (e.g. `feat(cli): ...`, `fix(doctor): ...`, `docs(adr): ...`).
 - **Pull requests.** Use [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).

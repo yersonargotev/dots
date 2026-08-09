@@ -1,6 +1,6 @@
 ---
 name: delivery-issue
-description: Delivers one approved dots GitHub issue through implementation, validation, independent review, squash merge, and green post-merge CI. Use only when the user explicitly invokes delivery-issue with one issue number or same-repository issue URL.
+description: Processes one approved dots GitHub issue from a producer-neutral Delivery Contract through a tracking result or implementation, review, squash merge, and green post-merge CI. Use only when the user explicitly invokes delivery-issue with one issue number or same-repository issue URL.
 disable-model-invocation: true
 argument-hint: "<issue-number-or-url>"
 ---
