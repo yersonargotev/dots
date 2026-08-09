@@ -86,6 +86,60 @@ entries:
 	}
 }
 
+func TestUpdatePreflightUsesSelectedManifestFile(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/custom": "custom\n",
+		"dots.yaml": `version: 1
+profiles:
+  default:
+    tags: [default]
+`,
+		"custom.yaml": `version: 1
+profiles:
+  custom:
+    tags: [custom]
+entries:
+  - source: configs/custom
+    target: ~/.custom
+    strategy: symlink
+    tags: [custom]
+`,
+	})
+	saveInstalledSelection(t, stateRoot, "custom")
+	advanceUpstream(t, origin, "update custom manifest", map[string]string{
+		"configs/new": "new\n",
+		"custom.yaml": `version: 1
+profiles:
+  custom:
+    tags: [custom, new]
+entries:
+  - source: configs/custom
+    target: ~/.custom
+    strategy: symlink
+    tags: [custom]
+  - source: configs/new
+    target: ~/.new
+    strategy: symlink
+    tags: [new]
+`,
+	})
+
+	out := runBareUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "custom.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+
+	if want := "Current: profiles=custom extra-tags=(none) effective-tags=custom,new"; !strings.Contains(out, want) {
+		t.Fatalf("output missing alternate manifest evolution %q:\n%s", want, out)
+	}
+	if _, err := os.Readlink(filepath.Join(home, ".new")); err != nil {
+		t.Fatalf("alternate manifest update did not apply incoming entry: %v", err)
+	}
+}
+
 func TestUpdateExplicitSelectionCompletelyOverridesRecordedIntent(t *testing.T) {
 	requireGitCLI(t)
 	home := t.TempDir()

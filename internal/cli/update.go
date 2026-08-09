@@ -209,11 +209,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	incomingManifestData, err := gitrepo.ReadFileAtRevision(paths.SourceRoot, preRefresh.NewRev, "dots.yaml")
-	if err != nil {
-		return updateReport{}, err
-	}
-	incomingManifest, err := manifest.Parse(incomingManifestData)
+	incomingManifest, err := loadUpdatedManifest(manifestPath, paths.SourceRoot, preRefresh, true)
 	if err != nil {
 		return updateReport{}, err
 	}
