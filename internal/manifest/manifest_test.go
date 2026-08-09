@@ -2265,6 +2265,10 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	if !ok || atuin.Source != "configs/atuin/config.toml" || atuin.Strategy != "copy" || atuin.Ownership != "toml-subset" {
 		t.Errorf("Atuin config entry = %#v, want copy with TOML Subset Ownership", atuin)
 	}
+	bat, ok := entriesByTarget["~/.config/bat/config"]
+	if !ok || bat.Source != "configs/bat/config" || bat.Strategy != "copy" || bat.Ownership != "" {
+		t.Errorf("bat config entry = %#v, want copy with implicit Whole-Target Ownership", bat)
+	}
 	portable, ok := entriesByTarget["~/.config/dots/zsh/zshrc"]
 	if !ok || portable.Source != "configs/zsh/zshrc" || portable.Strategy != "symlink" {
 		t.Errorf("portable zsh entry = %#v, want managed symlink", portable)

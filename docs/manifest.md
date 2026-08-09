@@ -207,7 +207,7 @@ Current Managed Entries:
 | `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `desktop` | `linux` | `Warp` |
 | `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `copy` | `core` | `darwin`, `linux` | `atuin`; owns TOML subset |
 | `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
-| `configs/bat/config` | `~/.config/bat/config` | `symlink` | `core` | `darwin`, `linux` | `bat` |
+| `configs/bat/config` | `~/.config/bat/config` | `copy` | `core` | `darwin`, `linux` | `bat`; whole-target ownership |
 | `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `core` | `darwin`, `linux` | None |
 | `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `core` | `darwin`, `linux` | `neovim` |
 | `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `core` | `darwin`, `linux` | None |

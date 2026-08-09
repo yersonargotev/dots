@@ -8,7 +8,10 @@ footprint is one managed config file:
 --theme="Catppuccin Mocha"
 ```
 
-`dots` symlinks it to `~/.config/bat/config`. There is **no managed theme file**
+`dots` materializes it as a regular file at `~/.config/bat/config` with
+Whole-Target Ownership. This keeps supported bat writes out of the Installed
+Repository: a confirmed `bat --generate-config-file` rewrite becomes Drift and
+is never treated as aligned local evolution. There is **no managed theme file**
 and **no managed cache** — the only thing this slice owns is the theme selection,
 and the theme it selects ships **inside bat itself**.
 
@@ -34,7 +37,7 @@ Catppuccin. It is **intentionally excluded** from the repo:
 
 | Live artifact | Category | Repository decision |
 | --- | --- | --- |
-| `~/.config/bat/config` (`--theme="Catppuccin Mocha"`) | **Portable / source-of-truth** | Managed as `configs/bat/config`, symlinked via `dots.yaml`. |
+| `~/.config/bat/config` (`--theme="Catppuccin Mocha"`) | **Portable / source-of-truth** | Materialized from `configs/bat/config` as a regular Whole-Target Ownership target. |
 | `~/.config/bat/themes/Catppuccin Mocha.tmTheme` (~66 KB) | **Downloaded / redundant** | **Excluded.** The theme is built-in since bat 0.25, so the file is dead weight, not source-owned. Versioning it would be copying machine state verbatim — exactly what epic #37 rejects. |
 | `~/.cache/bat/` (`syntaxes.bin`, `themes.bin`, `metadata.yaml`) | **Generated** (`bat cache --build`) | **Excluded.** Regenerable, and only existed to register the redundant custom theme. With the built-in theme there is nothing to build. |
 | Shell alias (`cat`→`bat`), `BAT_THEME` / `MANPAGER` / `BAT_*` env | **Not in use** | Nothing to migrate. If ever adopted, they belong to the Zsh slice or a future slice — never invented here. |
@@ -60,10 +63,9 @@ friction.
 
 ## Local machine overrides
 
-Layer machine-specific bat settings without touching this slice:
+Layer machine-specific bat settings without changing the whole-target config:
 
-- A different theme on one host: set it in a local, uncommitted bat config, or
-  export `BAT_THEME` from `~/.zshrc.local`.
+- A different theme on one host: export `BAT_THEME` from `~/.zshrc.local`.
 - A genuinely custom theme: drop the `.tmTheme` into `~/.config/bat/themes/`,
   run `bat cache --build`, and keep both out of the repo (the cache is generated;
   the theme is host-local) unless it becomes portable for every machine — in
@@ -96,8 +98,8 @@ go run ./cmd/dots status \
 Expected results:
 
 - `install` and `status` run clean and report the bat entry as **aligned**.
-- `$sandbox_home/.config/bat/config` is a symlink into the repo and resolves the
-  **built-in** Catppuccin Mocha theme:
+- `$sandbox_home/.config/bat/config` is a regular file outside the Installed
+  Repository and selects the **built-in** Catppuccin Mocha theme:
   `echo test | BAT_CONFIG_DIR="$sandbox_home/.config/bat" bat -p -l txt` renders
   with Catppuccin colors and exits 0.
 - **No** `~/.config/bat/themes/` and **no** `~/.cache/bat/` artifact is created
