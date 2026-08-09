@@ -14,6 +14,7 @@ import (
 	"github.com/yersonargotev/dots/internal/seededstate"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/textblock"
 )
 
 // Status describes what installing an Action would do to its target.
@@ -238,6 +239,8 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 				action.PreviousContent = append([]byte(nil), rec.OwnedContent...)
 			} else if rec.Ownership == "seeded" {
 				action.PreviousContent = append([]byte(nil), rec.SeededBaseline...)
+			} else if rec.Ownership == "marked-block" {
+				action.PreviousContent = append([]byte(nil), rec.OwnedBytes...)
 			}
 		}
 		targetKey := filepath.Clean(target)
@@ -289,7 +292,15 @@ func planLegacyMigration(entry manifest.Entry, currentSource string, migration L
 		return LegacyMigration{}, false, fmt.Errorf("read migration source %s: %w", currentSource, err)
 	}
 	planned := migration
-	planned.ExpectedLinkContent = append([]byte(nil), current...)
+	expectedPath := migration.LinkDestination
+	if migration.LegacyContentTarget != "" {
+		expectedPath = migration.LegacyContentTarget
+	}
+	expected, err := os.ReadFile(expectedPath)
+	if err != nil {
+		return LegacyMigration{}, false, fmt.Errorf("read current legacy target %s: %w", expectedPath, err)
+	}
+	planned.ExpectedLinkContent = expected
 	switch entry.Ownership {
 	case "seeded":
 		reconciliation := seededstate.Reconcile(migration.CapturedContent, migration.PreviousSourceContent, current)
@@ -328,6 +339,12 @@ func planLegacyMigration(entry manifest.Entry, currentSource string, migration L
 			return LegacyMigration{}, false, nil
 		}
 		planned.FinalContent = merged
+	case "marked-block":
+		reconciliation := textblock.MigrateLegacyOwned(migration.CapturedContent, migration.PreviousSourceContent, current, textblock.DotsManagedMarkers())
+		if !reconciliation.Compatible {
+			return LegacyMigration{}, false, nil
+		}
+		planned.FinalContent = reconciliation.Content
 	default:
 		if !bytes.Equal(migration.CapturedContent, migration.PreviousSourceContent) {
 			return LegacyMigration{}, false, nil
@@ -695,6 +712,15 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 	} else if !exists {
 		return StatusMissingSource, nil
 	}
+	if entry.Ownership == "marked-block" {
+		source, err := os.ReadFile(sourceAbs)
+		if err != nil {
+			return "", fmt.Errorf("read marked-block source %s: %w", sourceAbs, err)
+		}
+		if !textblock.ValidOwnedSource(source, textblock.DotsManagedMarkers()) {
+			return "", fmt.Errorf("marked-block source %s must contain exactly one complete block and no external content", sourceAbs)
+		}
+	}
 
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
@@ -719,6 +745,28 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 			return StatusConflict, nil
 		}
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
+			if entry.Ownership == "marked-block" {
+				rec, ok := meta.FindByTarget(target)
+				if !ok || rec.Strategy != entry.Strategy || rec.Source != entry.Source || rec.Ownership != "marked-block" || len(rec.OwnedBytes) == 0 {
+					return StatusConflict, nil
+				}
+				live, readErr := os.ReadFile(target)
+				if readErr != nil {
+					return "", fmt.Errorf("read marked-block target %s: %w", target, readErr)
+				}
+				current, readErr := os.ReadFile(sourceAbs)
+				if readErr != nil {
+					return "", fmt.Errorf("read marked-block source %s: %w", sourceAbs, readErr)
+				}
+				reconciliation := textblock.ReconcileOwned(live, rec.OwnedBytes, current, textblock.DotsManagedMarkers())
+				if !reconciliation.Compatible {
+					return StatusConflict, nil
+				}
+				if reconciliation.Changed {
+					return StatusUpdate, nil
+				}
+				return StatusUnchanged, nil
+			}
 			if entry.Ownership == "seeded" {
 				rec, ok := meta.FindByTarget(target)
 				if !ok || rec.Strategy != entry.Strategy || rec.Source != entry.Source || rec.Ownership != "seeded" {

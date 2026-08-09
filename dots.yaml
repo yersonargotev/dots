@@ -187,9 +187,10 @@ dependencies:
         dnf: jq
         pacman: jq
 entries:
-  - source: configs/zsh/zshrc
+  - source: configs/zsh/loader.zsh
     target: ~/.zshrc
-    strategy: symlink
+    strategy: copy
+    ownership: marked-block
     tags:
       - core
     os:
@@ -201,6 +202,14 @@ entries:
         apt: zsh
         dnf: zsh
         pacman: zsh
+  - source: configs/zsh/zshrc
+    target: ~/.config/dots/zsh/zshrc
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
   - source: configs/zsh/zimrc
     target: ~/.zimrc
     strategy: symlink

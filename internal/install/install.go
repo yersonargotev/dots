@@ -11,6 +11,7 @@ import (
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/textblock"
 	"github.com/yersonargotev/dots/internal/version"
 )
 
@@ -113,6 +114,7 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 		}
 		hash := ""
 		var ownedContent []byte
+		var ownedBytes []byte
 		var seededBaseline []byte
 		recordedOwnership := action.Ownership
 		if recordedOwnership == "" {
@@ -153,6 +155,11 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 							return fmt.Errorf("read seeded baseline %s: %w", resolvedSources[i][0], err)
 						}
 					}
+				} else if action.Ownership == "marked-block" {
+					ownedBytes, err = os.ReadFile(resolvedSources[i][0])
+					if err != nil {
+						return fmt.Errorf("read owned marked block %s: %w", resolvedSources[i][0], err)
+					}
 				}
 			}
 		}
@@ -163,6 +170,7 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 			Strategy:       action.Strategy,
 			Ownership:      recordedOwnership,
 			OwnedContent:   ownedContent,
+			OwnedBytes:     ownedBytes,
 			SeededBaseline: seededBaseline,
 			Hash:           hash,
 			InstalledAt:    now,
@@ -283,7 +291,7 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			if opts.StateRoot == "" {
 				return nil, fmt.Errorf("update for %s requires state root for Backup Set metadata", action.Target)
 			}
-			if action.Strategy != "copy" || (action.Ownership != "json-subset" && action.Ownership != "jsonc-subset" && action.Ownership != "toml-subset" && action.Ownership != "seeded") {
+			if action.Strategy != "copy" || (action.Ownership != "json-subset" && action.Ownership != "jsonc-subset" && action.Ownership != "toml-subset" && action.Ownership != "marked-block" && action.Ownership != "seeded") {
 				return nil, fmt.Errorf("update for %s requires copy strategy with reconcilable ownership", action.Target)
 			}
 			if err := validateBackupStateRoot(opts.StateRoot, home); err != nil {
@@ -618,6 +626,26 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 		}
 		if err := os.WriteFile(action.Target, current, info.Mode().Perm()); err != nil {
 			return fmt.Errorf("advance seeded target %s: %w", action.Target, err)
+		}
+	case "marked-block":
+		live, err := os.ReadFile(action.Target)
+		if err != nil {
+			return fmt.Errorf("read marked-block target %s: %w", action.Target, err)
+		}
+		current, err := os.ReadFile(source)
+		if err != nil {
+			return fmt.Errorf("read marked-block source %s: %w", source, err)
+		}
+		reconciliation := textblock.ReconcileOwned(live, action.PreviousContent, current, textblock.DotsManagedMarkers())
+		if !reconciliation.Compatible {
+			return fmt.Errorf("install plan is stale: marked block %s changed before update", action.Target)
+		}
+		info, err := os.Stat(action.Target)
+		if err != nil {
+			return fmt.Errorf("stat marked-block target %s: %w", action.Target, err)
+		}
+		if err := os.WriteFile(action.Target, reconciliation.Content, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("update marked block %s: %w", action.Target, err)
 		}
 	default:
 		return fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)

@@ -14,6 +14,7 @@ import (
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/textblock"
 )
 
 // Options carries the resolved inputs needed to apply an Uninstall Plan.
@@ -99,6 +100,21 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 			}
 			continue
 		}
+		if rec.Ownership == "marked-block" && len(rec.OwnedBytes) > 0 {
+			if action.Status != plan.UninstallRemove {
+				continue
+			}
+			applied, deleted, err := removeOwnedBlock(rec, home)
+			if err != nil {
+				return result, err
+			}
+			if applied && deleted {
+				result.Removed = append(result.Removed, action.Target)
+			} else if applied {
+				result.Updated = append(result.Updated, action.Target)
+			}
+			continue
+		}
 		remove, err := stillRemovable(rec, opts.SourceRoot, home, opts.Force)
 		if err != nil {
 			return result, err
@@ -129,6 +145,43 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 	}
 
 	return result, nil
+}
+
+func removeOwnedBlock(rec state.Record, home string) (applied, deleted bool, err error) {
+	if err := plan.ValidateResolvedTarget(rec.Target, home); err != nil {
+		return false, false, err
+	}
+	if err := plan.ValidateTargetParentInsideHome(rec.Target, home); err != nil {
+		return false, false, err
+	}
+	if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(rec.Target, home, "marked-block target"); err != nil {
+		return false, false, err
+	}
+	info, err := os.Stat(rec.Target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, false, nil
+		}
+		return false, false, fmt.Errorf("stat marked-block target %s: %w", rec.Target, err)
+	}
+	live, err := os.ReadFile(rec.Target)
+	if err != nil {
+		return false, false, fmt.Errorf("read marked-block target %s: %w", rec.Target, err)
+	}
+	content, _, empty, compatible := textblock.RemoveOwned(live, rec.OwnedBytes, textblock.DotsManagedMarkers())
+	if !compatible {
+		return false, false, nil
+	}
+	if empty {
+		if err := removeTarget(rec.Target); err != nil {
+			return false, false, fmt.Errorf("remove empty marked-block target %s: %w", rec.Target, err)
+		}
+		return true, true, nil
+	}
+	if err := os.WriteFile(rec.Target, content, info.Mode().Perm()); err != nil {
+		return false, false, fmt.Errorf("write marked-block target %s after removal: %w", rec.Target, err)
+	}
+	return true, false, nil
 }
 
 // removeOwnedJSON revalidates and subtracts a partial contribution at apply

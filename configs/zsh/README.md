@@ -5,23 +5,26 @@ workstation configuration slice (issue #38, epic #37).
 
 ## Managed targets
 
-`dots` symlinks exactly three files into your home directory:
+`dots` installs a co-owned native loader and three portable symlinks:
 
 | Source                | Target       |
 | --------------------- | ------------ |
-| `configs/zsh/zshrc`   | `~/.zshrc`   |
+| `configs/zsh/loader.zsh` | `~/.zshrc` (`copy`, marked block) |
+| `configs/zsh/zshrc`   | `~/.config/dots/zsh/zshrc` |
 | `configs/zsh/zimrc`   | `~/.zimrc`   |
 | `configs/zsh/zshenv`  | `~/.zshenv`  |
 
-The `symlink` strategy is **required**: `~/.zshrc` resolves its own real
-location to find the modular files under `rc.d/`. A copied `~/.zshrc` would not
-be able to locate them.
+The native `~/.zshrc` remains a regular file so third-party installers can
+append their own shell content without writing into the Installed Repository.
+Its initial dots-owned block loads the portable symlink; dots preserves all
+content outside that block.
 
 ## Layout
 
 ```
 configs/zsh/
-├── zshrc                  # entry point: pre-init → Zim → post-init → local
+├── loader.zsh             # native marked block loading the portable entrypoint
+├── zshrc                  # portable entrypoint: pre-init → Zim → post-init → local
 ├── zimrc                  # Zim module list
 ├── zshenv                 # environment for all shells (editor, cargo, foundry)
 ├── rc.d/
