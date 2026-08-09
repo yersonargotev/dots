@@ -1,12 +1,19 @@
 # Git configuration
 
-`configs/git/gitconfig` is the repository-managed Git configuration installed as
-`~/.gitconfig`. It intentionally contains only portable defaults that are safe to
-share across machines.
+`configs/git/loader.gitconfig` is installed as a dots-owned initial block in the
+regular native `~/.gitconfig`. The block loads the portable
+`configs/git/gitconfig` symlink at `~/.config/dots/git/gitconfig`, then the
+established `~/.gitconfig.local` extension. Native content follows the block and
+therefore has final precedence.
 
-Machine-specific configuration belongs in `~/.gitconfig.local`, which is loaded
-through the managed `[include]` entry. Use `gitconfig.local.example` as a starting
-point for the local file; never commit the real local file.
+The native file remains writable by `git config --global` and other Git tooling
+without changing the Installed Repository. Dots preserves comments and values
+outside its exact marked block during install, update, migration, and uninstall.
+Duplicate, incomplete, moved, or edited blocks are Conflicts and are not mutated.
+
+Machine-specific configuration belongs in `~/.gitconfig.local`. Use
+`gitconfig.local.example` as a starting point for the local file; never commit the
+real local file.
 
 ## Classification from current machine evidence
 
@@ -15,14 +22,20 @@ private values. The resulting boundary is:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| Portable | `init.defaultBranch`, `pull.rebase`, `merge.conflictStyle=diff3` | Managed in `configs/git/gitconfig`. |
+| Portable | `init.defaultBranch`, `pull.rebase`, `merge.conflictStyle=diff3` | Managed in `configs/git/gitconfig` and loaded first. |
 | Local/private | `user.name`, `user.email`, signing keys, credential helpers | Kept in `~/.gitconfig.local`. |
 | Generated | credential stores, tool caches, Git runtime state | Not managed by `dots`. |
-| Machine-specific | work/client `includeIf` rules, absolute local paths, optional pager/tool wiring such as delta | Kept in `~/.gitconfig.local` unless a later issue manages that tool explicitly. |
+| Machine-specific | work/client `includeIf` rules, absolute local paths, optional pager/tool wiring such as delta | Kept in `~/.gitconfig.local` or native content unless a later issue manages that tool explicitly. |
+
+Git reads the three layers in this order:
+
+1. portable baseline;
+2. machine-local extension;
+3. native additions after the dots block.
 
 ## Local extension point
 
-The managed config works when `~/.gitconfig.local` is absent. That is intentional:
+The managed loader works when `~/.gitconfig.local` is absent. That is intentional:
 sandbox validation must not require private material.
 
 For a real workstation only, create the local file deliberately and never
@@ -72,7 +85,8 @@ go run ./cmd/dots status \
   --state-root "$sandbox_state"
 ```
 
-The expected result is that `~/.gitconfig` is installed/aligned inside
-`$sandbox_home`. Both the Dotfiles CLI target paths and the Go toolchain caches
-are redirected into `$sandbox_root`; the maintainer's real home directory must
-not be touched.
+The expected result is that `~/.gitconfig` is a regular file containing the
+initial dots block and that `~/.config/dots/git/gitconfig` is the portable
+symlink. Both the Dotfiles CLI target paths and the Go toolchain caches are
+redirected into `$sandbox_root`; the maintainer's real home directory must not
+be touched.

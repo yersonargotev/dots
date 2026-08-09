@@ -238,9 +238,10 @@ entries:
         apt: zsh
         dnf: zsh
         pacman: zsh
-  - source: configs/git/gitconfig
+  - source: configs/git/loader.gitconfig
     target: ~/.gitconfig
-    strategy: symlink
+    strategy: copy
+    ownership: marked-block
     tags:
       - core
     os:
@@ -252,6 +253,14 @@ entries:
         apt: git
         dnf: git
         pacman: git
+  - source: configs/git/gitconfig
+    target: ~/.config/dots/git/gitconfig
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
   - source: configs/dots/theme.sh
     target: ~/.config/dots/theme.sh
     strategy: symlink

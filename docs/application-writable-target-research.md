@@ -37,7 +37,7 @@ documentation, official project documentation, or the repository under review.
 | 1 | `configs/zsh/zshrc` | `~/.zshrc` | Application-Writable Target | The official Zsh `zsh-newuser-install` guided configuration supports `~/.zshrc`; after choices, it offers to save the file and backs up an existing one. [Zsh User Configuration Functions](https://zsh.sourceforge.io/Doc/Release/User-Contributions.html#User-Configuration-Functions) |
 | 2 | `configs/zsh/zimrc` | `~/.zimrc` | Read under ordinary use | Zimfw calls this its plugin-manager configuration and uses it to build files in `$ZIM_HOME`; its documented install/update commands write modules and `init.zsh` there, not `.zimrc`. No first-party normal writer to `.zimrc` was found. [Zimfw commands](https://zimfw.sh/docs/commands/) |
 | 3 | `configs/zsh/zshenv` | `~/.zshenv` | Read under ordinary use | Zsh documents `.zshenv` as a startup file it tests/loads. The documented new-user configurator handles only `.zshrc`; no normal writer to `.zshenv` was found. [Zsh modules](https://zsh.sourceforge.io/Doc/Release/Zsh-Modules.html), [new-user function](https://zsh.sourceforge.io/Doc/Release/User-Contributions.html#User-Configuration-Functions) |
-| 4 | `configs/git/gitconfig` | `~/.gitconfig` | Application-Writable Target | `git config --global` writes the global user configuration; Git’s own manual says the command adds values to `.gitconfig` in the home directory. [Git user manual](https://git-scm.com/docs/user-manual#telling-git-your-name) |
+| 4 | `configs/git/gitconfig` | `~/.config/dots/git/gitconfig` | Read under ordinary use | The regular native `~/.gitconfig` loads this portable baseline through its dots-owned initial block. Git reads the fragment, while supported global writes remain in the native file. [Git user manual](https://git-scm.com/docs/user-manual#telling-git-your-name) |
 | 5 | `configs/dots/theme.sh` | `~/.config/dots/theme.sh` | Read under ordinary use | This repository documents it as the helper read by the adaptive-theme setup; `tmux.conf` and statusline scripts source it. It has no external owning application or documented writer in scope. [Repository adaptive-theme audit](adaptive-theme-audit.md) |
 | 6 | `configs/dots/adaptive-theme` | `~/.config/dots/adaptive-theme` | Read under ordinary use | The repository documents it as an opt-in marker read by `theme.sh`; installing the tag creates it. No application writer in scope was found. [Repository adaptive-theme audit](adaptive-theme-audit.md) |
 | 7 | `configs/starship/starship.toml` | `~/.config/starship.toml` | Explicit operator output | Starship documents presets with an explicit output target, e.g. `starship preset no-runtime-versions -o ~/.config/starship.toml`. This can overwrite through the symlink only when the operator selects that path; it is not a normal prompt-runtime write. [Starship preset](https://starship.rs/presets/no-runtimes) |
@@ -60,9 +60,10 @@ documentation, official project documentation, or the repository under review.
 ### Git
 
 Git is unambiguous: `git config --global user.name ...` and `user.email ...`
-write the home `.gitconfig` according to Git’s own manual. This is a supported,
-ordinary configuration command, so the symlink would expose the repository
-source to a normal Git configuration operation.
+write the home `.gitconfig` according to Git’s own manual. The native target is
+therefore a regular co-owned file whose initial marked block loads the portable
+symlink and local extension; normal Git writes no longer expose the repository
+source.
 
 ### Atuin
 

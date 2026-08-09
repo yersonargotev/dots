@@ -1,0 +1,6 @@
+# >>> dots managed block >>>
+# Load portable defaults before the established machine-local extension.
+[include]
+	path = ~/.config/dots/git/gitconfig
+	path = ~/.gitconfig.local
+# <<< dots managed block <<<

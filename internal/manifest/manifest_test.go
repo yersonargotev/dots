@@ -2227,7 +2227,7 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 		dep      string
 	}{
 		{name: "zsh", target: "~/.zshrc", source: "configs/zsh/loader.zsh", strategy: "copy", dep: "zsh"},
-		{name: "git", target: "~/.gitconfig", source: "configs/git/gitconfig", strategy: "symlink", dep: "git"},
+		{name: "git", target: "~/.gitconfig", source: "configs/git/loader.gitconfig", strategy: "copy", dep: "git"},
 		{name: "starship", target: "~/.config/starship.toml", source: "configs/starship/starship.toml", strategy: "symlink", dep: "starship"},
 		{name: "tmux", target: "~/.tmux.conf", source: "configs/tmux/tmux.conf", strategy: "symlink", dep: "tmux"},
 	}
@@ -2258,6 +2258,9 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	if got := entriesByTarget["~/.zshrc"].Ownership; got != "marked-block" {
 		t.Errorf("zsh ownership = %q, want marked-block", got)
 	}
+	if got := entriesByTarget["~/.gitconfig"].Ownership; got != "marked-block" {
+		t.Errorf("git ownership = %q, want marked-block", got)
+	}
 	atuin, ok := entriesByTarget["~/.config/atuin/config.toml"]
 	if !ok || atuin.Source != "configs/atuin/config.toml" || atuin.Strategy != "copy" || atuin.Ownership != "toml-subset" {
 		t.Errorf("Atuin config entry = %#v, want copy with TOML Subset Ownership", atuin)
@@ -2265,6 +2268,10 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	portable, ok := entriesByTarget["~/.config/dots/zsh/zshrc"]
 	if !ok || portable.Source != "configs/zsh/zshrc" || portable.Strategy != "symlink" {
 		t.Errorf("portable zsh entry = %#v, want managed symlink", portable)
+	}
+	portableGit, ok := entriesByTarget["~/.config/dots/git/gitconfig"]
+	if !ok || portableGit.Source != "configs/git/gitconfig" || portableGit.Strategy != "symlink" {
+		t.Errorf("portable git entry = %#v, want managed symlink", portableGit)
 	}
 }
 
@@ -2334,9 +2341,9 @@ func TestRepositoryManagedConfigsExposeLocalExtensionPoints(t *testing.T) {
 		},
 		{
 			name: "git has private local include",
-			path: "configs/git/gitconfig",
+			path: "configs/git/loader.gitconfig",
 			contains: []string{
-				"Machine-specific identity belongs in ~/.gitconfig.local",
+				"established machine-local extension",
 				"path = ~/.gitconfig.local",
 			},
 		},
@@ -2403,11 +2410,25 @@ func TestRepositoryGitConfigClassifiesPortableAndLocalConcerns(t *testing.T) {
 		"defaultBranch = main",
 		"rebase = false",
 		"conflictStyle = diff3",
-		"path = ~/.gitconfig.local",
 	} {
 		if !strings.Contains(managed, want) {
 			t.Fatalf("managed gitconfig missing portable/local boundary %q:\n%s", want, managed)
 		}
+	}
+	if strings.Contains(managed, "gitconfig.local") {
+		t.Fatalf("portable gitconfig includes the local extension directly:\n%s", managed)
+	}
+
+	loaderPath := filepath.Join(root, "configs/git/loader.gitconfig")
+	loaderBytes, err := os.ReadFile(loaderPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", loaderPath, err)
+	}
+	loader := string(loaderBytes)
+	portableIndex := strings.Index(loader, "path = ~/.config/dots/git/gitconfig")
+	localIndex := strings.Index(loader, "path = ~/.gitconfig.local")
+	if portableIndex < 0 || localIndex < 0 || portableIndex >= localIndex {
+		t.Fatalf("git loader include order is not portable then local:\n%s", loader)
 	}
 
 	normalizedManaged := strings.ToLower(managed)
