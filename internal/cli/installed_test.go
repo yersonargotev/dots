@@ -70,7 +70,7 @@ entries:
     tags: [editor]
     os: [darwin, linux]
 `)
-	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{{
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: 2, Entries: []state.Record{{
 		Target:   filepath.Join(xdgStateHome, "nvim", "lazy-lock.json"),
 		Source:   "configs/nvim/lazy-lock.json",
 		Strategy: "copy",

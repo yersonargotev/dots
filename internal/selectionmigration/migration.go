@@ -85,7 +85,10 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 	}
 
 	report, err := installed.Build(m, meta, installed.Options{
-		OS: opts.OS, Home: opts.Home, StatePath: opts.StatePath,
+		OS:           opts.OS,
+		Home:         opts.Home,
+		XDGStateHome: opts.XDGStateHome,
+		StatePath:    opts.StatePath,
 	})
 	if err != nil {
 		return Analysis{}, err
