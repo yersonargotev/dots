@@ -240,7 +240,11 @@ func reconcileParsedTOML(targetData []byte, previous, current *tomlDocument) (TO
 			if !tomlValuesEqual(targetValue, previousValue) {
 				return TOMLReconciliation{}, nil
 			}
-			edits = append(edits, tomlEdit{start: targetEntry.lineStart, end: targetEntry.lineEnd})
+			edits = append(edits, tomlEdit{
+				start:   targetEntry.lineStart,
+				end:     targetEntry.lineEnd,
+				content: tomlCommentsForRemoval(targetData[targetEntry.lineStart:targetEntry.lineEnd]),
+			})
 			continue
 		}
 		currentValue, ok := tomlValueAt(current.values, currentEntry.path)
@@ -653,6 +657,46 @@ func tomlContainsComments(data []byte) bool {
 		}
 	}
 	return false
+}
+
+func tomlCommentsForRemoval(expression []byte) []byte {
+	parser := unstable.Parser{KeepComments: true}
+	parser.Reset(expression)
+	comments := map[int][]byte{}
+	var offsets []int
+	for parser.NextExpression() {
+		collectTOMLComments(parser.Expression(), comments, &offsets)
+	}
+	if parser.Error() != nil {
+		return nil
+	}
+	sort.Ints(offsets)
+	var result []byte
+	for _, offset := range offsets {
+		lineStart := bytes.LastIndexByte(expression[:offset], '\n') + 1
+		prefix := expression[lineStart:offset]
+		if len(bytes.TrimSpace(prefix)) == 0 {
+			result = append(result, prefix...)
+		}
+		result = append(result, comments[offset]...)
+		result = append(result, '\n')
+	}
+	return result
+}
+
+func collectTOMLComments(node *unstable.Node, comments map[int][]byte, offsets *[]int) {
+	if node == nil {
+		return
+	}
+	if node.Kind == unstable.Comment {
+		offset := int(node.Raw.Offset)
+		if _, exists := comments[offset]; !exists {
+			comments[offset] = append([]byte(nil), node.Data...)
+			*offsets = append(*offsets, offset)
+		}
+	}
+	collectTOMLComments(node.Child(), comments, offsets)
+	collectTOMLComments(node.Next(), comments, offsets)
 }
 
 func tomlNodeContainsComment(node *unstable.Node) bool {

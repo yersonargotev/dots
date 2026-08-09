@@ -540,7 +540,7 @@ name = "catppuccin-mocha"
 `)
 	target := []byte(`# Atuin local configuration.
 enter_accept    = true # keep inline note
-retired = "old"
+retired = "old" # preserve retired note
 external = "untouched"
 
 [sync]
@@ -558,6 +558,7 @@ runtime = false # Atuin wrote this
 	got := string(reconciliation.Content)
 	for _, want := range []string{
 		"# Atuin local configuration.\n",
+		"# preserve retired note\n",
 		"enter_accept = false # keep inline note\n",
 		"external = \"untouched\"\n",
 		"runtime = false # Atuin wrote this\n",
@@ -645,6 +646,24 @@ func TestRemoveTOMLRemovesWholeMultilineArrayExpression(t *testing.T) {
 	}
 	if !compatible || !changed || empty || string(content) != "external = true\n" {
 		t.Fatalf("RemoveTOML() = (%q, %v, %v, %v), want only external value", content, changed, empty, compatible)
+	}
+}
+
+func TestRemoveTOMLPreservesCommentsInsideRemovedMultilineArray(t *testing.T) {
+	owned := []byte("history_filter = [\n  \"pwd\",\n  \"ls\",\n]\n")
+	target := []byte("history_filter = [ # keep array note\n  \"pwd\", # keep item note\n  \"ls\",\n]\nexternal = true\n")
+
+	content, changed, empty, compatible, err := RemoveTOML(target, owned)
+	if err != nil {
+		t.Fatalf("RemoveTOML() error = %v", err)
+	}
+	if !compatible || !changed || empty {
+		t.Fatalf("RemoveTOML() = (%q, %v, %v, %v), want compatible partial removal", content, changed, empty, compatible)
+	}
+	for _, want := range []string{"# keep array note\n", "# keep item note\n", "external = true\n"} {
+		if !strings.Contains(string(content), want) {
+			t.Fatalf("TOML after removal missing %q:\n%s", want, content)
+		}
 	}
 }
 
