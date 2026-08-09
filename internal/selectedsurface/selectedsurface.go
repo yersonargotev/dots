@@ -31,6 +31,15 @@ type SelectedEntry struct {
 	OverrideTag string
 }
 
+// EntryEvaluation is the ordered, de-duplicated diagnostic view of a
+// tag-selected Managed Entry. Applicable reports whether its OS Filter admits
+// the requested operating system; non-applicable entries let diagnostics
+// preserve the public skipped state without recreating selection rules.
+type EntryEvaluation struct {
+	SelectedEntry
+	Applicable bool
+}
+
 // DependencyOrigin records one dependency declaration and its manifest origin.
 type DependencyOrigin struct {
 	Dependency manifest.Dependency
@@ -60,6 +69,15 @@ func Evaluate(m manifest.Manifest, effectiveTags []string, osName string) Surfac
 	})
 }
 
+// EvaluateEntries returns the diagnostic Managed Entry scope for effective
+// tags and an operating system. It uses the same selection implementation as
+// Evaluate while retaining OS-excluded entries as non-applicable.
+func EvaluateEntries(m manifest.Manifest, effectiveTags []string, osName string) []EntryEvaluation {
+	return evaluateEntries(m, uniqueTags(effectiveTags), func(itemOS []string) bool {
+		return manifest.MatchesOS(itemOS, osName)
+	})
+}
+
 // EvaluateAll returns the portable selected surface across Darwin and Linux.
 // It evaluates each declaration once, preserving manifest order without
 // introducing an all-platform sentinel into the selected surface.
@@ -82,7 +100,6 @@ func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS func([]stri
 	}
 
 	seenSets := make([]manifest.DependencySet, 0)
-	seenEntries := make([]manifest.Entry, 0)
 	seenProvisioners := make([]manifest.Provisioner, 0)
 	seenOverrides := make([]SourceOverride, 0)
 	seenDependencies := map[string]int{}
@@ -129,12 +146,14 @@ func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS func([]stri
 				}
 			}
 		}
-		if !manifest.SharesTag(entry.Tags, tags) || !matchesOS(entry.OS) || containsExact(seenEntries, entry) {
+	}
+
+	for _, evaluated := range evaluateEntries(m, tags, matchesOS) {
+		if !evaluated.Applicable {
 			continue
 		}
-		seenEntries = append(seenEntries, entry)
-		source, overrideTag := entrySource(entry, tags)
-		result.Entries = append(result.Entries, SelectedEntry{Entry: cloneEntry(entry), Source: source, OverrideTag: overrideTag})
+		entry := evaluated.Entry
+		result.Entries = append(result.Entries, evaluated.SelectedEntry)
 		addDependencies(entry.Dependencies, Origin{Type: "entry", Name: entry.Target, Tags: cloneStrings(entry.Tags)})
 	}
 
@@ -147,6 +166,23 @@ func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS func([]stri
 		addDependencies(provisioner.Dependencies, Origin{Type: "provisioner", Name: provisioner.Tool, Tags: cloneStrings(provisioner.Tags)})
 	}
 
+	return result
+}
+
+func evaluateEntries(m manifest.Manifest, tags []string, matchesOS func([]string) bool) []EntryEvaluation {
+	result := []EntryEvaluation{}
+	seenEntries := make([]manifest.Entry, 0)
+	for _, entry := range m.Entries {
+		if !manifest.SharesTag(entry.Tags, tags) || containsExact(seenEntries, entry) {
+			continue
+		}
+		seenEntries = append(seenEntries, entry)
+		source, overrideTag := entrySource(entry, tags)
+		result = append(result, EntryEvaluation{
+			SelectedEntry: SelectedEntry{Entry: cloneEntry(entry), Source: source, OverrideTag: overrideTag},
+			Applicable:    matchesOS(entry.OS),
+		})
+	}
 	return result
 }
 
@@ -181,7 +217,12 @@ func containsExact[T any](values []T, candidate T) bool {
 	return false
 }
 
-func cloneStrings(values []string) []string { return append([]string(nil), values...) }
+func cloneStrings(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	return append([]string(nil), values...)
+}
 
 func cloneDependency(dependency manifest.Dependency) manifest.Dependency {
 	dependency.FontFallbackMatches = cloneStrings(dependency.FontFallbackMatches)
@@ -215,8 +256,9 @@ func cloneEntry(entry manifest.Entry) manifest.Entry {
 	entry.OS = cloneStrings(entry.OS)
 	entry.Dependencies = cloneDependencies(entry.Dependencies)
 	if entry.SourceOverrides != nil {
-		entry.SourceOverrides = make(map[string]string, len(entry.SourceOverrides))
-		for tag, source := range entry.SourceOverrides {
+		sourceOverrides := entry.SourceOverrides
+		entry.SourceOverrides = make(map[string]string, len(sourceOverrides))
+		for tag, source := range sourceOverrides {
 			entry.SourceOverrides[tag] = source
 		}
 	}
@@ -241,6 +283,9 @@ func cloneProvisioner(provisioner manifest.Provisioner) manifest.Provisioner {
 }
 
 func cloneDependencies(dependencies []manifest.Dependency) []manifest.Dependency {
+	if dependencies == nil {
+		return nil
+	}
 	result := make([]manifest.Dependency, len(dependencies))
 	for index, dependency := range dependencies {
 		result[index] = cloneDependency(dependency)

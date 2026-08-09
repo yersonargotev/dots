@@ -16,6 +16,7 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
@@ -155,15 +156,12 @@ func ScanSecrets(m manifest.Manifest, opts Options) (SecretReport, error) {
 		}
 		resolved = &selection
 	}
-	tags := resolved.Tags
+	surface := selectedsurface.Evaluate(m, resolved.Tags, opts.OS)
 
 	var report SecretReport
 	seen := map[string]bool{}
-	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, tags) || !manifest.MatchesOS(entry.OS, opts.OS) {
-			continue
-		}
-		source := manifest.EntrySource(entry, tags)
+	for _, selected := range surface.Entries {
+		source := selected.Source
 		if seen[source] {
 			continue
 		}

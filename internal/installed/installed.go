@@ -10,6 +10,7 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/state"
 )
 
@@ -313,6 +314,7 @@ func profileCoverage(m manifest.Manifest, opts Options, representedTags map[stri
 	out := []ProfileCoverage{}
 	for _, name := range profileNames {
 		profile := m.Profiles[name]
+		surface := selectedsurface.Evaluate(m, profile.Tags, opts.OS)
 		coveredTags, missingTags := splitTags(profile.Tags, representedTags)
 		if len(coveredTags) == 0 && !explicitProfiles[name] {
 			continue
@@ -326,8 +328,8 @@ func profileCoverage(m manifest.Manifest, opts Options, representedTags map[stri
 			coverage.Source = "recorded"
 		}
 
-		coverage.TotalEntries, coverage.CoveredEntries = entryCoverageForProfile(m, name, opts, matchedEntryKeys)
-		coverage.TotalProvisioners, coverage.RecordedProvisioners, coverage.ProvisionedProvisioners = provisionerCoverageForProfile(m, name, opts.OS, recordedProvisioners)
+		coverage.TotalEntries, coverage.CoveredEntries = entryCoverageForProfile(surface.Entries, opts, matchedEntryKeys)
+		coverage.TotalProvisioners, coverage.RecordedProvisioners, coverage.ProvisionedProvisioners = provisionerCoverageForProfile(surface.Provisioners, recordedProvisioners)
 		coverage.State = CoverageComplete
 		if len(missingTags) > 0 || coverage.CoveredEntries < coverage.TotalEntries || coverage.RecordedProvisioners < coverage.TotalProvisioners {
 			coverage.State = CoveragePartial
@@ -337,13 +339,10 @@ func profileCoverage(m manifest.Manifest, opts Options, representedTags map[stri
 	return out
 }
 
-func entryCoverageForProfile(m manifest.Manifest, profileName string, opts Options, matchedEntryKeys map[string]bool) (int, int) {
-	profile := m.Profiles[profileName]
+func entryCoverageForProfile(entries []selectedsurface.SelectedEntry, opts Options, matchedEntryKeys map[string]bool) (int, int) {
 	total, covered := 0, 0
-	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, profile.Tags) || !manifest.MatchesOS(entry.OS, opts.OS) {
-			continue
-		}
+	for _, selected := range entries {
+		entry := selected.Entry
 		total++
 		if matchedEntryKeys[entryKey(entry, opts)] {
 			covered++
@@ -352,14 +351,10 @@ func entryCoverageForProfile(m manifest.Manifest, profileName string, opts Optio
 	return total, covered
 }
 
-func provisionerCoverageForProfile(m manifest.Manifest, profileName, osName string, records map[string]state.ProvisionerRecord) (int, int, int) {
-	profile := m.Profiles[profileName]
+func provisionerCoverageForProfile(provisioners []manifest.Provisioner, records map[string]state.ProvisionerRecord) (int, int, int) {
 	total, recorded, provisioned := 0, 0, 0
 	seen := map[string]bool{}
-	for _, prov := range m.Provisioners {
-		if !manifest.SharesTag(prov.Tags, profile.Tags) || !manifest.MatchesOS(prov.OS, osName) {
-			continue
-		}
+	for _, prov := range provisioners {
 		executable, args := provision.RenderCommand(prov)
 		key := provisionerKey(prov.Tool, executable, args)
 		if seen[key] {
