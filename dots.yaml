@@ -532,7 +532,8 @@ entries:
         brew: zed
   - source: configs/zed/keymap.json
     target: ~/.config/zed/keymap.json
-    strategy: symlink
+    strategy: copy
+    ownership: seeded
     tags:
       - desktop
     os:
