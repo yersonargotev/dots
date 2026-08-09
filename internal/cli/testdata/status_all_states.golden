@@ -1,6 +1,7 @@
 Status for profile "work"
 
   ok           symlink   configs/zsh/zshrc -> /home/user/.zshrc
+  ok           copy      configs/nvim/lazy-lock.json -> /home/user/.local/state/nvim/lazy-lock.json
   missing      copy      configs/git/gitconfig -> /home/user/.gitconfig
   conflict     copy      configs/tmux/tmux.conf -> /home/user/.tmux.conf
     source override matches omitted tag(s): adaptive-theme, work-theme
@@ -9,7 +10,7 @@ Status for profile "work"
   drifted      copy      configs/starship.toml -> /home/user/.config/starship.toml
   unsupported  template  configs/nvim/init.lua -> /home/user/.config/nvim/init.lua
 
-Summary: 1 ok, 1 missing, 1 conflict, 1 skipped, 1 drifted, 1 unsupported
+Summary: 2 ok, 1 missing, 1 conflict, 1 skipped, 1 drifted, 1 unsupported
 
 Conflict guidance:
   Conflicts mean this profile is only partially managed until you choose a resolution.

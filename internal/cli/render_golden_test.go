@@ -25,6 +25,7 @@ func TestRenderPlanGolden(t *testing.T) {
 				Profile: "work",
 				Actions: []plan.Action{
 					{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
+					{Source: "configs/nvim/lazy-lock.json", Target: "/home/user/.local/state/nvim/lazy-lock.json", TargetRoot: "xdg-state", Strategy: "copy", Status: plan.StatusUnchanged, Reason: plan.ReasonSeededLocalEvolution},
 					{Source: "configs/app/settings.json", Target: "/home/user/.config/app/settings.json", Strategy: "copy", Status: plan.StatusMigrate},
 					{Source: "configs/git/gitconfig", Target: "/home/user/.gitconfig", Strategy: "symlink", Status: plan.StatusConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme"}},
 					{Source: "configs/starship.toml", Target: "/home/user/.config/starship.toml", Strategy: "copy", Status: plan.StatusUnchanged},

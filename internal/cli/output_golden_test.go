@@ -97,6 +97,8 @@ func TestEnvelopeGolden(t *testing.T) {
 					},
 					Entries: []status.Entry{
 						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", State: status.StateOK},
+						{Source: "configs/nvim/lazy-lock.json", Target: "/home/user/.local/state/nvim/lazy-lock.json", Strategy: "copy", State: status.StateOK, Reason: plan.ReasonSeededLocalEvolution},
+						{Source: "configs/bat/config", Target: "/home/user/.config/bat/config", Strategy: "copy", State: status.StateDrifted},
 						{Source: "configs/git/config", Target: "/home/user/.gitconfig", Strategy: "copy", State: status.StateMissing},
 						{Source: "configs/zellij/default.kdl", Target: "/home/user/.config/zellij/config.kdl", Strategy: "symlink", State: status.StateConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme"}},
 					},
@@ -168,6 +170,7 @@ func TestEnvelopeGolden(t *testing.T) {
 					Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
 				}, Actions: []plan.Action{
 					{Source: "configs/zsh/zshrc", ResolvedSource: "/abs/machine/local/path/MUST/NOT/APPEAR", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
+					{Source: "configs/nvim/lazy-lock.json", ResolvedSource: "/abs/MUST/NOT/APPEAR", Target: "/home/user/.local/state/nvim/lazy-lock.json", TargetRoot: "xdg-state", Strategy: "copy", Status: plan.StatusUnchanged, Reason: plan.ReasonSeededLocalEvolution},
 					{Source: "configs/app/settings.json", ResolvedSource: "/abs/MUST/NOT/APPEAR", Target: "/home/user/.config/app/settings.json", Strategy: "copy", Status: plan.StatusMigrate, Migration: &plan.LegacyMigration{CapturedContent: []byte("MUST NOT APPEAR")}},
 					{Source: "configs/git/config", Sources: []string{"configs/git/config", "configs/git/work.json"}, ResolvedSource: "/abs/x", ResolvedSources: []string{"/abs/x", "/abs/y"}, Content: []byte(`MUST NOT APPEAR`), Target: "/home/user/.gitconfig", Strategy: "copy", Status: plan.StatusConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme"}},
 				}},
@@ -183,18 +186,21 @@ func TestEnvelopeGolden(t *testing.T) {
 				Data: uninstallReport{
 					DryRun:    false,
 					StateRoot: "/home/user/.local/state/dots",
-					Plan: plan.UninstallPlan{Actions: []plan.UninstallAction{{
-						Source: "configs/antigravity/settings.json",
-						Sources: []string{
-							"configs/antigravity/settings.json",
-							"configs/antigravity/mobile-mcp-settings.json",
+					Plan: plan.UninstallPlan{Actions: []plan.UninstallAction{
+						{
+							Source: "configs/antigravity/settings.json",
+							Sources: []string{
+								"configs/antigravity/settings.json",
+								"configs/antigravity/mobile-mcp-settings.json",
+							},
+							Target:    "/home/user/.gemini/antigravity-cli/settings.json",
+							Strategy:  "copy",
+							Ownership: "json-subset",
+							Status:    plan.UninstallRemove,
 						},
-						Target:    "/home/user/.gemini/antigravity-cli/settings.json",
-						Strategy:  "copy",
-						Ownership: "json-subset",
-						Status:    plan.UninstallRemove,
-					}}},
-					Result: uninstall.Result{Updated: []string{"/home/user/.gemini/antigravity-cli/settings.json"}},
+						{Source: "configs/nvim/lazy-lock.json", Target: "/home/user/.local/state/nvim/lazy-lock.json", Strategy: "copy", Ownership: "seeded", Status: plan.UninstallRetain},
+					}},
+					Result: uninstall.Result{Updated: []string{"/home/user/.gemini/antigravity-cli/settings.json"}, Retained: []string{"/home/user/.local/state/nvim/lazy-lock.json"}},
 				},
 			},
 			golden: "envelope_uninstall.golden",

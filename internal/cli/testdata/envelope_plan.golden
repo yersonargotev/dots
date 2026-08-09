@@ -25,6 +25,14 @@
         "status": "create"
       },
       {
+        "source": "configs/nvim/lazy-lock.json",
+        "target": "/home/user/.local/state/nvim/lazy-lock.json",
+        "target_root": "xdg-state",
+        "strategy": "copy",
+        "status": "unchanged",
+        "reason": "seeded-local-evolution"
+      },
+      {
         "source": "configs/app/settings.json",
         "target": "/home/user/.config/app/settings.json",
         "strategy": "copy",

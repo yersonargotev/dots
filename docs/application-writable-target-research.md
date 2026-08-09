@@ -158,6 +158,11 @@ concrete co-ownership requirement.
 
 ## Coverage check
 
-The manifest inventory in `dots.yaml` has exactly 20 entries with
-`strategy: symlink`. Rows 1–20 above cover each source/target pair exactly
-once; no `copy` entry is included.
+At the date of the audit, the manifest inventory in `dots.yaml` had exactly 20
+entries with `strategy: symlink`; rows 1–20 above cover that pre-migration
+source/target inventory exactly once. The completed migrations leave 14 audited
+symlinks: ten read-under-ordinary-use entries, three explicit-operator-output
+entries, and Ghostty's separately classified conditional initializer. Repository
+Manifest tests lock that remaining set exactly, while the cross-application
+Temporary Home lifecycle verifies that each confirmed normal writer leaves the
+Installed Repository clean.

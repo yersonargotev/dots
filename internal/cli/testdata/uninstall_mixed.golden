@@ -1,8 +1,9 @@
 Uninstall Plan
 
   remove     /home/user/.zshrc
+  retain     /home/user/.local/state/nvim/lazy-lock.json
   modified   /home/user/.gitconfig
   not-owned  /home/user/.tmux.conf
   skip       /home/user/.vimrc
 
-Summary: 1 to remove, 1 modified, 1 not-owned, 1 skipped
+Summary: 1 to remove, 1 retained, 1 modified, 1 not-owned, 1 skipped

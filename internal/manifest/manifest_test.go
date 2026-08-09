@@ -3171,6 +3171,74 @@ func TestRepositoryManifestSourcesExist(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestRemainingSymlinksMatchAuditedClassifications(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	// These classifications are the dated evidence inventory in
+	// docs/application-writable-target-research.md. They deliberately describe
+	// observed ordinary use rather than claiming that a target is immutable.
+	const (
+		readUnderOrdinaryUse   = "read-under-ordinary-use"
+		explicitOperatorOutput = "explicit-operator-output"
+		conditionalInitializer = "conditional-initializer"
+	)
+	want := map[string]string{
+		"configs/zsh/zshrc\x00~/.config/dots/zsh/zshrc":                                               readUnderOrdinaryUse,
+		"configs/zsh/zimrc\x00~/.zimrc":                                                               readUnderOrdinaryUse,
+		"configs/zsh/zshenv\x00~/.zshenv":                                                             readUnderOrdinaryUse,
+		"configs/git/gitconfig\x00~/.config/dots/git/gitconfig":                                       readUnderOrdinaryUse,
+		"configs/dots/theme.sh\x00~/.config/dots/theme.sh":                                            readUnderOrdinaryUse,
+		"configs/dots/adaptive-theme\x00~/.config/dots/adaptive-theme":                                readUnderOrdinaryUse,
+		"configs/starship/starship.toml\x00~/.config/starship.toml":                                   explicitOperatorOutput,
+		"configs/tmux/tmux.conf\x00~/.tmux.conf":                                                      readUnderOrdinaryUse,
+		"configs/zellij/layouts/default.kdl\x00~/.config/zellij/layouts/default.kdl":                  explicitOperatorOutput,
+		"configs/ghostty/config.ghostty\x00~/.config/ghostty/config.ghostty":                          conditionalInitializer,
+		"configs/ghostty/adaptive/adaptive-theme.ghostty\x00~/.config/ghostty/adaptive-theme.ghostty": readUnderOrdinaryUse,
+		"configs/atuin/themes/catppuccin-mocha.toml\x00~/.config/atuin/themes/catppuccin-mocha.toml":  readUnderOrdinaryUse,
+		"configs/nvim\x00~/.config/dots/nvim":                                                         readUnderOrdinaryUse,
+		"configs/zed/themes/catppuccin-blue.json\x00~/.config/zed/themes/catppuccin-blue.json":        explicitOperatorOutput,
+	}
+
+	found := make(map[string]string)
+	for _, entry := range got.Entries {
+		if entry.Strategy != "symlink" {
+			continue
+		}
+		key := entry.Source + "\x00" + entry.Target
+		classification, ok := want[key]
+		if !ok {
+			t.Errorf("unaudited symlink Managed Entry %q -> %q", entry.Source, entry.Target)
+			continue
+		}
+		found[key] = classification
+	}
+	if !reflect.DeepEqual(found, want) {
+		t.Fatalf("audited symlinks = %#v, want %#v", found, want)
+	}
+
+	for _, writer := range []struct{ source, target string }{
+		{"configs/zsh/loader.zsh", "~/.zshrc"},
+		{"configs/git/loader.gitconfig", "~/.gitconfig"},
+		{"configs/herdr/config.toml", "~/.config/herdr/config.toml"},
+		{"configs/zellij/config.kdl", "~/.config/zellij/config.kdl"},
+		{"configs/atuin/config.toml", "~/.config/atuin/config.toml"},
+		{"configs/bat/config", "~/.config/bat/config"},
+		{"configs/nvim/lazy-lock.json", "nvim/lazy-lock.json"},
+		{"configs/zed/settings.json", "~/.config/zed/settings.json"},
+		{"configs/zed/keymap.json", "~/.config/zed/keymap.json"},
+	} {
+		for _, entry := range got.Entries {
+			if entry.Source == writer.source && entry.Target == writer.target && entry.Strategy == "symlink" {
+				t.Errorf("Application-Writable Target %q -> %q must not be a symlink", writer.source, writer.target)
+			}
+		}
+	}
+}
+
 func TestRepositoryManifestNeovimEntry(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")

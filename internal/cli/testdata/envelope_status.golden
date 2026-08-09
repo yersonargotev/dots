@@ -25,6 +25,19 @@
         "state": "ok"
       },
       {
+        "source": "configs/nvim/lazy-lock.json",
+        "target": "/home/user/.local/state/nvim/lazy-lock.json",
+        "strategy": "copy",
+        "state": "ok",
+        "reason": "seeded-local-evolution"
+      },
+      {
+        "source": "configs/bat/config",
+        "target": "/home/user/.config/bat/config",
+        "strategy": "copy",
+        "state": "drifted"
+      },
+      {
         "source": "configs/git/config",
         "target": "/home/user/.gitconfig",
         "strategy": "copy",

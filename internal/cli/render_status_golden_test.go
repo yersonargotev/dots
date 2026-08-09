@@ -22,6 +22,7 @@ func TestRenderStatusGolden(t *testing.T) {
 				Profile: "work",
 				Entries: []status.Entry{
 					{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", State: status.StateOK},
+					{Source: "configs/nvim/lazy-lock.json", Target: "/home/user/.local/state/nvim/lazy-lock.json", Strategy: "copy", State: status.StateOK, Reason: plan.ReasonSeededLocalEvolution},
 					{Source: "configs/git/gitconfig", Target: "/home/user/.gitconfig", Strategy: "copy", State: status.StateMissing},
 					{Source: "configs/tmux/tmux.conf", Target: "/home/user/.tmux.conf", Strategy: "copy", State: status.StateConflict, Reason: plan.ConflictReasonSourceOverrideNotSelected, MatchingTags: []string{"adaptive-theme", "work-theme"}},
 					{Source: "configs/mac/app", Target: "~/.app", Strategy: "copy", State: status.StateSkipped},

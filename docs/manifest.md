@@ -182,6 +182,15 @@ Backup Set and preserve surrounding bytes. Duplicate, incomplete, moved, or
 edited blocks remain Conflicts. Uninstall subtracts only the recorded block and
 removes the regular-file container only when no external bytes remain.
 
+The materialization choices below implement the
+[Application-Writable Target decision](adr/0017-keep-application-writable-targets-outside-the-installed-repository.md).
+Its [dated evidence inventory](application-writable-target-research.md)
+distinguishes normal writers from explicit operator outputs, Ghostty's
+conditional initializer, and entries read under ordinary use. Repository tests
+lock that classification for every remaining symlink and exercise the confirmed
+writers through an integrated Temporary Home lifecycle so ordinary application
+writes cannot dirty the Installed Repository.
+
 Current Managed Entries:
 
 | Source | Target | Strategy | Tags | OS | Dependencies |
