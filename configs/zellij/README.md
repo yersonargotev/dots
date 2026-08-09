@@ -1,10 +1,11 @@
 # Zellij configuration
 
 `configs/zellij/config.kdl` is the default repository-managed Zellij configuration
-installed as `~/.config/zellij/config.kdl` (symlink strategy, `core` tag,
-`darwin`+`linux`). When the manifest selection includes `--tag adaptive-theme`,
-that same Managed Entry uses the `configs/zellij/config-adaptive.kdl` source
-override for the same target instead of adding a duplicate Install Plan action.
+materialized as the regular file `~/.config/zellij/config.kdl` (`copy` strategy
+with Whole-Target Ownership, `core` tag, `darwin`+`linux`). When the manifest
+selection includes `--tag adaptive-theme`, that same Managed Entry uses the
+`configs/zellij/config-adaptive.kdl` source override for the same target instead
+of adding a duplicate Install Plan action.
 `configs/zellij/layouts/default.kdl` is installed as
 `~/.config/zellij/layouts/default.kdl` and selected by `default_layout "default"`.
 
@@ -14,9 +15,12 @@ common pane/tab actions keep tmux-like keys, and the status bar uses a
 Catppuccin `zjstatus` layout at the top of the screen. `Ctrl+g` remains as a
 compatibility entry point for the classic Zellij command flow.
 
-The Source of Truth is this repository. The installed files are links to these
-tracked sources; runtime state and downloaded plugins stay outside version
-control.
+The Source of Truth is this repository. Zellij's supported persistence APIs may
+rewrite the regular native config without modifying the Installed Repository;
+dots reports that whole-target replacement as Drift and preserves it during
+non-interactive reconciliation and uninstall. The explicit-output default layout
+remains a link to its tracked source. Runtime state and downloaded plugins stay
+outside version control.
 
 ## Prerequisites
 
@@ -152,8 +156,9 @@ go run ./cmd/dots status \
   --state-root "$sandbox_state"
 ```
 
-The expected default result is that `~/.config/zellij/config.kdl` points at
-`configs/zellij/config.kdl` and `~/.config/zellij/layouts/default.kdl` points at
-`configs/zellij/layouts/default.kdl`. With `--tag adaptive-theme`, the config
-symlink points at `configs/zellij/config-adaptive.kdl` instead. The maintainer's
-real home directory must not be touched.
+The expected default result is that `~/.config/zellij/config.kdl` is a regular
+file matching `configs/zellij/config.kdl`, while
+`~/.config/zellij/layouts/default.kdl` points at its tracked source. With
+`--tag adaptive-theme`, the regular config instead matches
+`configs/zellij/config-adaptive.kdl`. The maintainer's real home directory must
+not be touched.

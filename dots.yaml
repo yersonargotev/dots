@@ -329,7 +329,7 @@ entries:
     source_overrides:
       adaptive-theme: configs/zellij/config-adaptive.kdl
     target: ~/.config/zellij/config.kdl
-    strategy: symlink
+    strategy: copy
     tags:
       - core
     os:
