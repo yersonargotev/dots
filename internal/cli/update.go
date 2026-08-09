@@ -209,12 +209,16 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	incomingManifestData, err := gitrepo.ReadFileAtRevision(paths.SourceRoot, preRefresh.NewRev, "dots.yaml")
+	incomingManifest, err := loadUpdatedManifest(manifestPath, paths.SourceRoot, preRefresh, true)
 	if err != nil {
 		return updateReport{}, err
 	}
-	incomingManifest, err := manifest.Parse(incomingManifestData)
+	effective, err = selection.CompareEvolution(*previousManifest, *incomingManifest, effective, runtime.GOOS)
 	if err != nil {
+		var evolutionErr *selection.EvolutionError
+		if !wantsJSON(cmd) && errors.As(err, &evolutionErr) {
+			renderSelectionEvolution(cmd.OutOrStdout(), evolutionErr.SelectionDelta)
+		}
 		return updateReport{}, err
 	}
 	legacyMigrations, err := repositoryrefresh.CaptureLegacyTargets(*previousManifest, *incomingManifest, meta, paths.SourceRoot, paths.Home, paths.XDGStateHome, preRefresh.OldRev)
@@ -248,14 +252,6 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 
 	m, err := loadUpdatedManifest(manifestPath, paths.SourceRoot, update, opts.dryRun)
 	if err != nil {
-		return updateReport{}, err
-	}
-	effective, err = selection.CompareEvolution(*previousManifest, *m, effective, runtime.GOOS)
-	if err != nil {
-		var evolutionErr *selection.EvolutionError
-		if !wantsJSON(cmd) && errors.As(err, &evolutionErr) {
-			renderSelectionEvolution(out, evolutionErr.SelectionDelta)
-		}
 		return updateReport{}, err
 	}
 	sourceReadRoot := paths.SourceRoot
@@ -319,9 +315,16 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		if _, err := runProvisionersWithOptions(cmd, *m, provisionOpts, paths.Home, paths.StateRoot, paths.SourceRoot); err != nil {
 			return updateReport{}, err
 		}
+		report.Retirement, err = retireHistoricalDelegation(meta, paths.Home)
+		if err != nil {
+			return updateReport{}, err
+		}
 		installedSelection := effective.InstalledSelection(state.CaptureProvenance(paths.SourceRoot, version.Value))
 		if err := recordInstalledSelection(state.Path(paths.StateRoot), installedSelection); err != nil {
 			return updateReport{}, err
+		}
+		if !wantsJSON(cmd) {
+			renderDelegationRetirement(out, report.Retirement)
 		}
 	}
 	if wantsJSON(cmd) && emit {

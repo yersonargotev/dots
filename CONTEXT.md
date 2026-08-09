@@ -209,7 +209,7 @@ The `core` Tag's intended workstation role: a general development environment th
 _Avoid_: minimal shell, everything profile, desktop baseline
 
 **Agent CLI Baseline**:
-The `agents` Tag's intended workstation role: the supported agent command-line tools plus their dots-owned native Managed Configuration and required support Dependencies. Generated memory, context, skills, global rules, and specialized web, mobile, or delegation capabilities remain outside the baseline.
+The `agents` Tag's intended workstation role: the supported agent command-line tools plus their dots-owned native Managed Configuration and required support Dependencies. Generated memory, context, skills, global rules, and specialized web or mobile capabilities remain outside the baseline.
 _Avoid_: agent setup, AI tools profile, generated agent environment
 
 **Delivery Contract**:

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 const updateProvisionerManifest = `version: 1
@@ -90,91 +91,38 @@ func TestUpdateExecutesProvisionersAfterApply(t *testing.T) {
 	}
 }
 
-func TestUpdateLegacyCodexSparkDelegationTagInstallsGenericGuidance(t *testing.T) {
+func TestUpdateRetiresHistoricalDelegationAfterSuccessfulApply(t *testing.T) {
 	requireGitCLI(t)
-	sandboxHome := t.TempDir()
+	home := t.TempDir()
 	stateRoot := t.TempDir()
-	fakeRealHome := t.TempDir()
-	t.Setenv("HOME", fakeRealHome)
-
+	t.Setenv("HOME", t.TempDir())
 	stubDir := t.TempDir()
 	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Provisioners: []state.ProvisionerRecord{{
+		Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "yersonargotev/dots/skills/delegation", "--agent", "codex", "--skill", "delegation", "--global", "--copy"},
+	}}}); err != nil {
+		t.Fatalf("save historical metadata: %v", err)
+	}
+	agentsPath := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(agentsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agentsPath, []byte("before\n<!-- argote:subagent-delegation -->\nowned\n<!-- /argote:subagent-delegation -->\nafter\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	_, sourceRoot := newInstalledRepo(t, map[string]string{
 		"configs/git/gitconfig": "managed\n",
 		"dots.yaml":             updateProvisionerManifest,
 	})
 
-	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
-		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--profile", "default", "--tag", "codex-spark-delegation")
-
-	got, err := os.ReadFile(filepath.Join(sandboxHome, ".codex", "AGENTS.md"))
+	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	got, err := os.ReadFile(agentsPath)
 	if err != nil {
-		t.Fatalf("update with Codex Spark tag did not write Codex AGENTS.md: %v\noutput:\n%s", err, out)
+		t.Fatal(err)
 	}
-	content := string(got)
-	for _, want := range []string{"<!-- dots:delegation -->", "gpt-5.6-sol"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("update with Codex Spark tag missing %q\ncontent:\n%s\noutput:\n%s", want, content, out)
-		}
-	}
-	assertNativeCodexSparkAgents(t, sandboxHome, "update with Codex Spark tag")
-	if strings.Contains(content, "argote:subagent-delegation") {
-		t.Fatalf("update with Codex Spark tag used legacy markers\ncontent:\n%s", content)
-	}
-	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
-	}
-}
-
-func TestUpdateLegacyWithoutCodexSparkDelegationTagRemovesGuidanceAndNativeAgents(t *testing.T) {
-	requireGitCLI(t)
-	sandboxHome := t.TempDir()
-	stateRoot := t.TempDir()
-	fakeRealHome := t.TempDir()
-	t.Setenv("HOME", fakeRealHome)
-
-	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 0\n")
-	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	codexPath := filepath.Join(sandboxHome, ".codex", "AGENTS.md")
-	if err := os.MkdirAll(filepath.Dir(codexPath), 0o755); err != nil {
-		t.Fatalf("mkdir Codex dir: %v", err)
-	}
-	preexisting := "before\n\n<!-- dots:delegation -->\ncurrent\n<!-- /dots:delegation -->\n\n<!-- argote:subagent-delegation -->\nlegacy\n<!-- /argote:subagent-delegation -->\n\nafter\n"
-	if err := os.WriteFile(codexPath, []byte(preexisting), 0o600); err != nil {
-		t.Fatalf("write preexisting Codex instructions: %v", err)
-	}
-	agentsDir := writeStaleNativeCodexSparkAgents(t, sandboxHome)
-
-	_, sourceRoot := newInstalledRepo(t, map[string]string{
-		"configs/git/gitconfig": "managed\n",
-		"dots.yaml":             updateProvisionerManifest,
-	})
-
-	out := runUpdate(t, "--yes", "--file", filepath.Join(sourceRoot, "dots.yaml"),
-		"--home", sandboxHome, "--source-root", sourceRoot, "--state-root", stateRoot, "--profile", "default", "--tag", "codex-spark-delegation", "--tag", "without-codex-spark-delegation")
-
-	got, err := os.ReadFile(codexPath)
-	if err != nil {
-		t.Fatalf("read Codex instructions: %v", err)
-	}
-	content := string(got)
-	for _, not := range []string{"<!-- dots:delegation -->", "argote:subagent-delegation", "\ncurrent\n", "\nlegacy\n", "gpt-5.6-sol"} {
-		if strings.Contains(content, not) {
-			t.Fatalf("without Codex Spark tag kept %q\ncontent:\n%s\noutput:\n%s", not, content, out)
-		}
-	}
-	for _, want := range []string{"before", "after"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("without Codex Spark tag removed expected %q\ncontent:\n%s", want, content)
-		}
-	}
-	assertRemovedNativeCodexSparkAgents(t, agentsDir, "without Codex Spark tag")
-	if _, err := os.Stat(filepath.Join(fakeRealHome, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("update wrote Codex AGENTS.md in inherited HOME %q; stat err = %v", fakeRealHome, err)
+	if strings.Contains(string(got), "argote:subagent-delegation") || !strings.Contains(out, "Delegation retirement:") {
+		t.Fatalf("historical retirement was not reported and applied\ninstructions:\n%s\noutput:\n%s", got, out)
 	}
 }
 

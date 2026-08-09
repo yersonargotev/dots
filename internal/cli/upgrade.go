@@ -64,7 +64,7 @@ func newUpgradeCommand() *cobra.Command {
 				}
 				if wantsJSON(cmd) {
 					binPlan := upgrade.Plan{Channel: binaryChannel, CurrentVersion: binaryCurrentVersion, LatestVersion: binaryLatestVersion, Action: binaryAction, Executable: binaryExecutable, Artifact: binaryArtifact, Checksum: binaryChecksum}
-					return emitOK(cmd, upgradeReport{DryRun: false, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
+					return emitOK(cmd, upgradeReport{DryRun: false, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners, Retirement: updateReport.Retirement})
 				}
 				return nil
 			}
@@ -89,7 +89,7 @@ func newUpgradeCommand() *cobra.Command {
 					return err
 				}
 				if wantsJSON(cmd) {
-					return emitOK(cmd, upgradeReport{DryRun: true, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
+					return emitOK(cmd, upgradeReport{DryRun: true, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners, Retirement: updateReport.Retirement})
 				}
 				return nil
 			}
@@ -133,7 +133,7 @@ func newUpgradeCommand() *cobra.Command {
 				return err
 			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, upgradeReport{DryRun: false, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners})
+				return emitOK(cmd, upgradeReport{DryRun: false, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners, Retirement: updateReport.Retirement})
 			}
 			return nil
 		},

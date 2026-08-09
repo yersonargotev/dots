@@ -8,9 +8,7 @@ package tagpolicy
 type Action string
 
 const (
-	ActionRetireGentleAIState     Action = "retire-gentle-ai-state"
-	ActionRemoveCodexDelegation   Action = "remove-codex-delegation"
-	ActionConvergeCodexDelegation Action = "converge-codex-delegation"
+	ActionRetireGentleAIState Action = "retire-gentle-ai-state"
 )
 
 type behaviorPolicy struct {
@@ -19,11 +17,7 @@ type behaviorPolicy struct {
 }
 
 var behaviorByTag = map[string]behaviorPolicy{
-	"agents":                         {kind: "surface", action: ActionRetireGentleAIState},
-	"codex-delegation":               {kind: "surface", action: ActionConvergeCodexDelegation},
-	"without-codex-delegation":       {kind: "cleanup", action: ActionRemoveCodexDelegation},
-	"codex-spark-delegation":         {kind: "compatibility", action: ActionConvergeCodexDelegation},
-	"without-codex-spark-delegation": {kind: "compatibility", action: ActionRemoveCodexDelegation},
+	"agents": {kind: "surface", action: ActionRetireGentleAIState},
 }
 
 // IsBehaviorTag reports whether tag has an allowlisted effect beyond ordinary
@@ -60,7 +54,6 @@ func IsAllowedStatus(status string) bool {
 }
 
 // Actions returns the deterministic set of built-in actions selected by tags.
-// Removal wins over convergence when both delegation modes are selected.
 func Actions(tags []string) []Action {
 	present := make(map[Action]bool)
 	for _, tag := range tags {
@@ -68,14 +61,9 @@ func Actions(tags []string) []Action {
 			present[policy.action] = true
 		}
 	}
-	actions := make([]Action, 0, 2)
+	actions := make([]Action, 0, 1)
 	if present[ActionRetireGentleAIState] {
 		actions = append(actions, ActionRetireGentleAIState)
-	}
-	if present[ActionRemoveCodexDelegation] {
-		actions = append(actions, ActionRemoveCodexDelegation)
-	} else if present[ActionConvergeCodexDelegation] {
-		actions = append(actions, ActionConvergeCodexDelegation)
 	}
 	return actions
 }

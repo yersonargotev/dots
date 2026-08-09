@@ -282,12 +282,19 @@ func newInstallCommand() *cobra.Command {
 				}
 				return err
 			}
+			retirement, err := retireHistoricalDelegation(meta, paths.Home)
+			if err != nil {
+				return err
+			}
 			installedSelection.Provenance = state.CaptureProvenance(paths.SourceRoot, version.Value)
 			if err := recordInstalledSelection(state.Path(paths.StateRoot), installedSelection); err != nil {
 				return err
 			}
+			if !wantsJSON(cmd) {
+				renderDelegationRetirement(cmd.OutOrStdout(), retirement)
+			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups})
+				return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, Retirement: retirement})
 			}
 			return nil
 		},
@@ -518,10 +525,6 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 		switch action {
 		case tagpolicy.ActionRetireGentleAIState:
 			cleanupErr = agentinstructions.RetireGentleAIState(home)
-		case tagpolicy.ActionRemoveCodexDelegation:
-			cleanupErr = agentinstructions.RemoveCodexDelegation(home)
-		case tagpolicy.ActionConvergeCodexDelegation:
-			cleanupErr = agentinstructions.ConvergeCodexDelegation(home)
 		}
 		if cleanupErr != nil {
 			return report, errors.Join(err, cleanupErr)

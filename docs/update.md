@@ -133,9 +133,17 @@ failed Managed Entry or Provisioner work preserve the previous intent.
 
 ## Profiles and provisioners
 
-Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` Profile selects desktop configuration and non-web desktop integrations. The `agents` Profile is the native Agent CLI Baseline: Codex, Claude Code, OpenCode, Antigravity, Copilot CLI, shared `jq`, and their dots-owned native Managed Configuration. It does not select gentle-ai, Engram, Context7, generated permissions, SDD/persona operations, third-party engineering skills, delegation, or dots-owned global agent rules. `core` owns GitHub CLI and also selects `jq`. CodeGraph remains an explicit Tag, while `codex-delegation`, `web`, and `mobile` retain independent intent. The `web` Profile composes its Chrome DevTools overlay over OpenCode's native JSON baseline without replacing it. Use `workstation` when you explicitly want core, desktop integrations, and the Agent CLI Baseline together; web and mobile remain separate opt-ins.
+Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` Profile selects desktop configuration and non-web desktop integrations. The `agents` Profile is the native Agent CLI Baseline: Codex, Claude Code, OpenCode, Antigravity, Copilot CLI, shared `jq`, and their dots-owned native Managed Configuration. It does not select gentle-ai, Engram, Context7, generated permissions, SDD/persona operations, third-party engineering skills, or dots-owned global agent rules. `core` owns GitHub CLI and also selects `jq`. CodeGraph, `web`, and `mobile` retain independent opt-in intent. The `web` Profile composes its Chrome DevTools overlay over OpenCode's native JSON baseline without replacing it. Use `workstation` when you explicitly want core, desktop integrations, and the Agent CLI Baseline together; web and mobile remain separate opt-ins.
 
-Use `--profile codex-delegation` when only Codex delegation is desired. It installs the dots-owned `delegation` skill for Codex, the model-neutral `<!-- dots:delegation -->` overlay, and native `dots-explorer`/`dots-worker` agents without the broader agent baseline. Remove the overlay and native agents with `--profile codex-delegation --tag without-codex-delegation`. The legacy Spark-named install and cleanup tags remain compatibility aliases. See [`docs/agents/delegation.md`](agents/delegation.md) for the portable task-fit delegation policy and the current inventory of native delegation artifacts by supported agent surface.
+The retired Codex delegation capability follows the normal Installed Selection
+safety contract. A recorded `codex-delegation` Profile or explicit extra Tag
+blocks update or upgrade until the operator supplies a complete current
+selection; a reduction still requires its distinct acknowledgement. After a
+successful install, update, or upgrade with historical dots installation
+evidence, the retirement migration removes only recognized marker-delimited
+instruction blocks and byte-exact dots-owned native agent files. Modified files,
+symlinks, unrelated Codex state, and copied skills are preserved and reported
+for manual cleanup. Dry runs never perform the retirement.
 
 During update or upgrade, selection evolution reports gentle-ai and Engram
 Dependencies plus their gentle-ai/skills Provisioners as removed surfaces. This
@@ -144,7 +152,7 @@ remove Dependency Installation Metadata, or erase historical Provisioner
 receipts. After Managed Configuration succeeds, dots removes only known
 marker-delimited gentle-ai trigger/persona/Engram blocks and the dots-owned
 global-rules block from supported instruction files. Unmarked and co-owned
-content, complete files, Codex delegation, authentication, and Secret state are
+content, complete files, authentication, and Secret state are
 preserved.
 
 To remove residual gentle-ai state, first review it outside dots (for example

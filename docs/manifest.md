@@ -63,7 +63,6 @@ from compact discovery unless `--all` is supplied.
 | Profile | Status | Tags | Description |
 |---------|--------|------|-------------|
 | `agents` | current | `agents` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |
-| `codex-delegation` | current | `codex-delegation` | Codex-only delegation capability without the broader Agent CLI Baseline. |
 | `core` | current | `core` | Core dotfiles and general developer tooling without agent, web, or mobile provisioners. |
 | `desktop` | current | `desktop` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
 | `mobile` | current | `mobile` | Optional Dart and Flutter mobile development capabilities. |
@@ -77,14 +76,10 @@ from compact discovery unless `--all` is supplied.
 | `adaptive-theme` | surface | current | Opt-in adaptive-theme marker and supported app-specific sources or fragments. |  |
 | `agents` | surface | current | Native Agent CLI Baseline for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |  |
 | `codegraph` | surface | current | Opt-in CodeGraph provisioner and Codex SessionStart hook source override. |  |
-| `codex-delegation` | surface | current | Codex-only delegation skill, generic delegation overlay, and native explorer/worker agents. |  |
-| `codex-spark-delegation` | compatibility | legacy | Legacy Spark-specific delegation alias that converges the current generic delegation overlay and native agents. | `codex-delegation` |
 | `core` | surface | current | Core Development Baseline: shell, terminal, Git, editor, and common developer tooling. |  |
 | `desktop` | surface | current | Desktop terminal/editor configuration and integrations. |  |
 | `mobile` | surface | current | Optional Dart, Flutter, and Android development skills and MCP integrations. |  |
 | `web` | surface | current | Optional frontend/browser workbench with web skills and Chrome DevTools integrations. |  |
-| `without-codex-delegation` | cleanup | current | Remove the dots-owned generic delegation overlay and native Codex explorer/worker agents. |  |
-| `without-codex-spark-delegation` | compatibility | legacy | Legacy Spark-specific cleanup alias for the supported delegation cleanup behavior. | `without-codex-delegation` |
 
 <!-- dots:catalog:end -->
 
@@ -99,14 +94,11 @@ dots install --profile core --profile web
 # Add an optional capability to the complete workstation selection.
 dots install --profile workstation --tag adaptive-theme
 
-# Keep the delegation Profile intent while removing its dots-owned overlay and agents.
-dots install --profile codex-delegation --tag without-codex-delegation
 ```
 
-See the [adaptive theme audit](adaptive-theme-audit.md), the
-[`codegraph` Provisioner specification](#codegraph-spec), and the
-[delegation inventory and cleanup contract](agents/delegation.md) for the
-detailed behavior behind those focused capabilities.
+See the [adaptive theme audit](adaptive-theme-audit.md) and the
+[`codegraph` Provisioner specification](#codegraph-spec) for the detailed
+behavior behind those focused capabilities.
 
 ## Tag-scoped Dependency Sets
 
@@ -492,7 +484,6 @@ Current Provisioners:
 | `skills` | `mobile` | all | Install `android-cli` from `android/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `claude mcp add --transport stdio dart -- dart mcp-server`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `claude`, `dart` |
 | `codex` | `mobile` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `codex mcp add dart -- dart mcp-server --force-roots-fallback`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `codex`, `dart` |
-| `skills` | `codex-delegation` | all | Install the dots-owned `delegation` skill for Codex only, independently of the Agent CLI Baseline. | `npx` |
 | `claude` | `web` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
 | `claude` | `web` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
 | `codex` | `web` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
@@ -513,9 +504,7 @@ It reports effective Tag and selected Managed Entry, Dependency, and Provisioner
 additions and removals before application. A saved Profile that no longer
 exists, or an explicit extra Tag no longer declared by any Managed Entry,
 Dependency Set, or Provisioner, blocks application without rewriting the
-Installed Selection. Dots-owned selection modifiers and their documented legacy
-aliases remain valid even though they affect installation behavior rather than
-selecting a manifest surface. Removed surfaces are reported only; they are not
+Installed Selection. Removed surfaces are reported only; they are not
 automatically deleted or uninstalled.
 
 ## Related docs

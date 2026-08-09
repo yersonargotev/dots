@@ -209,6 +209,114 @@ entries:
 	}
 }
 
+func TestInstallRejectsRetiredCodexDelegationSelectors(t *testing.T) {
+	repositoryRoot := filepath.Join("..", "..")
+	manifestPath := filepath.Join(repositoryRoot, "dots.yaml")
+
+	for _, tc := range []struct {
+		name  string
+		flag  string
+		value string
+		want  string
+	}{
+		{name: "profile", flag: "--profile", value: "codex-delegation", want: `profile "codex-delegation" not found`},
+		{name: "surface tag", flag: "--tag", value: "codex-delegation", want: `tag "codex-delegation" is not declared`},
+		{name: "cleanup tag", flag: "--tag", value: "without-codex-delegation", want: `tag "without-codex-delegation" is not declared`},
+		{name: "legacy surface tag", flag: "--tag", value: "codex-spark-delegation", want: `tag "codex-spark-delegation" is not declared`},
+		{name: "legacy cleanup tag", flag: "--tag", value: "without-codex-spark-delegation", want: `tag "without-codex-spark-delegation" is not declared`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errOut bytes.Buffer
+			args := []string{
+				"install", "--dry-run", tc.flag, tc.value,
+				"--file", manifestPath,
+				"--home", t.TempDir(),
+				"--source-root", repositoryRoot,
+				"--state-root", t.TempDir(),
+			}
+			if tc.flag == "--tag" {
+				args = append(args, "--profile", "core")
+			}
+			code := cli.Run(args, &out, &errOut)
+			if code != cli.ExitError {
+				t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitError, out.String(), errOut.String())
+			}
+			if !strings.Contains(errOut.String(), tc.want) {
+				t.Fatalf("stderr missing %q:\n%s", tc.want, errOut.String())
+			}
+		})
+	}
+}
+
+func TestInstallAcknowledgedDelegationReductionRetiresOwnedBlocksAndReportsCopiedSkill(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	previous := state.InstalledSelection{
+		Profiles:     []string{"codex-delegation"},
+		ResolvedTags: []string{"codex-delegation"},
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{
+		Version:            state.CurrentVersion,
+		InstalledSelection: &previous,
+	}); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+
+	codexInstructions := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(codexInstructions), 0o755); err != nil {
+		t.Fatalf("mkdir Codex instructions: %v", err)
+	}
+	if err := os.WriteFile(codexInstructions, []byte("user before\n<!-- dots:delegation -->\nowned\n<!-- /dots:delegation -->\nuser after\n"), 0o600); err != nil {
+		t.Fatalf("write Codex instructions: %v", err)
+	}
+	copiedSkill := filepath.Join(home, ".agents", "skills", "delegation")
+	if err := os.MkdirAll(copiedSkill, 0o755); err != nil {
+		t.Fatalf("write copied skill: %v", err)
+	}
+
+	writeCLISource(t, sourceRoot, "configs/core", "managed\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/core
+    target: ~/.core
+    strategy: symlink
+    tags: [core]
+`)
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"install", "--yes", "--acknowledge-selection-change", "--skip-deps", "--output", "json", "--profile", "core",
+		"--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != cli.ExitOK {
+		t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitOK, out.String(), errOut.String())
+	}
+	if got, err := os.ReadFile(codexInstructions); err != nil || string(got) != "user before\n\nuser after\n" {
+		t.Fatalf("Codex instructions = %q, %v; want only user content", got, err)
+	}
+	if _, err := os.Stat(copiedSkill); err != nil {
+		t.Fatalf("copied skill was removed: %v", err)
+	}
+	for _, want := range []string{`"retirement"`, `~/.codex/AGENTS.md delegation blocks`, `~/.agents/skills/delegation`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("JSON output missing %q:\n%s", want, out.String())
+		}
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load updated metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(meta.InstalledSelection.Profiles, []string{"core"}) {
+		t.Fatalf("InstalledSelection = %#v, want core after terminal success", meta.InstalledSelection)
+	}
+}
+
 func TestInstallPostProvisionerConvergenceFailurePreservesPreviousSelection(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()

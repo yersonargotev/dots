@@ -26,21 +26,12 @@ const (
 	legacyCodexDelegationEnd   = "<!-- /argote:subagent-delegation -->"
 	codexExplorerAgentFile     = "dots-explorer.toml"
 	codexWorkerAgentFile       = "dots-worker.toml"
+	copiedDelegationSkill      = "delegation"
 )
 
-const codexDelegationBlock = `## Codex delegation
-
-Load the ` + "`delegation`" + ` skill when available, then map safe Codex slices to the dots-owned native agents:
-
-| Slice | Codex agent |
-| --- | --- |
-| Codebase exploration, impact scans, or test/log triage | ` + "`dots-explorer`" + ` on ` + "`gpt-5.6-sol`" + ` |
-| Separable implementation over disjoint files/modules | ` + "`dots-worker`" + ` on ` + "`gpt-5.6-sol`" + ` |
-| Review, architecture, security, or other judgment-heavy work | Strongest appropriate available model; reserve this profile's GPT-5.6 Sol low default for bounded exploration and implementation. |
-
-Selecting the ` + "`codex-delegation`" + ` profile is standing authorization for safe bounded Codex delegation across repositories when the active prompt, workflow, or selected skill asks for subagents, parallel agents, or delegation. If the active Codex tool still requires prompt-level permission, ask once or record ` + "`tool-level permission required`" + ` as the skip reason.`
-
-const codexExplorerAgent = `name = "dots-explorer"
+// codexExplorerAgentSol and codexWorkerAgentSol are the last emitted native
+// agent files. Retirement compares exact bytes so it never deletes user edits.
+const codexExplorerAgentSol = `name = "dots-explorer"
 description = "Read-only dots explorer for bounded codebase exploration, impact scans, and test/log triage."
 model = "gpt-5.6-sol"
 model_reasoning_effort = "low"
@@ -59,7 +50,7 @@ Load the delegation skill when available. Do not edit files. Keep GitHub, releas
 nickname_candidates = ["Dots Scout", "Dots Cartographer", "Dots Radar"]
 `
 
-const codexWorkerAgent = `name = "dots-worker"
+const codexWorkerAgentSol = `name = "dots-worker"
 description = "dots implementation worker for explicitly assigned, non-overlapping files or modules."
 model = "gpt-5.6-sol"
 model_reasoning_effort = "low"
@@ -78,14 +69,106 @@ Load the delegation skill when available. Use sandboxed --home, --source-root, -
 nickname_candidates = ["Dots Builder", "Dots Mason", "Dots Stitcher"]
 `
 
+const codexExplorerAgentSpark = `name = "dots-explorer"
+description = "Read-only dots explorer for bounded codebase exploration, impact scans, and test/log triage."
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+You are a dots explorer subagent.
+
+Scope:
+- Inspect code, docs, tests, manifests, logs, and command output.
+- Return concise findings with file:line references and confidence.
+- Prefer CodeGraph for source-code architecture, symbols, call flow, and impact analysis.
+- Prefer targeted rg/sed reads for manifests, docs, config, and scripts.
+
+Boundaries:
+- Do not edit files.
+- Do not mutate GitHub, PRs, releases, package managers, or real user configuration.
+- Do not validate dotfiles behavior against the operator's real home.
+- Keep the main agent responsible for requirements, decisions, integration, and final verification.
+"""
+nickname_candidates = ["Dots Scout", "Dots Cartographer", "Dots Radar"]
+`
+
+const codexExplorerAgentSparkWithSkill = `name = "dots-explorer"
+description = "Read-only dots explorer for bounded codebase exploration, impact scans, and test/log triage."
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+You are a dots explorer subagent.
+
+Scope:
+- Inspect code, docs, tests, manifests, logs, and command output.
+- Load the delegation skill when available and return concise findings with file:line references and confidence.
+- Prefer CodeGraph for source-code architecture, symbols, call flow, and impact analysis.
+- Prefer targeted rg/sed reads for manifests, docs, config, and scripts.
+
+Boundaries:
+- Do not edit files.
+- Do not mutate GitHub, PRs, releases, package managers, or real user configuration.
+- Do not validate dotfiles behavior against the operator's real home.
+- Keep the main agent responsible for requirements, decisions, integration, and final verification.
+"""
+nickname_candidates = ["Dots Scout", "Dots Cartographer", "Dots Radar"]
+`
+
+const codexWorkerAgentSpark = `name = "dots-worker"
+description = "dots implementation worker for explicitly assigned, non-overlapping files or modules."
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+You are a dots worker subagent.
+
+Scope:
+- Implement only the explicitly assigned files or modules.
+- Keep diffs surgical and trace every changed line to the requested slice.
+- Follow existing repository patterns and the dots domain language.
+- Return a concise handoff with changed files, tests run, and any remaining risks.
+
+Boundaries:
+- You are not alone in the codebase; do not revert or overwrite edits outside your assigned ownership.
+- Do not mutate GitHub, PRs, releases, package managers, or real user configuration.
+- Use sandboxed --home, --source-root, --state-root, or temporary config paths for dotfiles behavior.
+- Leave requirements, decisions, external state, integration, and final verification to the main agent.
+"""
+nickname_candidates = ["Dots Builder", "Dots Mason", "Dots Stitcher"]
+`
+
+const codexWorkerAgentSparkWithSkill = `name = "dots-worker"
+description = "dots implementation worker for explicitly assigned, non-overlapping files or modules."
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+You are a dots worker subagent.
+
+Scope:
+- Implement only the explicitly assigned files or modules.
+- Keep diffs surgical and trace every changed line to the requested slice.
+- Follow existing repository patterns and the dots domain language.
+- Load the delegation skill when available and return a concise handoff with changed files, tests run, and any remaining risks.
+
+Boundaries:
+- You are not alone in the codebase; do not revert or overwrite edits outside your assigned ownership.
+- Do not mutate GitHub, PRs, releases, package managers, or real user configuration.
+- Use sandboxed --home, --source-root, --state-root, or temporary config paths for dotfiles behavior.
+- Leave requirements, decisions, external state, integration, and final verification to the main agent.
+"""
+nickname_candidates = ["Dots Builder", "Dots Mason", "Dots Stitcher"]
+`
+
 type instructionTarget struct {
 	agent string
 	path  string
 }
 
 // RetireGentleAIState removes only marker-delimited instruction content whose
-// ownership is explicit. It preserves instruction files, unmarked content, and
-// independently selected Codex delegation guidance.
+// ownership is explicit. It preserves instruction files and unmarked content;
+// retired Codex delegation state is handled by a separate evidence-gated migration.
 func RetireGentleAIState(home string) error {
 	var errs []error
 	for _, path := range instructionPaths(home, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
@@ -102,44 +185,87 @@ func RetireGentleAIState(home string) error {
 	return errors.Join(errs...)
 }
 
-// ConvergeCodexDelegation injects opt-in delegation guidance into Codex
-// instructions only. Legacy Spark-specific and argote-owned marker pairs are
-// migrated to the generic dots-owned marker pair during the upsert.
-func ConvergeCodexDelegation(home string) error {
-	return errors.Join(
-		convergeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md")),
-		writeCodexAgentFile(home, codexExplorerAgentFile, codexExplorerAgent),
-		writeCodexAgentFile(home, codexWorkerAgentFile, codexWorkerAgent),
-	)
+// RetirementReport records only state that the narrow migration removed or
+// deliberately left for the user. Paths are home-relative for portable reports.
+type RetirementReport struct {
+	Removed       []string `json:"removed"`
+	ManualCleanup []string `json:"manual_cleanup"`
 }
 
-// RemoveCodexDelegation removes current and legacy dots-owned delegation blocks
-// plus the legacy argote-owned block without touching the rest of the baseline.
-func RemoveCodexDelegation(home string) error {
-	return errors.Join(
-		removeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md")),
-		removeCodexAgentFile(home, codexExplorerAgentFile),
-		removeCodexAgentFile(home, codexWorkerAgentFile),
-	)
+// RetireCodexDelegation removes exact dots-owned delegation state. It fails
+// closed for malformed markers and never deletes a user-modified file, symlink,
+// or copied delegation skill.
+func RetireCodexDelegation(home string) (RetirementReport, error) {
+	report := RetirementReport{Removed: []string{}, ManualCleanup: []string{}}
+	if removed, manual, err := removeCodexDelegation(filepath.Join(home, ".codex", "AGENTS.md")); err != nil {
+		return report, err
+	} else if removed {
+		report.Removed = append(report.Removed, "~/.codex/AGENTS.md delegation blocks")
+	} else if manual {
+		report.ManualCleanup = append(report.ManualCleanup, "~/.codex/AGENTS.md")
+	}
+	for _, name := range []string{codexExplorerAgentFile, codexWorkerAgentFile} {
+		removed, manual, err := removeKnownCodexAgentFile(home, name)
+		if err != nil {
+			return report, err
+		}
+		if removed {
+			report.Removed = append(report.Removed, "~/.codex/agents/"+name)
+		}
+		if manual {
+			report.ManualCleanup = append(report.ManualCleanup, "~/.codex/agents/"+name)
+		}
+	}
+	skillPath := filepath.Join(home, ".agents", "skills", copiedDelegationSkill)
+	if _, err := os.Lstat(skillPath); err == nil {
+		report.ManualCleanup = append(report.ManualCleanup, "~/.agents/skills/"+copiedDelegationSkill)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return report, fmt.Errorf("inspect copied delegation skill %s: %w", skillPath, err)
+	}
+	return report, nil
 }
 
-func writeCodexAgentFile(home, name, content string) error {
+func removeKnownCodexAgentFile(home, name string) (removed, manual bool, err error) {
 	path := filepath.Join(home, ".codex", "agents", name)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("mkdir Codex agents %s: %w", filepath.Dir(path), err)
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, false, nil
 	}
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		return fmt.Errorf("write Codex agent %s: %w", path, err)
+	if err != nil {
+		return false, false, fmt.Errorf("inspect Codex agent %s: %w", path, err)
 	}
-	return nil
+	if !info.Mode().IsRegular() {
+		return false, true, nil
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return false, false, fmt.Errorf("read Codex agent %s: %w", path, err)
+	}
+	if !knownCodexAgentContent(name, content) {
+		return false, true, nil
+	}
+	if err := os.Remove(path); err != nil {
+		return false, false, fmt.Errorf("remove Codex agent %s: %w", path, err)
+	}
+	return true, false, nil
 }
 
-func removeCodexAgentFile(home, name string) error {
-	path := filepath.Join(home, ".codex", "agents", name)
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("remove Codex agent %s: %w", path, err)
+func knownCodexAgentContent(name string, content []byte) bool {
+	var variants []string
+	switch name {
+	case codexExplorerAgentFile:
+		variants = []string{codexExplorerAgentSpark, codexExplorerAgentSparkWithSkill, codexExplorerAgentSol}
+	case codexWorkerAgentFile:
+		variants = []string{codexWorkerAgentSpark, codexWorkerAgentSparkWithSkill, codexWorkerAgentSol}
+	default:
+		return false
 	}
-	return nil
+	for _, variant := range variants {
+		if string(content) == variant {
+			return true
+		}
+	}
+	return false
 }
 
 func instructionPaths(home string, agents []string) []string {
@@ -210,70 +336,35 @@ func removeMarkedBlocks(path string, markers ...textblock.Markers) error {
 	return nil
 }
 
-func convergeCodexDelegation(path string) error {
-	content, mode, err := readInstructionFile(path)
+func removeCodexDelegation(path string) (removed, manual bool, err error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, false, nil
+	}
 	if err != nil {
-		return err
+		return false, false, fmt.Errorf("inspect Codex instructions %s: %w", path, err)
 	}
-	updated, err := textblock.Upsert(
-		content,
-		textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd},
-		codexDelegationBlock,
-		textblock.Markers{Start: legacyDotsDelegationStart, End: legacyDotsDelegationEnd},
-		textblock.Markers{Start: legacyCodexDelegationStart, End: legacyCodexDelegationEnd},
-	)
-	if err != nil {
-		return fmt.Errorf("upsert Codex delegation guidance in %s: %w", path, err)
+	if !info.Mode().IsRegular() {
+		return false, true, nil
 	}
-	if updated == content {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("mkdir agent instructions %s: %w", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, []byte(updated), mode); err != nil {
-		return fmt.Errorf("write agent instructions %s: %w", path, err)
-	}
-	return nil
-}
-
-func removeCodexDelegation(path string) error {
-	content, mode, err := readInstructionFile(path)
-	if err != nil {
-		return err
-	}
-	updated, err := textblock.Remove(
-		content,
-		textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd},
-		textblock.Markers{Start: legacyDotsDelegationStart, End: legacyDotsDelegationEnd},
-		textblock.Markers{Start: legacyCodexDelegationStart, End: legacyCodexDelegationEnd},
-	)
-	if err != nil {
-		return fmt.Errorf("remove Codex delegation guidance from %s: %w", path, err)
-	}
-	if updated == content {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("mkdir agent instructions %s: %w", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, []byte(updated), mode); err != nil {
-		return fmt.Errorf("write agent instructions %s: %w", path, err)
-	}
-	return nil
-}
-
-func readInstructionFile(path string) (string, os.FileMode, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", 0o600, nil
-		}
-		return "", 0, fmt.Errorf("read agent instructions %s: %w", path, err)
+		return false, false, fmt.Errorf("read Codex instructions %s: %w", path, err)
 	}
-	info, err := os.Stat(path)
+	updated, err := textblock.Remove(
+		string(content),
+		textblock.Markers{Start: codexDelegationStart, End: codexDelegationEnd},
+		textblock.Markers{Start: legacyDotsDelegationStart, End: legacyDotsDelegationEnd},
+		textblock.Markers{Start: legacyCodexDelegationStart, End: legacyCodexDelegationEnd},
+	)
 	if err != nil {
-		return "", 0, fmt.Errorf("stat agent instructions %s: %w", path, err)
+		return false, false, fmt.Errorf("remove Codex delegation guidance from %s: %w", path, err)
 	}
-	return string(content), info.Mode().Perm(), nil
+	if updated == string(content) {
+		return false, false, nil
+	}
+	if err := os.WriteFile(path, []byte(updated), info.Mode().Perm()); err != nil {
+		return false, false, fmt.Errorf("write Codex instructions %s: %w", path, err)
+	}
+	return true, false, nil
 }

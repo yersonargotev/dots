@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/yersonargotev/dots/internal/agentinstructions"
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/bootstrap"
 	"github.com/yersonargotev/dots/internal/deps"
@@ -39,15 +40,16 @@ type manifestValidateReport struct {
 }
 
 type installReport struct {
-	RepositoryRefresh   *gitrepo.Update            `json:"repository_refresh,omitempty"`
-	DryRun              bool                       `json:"dry_run"`
-	Selection           selection.Report           `json:"selection"`
-	PackageManagerSetup *pkgmgr.Report             `json:"package_manager_setup,omitempty"`
-	Dependencies        *installDependenciesReport `json:"dependencies,omitempty"`
-	Plan                plan.Plan                  `json:"plan"`
-	Provisioners        provision.Plan             `json:"provisioners"`
-	BackupSets          []installBackupSetReport   `json:"backup_sets,omitempty"`
-	ProvisionerResults  *provision.Report          `json:"provisioner_results,omitempty"`
+	RepositoryRefresh   *gitrepo.Update                     `json:"repository_refresh,omitempty"`
+	DryRun              bool                                `json:"dry_run"`
+	Selection           selection.Report                    `json:"selection"`
+	PackageManagerSetup *pkgmgr.Report                      `json:"package_manager_setup,omitempty"`
+	Dependencies        *installDependenciesReport          `json:"dependencies,omitempty"`
+	Plan                plan.Plan                           `json:"plan"`
+	Provisioners        provision.Plan                      `json:"provisioners"`
+	BackupSets          []installBackupSetReport            `json:"backup_sets,omitempty"`
+	ProvisionerResults  *provision.Report                   `json:"provisioner_results,omitempty"`
+	Retirement          *agentinstructions.RetirementReport `json:"retirement,omitempty"`
 }
 
 type installDependenciesReport struct {
@@ -61,21 +63,23 @@ type installBackupSetReport struct {
 }
 
 type updateReport struct {
-	DryRun       bool                     `json:"dry_run"`
-	Selection    selection.Report         `json:"selection"`
-	Update       gitrepo.Update           `json:"update"`
-	Plan         plan.Plan                `json:"plan"`
-	Provisioners provision.Plan           `json:"provisioners"`
-	BackupSets   []installBackupSetReport `json:"backup_sets,omitempty"`
+	DryRun       bool                                `json:"dry_run"`
+	Selection    selection.Report                    `json:"selection"`
+	Update       gitrepo.Update                      `json:"update"`
+	Plan         plan.Plan                           `json:"plan"`
+	Provisioners provision.Plan                      `json:"provisioners"`
+	BackupSets   []installBackupSetReport            `json:"backup_sets,omitempty"`
+	Retirement   *agentinstructions.RetirementReport `json:"retirement,omitempty"`
 }
 
 type upgradeReport struct {
-	DryRun       bool             `json:"dry_run"`
-	Selection    selection.Report `json:"selection"`
-	Binary       upgrade.Plan     `json:"binary"`
-	Update       gitrepo.Update   `json:"update"`
-	Plan         plan.Plan        `json:"plan"`
-	Provisioners provision.Plan   `json:"provisioners"`
+	DryRun       bool                                `json:"dry_run"`
+	Selection    selection.Report                    `json:"selection"`
+	Binary       upgrade.Plan                        `json:"binary"`
+	Update       gitrepo.Update                      `json:"update"`
+	Plan         plan.Plan                           `json:"plan"`
+	Provisioners provision.Plan                      `json:"provisioners"`
+	Retirement   *agentinstructions.RetirementReport `json:"retirement,omitempty"`
 }
 
 type uninstallReport struct {
