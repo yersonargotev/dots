@@ -1164,6 +1164,61 @@ func TestBuildUsesSourceOverrideForSelectedExtraTag(t *testing.T) {
 	}
 }
 
+func TestBuildProfileAndEquivalentExplicitTagsProduceSameActions(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "core.conf", "core\n")
+	writeSource(t, sourceRoot, "desktop.conf", "desktop\n")
+	writeSource(t, sourceRoot, "linux.conf", "linux\n")
+
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"workstation": {Tags: []string{"core", "desktop"}},
+		},
+		Entries: []manifest.Entry{
+			{Source: "core.conf", Target: "~/.core", Strategy: "copy", Tags: []string{"core"}},
+			{Source: "desktop.conf", Target: "~/.desktop", Strategy: "copy", Tags: []string{"desktop"}, OS: []string{"darwin"}},
+			{Source: "linux.conf", Target: "~/.linux", Strategy: "copy", Tags: []string{"desktop"}, OS: []string{"linux"}},
+		},
+	}
+	profileSelection := manifest.Selection{Profile: "workstation", Profiles: []string{"workstation"}, Tags: []string{"core", "desktop"}}
+	explicitTagSelection := manifest.Selection{Tags: []string{"core", "desktop"}}
+
+	for _, osName := range []string{"darwin", "linux"} {
+		t.Run(osName, func(t *testing.T) {
+			fromProfile, err := plan.Build(m, plan.Options{Selection: &profileSelection, OS: osName, SourceRoot: sourceRoot, Home: home})
+			if err != nil {
+				t.Fatalf("Build() from Profile error = %v", err)
+			}
+			fromTags, err := plan.Build(m, plan.Options{Selection: &explicitTagSelection, OS: osName, SourceRoot: sourceRoot, Home: home})
+			if err != nil {
+				t.Fatalf("Build() from explicit Tags error = %v", err)
+			}
+			if !reflect.DeepEqual(fromProfile.Actions, fromTags.Actions) {
+				t.Fatalf("Profile actions = %#v, explicit Tag actions = %#v", fromProfile.Actions, fromTags.Actions)
+			}
+		})
+	}
+}
+
+func TestBuildPreservesDuplicateTargetConflictFromSelectedSurface(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "duplicate.conf", "content\n")
+	duplicate := manifest.Entry{Source: "duplicate.conf", Target: "~/.duplicate", Strategy: "copy", Tags: []string{"core"}}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{duplicate, duplicate},
+	}
+
+	_, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home})
+	if err == nil || !strings.Contains(err.Error(), "duplicate target") {
+		t.Fatalf("Build() error = %v, want duplicate target conflict", err)
+	}
+}
+
 func TestBuildDiagnosesUnselectedSourceOverrides(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

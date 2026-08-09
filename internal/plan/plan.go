@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/seededstate"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/textblock"
@@ -151,16 +153,10 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	actionByTarget := map[string]int{}
 	readSourcesByTarget := map[string][]string{}
 	scheduledLegacyParents := map[string]struct{}{}
-	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, tags) {
-			continue
-		}
-		if !manifest.MatchesOS(entry.OS, opts.OS) {
-			continue
-		}
-
+	for _, selected := range selectedEntries(m, tags, opts.OS) {
+		entry := selected.Entry
 		defaultSource := entry.Source
-		source := manifest.EntrySource(entry, tags)
+		source := selected.Source
 		target, err := ResolveEntryTarget(entry, opts.Home, opts.XDGStateHome)
 		if err != nil {
 			return Plan{}, err
@@ -283,6 +279,29 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	}
 
 	return plan, nil
+}
+
+type selectedManifestEntry struct {
+	Index int
+	selectedsurface.SelectedEntry
+}
+
+// selectedEntries projects the Selected Surface back onto manifest positions.
+// The projection preserves declaration multiplicity for existing duplicate-target
+// diagnostics while keeping Tag, OS, ordering, and source selection in the
+// Selected Surface module.
+func selectedEntries(m manifest.Manifest, tags []string, osName string) []selectedManifestEntry {
+	surface := selectedsurface.Evaluate(m, tags, osName)
+	selected := make([]selectedManifestEntry, 0, len(surface.Entries))
+	for index, entry := range m.Entries {
+		for _, surfaceEntry := range surface.Entries {
+			if reflect.DeepEqual(entry, surfaceEntry.Entry) {
+				selected = append(selected, selectedManifestEntry{Index: index, SelectedEntry: surfaceEntry})
+				break
+			}
+		}
+	}
+	return selected
 }
 
 func planLegacyMigration(entry manifest.Entry, currentSource string, migration LegacyMigration) (LegacyMigration, bool, error) {

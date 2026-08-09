@@ -1,11 +1,13 @@
 package provision
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/profilesel"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 )
 
 // Options carries the resolved inputs needed to select and plan Provisioners.
@@ -38,30 +40,27 @@ type Plan struct {
 	Steps    []Step   `json:"steps"`
 }
 
-// Select gathers the Provisioners that belong to the Profile (their tags
-// intersect the Profile's tags) and pass the OS filter, preserving manifest
-// order. It mirrors the Entry selection used by deps, plan, and status.
+// Select returns the Provisioners from the Selected Surface, preserving its
+// deterministic manifest order.
 func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
 	selection, err := resolveOptionsSelection(m, opts)
 	if err != nil {
 		return nil, err
 	}
-	indices := selectedIndicesForSelection(m, selection, opts.OS)
-
-	var selected []manifest.Provisioner
-	for i, prov := range m.Provisioners {
-		if indices[i] {
-			selected = append(selected, prov)
-		}
+	selected := selectedProvisioners(m, selection.Tags, opts.OS)
+	if len(selected) == 0 {
+		return nil, nil
 	}
-	return selected, nil
+	provisioners := make([]manifest.Provisioner, 0, len(selected))
+	for _, item := range selected {
+		provisioners = append(provisioners, item.Provisioner)
+	}
+	return provisioners, nil
 }
 
-// selectedIndices returns the set of m.Provisioners positions a profile would
-// select on the given OS. Working in index space lets callers reason about
-// provisioner identity across profiles (which provisioner, not just how many)
-// without depending on struct equality, and keeps Select and SkippedProvisioners
-// filtering through one tag/OS rule.
+// selectedIndices maps the Selected Surface back to manifest positions so the
+// skipped-surface hint can compare Provisioner identity across Profiles without
+// repeating Tag or OS selection.
 func selectedIndices(m manifest.Manifest, profileNames []string, os string, extraTags []string) (map[int]bool, error) {
 	selection, err := manifest.ResolveSelection(m, profileNames, extraTags)
 	if err != nil {
@@ -72,20 +71,39 @@ func selectedIndices(m manifest.Manifest, profileNames []string, os string, extr
 
 func selectedIndicesForSelection(m manifest.Manifest, selection manifest.Selection, os string) map[int]bool {
 	indices := make(map[int]bool)
-	for i, prov := range m.Provisioners {
-		if manifest.SharesTag(prov.Tags, selection.Tags) && manifest.MatchesOS(prov.OS, os) {
-			indices[i] = true
-		}
+	for _, selected := range selectedProvisioners(m, selection.Tags, os) {
+		indices[selected.Index] = true
 	}
 	return indices
+}
+
+type selectedManifestProvisioner struct {
+	Index       int
+	Provisioner manifest.Provisioner
+}
+
+// selectedProvisioners projects the Selected Surface back onto manifest
+// positions. The projection preserves declaration multiplicity while keeping
+// Tag, OS, and ordering rules in the Selected Surface module.
+func selectedProvisioners(m manifest.Manifest, tags []string, osName string) []selectedManifestProvisioner {
+	surface := selectedsurface.Evaluate(m, tags, osName)
+	selected := make([]selectedManifestProvisioner, 0, len(surface.Provisioners))
+	for index, provisioner := range m.Provisioners {
+		for _, surfaceProvisioner := range surface.Provisioners {
+			if reflect.DeepEqual(provisioner, surfaceProvisioner) {
+				selected = append(selected, selectedManifestProvisioner{Index: index, Provisioner: surfaceProvisioner})
+				break
+			}
+		}
+	}
+	return selected
 }
 
 // SkippedProvisioners reports whether the active profile omits provisioners that
 // another profile would select on this OS, and which single profile best recovers
 // them. It is a thin adapter over profilesel.Skipped, injecting the provisioner
 // index selection; plan.SkippedEntries is its file-entry twin over the same
-// shared math. It is PURE: no I/O, safe in a dry-run, and mirrors the tag/OS
-// scoping used by Select.
+// shared math. It is PURE: no I/O and safe in a dry-run.
 func SkippedProvisioners(m manifest.Manifest, opts Options) (profilesel.Hint, bool, error) {
 	active := selectionLabel(opts.Profile, opts.Profiles)
 	if len(opts.Profiles) > 1 {

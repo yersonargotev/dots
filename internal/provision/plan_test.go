@@ -125,6 +125,45 @@ func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 	}
 }
 
+func TestBuildProfileAndEquivalentExplicitTagsProduceSameSteps(t *testing.T) {
+	core := manifest.Provisioner{Tool: "zimfw", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Yes: true}}
+	desktop := manifest.Provisioner{Tool: "claude", Tags: []string{"desktop"}, OS: []string{"darwin"}, Spec: manifest.ProvisionerSpec{Marketplace: "example/tools"}}
+	linux := manifest.Provisioner{Tool: "codex", Tags: []string{"desktop"}, OS: []string{"linux"}, Spec: manifest.ProvisionerSpec{MCP: "example", Command: []string{"npx"}}}
+	m := manifestWithProvisioners(core, desktop, linux)
+	m.Profiles["workstation"] = manifest.Profile{Tags: []string{"core", "desktop"}}
+	profileSelection := manifest.Selection{Profile: "workstation", Profiles: []string{"workstation"}, Tags: []string{"core", "desktop"}}
+	explicitTagSelection := manifest.Selection{Tags: []string{"core", "desktop"}}
+
+	for _, osName := range []string{"darwin", "linux"} {
+		t.Run(osName, func(t *testing.T) {
+			fromProfile, err := provision.Build(m, provision.Options{Selection: &profileSelection, OS: osName})
+			if err != nil {
+				t.Fatalf("Build() from Profile error = %v", err)
+			}
+			fromTags, err := provision.Build(m, provision.Options{Selection: &explicitTagSelection, OS: osName})
+			if err != nil {
+				t.Fatalf("Build() from explicit Tags error = %v", err)
+			}
+			if !reflect.DeepEqual(fromProfile.Steps, fromTags.Steps) {
+				t.Fatalf("Profile steps = %#v, explicit Tag steps = %#v", fromProfile.Steps, fromTags.Steps)
+			}
+		})
+	}
+}
+
+func TestSelectPreservesDuplicateProvisionerDeclarations(t *testing.T) {
+	duplicate := manifest.Provisioner{Tool: "zimfw", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Yes: true}}
+	m := manifestWithProvisioners(duplicate, duplicate)
+
+	selected, err := provision.Select(m, provision.Options{Profile: "default", OS: "linux"})
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+	if len(selected) != 2 {
+		t.Fatalf("len(Select()) = %d, want 2 duplicate declarations preserved", len(selected))
+	}
+}
+
 func TestPlanResolvesClaudeProvisioner(t *testing.T) {
 	market := manifest.Provisioner{
 		Tool: "claude", Tags: []string{"core"},
