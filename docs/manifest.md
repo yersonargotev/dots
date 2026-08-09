@@ -190,7 +190,8 @@ Current Managed Entries:
 | `configs/zsh/zshrc` | `~/.config/dots/zsh/zshrc` | `symlink` | `core` | `darwin`, `linux` | None |
 | `configs/zsh/zimrc` | `~/.zimrc` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
 | `configs/zsh/zshenv` | `~/.zshenv` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
-| `configs/git/gitconfig` | `~/.gitconfig` | `symlink` | `core` | `darwin`, `linux` | `git` |
+| `configs/git/loader.gitconfig` | `~/.gitconfig` | `copy` (`marked-block`) | `core` | `darwin`, `linux` | `git` |
+| `configs/git/gitconfig` | `~/.config/dots/git/gitconfig` | `symlink` | `core` | `darwin`, `linux` | None |
 | `configs/dots/theme.sh` | `~/.config/dots/theme.sh` | `symlink` | `core` | `darwin`, `linux` | None |
 | `configs/dots/adaptive-theme` | `~/.config/dots/adaptive-theme` | `symlink` | `adaptive-theme` | `darwin`, `linux` | None |
 | `configs/starship/starship.toml` | `~/.config/starship.toml` | `symlink` | `core` | `darwin`, `linux` | `starship` |

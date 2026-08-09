@@ -1,5 +1,4 @@
-# Repository-managed Git configuration.
-# Machine-specific identity belongs in ~/.gitconfig.local.
+# Portable repository-managed Git configuration.
 
 [init]
 	defaultBranch = main
@@ -9,6 +8,3 @@
 
 [merge]
 	conflictStyle = diff3
-
-[include]
-	path = ~/.gitconfig.local
