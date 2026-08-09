@@ -1,6 +1,7 @@
 Plan for profile "work"
 
   create          symlink   configs/zsh/zshrc -> /home/user/.zshrc
+  unchanged       copy      configs/nvim/lazy-lock.json -> /home/user/.local/state/nvim/lazy-lock.json
   migrate         copy      configs/app/settings.json -> /home/user/.config/app/settings.json
   conflict        symlink   configs/git/gitconfig -> /home/user/.gitconfig
     source override matches omitted tag(s): adaptive-theme
@@ -8,7 +9,7 @@ Plan for profile "work"
   unchanged       copy      configs/starship.toml -> /home/user/.config/starship.toml
   missing-source  template  configs/nvim/init.lua -> /home/user/.config/nvim/init.lua
 
-Summary: 1 create, 0 update, 1 migrate, 1 conflict, 1 unchanged, 1 missing-source
+Summary: 1 create, 0 update, 1 migrate, 1 conflict, 2 unchanged, 1 missing-source
 
 Conflict guidance:
   Conflicts mean this profile is only partially managed until you choose a resolution.
