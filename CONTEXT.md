@@ -125,7 +125,7 @@ The preview of filesystem changes, conflicts, dependency findings, and backup re
 _Avoid_: preview, dry run output, change list
 
 **Uninstall Plan**:
-The preview of removals the Dotfiles CLI computes from the Installation Metadata before reversing an install, classifying each recorded target as remove, skip, modified, or not-owned. It is the mirror of the Install Plan and is the output of `dots uninstall --dry-run`.
+The preview of removals the Dotfiles CLI computes from the Installation Metadata before reversing an install, classifying each recorded target as remove, retain, skip, modified, or not-owned. It is the mirror of the Install Plan and is the output of `dots uninstall --dry-run`.
 _Avoid_: removal preview, deletion list, reverse plan
 
 **Dotfiles Status**:
