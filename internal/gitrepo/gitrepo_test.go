@@ -128,7 +128,7 @@ func TestPreviewReportsIncomingWithoutModifyingWorkingTree(t *testing.T) {
 	}
 }
 
-func TestCheckoutRefSameRevisionLeavesDirtyWorktreeInPlace(t *testing.T) {
+func TestCheckoutRefSameRevisionPreservesDirtyWorktreeWithoutDetaching(t *testing.T) {
 	requireGit(t)
 	_, clone := setupRemoteAndClone(t)
 	localPath := filepath.Join(clone, "configs", "zsh", "zshrc")
@@ -145,12 +145,12 @@ func TestCheckoutRefSameRevisionLeavesDirtyWorktreeInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckoutRef() error = %v", err)
 	}
-	if result.PreservedChanges != "" {
-		t.Fatalf("same-ref checkout preserved changes in %q", result.PreservedChanges)
+	if result.PreservedChanges != "stash@{0}" {
+		t.Fatalf("same-ref checkout preserved changes in %q, want stash@{0}", result.PreservedChanges)
 	}
 	content, err := os.ReadFile(localPath)
-	if err != nil || string(content) != "local edit\n" {
-		t.Fatalf("dirty content = %q, err=%v", content, err)
+	if err != nil || string(content) == "local edit\n" {
+		t.Fatalf("dirty content remained in checkout: %q, err=%v", content, err)
 	}
 	if got := gitOutput(t, clone, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
 		t.Fatalf("same-ref checkout detached branch: %s", got)
