@@ -1116,57 +1116,12 @@ func resolveSelection(m Manifest, profileNames []string, extraTags []string, all
 	return Selection{Profile: strings.Join(profiles, ","), Profiles: profiles, Tags: tags}, nil
 }
 
-// SelectionTags returns the effective tag set for a profile plus any
-// explicit tags requested by the caller. The profile tags stay first so selected
-// entries and provisioners preserve the manifest's role-oriented baseline while
-// --tag can opt into one-off capabilities without creating feature profiles.
-func SelectionTags(profile Profile, extraTags []string) []string {
-	tags := append([]string(nil), profile.Tags...)
-	seen := make(map[string]bool, len(tags)+len(extraTags))
-	for _, tag := range tags {
-		seen[tag] = true
-	}
-	for _, tag := range extraTags {
-		if seen[tag] {
-			continue
-		}
-		seen[tag] = true
-		tags = append(tags, tag)
-	}
-	return tags
-}
-
-func EntrySource(entry Entry, selectionTags []string) string {
-	for i := len(selectionTags) - 1; i >= 0; i-- {
-		if source, ok := entry.SourceOverrides[selectionTags[i]]; ok {
-			return source
-		}
-	}
-	return entry.Source
-}
-
-// SharesTag reports whether an item's tags intersect a profile's tags. It is
-// half the profile-scoping rule entries and provisioners share: an item belongs
-// to a profile when at least one of its tags matches one of the profile's tags.
-// Centralizing it here keeps plan, status, deps, doctor, and provision filtering
-// through one rule instead of each carrying its own copy.
-func SharesTag(itemTags, profileTags []string) bool {
-	for _, it := range itemTags {
-		for _, pt := range profileTags {
-			if it == pt {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // MatchesOS reports whether an item's OS filter admits the current OS. An empty
 // filter matches every OS. The comparison is case-insensitive so a manifest that
 // declared an OS in mixed case still matches runtime.GOOS, which is always
 // lowercase; validation already constrains OS values to lowercase darwin/linux,
-// so this is defensive rather than load-bearing. It is the other half of the
-// profile-scoping rule SharesTag begins.
+// so this is defensive rather than load-bearing. Current declarative selection
+// belongs to selectedsurface; this helper remains for historical record matching.
 func MatchesOS(itemOS []string, currentOS string) bool {
 	if len(itemOS) == 0 {
 		return true

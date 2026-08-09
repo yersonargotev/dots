@@ -4,6 +4,7 @@ package catalog
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -272,7 +273,7 @@ func Tag(m manifest.Manifest, name string, opts Options) (Report, error) {
 
 func buildDetail(m manifest.Manifest, name, description, status, kind, replacedBy string, tags []string, osName string) *Detail {
 	d := &Detail{Name: name, Description: description, Status: status, Kind: kind, ReplacedBy: replacedBy, ResolvedTags: clone(tags), Dependencies: []Dependency{}, DependencySets: []DependencySet{}, ProfileDependencies: []Dependency{}, Entries: []Entry{}, SourceOverrides: []SourceOverride{}, Provisioners: []Provisioner{}, Behaviors: behaviors(tags), Excluded: []ExcludedSurface{}}
-	surface := selectedSurface(m, tags, osName)
+	surface, excludedSurface := selectedSurfaces(m, tags, osName)
 	for _, set := range surface.DependencySets {
 		item := DependencySet{Tags: clone(set.Tags), OS: declaredOS(set.OS), Dependencies: []Dependency{}}
 		for _, dep := range set.Dependencies {
@@ -295,11 +296,11 @@ func buildDetail(m manifest.Manifest, name, description, status, kind, replacedB
 		entry := override.Entry
 		d.SourceOverrides = append(d.SourceOverrides, SourceOverride{Tag: override.Tag, Source: override.Source, Entry: entry.Source, Target: entry.Target, OS: declaredOS(entry.OS), Applicable: true})
 	}
-	d.SourceOverrides = append(d.SourceOverrides, inactiveSourceOverrides(m, tags, osName)...)
+	d.SourceOverrides = append(d.SourceOverrides, inactiveSourceOverrides(excludedSurface)...)
 	for _, p := range surface.Provisioners {
 		d.Provisioners = append(d.Provisioners, provisioner(p))
 	}
-	d.Excluded = excludedSurfaces(m, tags, osName)
+	d.Excluded = excludedSurfaces(excludedSurface, osName)
 	sort.Slice(d.SourceOverrides, func(i, j int) bool {
 		if d.SourceOverrides[i].Tag == d.SourceOverrides[j].Tag {
 			return d.SourceOverrides[i].Target < d.SourceOverrides[j].Target
@@ -319,68 +320,75 @@ func catalogOrigin(origin selectedsurface.Origin) Origin {
 	return Origin{Type: origin.Type, Name: origin.Name, Tags: clone(origin.Tags)}
 }
 
-func selectedSurface(m manifest.Manifest, tags []string, osName string) selectedsurface.Surface {
+func selectedSurfaces(m manifest.Manifest, tags []string, osName string) (selectedsurface.Surface, selectedsurface.Surface) {
 	if osName == "all" {
-		return selectedsurface.EvaluateAll(m, tags)
+		return selectedsurface.EvaluateAll(m, tags), selectedsurface.Surface{}
 	}
-	return selectedsurface.Evaluate(m, tags, osName)
+	selected := selectedsurface.Evaluate(m, tags, osName)
+	otherOS := "darwin"
+	if osName == "darwin" {
+		otherOS = "linux"
+	}
+	other := selectedsurface.Evaluate(m, tags, otherOS)
+	return selected, subtractSurface(other, selected)
 }
 
 // inactiveSourceOverrides preserves the catalog explanation for selected tags
 // whose override is excluded by OS. Applicable overrides always come from the
 // selected surface above.
-func inactiveSourceOverrides(m manifest.Manifest, tags []string, osName string) []SourceOverride {
-	result := []SourceOverride{}
-	for _, entry := range m.Entries {
-		if matches(entry.OS, osName) {
-			continue
-		}
-		for tag, source := range entry.SourceOverrides {
-			if contains(tags, tag) {
-				result = append(result, SourceOverride{Tag: tag, Source: source, Entry: entry.Source, Target: entry.Target, OS: declaredOS(entry.OS), Applicable: false})
-			}
+func inactiveSourceOverrides(surface selectedsurface.Surface) []SourceOverride {
+	result := make([]SourceOverride, 0, len(surface.SourceOverrides))
+	for _, override := range surface.SourceOverrides {
+		entry := override.Entry
+		result = append(result, SourceOverride{Tag: override.Tag, Source: override.Source, Entry: entry.Source, Target: entry.Target, OS: declaredOS(entry.OS), Applicable: false})
+	}
+	return result
+}
+
+// excludedSurfaces projects declarations selected only on the other Supported
+// Platform. Tag and OS traversal remains owned by selectedsurface.
+func excludedSurfaces(surface selectedsurface.Surface, osName string) []ExcludedSurface {
+	result := []ExcludedSurface{}
+	for _, set := range surface.DependencySets {
+		result = append(result, excluded("dependency_set", strings.Join(set.Tags, ","), set.OS, osName))
+	}
+	for _, override := range surface.SourceOverrides {
+		result = append(result, excluded("source_override", override.Entry.Target+" ("+override.Tag+")", override.Entry.OS, osName))
+	}
+	for _, entry := range surface.Entries {
+		result = append(result, excluded("entry", entry.Entry.Target, entry.Entry.OS, osName))
+	}
+	for _, provisioner := range surface.Provisioners {
+		result = append(result, excluded("provisioner", provisioner.Tool, provisioner.OS, osName))
+	}
+	return result
+}
+
+func subtractSurface(surface, selected selectedsurface.Surface) selectedsurface.Surface {
+	surface.DependencySets = subtractExact(surface.DependencySets, selected.DependencySets)
+	surface.Entries = subtractExact(surface.Entries, selected.Entries)
+	surface.Provisioners = subtractExact(surface.Provisioners, selected.Provisioners)
+	surface.SourceOverrides = subtractExact(surface.SourceOverrides, selected.SourceOverrides)
+	return surface
+}
+
+func subtractExact[T any](values, excludedValues []T) []T {
+	result := make([]T, 0, len(values))
+	for _, value := range values {
+		if !containsExact(excludedValues, value) {
+			result = append(result, value)
 		}
 	}
 	return result
 }
 
-// excludedSurfaces reports raw declarations that share the requested tags but
-// are not applicable to the requested operating system. They are deliberately
-// outside selectedsurface because that package exposes applicable declarations.
-func excludedSurfaces(m manifest.Manifest, tags []string, osName string) []ExcludedSurface {
-	result := []ExcludedSurface{}
-	for _, set := range m.Dependencies {
-		if !manifest.SharesTag(set.Tags, tags) {
-			continue
-		}
-		if !matches(set.OS, osName) {
-			result = append(result, excluded("dependency_set", strings.Join(set.Tags, ","), set.OS, osName))
+func containsExact[T any](values []T, candidate T) bool {
+	for _, value := range values {
+		if reflect.DeepEqual(value, candidate) {
+			return true
 		}
 	}
-	for _, entry := range m.Entries {
-		for tag := range entry.SourceOverrides {
-			if contains(tags, tag) {
-				if !matches(entry.OS, osName) {
-					result = append(result, excluded("source_override", entry.Target+" ("+tag+")", entry.OS, osName))
-				}
-			}
-		}
-		if !manifest.SharesTag(entry.Tags, tags) {
-			continue
-		}
-		if !matches(entry.OS, osName) {
-			result = append(result, excluded("entry", entry.Target, entry.OS, osName))
-		}
-	}
-	for _, p := range m.Provisioners {
-		if !manifest.SharesTag(p.Tags, tags) {
-			continue
-		}
-		if !matches(p.OS, osName) {
-			result = append(result, excluded("provisioner", p.Tool, p.OS, osName))
-		}
-	}
-	return result
+	return false
 }
 
 func comparisonSurface(detail *Detail) ComparisonSurface {
@@ -594,7 +602,6 @@ func resolveOS(value string) (string, error) {
 		return "", fmt.Errorf("catalog OS %q is invalid: choose darwin, linux, or all", value)
 	}
 }
-func matches(os []string, value string) bool { return value == "all" || manifest.MatchesOS(os, value) }
 func declaredOS(os []string) []string {
 	if len(os) == 0 {
 		return []string{"darwin", "linux"}

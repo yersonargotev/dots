@@ -11,6 +11,7 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 )
 
 func TestLoadFileAcceptsMinimalValidManifest(t *testing.T) {
@@ -3144,21 +3145,13 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 		t.Fatalf("Build() error = %v", err)
 	}
 
-	// Derive the expected action count from the loaded manifest instead of a
-	// hardcoded literal: every managed entry whose tags intersect the profile
-	// and that passes the OS filter must produce exactly one action. This is the
-	// same selection plan.Build applies, so adding or removing a dots.yaml entry
-	// never forces a magic-number bump here.
+	// Derive the expected action count from the Selected Surface instead of
+	// repeating its Tag and OS traversal in this command-level plan test.
 	profile, ok := got.Profiles["core"]
 	if !ok {
 		t.Fatal("manifest missing profile \"default\"")
 	}
-	wantActions := 0
-	for _, entry := range got.Entries {
-		if manifest.SharesTag(entry.Tags, profile.Tags) && manifest.MatchesOS(entry.OS, "darwin") {
-			wantActions++
-		}
-	}
+	wantActions := len(selectedsurface.Evaluate(*got, profile.Tags, "darwin").Entries)
 	if wantActions == 0 {
 		t.Fatal("no managed entries apply to profile \"default\" on darwin; derived plan is empty")
 	}

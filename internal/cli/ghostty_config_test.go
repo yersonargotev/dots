@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -89,12 +90,12 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	if ghosttyEntry == nil {
 		t.Fatal("dots manifest missing Ghostty managed entry")
 	}
-	if !manifest.SharesTag(ghosttyEntry.Tags, []string{"desktop"}) {
+	if !slices.Contains(ghosttyEntry.Tags, "desktop") {
 		t.Fatalf("Ghostty managed entry tags = %#v, want desktop", ghosttyEntry.Tags)
 	}
 	foundDesktopFontDependency := false
 	for _, set := range manifestFile.Dependencies {
-		if !manifest.SharesTag(set.Tags, []string{"desktop"}) {
+		if !slices.Contains(set.Tags, "desktop") {
 			continue
 		}
 		for _, dep := range set.Dependencies {

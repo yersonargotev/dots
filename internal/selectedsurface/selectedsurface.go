@@ -123,7 +123,7 @@ func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS func([]stri
 	}
 
 	for _, set := range m.Dependencies {
-		if !manifest.SharesTag(set.Tags, tags) || !matchesOS(set.OS) || containsExact(seenSets, set) {
+		if !sharesTag(set.Tags, tags) || !matchesOS(set.OS) || containsExact(seenSets, set) {
 			continue
 		}
 		seenSets = append(seenSets, set)
@@ -158,7 +158,7 @@ func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS func([]stri
 	}
 
 	for _, provisioner := range m.Provisioners {
-		if !manifest.SharesTag(provisioner.Tags, tags) || !matchesOS(provisioner.OS) || containsExact(seenProvisioners, provisioner) {
+		if !sharesTag(provisioner.Tags, tags) || !matchesOS(provisioner.OS) || containsExact(seenProvisioners, provisioner) {
 			continue
 		}
 		seenProvisioners = append(seenProvisioners, provisioner)
@@ -173,7 +173,7 @@ func evaluateEntries(m manifest.Manifest, tags []string, matchesOS func([]string
 	result := []EntryEvaluation{}
 	seenEntries := make([]manifest.Entry, 0)
 	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, tags) || containsExact(seenEntries, entry) {
+		if !sharesTag(entry.Tags, tags) || containsExact(seenEntries, entry) {
 			continue
 		}
 		seenEntries = append(seenEntries, entry)
@@ -206,6 +206,17 @@ func uniqueTags(tags []string) []string {
 		result = append(result, tag)
 	}
 	return result
+}
+
+func sharesTag(itemTags, selectedTags []string) bool {
+	for _, itemTag := range itemTags {
+		for _, selectedTag := range selectedTags {
+			if itemTag == selectedTag {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func containsExact[T any](values []T, candidate T) bool {
