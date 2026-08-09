@@ -1,6 +1,7 @@
 package configsubset
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -517,5 +518,151 @@ theme = "catppuccin-mocha"
 	}
 	if gotMode := info.Mode().Perm(); gotMode != 0o640 {
 		t.Fatalf("target mode = %v, want 0640", gotMode)
+	}
+}
+
+func TestReconcileTOMLPreservesFormattingWhileAddingRemovingAndChangingValues(t *testing.T) {
+	previous := []byte(`enter_accept = true
+retired = "old"
+
+[sync]
+records = true
+`)
+	current := []byte(`enter_accept = false
+new_root = 42
+
+[sync]
+records = true
+new_setting = ["one", "two"]
+
+[theme]
+name = "catppuccin-mocha"
+`)
+	target := []byte(`# Atuin local configuration.
+enter_accept    = true # keep inline note
+retired = "old"
+external = "untouched"
+
+[sync]
+records = true
+runtime = false # Atuin wrote this
+`)
+
+	reconciliation, err := ReconcileTOML(target, previous, current)
+	if err != nil {
+		t.Fatalf("ReconcileTOML() error = %v", err)
+	}
+	if !reconciliation.Compatible || !reconciliation.Changed {
+		t.Fatalf("ReconcileTOML() = %#v, want compatible change", reconciliation)
+	}
+	got := string(reconciliation.Content)
+	for _, want := range []string{
+		"# Atuin local configuration.\n",
+		"enter_accept = false # keep inline note\n",
+		"external = \"untouched\"\n",
+		"runtime = false # Atuin wrote this\n",
+		"new_root = 42\n",
+		"new_setting = [\"one\", \"two\"]\n",
+		"[theme]\nname = \"catppuccin-mocha\"\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("reconciled TOML missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, `retired = "old"`) {
+		t.Fatalf("reconciled TOML retained retired value:\n%s", got)
+	}
+}
+
+func TestReconcileTOMLRejectsChangedOwnedAtomicArray(t *testing.T) {
+	owned := []byte("history_filter = [\"pwd\", \"ls\"]\n")
+	target := []byte("history_filter = [\"pwd\"]\nexternal = true\n")
+
+	reconciliation, err := ReconcileTOML(target, owned, owned)
+	if err != nil {
+		t.Fatalf("ReconcileTOML() error = %v", err)
+	}
+	if reconciliation.Compatible {
+		t.Fatalf("ReconcileTOML() = %#v, want incompatible changed array", reconciliation)
+	}
+}
+
+func TestRemoveTOMLPreservesExternalKeysTablesCommentsAndFormatting(t *testing.T) {
+	owned := []byte(`enter_accept = true
+
+[sync]
+records = true
+`)
+	target := []byte(`# local note
+enter_accept = true
+external    = "keep"
+
+[sync]
+records = true
+runtime = false
+
+[external_table]
+value = 7
+`)
+
+	content, changed, empty, compatible, err := RemoveTOML(target, owned)
+	if err != nil {
+		t.Fatalf("RemoveTOML() error = %v", err)
+	}
+	if !compatible || !changed || empty {
+		t.Fatalf("RemoveTOML() = changed %v, empty %v, compatible %v", changed, empty, compatible)
+	}
+	got := string(content)
+	for _, want := range []string{"# local note\n", `external    = "keep"`, "runtime = false", "[external_table]\nvalue = 7"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("TOML after removal missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "enter_accept") || strings.Contains(got, "records = true") {
+		t.Fatalf("TOML after removal retained owned values:\n%s", got)
+	}
+}
+
+func TestRemoveTOMLReportsSemanticallyEmptyDocumentWithoutComments(t *testing.T) {
+	owned := []byte("enter_accept = true\n\n[sync]\nrecords = true\n")
+
+	content, changed, empty, compatible, err := RemoveTOML(owned, owned)
+	if err != nil {
+		t.Fatalf("RemoveTOML() error = %v", err)
+	}
+	if !compatible || !changed || !empty {
+		t.Fatalf("RemoveTOML() = (%q, %v, %v, %v), want changed compatible empty", content, changed, empty, compatible)
+	}
+}
+
+func TestRemoveTOMLRemovesWholeMultilineArrayExpression(t *testing.T) {
+	owned := []byte("history_filter = [\n  \"pwd\",\n  \"ls\",\n]\n")
+	target := append(append([]byte(nil), owned...), []byte("external = true\n")...)
+
+	content, changed, empty, compatible, err := RemoveTOML(target, owned)
+	if err != nil {
+		t.Fatalf("RemoveTOML() error = %v", err)
+	}
+	if !compatible || !changed || empty || string(content) != "external = true\n" {
+		t.Fatalf("RemoveTOML() = (%q, %v, %v, %v), want only external value", content, changed, empty, compatible)
+	}
+}
+
+func TestMergeTOMLSupportsTargetOnlyTablesAndMultilineAtomicArrays(t *testing.T) {
+	source := []byte("history_filter = [\n  \"pwd\",\n  \"ls\",\n]\n\n[sync]\nrecords = true\n")
+	target := []byte("# untouched\nexternal = 1\n\n[application]\nvalue = { enabled = true }\n")
+
+	merged, err := MergeTOML(target, source)
+	if err != nil {
+		t.Fatalf("MergeTOML() error = %v", err)
+	}
+	for _, untouched := range []string{"# untouched\nexternal = 1\n", "[application]\nvalue = { enabled = true }\n"} {
+		if !bytes.Contains(merged, []byte(untouched)) {
+			t.Fatalf("MergeTOML() changed existing bytes %q:\n%s", untouched, merged)
+		}
+	}
+	relation, err := AnalyzeTOML(merged, source)
+	if err != nil || !relation.Contains {
+		t.Fatalf("AnalyzeTOML() = (%#v, %v), want contains", relation, err)
 	}
 }

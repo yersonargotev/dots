@@ -72,6 +72,40 @@ func TestBuildUninstallClassifiesChangedPartialJSONAsModified(t *testing.T) {
 	}
 }
 
+func TestBuildUninstallPlansPartialTOMLRemovalFromRecordedContribution(t *testing.T) {
+	f := newUninstallFixture(t)
+	target := f.target(".config/atuin/config.toml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte("enter_accept = true\nexternal = \"keep\"\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	p := f.build(t, state.Record{
+		Target: target, Source: "configs/atuin/config.toml", Strategy: "copy", Ownership: "toml-subset", OwnedBytes: []byte("enter_accept = true\n"),
+	})
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.UninstallRemove || p.Actions[0].Ownership != "toml-subset" {
+		t.Fatalf("action = %+v, want safe partial TOML remove", p.Actions)
+	}
+}
+
+func TestBuildUninstallRejectsChangedOwnedTOMLEvenWithForceEligiblePlan(t *testing.T) {
+	f := newUninstallFixture(t)
+	target := f.target(".config/atuin/config.toml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte("enter_accept = false\nexternal = \"keep\"\n"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	p := f.build(t, state.Record{
+		Target: target, Source: "configs/atuin/config.toml", Strategy: "copy", Ownership: "toml-subset", OwnedBytes: []byte("enter_accept = true\n"),
+	})
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.UninstallModified || p.Removable() {
+		t.Fatalf("plan = %+v, want non-removable modified TOML ownership", p)
+	}
+}
+
 func TestUninstallPlanRemovableRequiresExplicitWholeOwnershipForModifiedTarget(t *testing.T) {
 	tests := []struct {
 		name string

@@ -146,6 +146,11 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 					if err != nil {
 						return fmt.Errorf("canonicalize owned JSONC contribution %s: %w", resolvedSources[i][0], err)
 					}
+				} else if action.Ownership == "toml-subset" {
+					ownedBytes, err = os.ReadFile(resolvedSources[i][0])
+					if err != nil {
+						return fmt.Errorf("read owned TOML contribution %s: %w", resolvedSources[i][0], err)
+					}
 				} else if action.Ownership == "seeded" {
 					if action.Migration != nil && action.Migration.RecordedBaseline != nil {
 						seededBaseline = append([]byte(nil), action.Migration.RecordedBaseline...)
@@ -605,6 +610,16 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 			return fmt.Errorf("merge JSONC update for %s: %w", action.Target, err)
 		}
 	case "toml-subset":
+		if len(action.PreviousContent) > 0 {
+			current, err := os.ReadFile(source)
+			if err != nil {
+				return fmt.Errorf("read current owned TOML %s: %w", source, err)
+			}
+			if err := reconcileTOMLContentFile(action.Target, action.PreviousContent, current); err != nil {
+				return fmt.Errorf("reconcile TOML update for %s: %w", action.Target, err)
+			}
+			return nil
+		}
 		if err := configsubset.MergeTOMLFile(action.Target, source); err != nil {
 			return fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
 		}
@@ -927,6 +942,28 @@ func reconcileJSONCContentFile(target string, previousData, currentData []byte) 
 	}
 	if !reconciliation.Compatible {
 		return fmt.Errorf("live target changed a previously owned JSONC value")
+	}
+	if !reconciliation.Changed {
+		return nil
+	}
+	return os.WriteFile(target, reconciliation.Content, info.Mode().Perm())
+}
+
+func reconcileTOMLContentFile(target string, previousData, currentData []byte) error {
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return err
+	}
+	reconciliation, err := configsubset.ReconcileTOML(targetData, previousData, currentData)
+	if err != nil {
+		return err
+	}
+	if !reconciliation.Compatible {
+		return fmt.Errorf("live target changed a previously owned TOML value")
 	}
 	if !reconciliation.Changed {
 		return nil

@@ -160,6 +160,14 @@ updates preserve target-only object keys plus untouched comments, trailing
 commas, ordering, and formatting. A changed owned scalar or array is Drift for
 a recorded target and a Conflict without trusted Installation Metadata.
 
+For a `toml-subset` target, dots owns baseline values declared at root or in
+ordinary tables. Scalars, arrays, and inline tables are atomic; target-only keys
+and tables remain outside dots ownership. Exact prior-contribution evidence
+allows compatible baseline additions, replacements, and removals without
+rewriting unrelated comments or formatting. Changed owned values remain Drift
+and are never overwritten. Uninstall subtracts only unchanged recorded values
+and preserves external content.
+
 For `seeded` ownership, dots stores the exact opaque baseline in Installation
 Metadata. Missing state is seeded; live state still equal to the prior baseline
 advances to the current baseline after a Backup Set; and locally evolved state
@@ -196,7 +204,7 @@ Current Managed Entries:
 | `configs/warp/keybindings.yaml` | `~/.warp/keybindings.yaml` | `copy` | `desktop` | `darwin` | None |
 | `configs/warp/settings.toml` | `~/.config/warp-terminal/settings.toml` | `copy` | `desktop` | `linux` | `Warp` |
 | `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `desktop` | `linux` | `Warp` |
-| `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
+| `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `copy` | `core` | `darwin`, `linux` | `atuin`; owns TOML subset |
 | `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
 | `configs/bat/config` | `~/.config/bat/config` | `symlink` | `core` | `darwin`, `linux` | `bat` |
 | `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `core` | `darwin`, `linux` | None |

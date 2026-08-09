@@ -176,6 +176,20 @@ func uninstallStatus(rec state.Record, sourceRoot, home string) (UninstallStatus
 			}
 			return UninstallModified, nil
 		}
+		if rec.Ownership == "toml-subset" && len(rec.OwnedBytes) > 0 {
+			targetData, err := os.ReadFile(rec.Target)
+			if err != nil {
+				return "", fmt.Errorf("read uninstall target %s: %w", rec.Target, err)
+			}
+			_, _, _, compatible, err := configsubset.RemoveTOML(targetData, rec.OwnedBytes)
+			if err != nil {
+				return "", fmt.Errorf("analyze owned TOML for %s: %w", rec.Target, err)
+			}
+			if compatible {
+				return UninstallRemove, nil
+			}
+			return UninstallModified, nil
+		}
 		if rec.Ownership == "marked-block" && len(rec.OwnedBytes) > 0 {
 			targetData, err := os.ReadFile(rec.Target)
 			if err != nil {

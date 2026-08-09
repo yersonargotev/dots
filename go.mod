@@ -7,6 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260607010151-cd19a2bba55f
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/spf13/cobra v1.8.1
 	github.com/tailscale/hujson v0.0.0-20241010212012-29efb4a0184b
 	gopkg.in/yaml.v3 v3.0.1
