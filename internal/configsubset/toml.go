@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -278,7 +279,12 @@ func reconcileParsedTOML(targetData []byte, previous, current *tomlDocument) (TO
 		if currentEntry.tableKey != "" {
 			if _, tableExists := tomlValueAt(target.values, current.sections[currentEntry.tableKey].path); tableExists {
 				if _, sectionExists := target.sections[currentEntry.tableKey]; !sectionExists {
-					return TOMLReconciliation{}, nil
+					dotted, ok := renderDottedTOMLEntry(currentEntry.path, currentEntry.raw)
+					if !ok {
+						return TOMLReconciliation{}, nil
+					}
+					currentEntry.tableKey = ""
+					currentEntry.raw = dotted
 				}
 			}
 		}
@@ -520,6 +526,58 @@ func joinTOMLEntries(entries []tomlEntry) []byte {
 		result = append(result, entry.raw...)
 	}
 	return result
+}
+
+func renderDottedTOMLEntry(path []string, expression []byte) ([]byte, bool) {
+	equals := tomlAssignmentEquals(expression)
+	if equals < 0 {
+		return nil, false
+	}
+	parts := make([]string, len(path))
+	for index, part := range path {
+		if isBareTOMLKey(part) {
+			parts[index] = part
+		} else {
+			parts[index] = strconv.Quote(part)
+		}
+	}
+	result := []byte(strings.Join(parts, ".") + " ")
+	result = append(result, expression[equals:]...)
+	return result, true
+}
+
+func tomlAssignmentEquals(expression []byte) int {
+	inBasicString := false
+	inLiteralString := false
+	escaped := false
+	for index, value := range expression {
+		switch {
+		case escaped:
+			escaped = false
+		case inBasicString && value == '\\':
+			escaped = true
+		case !inLiteralString && value == '"':
+			inBasicString = !inBasicString
+		case !inBasicString && value == '\'':
+			inLiteralString = !inLiteralString
+		case !inBasicString && !inLiteralString && value == '=':
+			return index
+		}
+	}
+	return -1
+}
+
+func isBareTOMLKey(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' || char == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func formatTOMLInsertion(data []byte, offset int, addition []byte, separate bool) []byte {

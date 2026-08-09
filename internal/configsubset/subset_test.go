@@ -666,3 +666,39 @@ func TestMergeTOMLSupportsTargetOnlyTablesAndMultilineAtomicArrays(t *testing.T)
 		t.Fatalf("AnalyzeTOML() = (%#v, %v), want contains", relation, err)
 	}
 }
+
+func TestMergeTOMLExtendsExternalTableExpressedWithDottedKey(t *testing.T) {
+	source := []byte("[sync]\nrecords = true\n")
+	target := []byte("# external dotted table\nsync.runtime = false # untouched\n")
+
+	merged, err := MergeTOML(target, source)
+	if err != nil {
+		t.Fatalf("MergeTOML() error = %v", err)
+	}
+	for _, want := range []string{
+		"# external dotted table\n",
+		"sync.runtime = false # untouched\n",
+		"sync.records = true\n",
+	} {
+		if !strings.Contains(string(merged), want) {
+			t.Fatalf("merged TOML missing %q:\n%s", want, merged)
+		}
+	}
+	relation, err := AnalyzeTOML(merged, source)
+	if err != nil || !relation.Contains {
+		t.Fatalf("AnalyzeTOML() = (%#v, %v), want contains", relation, err)
+	}
+}
+
+func TestMergeTOMLRendersQuotedDottedOwnershipPath(t *testing.T) {
+	source := []byte("[sync]\n\"record=key\" = true\n")
+	target := []byte("sync.runtime = false\n")
+
+	merged, err := MergeTOML(target, source)
+	if err != nil {
+		t.Fatalf("MergeTOML() error = %v", err)
+	}
+	if !strings.Contains(string(merged), "sync.\"record=key\" = true\n") {
+		t.Fatalf("merged TOML did not render quoted dotted key safely:\n%s", merged)
+	}
+}
