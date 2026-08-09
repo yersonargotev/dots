@@ -361,7 +361,7 @@ func selectedSurface(m manifest.Manifest, selected manifest.Selection, osName st
 		}
 	}
 	for _, profileName := range selected.Profiles {
-		addDependencies(m.Profiles[profileName].Dependencies)
+		addDependencies(m.LegacyProfileDependencies(profileName))
 	}
 	for _, set := range m.Dependencies {
 		if manifest.SharesTag(set.Tags, selected.Tags) && manifest.MatchesOS(set.OS, osName) {

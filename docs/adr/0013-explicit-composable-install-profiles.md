@@ -26,3 +26,15 @@ mutation. Users run commands such as `dots install --profile core`,
 `dots install --profile core --profile agents --profile web` to state exactly
 what they want. Legacy test fixtures may still define a `default` Profile, but
 that name is no longer part of the repository manifest or public examples.
+
+## Amendment: pure Profile invariant
+
+A Profile is a removable name for an ordered Tag selection. Its declaration
+contains descriptive metadata, lifecycle status, and Tags only; Dependencies,
+Managed Entries, and Provisioners belong to their narrowest declarative owner.
+Capability-wide Dependencies therefore use Tag-scoped Dependency Sets. The same
+effective Tags on an operating system select the same declarative surface
+whether supplied by Profiles or explicit `--tag` values. Historical manifests
+may be read only for update-evolution inventory when they contain retired
+Profile Dependencies; current manifest loading rejects that field with migration
+guidance.

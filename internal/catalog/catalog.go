@@ -225,7 +225,7 @@ func Profile(m manifest.Manifest, name string, opts Options) (Report, error) {
 		return Report{}, fmt.Errorf("profile %q not found", name)
 	}
 	summary := summaryProfile(name, p)
-	base.Profile = buildDetail(m, name, summary.Description, summary.Status, "", "", unique(p.Tags), base.OS, p.Dependencies)
+	base.Profile = buildDetail(m, name, summary.Description, summary.Status, "", "", unique(p.Tags), base.OS)
 	return base, nil
 }
 
@@ -265,15 +265,12 @@ func Tag(m manifest.Manifest, name string, opts Options) (Report, error) {
 		return Report{}, fmt.Errorf("tag %q not found", name)
 	}
 	t := summaryTag(m, name)
-	base.Tag = buildDetail(m, name, t.Description, t.Status, t.Kind, t.ReplacedBy, []string{name}, base.OS, nil)
+	base.Tag = buildDetail(m, name, t.Description, t.Status, t.Kind, t.ReplacedBy, []string{name}, base.OS)
 	return base, nil
 }
 
-func buildDetail(m manifest.Manifest, name, description, status, kind, replacedBy string, tags []string, osName string, profileDeps []manifest.Dependency) *Detail {
+func buildDetail(m manifest.Manifest, name, description, status, kind, replacedBy string, tags []string, osName string) *Detail {
 	d := &Detail{Name: name, Description: description, Status: status, Kind: kind, ReplacedBy: replacedBy, ResolvedTags: clone(tags), Dependencies: []Dependency{}, DependencySets: []DependencySet{}, ProfileDependencies: []Dependency{}, Entries: []Entry{}, SourceOverrides: []SourceOverride{}, Provisioners: []Provisioner{}, Behaviors: behaviors(tags), Excluded: []ExcludedSurface{}}
-	for _, dep := range profileDeps {
-		d.ProfileDependencies = append(d.ProfileDependencies, dependency(dep, Origin{Type: "profile", Name: name}))
-	}
 	for _, set := range m.Dependencies {
 		if !manifest.SharesTag(set.Tags, tags) {
 			continue
@@ -347,9 +344,7 @@ func comparisonSurface(detail *Detail) ComparisonSurface {
 	if detail == nil {
 		return ComparisonSurface{ResolvedTags: []string{}, Dependencies: []Dependency{}, Entries: []Entry{}, SourceOverrides: []SourceOverride{}, Provisioners: []Provisioner{}, Behaviors: []Behavior{}}
 	}
-	dependencies := make([]Dependency, 0, len(detail.ProfileDependencies)+len(detail.Dependencies))
-	dependencies = append(dependencies, detail.ProfileDependencies...)
-	dependencies = append(dependencies, detail.Dependencies...)
+	dependencies := append([]Dependency{}, detail.Dependencies...)
 	return ComparisonSurface{
 		ResolvedTags:    clone(detail.ResolvedTags),
 		Dependencies:    deduplicate(dependencies, dependencyKey),

@@ -161,7 +161,6 @@ func renderCatalogDetail(w io.Writer, label string, report catalog.Report, detai
 		fmt.Fprintf(w, "Replaced by: %s\n", detail.ReplacedBy)
 	}
 	fmt.Fprintf(w, "Resolved tags: %s\n", catalogList(detail.ResolvedTags))
-	renderCatalogDependencies(w, "Profile dependencies", detail.ProfileDependencies)
 	renderCatalogDependencySets(w, detail.DependencySets)
 	renderCatalogDependencies(w, "Dependencies", detail.Dependencies)
 	renderCatalogEntries(w, detail.Entries)

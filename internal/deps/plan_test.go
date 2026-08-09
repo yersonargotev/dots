@@ -156,16 +156,12 @@ func TestPlanUsesAtuinUserLocalProviderOnLinuxWhenDistroProviderUnavailable(t *t
 
 func TestPlanReportsDependencyRequirement(t *testing.T) {
 	m := manifest.Manifest{
-		Version: 1,
-		Profiles: map[string]manifest.Profile{
-			"default": {
-				Tags: []string{"core"},
-				Dependencies: []manifest.Dependency{
-					{Name: "required-tool", Brew: "required-tool"},
-					{Name: "optional-tool", Requirement: manifest.DependencyRequirementOptional, Brew: "optional-tool"},
-				},
-			},
-		},
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{Tags: []string{"core"}, Dependencies: []manifest.Dependency{
+			{Name: "required-tool", Brew: "required-tool"},
+			{Name: "optional-tool", Requirement: manifest.DependencyRequirementOptional, Brew: "optional-tool"},
+		}}},
 		Entries: []manifest.Entry{{Source: "configs/x", Target: "~/.x", Strategy: "symlink", Tags: []string{"core"}}},
 	}
 

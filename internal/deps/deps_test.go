@@ -2,12 +2,47 @@ package deps_test
 
 import (
 	"errors"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/manifest"
 )
+
+func TestRepositoryProfilesMatchEquivalentExplicitTagsAcrossSupportedOS(t *testing.T) {
+	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatalf("load repository manifest: %v", err)
+	}
+
+	for _, osName := range []string{"darwin", "linux"} {
+		for profileName, profile := range m.Profiles {
+			t.Run(osName+"/"+profileName, func(t *testing.T) {
+				byProfile, err := deps.Check(*m, deps.Options{Profile: profileName, OS: osName}, lookupSet(), fontLookupSet())
+				if err != nil {
+					t.Fatalf("profile dependency check: %v", err)
+				}
+				byTags, err := deps.Check(*m, deps.Options{ExtraTags: profile.Tags, OS: osName}, lookupSet(), fontLookupSet())
+				if err != nil {
+					t.Fatalf("explicit tag dependency check: %v", err)
+				}
+				if got, want := dependencyNames(byProfile.Results), dependencyNames(byTags.Results); !reflect.DeepEqual(got, want) {
+					t.Fatalf("profile dependencies = %#v, explicit tags = %#v", got, want)
+				}
+			})
+		}
+	}
+}
+
+func dependencyNames(results []deps.Result) []string {
+	names := make([]string, 0, len(results))
+	for _, result := range results {
+		names = append(names, result.Name)
+	}
+	return names
+}
 
 func lookupSet(present ...string) deps.Lookup {
 	defaultPresent := []string{"brew", "sudo", "apt-get", "dnf", "pacman"}
@@ -159,17 +194,13 @@ func TestRepositoryManifestDesktopFontAcceptsCurrentCaskaydiaName(t *testing.T) 
 	}
 }
 
-func TestCheckIncludesProfileDependenciesBeforeEntryDependencies(t *testing.T) {
+func TestCheckIncludesTagDependencySetsBeforeEntryDependencies(t *testing.T) {
 	m := manifest.Manifest{
-		Version: 1,
-		Profiles: map[string]manifest.Profile{
-			"default": {
-				Tags: []string{"desktop"},
-				Dependencies: []manifest.Dependency{
-					{Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*"},
-				},
-			},
-		},
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"desktop"}}},
+		Dependencies: []manifest.DependencySet{{Tags: []string{"desktop"}, Dependencies: []manifest.Dependency{
+			{Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*"},
+		}}},
 		Entries: []manifest.Entry{
 			{
 				Source: "configs/ghostty/config.ghostty", Target: "~/.config/ghostty/config.ghostty", Strategy: "symlink", Tags: []string{"desktop"},
@@ -233,15 +264,11 @@ func TestCheckReportsPresentAndMissingForProfile(t *testing.T) {
 
 func TestCheckReportsOptionalRequirementAndRequiredDominatesDuplicates(t *testing.T) {
 	m := manifest.Manifest{
-		Version: 1,
-		Profiles: map[string]manifest.Profile{
-			"default": {
-				Tags: []string{"core"},
-				Dependencies: []manifest.Dependency{
-					{Name: "starship", Requirement: manifest.DependencyRequirementOptional, Brew: "starship"},
-				},
-			},
-		},
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Dependencies: []manifest.DependencySet{{Tags: []string{"core"}, Dependencies: []manifest.Dependency{
+			{Name: "starship", Requirement: manifest.DependencyRequirementOptional, Brew: "starship"},
+		}}},
 		Entries: []manifest.Entry{{
 			Source: "configs/zsh/zshrc", Target: "~/.zshrc", Strategy: "symlink", Tags: []string{"core"},
 			Dependencies: []manifest.Dependency{{Name: "starship", Brew: "starship"}},

@@ -242,10 +242,9 @@ func fontProbeLabel(matches []string) string {
 	return strings.Join(matches, ", ")
 }
 
-// selectDependencies gathers the Dependencies declared directly by the Profile,
-// tag-scoped Dependency Sets, then every Managed Entry and Provisioner that
-// belongs to the Profile and passes the OS filter, deduplicated by name in
-// first-declared order.
+// selectDependencies gathers the Dependencies declared by tag-scoped Dependency
+// Sets, then every Managed Entry and Provisioner that belongs to the selected
+// Tags and passes the OS filter, deduplicated by name in first-declared order.
 
 func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependency, error) {
 	selection, err := resolveOptionsSelection(m, opts)
@@ -276,9 +275,6 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 		}
 	}
 
-	for _, profileName := range selection.Profiles {
-		addDependencies(m.Profiles[profileName].Dependencies)
-	}
 	tags := selection.Tags
 	for _, set := range m.Dependencies {
 		if !manifest.SharesTag(set.Tags, tags) {
@@ -314,5 +310,9 @@ func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Select
 	if opts.Selection != nil {
 		return *opts.Selection, nil
 	}
-	return manifest.ResolveSelection(m, manifest.SelectedProfileNames(opts.Profile, opts.Profiles), opts.ExtraTags)
+	profiles := manifest.SelectedProfileNames(opts.Profile, opts.Profiles)
+	if len(profiles) == 0 && len(opts.ExtraTags) == 0 {
+		return manifest.ResolveSelection(m, profiles, nil)
+	}
+	return manifest.ResolveReadOnlySelection(m, profiles, opts.ExtraTags)
 }

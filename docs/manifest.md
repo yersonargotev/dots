@@ -50,7 +50,6 @@ may instead offer an unambiguous candidate for confirmation.
 | Field | Required | Supported values |
 |-------|----------|------------------|
 | `tags` | Yes | Non-empty strings. Entries and Provisioners are selected when at least one tag matches. Optional CLI `--tag` values join this set at runtime. |
-| `dependencies` | No | Profile-level Dependencies, using the same dependency fields as entries. |
 
 The following compact catalog is generated from the Install Manifest. It lists
 current and legacy declarations; the `dots catalog` command hides legacy items
@@ -273,8 +272,8 @@ Current Managed Entries:
 
 ## Dependencies
 
-Dependencies can be declared in tag-scoped Dependency Sets, Profiles, Managed
-Entries, and Provisioners. They are detection and installation guidance, not
+Dependencies can be declared in tag-scoped Dependency Sets, Managed Entries,
+and Provisioners. They are detection and installation guidance, not
 arbitrary shell hooks.
 
 Tag-scoped Dependency Sets use:

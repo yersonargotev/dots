@@ -88,8 +88,8 @@ func TestProfileDetailIncludesOriginAndBehavior(t *testing.T) {
 	if detail == nil || !reflect.DeepEqual(detail.ResolvedTags, []string{"core", "agents"}) {
 		t.Fatalf("Detail = %#v", detail)
 	}
-	if len(detail.ProfileDependencies) != 1 || detail.ProfileDependencies[0].Origin.Type != "profile" {
-		t.Fatalf("profile dependencies = %#v", detail.ProfileDependencies)
+	if len(detail.ProfileDependencies) != 0 {
+		t.Fatalf("profile dependencies = %#v, want empty compatibility field", detail.ProfileDependencies)
 	}
 	if len(detail.Behaviors) != 1 || detail.Behaviors[0].Action != "retire-gentle-ai-state" {
 		t.Fatalf("behaviors = %#v", detail.Behaviors)
@@ -117,8 +117,8 @@ func TestCompareProfilesDescribesPortableSurfaceDelta(t *testing.T) {
 	if len(comparison.Removed.ResolvedTags) != 0 || comparison.Shared.ResolvedTags != 2 {
 		t.Fatalf("comparison tags = added %#v removed %#v shared %d", comparison.Added.ResolvedTags, comparison.Removed.ResolvedTags, comparison.Shared.ResolvedTags)
 	}
-	if comparison.Shared.Dependencies != 2 {
-		t.Fatalf("shared dependencies = %d, want profile-tool and set-tool", comparison.Shared.Dependencies)
+	if comparison.Shared.Dependencies != 1 {
+		t.Fatalf("shared dependencies = %d, want set-tool", comparison.Shared.Dependencies)
 	}
 	if got.Profile != nil {
 		t.Fatalf("Profile = %#v, want nil in comparison report", got.Profile)
@@ -142,8 +142,8 @@ func fixtureManifest() manifest.Manifest {
 			"old":     {Description: "Old", Kind: "compatibility", Status: "legacy", ReplacedBy: "core"},
 		},
 		Profiles: map[string]manifest.Profile{
-			"core":    {Description: "Core profile", Tags: []string{"core", "agents"}, Dependencies: []manifest.Dependency{{Name: "profile-tool"}}},
-			"desktop": {Description: "Desktop profile", Tags: []string{"core", "agents", "theme"}, Dependencies: []manifest.Dependency{{Name: "profile-tool"}}},
+			"core":    {Description: "Core profile", Tags: []string{"core", "agents"}},
+			"desktop": {Description: "Desktop profile", Tags: []string{"core", "agents", "theme"}},
 			"old":     {Description: "Old profile", Status: "legacy", Tags: []string{"old"}},
 		},
 		Dependencies: []manifest.DependencySet{{Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "set-tool"}}}},
