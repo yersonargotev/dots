@@ -128,6 +128,10 @@ _Avoid_: local script, custom install command, manual curl pipe
 A User-Local Provider for fast-moving tools that resolves the latest stable artifact from allowlisted official metadata when the Dependency is absent, verifies its published digest, and records the resolved release instead of pinning it in the Install Manifest.
 _Avoid_: latest installer, unpinned download, auto-updater
 
+**Selected Surface**:
+The deterministic, ordered, and de-duplicated Managed Entries, resolved source overrides, Dependencies, and Provisioners selected by effective Tags and the operating system. Equivalent effective Tags on the same operating system produce the same Selected Surface regardless of whether they came from a Profile or explicit Tag selection. It excludes filesystem state, Drift, Conflicts, Install Plan actions, and historical migrations.
+_Avoid_: install plan, status, installed selection, profile surface
+
 **Install Plan**:
 The preview of filesystem changes, conflicts, dependency findings, and backup requirements that the Dotfiles CLI computes before applying installation. It is shown during normal installation and is the output of dry-run mode.
 _Avoid_: preview, dry run output, change list
