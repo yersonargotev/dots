@@ -73,6 +73,10 @@ func TestBatConfigMigratesToWholeTargetAndPreservesGeneratorDrift(t *testing.T) 
 	if !strings.Contains(statusOutput, `"state": "drifted"`) {
 		t.Fatalf("status did not report generated bat config as Drift:\n%s", statusOutput)
 	}
+	doctorOutput := run(2, append([]string{"doctor", "--output", "json"}, common...)...)
+	if !strings.Contains(doctorOutput, `"state": "drifted"`) || !strings.Contains(doctorOutput, `"source": "configs/bat/config"`) {
+		t.Fatalf("doctor did not report generated bat config as Drift:\n%s", doctorOutput)
+	}
 
 	run(0, append([]string{"install", "--yes", "--skip-deps"}, common...)...)
 	runUpdate(t, "--yes", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
