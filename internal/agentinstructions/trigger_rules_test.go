@@ -368,6 +368,8 @@ func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T)
 		"Revalidate the complete snapshot before modifying code",
 		"before opening the PR",
 		"before merge",
+		"category; triage/readiness label",
+		"difference restarts admission",
 	})
 
 	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "triage-labels.md"), []string{
@@ -375,6 +377,39 @@ func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T)
 		"Execution Frontier",
 		"Do not use `needs-triage` as a blocked-work label",
 	})
+}
+
+func TestDeliveryContractAdmissionScenarioMatrix(t *testing.T) {
+	root := filepath.Join("..", "..")
+	path := filepath.Join(root, "docs", "agents", "delivery-contract.md")
+	scenarios := readMarkdownScenarioMatrix(t, path)
+
+	wants := map[string][2]string{
+		"historical-agent-brief": {"complete Agent Brief", "using the Agent Brief as the Contract Source"},
+		"standalone-body":        {"complete issue body", "using the standalone body as the Contract Source"},
+		"composed-ticket":        {"native parent specification", "using the composed ticket Contract Source"},
+		"blocked-unit":           {"open native `blockedBy`", "retain `ready-for-agent`, and create no branch or PR"},
+		"tracking-issue":         {"native sub-issues", "Return `tracking`"},
+		"incomplete-source":      {"omits required scope", "Return `needs-triage`"},
+		"contradictory-source":   {"Duplicate or conflicting", "Return `needs-triage`"},
+		"stale-snapshot":         {"snapshot differs", "Restart admission before code mutation, PR creation, or merge"},
+	}
+	if len(scenarios) != len(wants) {
+		t.Fatalf("admission scenario count = %d, want %d: %#v", len(scenarios), len(wants), scenarios)
+	}
+	for name, want := range wants {
+		got, ok := scenarios[name]
+		if !ok {
+			t.Errorf("admission scenario %q is missing", name)
+			continue
+		}
+		if !strings.Contains(got[0], want[0]) {
+			t.Errorf("admission scenario %q evidence = %q, want %q", name, got[0], want[0])
+		}
+		if !strings.Contains(got[1], want[1]) {
+			t.Errorf("admission scenario %q result = %q, want %q", name, got[1], want[1])
+		}
+	}
 }
 
 func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t *testing.T) {
@@ -457,4 +492,21 @@ func assertDocumentOmitsAll(t *testing.T, path string, forbidden []string) {
 			t.Errorf("delivery contract document %s retains obsolete language %q", path, phrase)
 		}
 	}
+}
+
+func readMarkdownScenarioMatrix(t *testing.T, path string) map[string][2]string {
+	t.Helper()
+	scenarios := make(map[string][2]string)
+	for _, line := range strings.Split(readContractDocument(t, path), "\n") {
+		if !strings.HasPrefix(line, "| `") {
+			continue
+		}
+		cells := strings.Split(line, "|")
+		if len(cells) != 5 {
+			t.Fatalf("malformed scenario row in %s: %q", path, line)
+		}
+		name := strings.Trim(strings.TrimSpace(cells[1]), "`")
+		scenarios[name] = [2]string{strings.TrimSpace(cells[2]), strings.TrimSpace(cells[3])}
+	}
+	return scenarios
 }

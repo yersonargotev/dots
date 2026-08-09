@@ -68,9 +68,27 @@ Admission records all inputs needed to prove that the contract did not change:
   issue identifiers, state, and update timestamps.
 
 Revalidate the snapshot immediately before code mutation, pull-request
-creation, and merge. A changed source body or relationship restarts admission.
-Compatible comments do not change scope. New contradictory evidence returns the
-issue to triage; changed blocker state only recomputes the Execution Frontier.
+creation, and merge. Any difference in source identity, body, timestamp, or
+digest; category; triage/readiness labels; or relationship membership restarts
+admission. A blocker issue's state-only change recomputes the Execution Frontier
+instead. Compatible comments do not change scope. New contradictory evidence
+returns the issue to triage, and missing or conflicting readiness removes
+authorization until admission succeeds again.
+
+## Admission scenarios
+
+These scenarios are contract tests, not examples with optional outcomes:
+
+| Scenario | Contract evidence | Expected admission result |
+| --- | --- | --- |
+| `historical-agent-brief` | One complete Agent Brief consistent with category and native relationships | Admit a Delivery Unit using the Agent Brief as the Contract Source |
+| `standalone-body` | No Agent Brief or native parent; complete issue body | Admit a Delivery Unit using the standalone body as the Contract Source |
+| `composed-ticket` | No Agent Brief; complete ticket body plus complete native parent specification and relationships | Admit a Delivery Unit using the composed ticket Contract Source |
+| `blocked-unit` | Complete Delivery Contract with an open native `blockedBy` issue | Return `blocked`, retain `ready-for-agent`, and create no branch or PR |
+| `tracking-issue` | Complete specification with native sub-issues carrying implementation | Return `tracking` with executable child Delivery Units and no mutation |
+| `incomplete-source` | Selected source omits required scope or verifiable acceptance criteria | Return `needs-triage` with concrete gaps before branch creation |
+| `contradictory-source` | Duplicate or conflicting Agent Brief, source body, category, or native relationship evidence | Return `needs-triage` with the contradiction before branch creation |
+| `stale-snapshot` | Source, category, readiness, or relationship snapshot differs at a material gate | Restart admission before code mutation, PR creation, or merge; blocker state alone only recomputes the Execution Frontier |
 
 ## Source-specific guidance
 
