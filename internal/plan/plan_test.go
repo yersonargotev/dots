@@ -1185,16 +1185,37 @@ func TestBuildProfileAndEquivalentExplicitTagsProduceSameActions(t *testing.T) {
 	profileSelection := manifest.Selection{Profile: "workstation", Profiles: []string{"workstation"}, Tags: []string{"core", "desktop"}}
 	explicitTagSelection := manifest.Selection{Tags: []string{"core", "desktop"}}
 
-	fromProfile, err := plan.Build(m, plan.Options{Selection: &profileSelection, OS: "darwin", SourceRoot: sourceRoot, Home: home})
-	if err != nil {
-		t.Fatalf("Build() from Profile error = %v", err)
+	for _, osName := range []string{"darwin", "linux"} {
+		t.Run(osName, func(t *testing.T) {
+			fromProfile, err := plan.Build(m, plan.Options{Selection: &profileSelection, OS: osName, SourceRoot: sourceRoot, Home: home})
+			if err != nil {
+				t.Fatalf("Build() from Profile error = %v", err)
+			}
+			fromTags, err := plan.Build(m, plan.Options{Selection: &explicitTagSelection, OS: osName, SourceRoot: sourceRoot, Home: home})
+			if err != nil {
+				t.Fatalf("Build() from explicit Tags error = %v", err)
+			}
+			if !reflect.DeepEqual(fromProfile.Actions, fromTags.Actions) {
+				t.Fatalf("Profile actions = %#v, explicit Tag actions = %#v", fromProfile.Actions, fromTags.Actions)
+			}
+		})
 	}
-	fromTags, err := plan.Build(m, plan.Options{Selection: &explicitTagSelection, OS: "darwin", SourceRoot: sourceRoot, Home: home})
-	if err != nil {
-		t.Fatalf("Build() from explicit Tags error = %v", err)
+}
+
+func TestBuildPreservesDuplicateTargetConflictFromSelectedSurface(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "duplicate.conf", "content\n")
+	duplicate := manifest.Entry{Source: "duplicate.conf", Target: "~/.duplicate", Strategy: "copy", Tags: []string{"core"}}
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{duplicate, duplicate},
 	}
-	if !reflect.DeepEqual(fromProfile.Actions, fromTags.Actions) {
-		t.Fatalf("Profile actions = %#v, explicit Tag actions = %#v", fromProfile.Actions, fromTags.Actions)
+
+	_, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home})
+	if err == nil || !strings.Contains(err.Error(), "duplicate target") {
+		t.Fatalf("Build() error = %v, want duplicate target conflict", err)
 	}
 }
 

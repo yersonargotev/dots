@@ -2,11 +2,9 @@ package plan
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/profilesel"
-	"github.com/yersonargotev/dots/internal/selectedsurface"
 )
 
 // selectedEntryIndices maps the Selected Surface back to manifest positions so
@@ -19,13 +17,8 @@ func selectedEntryIndices(m manifest.Manifest, profileName, os string) (map[int]
 	}
 
 	indices := make(map[int]bool)
-	for _, selected := range selectedsurface.Evaluate(m, profile.Tags, os).Entries {
-		for i, entry := range m.Entries {
-			if !indices[i] && reflect.DeepEqual(entry, selected.Entry) {
-				indices[i] = true
-				break
-			}
-		}
+	for _, selected := range selectedEntries(m, profile.Tags, os) {
+		indices[selected.Index] = true
 	}
 	return indices, nil
 }

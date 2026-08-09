@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -152,8 +153,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	actionByTarget := map[string]int{}
 	readSourcesByTarget := map[string][]string{}
 	scheduledLegacyParents := map[string]struct{}{}
-	surface := selectedsurface.Evaluate(m, tags, opts.OS)
-	for _, selected := range surface.Entries {
+	for _, selected := range selectedEntries(m, tags, opts.OS) {
 		entry := selected.Entry
 		defaultSource := entry.Source
 		source := selected.Source
@@ -279,6 +279,29 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	}
 
 	return plan, nil
+}
+
+type selectedManifestEntry struct {
+	Index int
+	selectedsurface.SelectedEntry
+}
+
+// selectedEntries projects the Selected Surface back onto manifest positions.
+// The projection preserves declaration multiplicity for existing duplicate-target
+// diagnostics while keeping Tag, OS, ordering, and source selection in the
+// Selected Surface module.
+func selectedEntries(m manifest.Manifest, tags []string, osName string) []selectedManifestEntry {
+	surface := selectedsurface.Evaluate(m, tags, osName)
+	selected := make([]selectedManifestEntry, 0, len(surface.Entries))
+	for index, entry := range m.Entries {
+		for _, surfaceEntry := range surface.Entries {
+			if reflect.DeepEqual(entry, surfaceEntry.Entry) {
+				selected = append(selected, selectedManifestEntry{Index: index, SelectedEntry: surfaceEntry})
+				break
+			}
+		}
+	}
+	return selected
 }
 
 func planLegacyMigration(entry manifest.Entry, currentSource string, migration LegacyMigration) (LegacyMigration, bool, error) {

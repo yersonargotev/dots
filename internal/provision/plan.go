@@ -47,11 +47,15 @@ func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
 	if err != nil {
 		return nil, err
 	}
-	selected := selectedsurface.Evaluate(m, selection.Tags, opts.OS).Provisioners
+	selected := selectedProvisioners(m, selection.Tags, opts.OS)
 	if len(selected) == 0 {
 		return nil, nil
 	}
-	return selected, nil
+	provisioners := make([]manifest.Provisioner, 0, len(selected))
+	for _, item := range selected {
+		provisioners = append(provisioners, item.Provisioner)
+	}
+	return provisioners, nil
 }
 
 // selectedIndices maps the Selected Surface back to manifest positions so the
@@ -67,15 +71,32 @@ func selectedIndices(m manifest.Manifest, profileNames []string, os string, extr
 
 func selectedIndicesForSelection(m manifest.Manifest, selection manifest.Selection, os string) map[int]bool {
 	indices := make(map[int]bool)
-	for _, selected := range selectedsurface.Evaluate(m, selection.Tags, os).Provisioners {
-		for i, provisioner := range m.Provisioners {
-			if !indices[i] && reflect.DeepEqual(provisioner, selected) {
-				indices[i] = true
+	for _, selected := range selectedProvisioners(m, selection.Tags, os) {
+		indices[selected.Index] = true
+	}
+	return indices
+}
+
+type selectedManifestProvisioner struct {
+	Index       int
+	Provisioner manifest.Provisioner
+}
+
+// selectedProvisioners projects the Selected Surface back onto manifest
+// positions. The projection preserves declaration multiplicity while keeping
+// Tag, OS, and ordering rules in the Selected Surface module.
+func selectedProvisioners(m manifest.Manifest, tags []string, osName string) []selectedManifestProvisioner {
+	surface := selectedsurface.Evaluate(m, tags, osName)
+	selected := make([]selectedManifestProvisioner, 0, len(surface.Provisioners))
+	for index, provisioner := range m.Provisioners {
+		for _, surfaceProvisioner := range surface.Provisioners {
+			if reflect.DeepEqual(provisioner, surfaceProvisioner) {
+				selected = append(selected, selectedManifestProvisioner{Index: index, Provisioner: surfaceProvisioner})
 				break
 			}
 		}
 	}
-	return indices
+	return selected
 }
 
 // SkippedProvisioners reports whether the active profile omits provisioners that
