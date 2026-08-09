@@ -69,11 +69,13 @@ Admission records all inputs needed to prove that the contract did not change:
 
 Revalidate the snapshot immediately before code mutation, pull-request
 creation, and merge. Any difference in source identity, body, timestamp, or
-digest; category; triage/readiness labels; or relationship membership restarts
-admission. A blocker issue's state-only change recomputes the Execution Frontier
-instead. Compatible comments do not change scope. New contradictory evidence
-returns the issue to triage, and missing or conflicting readiness removes
-authorization until admission succeeds again.
+digest; category; triage/readiness labels; or a native relationship's
+membership, issue identity, state, or `updatedAt` restarts admission. The sole
+exception is a `blockedBy` issue whose only semantic change is blocker state and
+its consequent timestamp; that recomputes the Execution Frontier. Compatible
+comments do not change scope. New contradictory evidence returns the issue to
+triage, and missing or conflicting readiness removes authorization until
+admission succeeds again.
 
 ## Admission scenarios
 
@@ -88,7 +90,7 @@ These scenarios are contract tests, not examples with optional outcomes:
 | `tracking-issue` | Complete specification with native sub-issues carrying implementation | Return `tracking` with executable child Delivery Units and no mutation |
 | `incomplete-source` | Selected source omits required scope or verifiable acceptance criteria | Return `needs-triage` with concrete gaps before branch creation |
 | `contradictory-source` | Duplicate or conflicting Agent Brief, source body, category, or native relationship evidence | Return `needs-triage` with the contradiction before branch creation |
-| `stale-snapshot` | Source, category, readiness, or relationship snapshot differs at a material gate | Restart admission before code mutation, PR creation, or merge; blocker state alone only recomputes the Execution Frontier |
+| `stale-snapshot` | Source, category, readiness, or relationship identity, state, or `updatedAt` snapshot differs at a material gate | Restart admission before code mutation, PR creation, or merge; `blockedBy` state and its consequent timestamp alone only recompute the Execution Frontier |
 
 ## Source-specific guidance
 

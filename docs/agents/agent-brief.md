@@ -12,12 +12,12 @@ When an approved workflow chooses to publish an Agent Brief, it is the
 authoritative source body for that issue. The original issue body and discussion
 remain context unless admission finds the brief incomplete or contradictory.
 
-Each issue has exactly one comment headed `## Agent Brief`. The repository's
-required AI-triage disclaimer and blank lines may precede that heading; no other
-preface may. Revise that comment in place so its comment ID remains the stable
-contract identity. Multiple comments with that heading make the contract
-ambiguous and require the issue to return to triage; delivery must not silently
-choose the newest one.
+An issue that publishes an Agent Brief has exactly one comment headed
+`## Agent Brief`. The repository's required AI-triage disclaimer and blank lines
+may precede that heading; no other preface may. Revise that comment in place so
+its comment ID remains the stable contract identity. Multiple comments with that
+heading make the contract ambiguous and require the issue to return to triage;
+delivery must not silently choose the newest one.
 
 A complete brief has non-empty `Category`, `Summary`, `Current behavior`,
 `Desired behavior`, `Key interfaces`, `Acceptance criteria`, and `Out of scope`

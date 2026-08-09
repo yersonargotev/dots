@@ -336,7 +336,9 @@ func TestDeliveryContractAdmissionSupportsProducerNeutralSources(t *testing.T) {
 	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "agent-brief.md"), []string{
 		"historical Agent Brief",
 		"complete Agent Brief",
+		"An issue that publishes an Agent Brief",
 	})
+	assertDocumentContainsAll(t, contractPath, []string{"or add an Agent Brief before delivery"})
 }
 
 func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T) {
@@ -369,7 +371,9 @@ func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T)
 		"before opening the PR",
 		"before merge",
 		"category; triage/readiness label",
-		"difference restarts admission",
+		"issue identity, state, and `updatedAt`",
+		"Any difference restarts",
+		"only semantic change is blocker state",
 	})
 
 	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "triage-labels.md"), []string{
@@ -392,7 +396,7 @@ func TestDeliveryContractAdmissionScenarioMatrix(t *testing.T) {
 		"tracking-issue":         {"native sub-issues", "Return `tracking`"},
 		"incomplete-source":      {"omits required scope", "Return `needs-triage`"},
 		"contradictory-source":   {"Duplicate or conflicting", "Return `needs-triage`"},
-		"stale-snapshot":         {"snapshot differs", "Restart admission before code mutation, PR creation, or merge"},
+		"stale-snapshot":         {"relationship identity, state, or `updatedAt` snapshot differs", "Restart admission before code mutation, PR creation, or merge"},
 	}
 	if len(scenarios) != len(wants) {
 		t.Fatalf("admission scenario count = %d, want %d: %#v", len(scenarios), len(wants), scenarios)
@@ -460,6 +464,7 @@ func TestDeliveryContractEvidenceAndRepositoryLanguage(t *testing.T) {
 			"sole producer of `ready-for-agent`",
 			"requires both the label and exactly one complete",
 			"Every issue handed to `delivery-issue` requires exactly one complete Agent Brief",
+			"Each issue has exactly one comment headed `## Agent Brief`",
 			"only an in-place Agent Brief revision does",
 		})
 	}
