@@ -737,7 +737,8 @@ func TestBuildProfileAndEquivalentTagsHaveSameDiagnosticScope(t *testing.T) {
 		Profiles: map[string]manifest.Profile{"work": {Tags: []string{"core", "theme"}}},
 		Entries: []manifest.Entry{
 			{Source: "configs/base", SourceOverrides: map[string]string{"theme": "configs/theme"}, Target: "~/.selected", Strategy: "copy", Tags: []string{"core"}, OS: []string{"linux"}},
-			{Source: "configs/darwin", Target: "~/.darwin", Strategy: "copy", Tags: []string{"core"}, OS: []string{"darwin"}},
+			{Source: "configs/base", SourceOverrides: map[string]string{"theme": "configs/theme"}, Target: "~/.selected", Strategy: "copy", Tags: []string{"core"}, OS: []string{"linux"}},
+			{Source: "configs/darwin", SourceOverrides: map[string]string{"theme": "configs/darwin-theme"}, Target: "~/.darwin", Strategy: "copy", Tags: []string{"core"}, OS: []string{"darwin"}},
 			{Source: "configs/other", Target: "~/.other", Strategy: "copy", Tags: []string{"other"}},
 		},
 	}
@@ -761,7 +762,7 @@ func TestBuildProfileAndEquivalentTagsHaveSameDiagnosticScope(t *testing.T) {
 	if !reflect.DeepEqual(profileReport.Entries, tagReport.Entries) {
 		t.Fatalf("diagnostic scope differs\nProfile: %+v\nTags: %+v", profileReport.Entries, tagReport.Entries)
 	}
-	if len(profileReport.Entries) != 2 || profileReport.Entries[0].Source != "configs/theme" || profileReport.Entries[0].State != status.StateMissing || profileReport.Entries[1].State != status.StateSkipped {
+	if len(profileReport.Entries) != 2 || profileReport.Entries[0].Source != "configs/theme" || profileReport.Entries[0].State != status.StateMissing || profileReport.Entries[1].Source != "configs/darwin-theme" || profileReport.Entries[1].State != status.StateSkipped {
 		t.Fatalf("diagnostic entries = %+v, want selected override plus OS-skipped entry", profileReport.Entries)
 	}
 }

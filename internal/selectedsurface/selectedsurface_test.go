@@ -105,6 +105,16 @@ func TestEvaluatePreservesAndCopiesEntrySourceOverrides(t *testing.T) {
 	}
 }
 
+func TestEvaluateEntriesPreservesSkippedScopeAndResolvedSource(t *testing.T) {
+	selected := manifest.Entry{Source: "base", SourceOverrides: map[string]string{"theme": "theme-source"}, Target: "selected", Strategy: "copy", Tags: []string{"core"}}
+	skipped := manifest.Entry{Source: "darwin", SourceOverrides: map[string]string{"theme": "darwin-theme"}, Target: "skipped", Strategy: "copy", Tags: []string{"core"}, OS: []string{"darwin"}}
+	m := manifest.Manifest{Entries: []manifest.Entry{selected, selected, skipped, {Source: "other", Target: "other", Strategy: "copy", Tags: []string{"other"}}}}
+	got := selectedsurface.EvaluateEntries(m, []string{"core", "theme"}, "linux")
+	if len(got) != 2 || !got[0].Applicable || got[0].Source != "theme-source" || got[1].Applicable || got[1].Source != "darwin-theme" {
+		t.Fatalf("Entry scope = %#v, want de-duplicated selected and OS-skipped entries with resolved sources", got)
+	}
+}
+
 func TestEvaluateSameTagsHaveNoProvenanceInputOrOutput(t *testing.T) {
 	m := manifest.Manifest{Entries: []manifest.Entry{{Source: "base", Target: "target", Strategy: "copy", Tags: []string{"core"}}}}
 	first := selectedsurface.Evaluate(m, []string{"core"}, "linux")

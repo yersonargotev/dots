@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"reflect"
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -102,24 +101,19 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 	}
 	tags := resolved.Tags
 	surface := selectedsurface.Evaluate(m, tags, opts.OS)
-	jsonContentByTarget, jsonSourcesByTarget, err := selectedJSONContributions(m, surface, opts)
+	entryScope := selectedsurface.EvaluateEntries(m, tags, opts.OS)
+	jsonContentByTarget, jsonSourcesByTarget, err := selectedJSONContributions(surface.Entries, opts)
 	if err != nil {
 		return Report{}, err
 	}
 
 	report := Report{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
-	for _, entry := range m.Entries {
-		selected, applicable := selectedSurfaceEntry(surface, entry)
-		if !applicable && !manifest.SharesTag(entry.Tags, tags) {
-			continue
-		}
-
-		source := entry.Source
-		if applicable {
-			source = selected.Source
-		}
+	for _, scoped := range entryScope {
+		selected := scoped.SelectedEntry
+		entry := selected.Entry
+		source := selected.Source
 		evaluated := Entry{Source: source, Target: entry.Target, Strategy: entry.Strategy}
-		if !applicable {
+		if !scoped.Applicable {
 			evaluated.State = StateSkipped
 			report.Entries = append(report.Entries, evaluated)
 			continue
@@ -165,12 +159,12 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 	return report, nil
 }
 
-func selectedJSONContributions(m manifest.Manifest, surface selectedsurface.Surface, opts Options) (map[string][]byte, map[string][]string, error) {
+func selectedJSONContributions(entries []selectedsurface.SelectedEntry, opts Options) (map[string][]byte, map[string][]string, error) {
 	pathsByTarget := map[string][]string{}
 	sourcesByTarget := map[string][]string{}
-	for _, entry := range m.Entries {
-		selected, applicable := selectedSurfaceEntry(surface, entry)
-		if !applicable || entry.Strategy != "copy" || entry.Ownership != "json-subset" {
+	for _, selected := range entries {
+		entry := selected.Entry
+		if entry.Strategy != "copy" || entry.Ownership != "json-subset" {
 			continue
 		}
 		source := selected.Source
@@ -207,15 +201,6 @@ func selectedJSONContributions(m manifest.Manifest, surface selectedsurface.Surf
 		contentByTarget[target] = content
 	}
 	return contentByTarget, sourcesByTarget, nil
-}
-
-func selectedSurfaceEntry(surface selectedsurface.Surface, entry manifest.Entry) (selectedsurface.SelectedEntry, bool) {
-	for _, selected := range surface.Entries {
-		if reflect.DeepEqual(selected.Entry, entry) {
-			return selected, true
-		}
-	}
-	return selectedsurface.SelectedEntry{}, false
 }
 
 func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRoot string, defaultSource string, currentJSON []byte, currentSources []string) (State, error) {
