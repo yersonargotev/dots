@@ -19,6 +19,7 @@ func TestRenderUninstallPlanGolden(t *testing.T) {
 			name: "mixed actions",
 			plan: plan.UninstallPlan{Actions: []plan.UninstallAction{
 				{Target: "/home/user/.zshrc", Source: "shell/zshrc", Strategy: "symlink", Status: plan.UninstallRemove},
+				{Target: "/home/user/.local/state/nvim/lazy-lock.json", Source: "nvim/lazy-lock.json", Strategy: "copy", Ownership: "seeded", Status: plan.UninstallRetain},
 				{Target: "/home/user/.gitconfig", Source: "git/gitconfig", Strategy: "copy", ForceRemovable: true, Status: plan.UninstallModified},
 				{Target: "/home/user/.tmux.conf", Source: "term/tmux.conf", Strategy: "symlink", Status: plan.UninstallNotOwned},
 				{Target: "/home/user/.vimrc", Source: "vim/vimrc", Strategy: "copy", Status: plan.UninstallSkip},

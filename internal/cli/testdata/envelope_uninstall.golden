@@ -17,6 +17,13 @@
           "strategy": "copy",
           "ownership": "json-subset",
           "status": "remove"
+        },
+        {
+          "target": "/home/user/.local/state/nvim/lazy-lock.json",
+          "source": "configs/nvim/lazy-lock.json",
+          "strategy": "copy",
+          "ownership": "seeded",
+          "status": "retain"
         }
       ]
     },
@@ -24,6 +31,9 @@
       "removed": null,
       "updated": [
         "/home/user/.gemini/antigravity-cli/settings.json"
+      ],
+      "retained": [
+        "/home/user/.local/state/nvim/lazy-lock.json"
       ],
       "restored_sets": null
     }
