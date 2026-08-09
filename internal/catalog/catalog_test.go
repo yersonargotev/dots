@@ -137,7 +137,7 @@ func TestRegistrylessCatalogDerivesSurfaceTags(t *testing.T) {
 	}
 }
 
-func TestProfileDetailIncludesOriginAndBehavior(t *testing.T) {
+func TestProfileDetailIncludesOriginWithoutBuiltInTagBehavior(t *testing.T) {
 	got, err := Profile(fixtureManifest(), "core", Options{OS: "all"})
 	if err != nil {
 		t.Fatal(err)
@@ -149,8 +149,8 @@ func TestProfileDetailIncludesOriginAndBehavior(t *testing.T) {
 	if len(detail.ProfileDependencies) != 0 {
 		t.Fatalf("profile dependencies = %#v, want empty compatibility field", detail.ProfileDependencies)
 	}
-	if len(detail.Behaviors) != 1 || detail.Behaviors[0].Action != "retire-gentle-ai-state" {
-		t.Fatalf("behaviors = %#v", detail.Behaviors)
+	if len(detail.Behaviors) != 0 {
+		t.Fatalf("behaviors = %#v, want Tags to remain declarative selection only", detail.Behaviors)
 	}
 }
 

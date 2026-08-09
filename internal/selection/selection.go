@@ -9,7 +9,6 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/state"
-	"github.com/yersonargotev/dots/internal/tagpolicy"
 )
 
 // Source identifies where a selection-aware command obtained its intent.
@@ -309,7 +308,7 @@ func staleExtraTags(m manifest.Manifest, extraTags []string) []string {
 	if m.Tags != nil {
 		var stale []string
 		for _, tag := range orderedUnique(extraTags) {
-			if _, declared := m.Tags[tag]; !declared && !tagpolicy.IsBehaviorTag(tag) {
+			if _, declared := m.Tags[tag]; !declared {
 				stale = append(stale, tag)
 			}
 		}
@@ -334,7 +333,7 @@ func staleExtraTags(m manifest.Manifest, extraTags []string) []string {
 	}
 	var stale []string
 	for _, tag := range orderedUnique(extraTags) {
-		if !declared[tag] && !tagpolicy.IsBehaviorTag(tag) {
+		if !declared[tag] {
 			stale = append(stale, tag)
 		}
 	}

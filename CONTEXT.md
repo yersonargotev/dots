@@ -202,6 +202,7 @@ _Avoid_: install profile, machine config, host config, preset
 
 **Tag**:
 A label assigned to a Managed Entry so Profiles can include related configuration by intent, such as `core`, `agents`, `web`, `mobile`, or `desktop`. Tags from repeated Profiles and explicit `--tag` flags are de-duplicated while preserving order.
+Tags are declarative selection only: they do not authorize built-in cleanup or historical migrations.
 _Avoid_: category, group, label
 
 **Core Development Baseline**:

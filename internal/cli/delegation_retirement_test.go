@@ -29,13 +29,36 @@ func TestHistoricalDelegationEvidenceIsNarrow(t *testing.T) {
 	}
 }
 
+func TestHistoricalGentleAIEvidenceRequiresSuccessfulInstallReceipt(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		meta state.Metadata
+		want bool
+	}{
+		{name: "no evidence", meta: state.Metadata{}, want: false},
+		{name: "Installed Selection agents only", meta: state.Metadata{InstalledSelection: &state.InstalledSelection{Profiles: []string{"agents"}, ResolvedTags: []string{"agents"}}}, want: false},
+		{name: "legacy receipt", meta: state.Metadata{Provisioners: []state.ProvisionerRecord{{Profile: "agents", Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global"}, Status: "provisioned"}}}, want: true},
+		{name: "current receipt", meta: state.Metadata{Provisioners: []state.ProvisionerRecord{{Profiles: []string{"agents"}, Tags: []string{"agents"}, Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--agents", "codex"}, Status: "provisioned"}}}, want: true},
+		{name: "failed install", meta: state.Metadata{Provisioners: []state.ProvisionerRecord{{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install"}, Status: "failed"}}}, want: false},
+		{name: "missing dependency", meta: state.Metadata{Provisioners: []state.ProvisionerRecord{{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install"}, Status: "missing-dependencies"}}}, want: false},
+		{name: "uninstall receipt", meta: state.Metadata{Provisioners: []state.ProvisionerRecord{{Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"uninstall", "--yes"}, Status: "provisioned"}}}, want: false},
+		{name: "wrong executable", meta: state.Metadata{Provisioners: []state.ProvisionerRecord{{Tool: "gentle-ai", Executable: "npx", Args: []string{"install"}, Status: "provisioned"}}}, want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hasHistoricalGentleAIEvidence(tc.meta); got != tc.want {
+				t.Fatalf("hasHistoricalGentleAIEvidence() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRenderDelegationRetirementIncludesRemovedAndManualCleanup(t *testing.T) {
 	var out bytes.Buffer
-	renderDelegationRetirement(&out, &agentinstructions.RetirementReport{
+	renderHistoricalRetirement(&out, &agentinstructions.RetirementReport{
 		Removed:       []string{"~/.codex/AGENTS.md delegation blocks"},
 		ManualCleanup: []string{"~/.agents/skills/delegation"},
 	})
-	for _, want := range []string{"Delegation retirement:", "Removed: ~/.codex/AGENTS.md delegation blocks", "Manual cleanup: ~/.agents/skills/delegation"} {
+	for _, want := range []string{"Historical retirement:", "Removed: ~/.codex/AGENTS.md delegation blocks", "Manual cleanup: ~/.agents/skills/delegation"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("report missing %q:\n%s", want, out.String())
 		}

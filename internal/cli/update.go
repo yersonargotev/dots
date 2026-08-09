@@ -315,7 +315,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		if _, err := runProvisionersWithOptions(cmd, *m, provisionOpts, paths.Home, paths.StateRoot, paths.SourceRoot); err != nil {
 			return updateReport{}, err
 		}
-		report.Retirement, err = retireHistoricalDelegation(meta, paths.Home)
+		report.Retirement, err = retireHistoricalAgentState(meta, paths.Home)
 		if err != nil {
 			return updateReport{}, err
 		}
@@ -324,7 +324,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 			return updateReport{}, err
 		}
 		if !wantsJSON(cmd) {
-			renderDelegationRetirement(out, report.Retirement)
+			renderHistoricalRetirement(out, report.Retirement)
 		}
 	}
 	if wantsJSON(cmd) && emit {

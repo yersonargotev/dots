@@ -171,12 +171,16 @@ prose the text surface prints:
   `selection-change-acknowledgement-required`; error `data` contains `code` and
   the complete `selection_change`. This acknowledgement is independent from
   Conflict Resolution and `--backup-and-replace`.
-- After a successful `install`, `update`, or `upgrade` finds historical evidence
-  of the retired Codex delegation capability, `data.retirement` records portable
-  `removed` and `manual_cleanup` arrays. The migration removes only proven
-  dots-owned markers and byte-exact native agent files; copied skills and
-  ambiguous files remain in `manual_cleanup`. The optional field is omitted
-  when no historical evidence exists and is never emitted by a dry run.
+- After a successful `install`, `update`, or `upgrade` finds sufficiently
+  specific historical Installation Metadata evidence for retired Gentle AI or
+  Codex delegation capabilities, `data.retirement` records portable `removed`
+  and `manual_cleanup` arrays. Gentle AI specifically requires a successful
+  historical `gentle-ai install` Provisioner receipt; current or recorded
+  `agents` Tags alone never authorize it. The migration removes only proven
+  dots-owned marker blocks and byte-exact native agent files; copied skills,
+  symlinks, and ambiguous files remain in `manual_cleanup`. The optional field
+  is omitted when no historical evidence exists and is never emitted by a dry
+  run.
 - `plan`'s `resolved_source` (a per-machine absolute path) and `deps`'s
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the

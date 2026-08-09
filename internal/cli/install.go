@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yersonargotev/dots/internal/agentinstructions"
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/codexconfig"
 	"github.com/yersonargotev/dots/internal/deps"
@@ -25,7 +24,6 @@ import (
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
-	"github.com/yersonargotev/dots/internal/tagpolicy"
 	"github.com/yersonargotev/dots/internal/tui"
 	"github.com/yersonargotev/dots/internal/version"
 )
@@ -282,7 +280,7 @@ func newInstallCommand() *cobra.Command {
 				}
 				return err
 			}
-			retirement, err := retireHistoricalDelegation(meta, paths.Home)
+			retirement, err := retireHistoricalAgentState(meta, paths.Home)
 			if err != nil {
 				return err
 			}
@@ -291,7 +289,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			if !wantsJSON(cmd) {
-				renderDelegationRetirement(cmd.OutOrStdout(), retirement)
+				renderHistoricalRetirement(cmd.OutOrStdout(), retirement)
 			}
 			if wantsJSON(cmd) {
 				return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, Retirement: retirement})
@@ -519,16 +517,6 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 	}
 	if recordErr := recordProvisionerMetadata(stateRoot, sourceRoot, report); recordErr != nil {
 		return report, recordErr
-	}
-	for _, action := range tagpolicy.Actions(report.Tags) {
-		var cleanupErr error
-		switch action {
-		case tagpolicy.ActionRetireGentleAIState:
-			cleanupErr = agentinstructions.RetireGentleAIState(home)
-		}
-		if cleanupErr != nil {
-			return report, errors.Join(err, cleanupErr)
-		}
 	}
 	if err != nil {
 		return report, err

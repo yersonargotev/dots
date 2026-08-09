@@ -11,7 +11,6 @@ import (
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/selectedsurface"
-	"github.com/yersonargotev/dots/internal/tagpolicy"
 )
 
 const (
@@ -514,20 +513,7 @@ func dependency(dep manifest.Dependency, origin Origin) Dependency {
 }
 
 func behaviors(tags []string) []Behavior {
-	result := []Behavior{}
-	for _, action := range tagpolicy.Actions(tags) {
-		result = append(result, Behavior{Action: string(action), Description: behaviorDescription(action)})
-	}
-	return result
-}
-
-func behaviorDescription(action tagpolicy.Action) string {
-	switch action {
-	case tagpolicy.ActionRetireGentleAIState:
-		return "Retire dots-owned Gentle AI state."
-	default:
-		return "Allowlisted selection behavior."
-	}
+	return []Behavior{}
 }
 
 func summaryProfile(name string, p manifest.Profile) ProfileSummary {

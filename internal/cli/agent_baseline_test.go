@@ -10,7 +10,7 @@ import (
 	"github.com/yersonargotev/dots/internal/cli"
 )
 
-func TestAgentsProfileInstallsNativeBaselineAndRetiresOwnedInstructionsInSandbox(t *testing.T) {
+func TestAgentsProfileInstallsNativeBaselineWithoutAuthorizingHistoricalCleanup(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
@@ -97,17 +97,13 @@ Keep this unmarked user-owned content.
 
 	gotInstructions, err := os.ReadFile(instructions)
 	if err != nil {
-		t.Fatalf("read retired instructions: %v", err)
+		t.Fatalf("read historical instructions: %v", err)
 	}
-	for _, removed := range []string{"gentle-ai:trigger-rules", "gentle-ai:engram-protocol", "dots:rules", "retired trigger rules", "retired Engram instructions", "retired global rules"} {
-		if strings.Contains(string(gotInstructions), removed) {
-			t.Errorf("retirement kept %q:\n%s", removed, gotInstructions)
-		}
+	if !bytes.Equal(gotInstructions, []byte(legacy)) {
+		t.Errorf("agents selection changed historical instructions without Provisioner evidence:\n%s", gotInstructions)
 	}
-	for _, preserved := range []string{"user-owned before", "## User instructions", "Keep this unmarked user-owned content."} {
-		if !strings.Contains(string(gotInstructions), preserved) {
-			t.Errorf("retirement removed %q:\n%s", preserved, gotInstructions)
-		}
+	if strings.Contains(output.String(), "Historical retirement:") {
+		t.Errorf("agents selection reported historical retirement without evidence:\n%s", output.String())
 	}
 
 	opencodeTarget := filepath.Join(home, ".config", "opencode", "opencode.json")

@@ -386,6 +386,67 @@ provisioners:
 	}
 }
 
+func TestInstallHistoricalRetirementFailurePreservesPreviousSelection(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	previous := state.InstalledSelection{Profiles: []string{"old"}, ResolvedTags: []string{"old"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{
+		Version:            state.CurrentVersion,
+		InstalledSelection: &previous,
+		Provisioners: []state.ProvisionerRecord{{
+			Profile: "agents", Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global"}, Status: "provisioned",
+		}},
+	}); err != nil {
+		t.Fatalf("seed historical metadata: %v", err)
+	}
+	instructions := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(instructions), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	malformed := "before\n<!-- gentle-ai:trigger-rules -->\nunclosed\n"
+	if err := os.WriteFile(instructions, []byte(malformed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  new:
+    tags: [core]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+`)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{
+		"install", "--yes", "--acknowledge-selection-change", "--skip-deps", "--profile", "new",
+		"--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	})
+	if err := cmd.Execute(); err == nil {
+		t.Fatalf("Execute() error = nil, want malformed historical retirement failure\noutput:\n%s", out.String())
+	}
+
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
+		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+	got, err := os.ReadFile(instructions)
+	if err != nil || string(got) != malformed {
+		t.Fatalf("malformed instructions changed: %q, %v", got, err)
+	}
+}
+
 func TestInstallWithoutExplicitProfileMutatesNothing(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
