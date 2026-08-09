@@ -469,7 +469,7 @@ entries:
             linux_arm64: 9b2b7b41c3587533964ec5ab204b5116200bda39d534619387bcf4f197739b47
   - source: configs/bat/config
     target: ~/.config/bat/config
-    strategy: symlink
+    strategy: copy
     tags:
       - core
     os:
