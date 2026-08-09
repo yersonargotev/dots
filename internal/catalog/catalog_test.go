@@ -19,7 +19,7 @@ func TestBuildHidesLegacyAndSortsDeclaredCatalog(t *testing.T) {
 	if got.Hidden != (Hidden{Profiles: 1, Tags: 1}) {
 		t.Fatalf("Hidden = %#v", got.Hidden)
 	}
-	if names := profileNames(got.Profiles); !reflect.DeepEqual(names, []string{"core"}) {
+	if names := profileNames(got.Profiles); !reflect.DeepEqual(names, []string{"core", "desktop"}) {
 		t.Fatalf("profiles = %#v", names)
 	}
 	if names := tagNames(got.Tags); !reflect.DeepEqual(names, []string{"agents", "cleanup", "core", "theme"}) {
@@ -96,6 +96,42 @@ func TestProfileDetailIncludesOriginAndBehavior(t *testing.T) {
 	}
 }
 
+func TestCompareProfilesDescribesPortableSurfaceDelta(t *testing.T) {
+	got, err := CompareProfiles(fixtureManifest(), "core", "desktop", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	comparison := got.Comparison
+	if comparison == nil || comparison.From != "core" || comparison.To != "desktop" {
+		t.Fatalf("Comparison = %#v", comparison)
+	}
+	if !reflect.DeepEqual(comparison.Added.ResolvedTags, []string{"theme"}) {
+		t.Fatalf("added tags = %#v", comparison.Added.ResolvedTags)
+	}
+	if len(comparison.Added.Entries) != 1 || comparison.Added.Entries[0].Source != "adaptive" {
+		t.Fatalf("added entries = %#v", comparison.Added.Entries)
+	}
+	if len(comparison.Added.Provisioners) != 1 || comparison.Added.Provisioners[0].Identity != "demo" {
+		t.Fatalf("added provisioners = %#v", comparison.Added.Provisioners)
+	}
+	if len(comparison.Removed.ResolvedTags) != 0 || comparison.Shared.ResolvedTags != 2 {
+		t.Fatalf("comparison tags = added %#v removed %#v shared %d", comparison.Added.ResolvedTags, comparison.Removed.ResolvedTags, comparison.Shared.ResolvedTags)
+	}
+	if comparison.Shared.Dependencies != 2 {
+		t.Fatalf("shared dependencies = %d, want profile-tool and set-tool", comparison.Shared.Dependencies)
+	}
+	if got.Profile != nil {
+		t.Fatalf("Profile = %#v, want nil in comparison report", got.Profile)
+	}
+}
+
+func TestCompareProfilesRejectsUnknownProfile(t *testing.T) {
+	_, err := CompareProfiles(fixtureManifest(), "core", "missing", Options{OS: "all"})
+	if err == nil || err.Error() != `profile "missing" not found` {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func fixtureManifest() manifest.Manifest {
 	return manifest.Manifest{
 		Tags: map[string]manifest.Tag{
@@ -106,8 +142,9 @@ func fixtureManifest() manifest.Manifest {
 			"old":     {Description: "Old", Kind: "compatibility", Status: "legacy", ReplacedBy: "core"},
 		},
 		Profiles: map[string]manifest.Profile{
-			"core": {Description: "Core profile", Tags: []string{"core", "agents"}, Dependencies: []manifest.Dependency{{Name: "profile-tool"}}},
-			"old":  {Description: "Old profile", Status: "legacy", Tags: []string{"old"}},
+			"core":    {Description: "Core profile", Tags: []string{"core", "agents"}, Dependencies: []manifest.Dependency{{Name: "profile-tool"}}},
+			"desktop": {Description: "Desktop profile", Tags: []string{"core", "agents", "theme"}, Dependencies: []manifest.Dependency{{Name: "profile-tool"}}},
+			"old":     {Description: "Old profile", Status: "legacy", Tags: []string{"old"}},
 		},
 		Dependencies: []manifest.DependencySet{{Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "set-tool"}}}},
 		Entries:      []manifest.Entry{{Source: "base", SourceOverrides: map[string]string{"theme": "adaptive"}, Target: "~/.example", Strategy: "copy", Tags: []string{"theme"}, OS: []string{"darwin"}, Dependencies: []manifest.Dependency{{Name: "entry-tool"}}}},

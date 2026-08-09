@@ -79,6 +79,16 @@ There is no implicit install Profile. Repeat `--profile` to compose selections:
 explicit opt-ins. For a full workstation plus optional web and mobile setup, run
 `dots install --profile workstation --profile web --profile mobile`.
 
+Explore the portable catalog before choosing, or compare two Profiles to see
+the exact declarative surface added and removed without inspecting machine
+state:
+
+```bash
+dots catalog profiles
+dots catalog compare core workstation
+dots catalog compare core workstation --output json
+```
+
 Then inspect the current machine state:
 
 ```bash

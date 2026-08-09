@@ -50,6 +50,12 @@ func TestCatalogCommandsRenderManifestOnlyViews(t *testing.T) {
 			want:  []string{"Tag \"theme\"", "Dependency sets:", "Entries:", "Source overrides:", "Provisioners:", "Behaviors:", "Excluded surfaces:", "not applicable to linux"},
 			avoid: []string{"must-not-leak"},
 		},
+		{
+			name:  "profile comparison renders a directional delta",
+			args:  []string{"catalog", "compare", "core", "desktop", "--file", manifestPath, "--os", "all"},
+			want:  []string{"Profile comparison: core -> desktop", "Added:", "+ tag theme", "+ dependency theme-tool", "+ entry adaptive -> ~/.example (copy)", "+ provisioner codex (mcp: demo)", "Removed:", "Shared:"},
+			avoid: []string{"must-not-leak"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -90,8 +96,23 @@ func TestCatalogDetailCompletionUsesManifestNames(t *testing.T) {
 		t.Fatalf("set profile os: %v", err)
 	}
 	profiles, directive := profileCmd.ValidArgsFunction(profileCmd, nil, "")
-	if !reflect.DeepEqual(profiles, []string{"core", "old"}) {
+	if !reflect.DeepEqual(profiles, []string{"core", "desktop", "old"}) {
 		t.Fatalf("profile completion = %#v", profiles)
+	}
+
+	compareCmd, _, err := root.Find([]string{"catalog", "compare"})
+	if err != nil {
+		t.Fatalf("find compare: %v", err)
+	}
+	if err := compareCmd.InheritedFlags().Set("file", manifestPath); err != nil {
+		t.Fatalf("set compare file: %v", err)
+	}
+	profiles, directive = compareCmd.ValidArgsFunction(compareCmd, []string{"core"}, "")
+	if !reflect.DeepEqual(profiles, []string{"desktop", "old"}) {
+		t.Fatalf("comparison second-profile completion = %#v", profiles)
+	}
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("comparison completion directive = %v", directive)
 	}
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("profile completion directive = %v", directive)
@@ -136,6 +157,25 @@ func TestCatalogJSONAndErrorsUseTheOutputContract(t *testing.T) {
 	}
 	if _, ok := data["profile"].(map[string]any); !ok {
 		t.Fatalf("profile detail missing from data: %#v", data)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"catalog", "compare", "core", "desktop", "--file", manifestPath, "--os", "all", "--output", "json"}, &stdout, &stderr); code != ExitOK {
+		t.Fatalf("comparison Run() exit code = %d, stderr = %s", code, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode comparison JSON: %v\n%s", err, stdout.String())
+	}
+	if result.Command != "catalog compare" || result.Status != statusOK {
+		t.Fatalf("comparison envelope = %#v", result)
+	}
+	data, ok = result.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("comparison data = %#v", result.Data)
+	}
+	if _, ok := data["comparison"].(map[string]any); !ok {
+		t.Fatalf("comparison missing from data: %#v", data)
 	}
 	if strings.Contains(stdout.String(), "must-not-leak") {
 		t.Fatalf("JSON leaked provisioner environment value: %s", stdout.String())
@@ -242,6 +282,9 @@ profiles:
   core:
     description: Core profile
     tags: [core]
+  desktop:
+    description: Desktop profile
+    tags: [core, theme]
   old:
     status: legacy
     tags: [old]

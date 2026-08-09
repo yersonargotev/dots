@@ -15,6 +15,15 @@
         ]
       },
       {
+        "name": "desktop",
+        "description": "Desktop profile",
+        "status": "current",
+        "tags": [
+          "core",
+          "theme"
+        ]
+      },
+      {
         "name": "old",
         "description": "",
         "status": "legacy",

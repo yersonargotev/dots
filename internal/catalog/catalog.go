@@ -35,6 +35,7 @@ type Report struct {
 	Hidden         Hidden           `json:"hidden"`
 	Profile        *Detail          `json:"profile,omitempty"`
 	Tag            *Detail          `json:"tag,omitempty"`
+	Comparison     *Comparison      `json:"comparison,omitempty"`
 }
 
 // Hidden records items deliberately omitted from a compact current-only list.
@@ -153,6 +154,38 @@ type ExcludedSurface struct {
 	Reason string   `json:"reason"`
 }
 
+// Comparison describes the portable surface delta when moving from one
+// Profile to another. Added belongs only to To, Removed belongs only to From,
+// and Shared reports counts without repeating the common surface.
+type Comparison struct {
+	From    string            `json:"from"`
+	To      string            `json:"to"`
+	Added   ComparisonSurface `json:"added"`
+	Removed ComparisonSurface `json:"removed"`
+	Shared  ComparisonCounts  `json:"shared"`
+}
+
+// ComparisonSurface groups the declarative catalog items unique to one side
+// of a Profile comparison.
+type ComparisonSurface struct {
+	ResolvedTags    []string         `json:"resolved_tags"`
+	Dependencies    []Dependency     `json:"dependencies"`
+	Entries         []Entry          `json:"entries"`
+	SourceOverrides []SourceOverride `json:"source_overrides"`
+	Provisioners    []Provisioner    `json:"provisioners"`
+	Behaviors       []Behavior       `json:"behaviors"`
+}
+
+// ComparisonCounts summarizes common items between two Profiles.
+type ComparisonCounts struct {
+	ResolvedTags    int `json:"resolved_tags"`
+	Dependencies    int `json:"dependencies"`
+	Entries         int `json:"entries"`
+	SourceOverrides int `json:"source_overrides"`
+	Provisioners    int `json:"provisioners"`
+	Behaviors       int `json:"behaviors"`
+}
+
 // Build returns deterministic Profile and Tag summaries. The manifest must
 // already have passed manifest validation.
 func Build(m manifest.Manifest, opts Options) (Report, error) {
@@ -194,6 +227,31 @@ func Profile(m manifest.Manifest, name string, opts Options) (Report, error) {
 	summary := summaryProfile(name, p)
 	base.Profile = buildDetail(m, name, summary.Description, summary.Status, "", "", unique(p.Tags), base.OS, p.Dependencies)
 	return base, nil
+}
+
+// CompareProfiles returns the declarative surface delta from one Profile to
+// another. It remains independent from Installed Selection and machine state.
+func CompareProfiles(m manifest.Manifest, from, to string, opts Options) (Report, error) {
+	fromReport, err := Profile(m, from, opts)
+	if err != nil {
+		return Report{}, err
+	}
+	toReport, err := Profile(m, to, opts)
+	if err != nil {
+		return Report{}, err
+	}
+
+	fromSurface := comparisonSurface(fromReport.Profile)
+	toSurface := comparisonSurface(toReport.Profile)
+	fromReport.Comparison = &Comparison{
+		From:    from,
+		To:      to,
+		Added:   difference(toSurface, fromSurface),
+		Removed: difference(fromSurface, toSurface),
+		Shared:  sharedCounts(fromSurface, toSurface),
+	}
+	fromReport.Profile = nil
+	return fromReport, nil
 }
 
 // Tag returns a detailed, exact Tag view. Registryless manifests derive a
@@ -283,6 +341,97 @@ func buildDetail(m manifest.Manifest, name, description, status, kind, replacedB
 		return d.Excluded[i].Type < d.Excluded[j].Type
 	})
 	return d
+}
+
+func comparisonSurface(detail *Detail) ComparisonSurface {
+	if detail == nil {
+		return ComparisonSurface{ResolvedTags: []string{}, Dependencies: []Dependency{}, Entries: []Entry{}, SourceOverrides: []SourceOverride{}, Provisioners: []Provisioner{}, Behaviors: []Behavior{}}
+	}
+	dependencies := make([]Dependency, 0, len(detail.ProfileDependencies)+len(detail.Dependencies))
+	dependencies = append(dependencies, detail.ProfileDependencies...)
+	dependencies = append(dependencies, detail.Dependencies...)
+	return ComparisonSurface{
+		ResolvedTags:    clone(detail.ResolvedTags),
+		Dependencies:    deduplicate(dependencies, dependencyKey),
+		Entries:         append([]Entry{}, detail.Entries...),
+		SourceOverrides: append([]SourceOverride{}, detail.SourceOverrides...),
+		Provisioners:    append([]Provisioner{}, detail.Provisioners...),
+		Behaviors:       append([]Behavior{}, detail.Behaviors...),
+	}
+}
+
+func difference(wanted, other ComparisonSurface) ComparisonSurface {
+	return ComparisonSurface{
+		ResolvedTags:    sliceDifference(wanted.ResolvedTags, other.ResolvedTags, func(value string) string { return value }),
+		Dependencies:    sliceDifference(wanted.Dependencies, other.Dependencies, dependencyKey),
+		Entries:         sliceDifference(wanted.Entries, other.Entries, entryKey),
+		SourceOverrides: sliceDifference(wanted.SourceOverrides, other.SourceOverrides, sourceOverrideKey),
+		Provisioners:    sliceDifference(wanted.Provisioners, other.Provisioners, provisionerKey),
+		Behaviors:       sliceDifference(wanted.Behaviors, other.Behaviors, behaviorKey),
+	}
+}
+
+func sharedCounts(left, right ComparisonSurface) ComparisonCounts {
+	return ComparisonCounts{
+		ResolvedTags:    sharedCount(left.ResolvedTags, right.ResolvedTags, func(value string) string { return value }),
+		Dependencies:    sharedCount(left.Dependencies, right.Dependencies, dependencyKey),
+		Entries:         sharedCount(left.Entries, right.Entries, entryKey),
+		SourceOverrides: sharedCount(left.SourceOverrides, right.SourceOverrides, sourceOverrideKey),
+		Provisioners:    sharedCount(left.Provisioners, right.Provisioners, provisionerKey),
+		Behaviors:       sharedCount(left.Behaviors, right.Behaviors, behaviorKey),
+	}
+}
+
+func sliceDifference[T any](wanted, other []T, key func(T) string) []T {
+	otherKeys := make(map[string]bool, len(other))
+	for _, item := range other {
+		otherKeys[key(item)] = true
+	}
+	result := []T{}
+	for _, item := range wanted {
+		if !otherKeys[key(item)] {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func deduplicate[T any](items []T, key func(T) string) []T {
+	seen := make(map[string]bool, len(items))
+	result := []T{}
+	for _, item := range items {
+		identity := key(item)
+		if seen[identity] {
+			continue
+		}
+		seen[identity] = true
+		result = append(result, item)
+	}
+	return result
+}
+
+func sharedCount[T any](left, right []T, key func(T) string) int {
+	return len(left) - len(sliceDifference(left, right, key))
+}
+
+func dependencyKey(value Dependency) string {
+	return fmt.Sprintf("%s\x00%s\x00%v", value.Name, value.Requirement, value.Probes)
+}
+
+func entryKey(value Entry) string {
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%s\x00%v\x00%v\x00%v", value.Source, value.Target, value.TargetRoot, value.Strategy, value.Ownership, value.Tags, value.OS, value.Dependencies)
+}
+
+func sourceOverrideKey(value SourceOverride) string {
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%v\x00%t", value.Tag, value.Source, value.Entry, value.Target, value.OS, value.Applicable)
+}
+
+func provisionerKey(value Provisioner) string {
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v", value.Tool, value.Operation, value.Identity, value.Scope, value.Agents, value.Skills, value.Command, value.EnvironmentNames, value.Tags, value.OS)
+}
+
+func behaviorKey(value Behavior) string {
+	return value.Action + "\x00" + value.Description
 }
 
 func provisioner(p manifest.Provisioner) Provisioner {

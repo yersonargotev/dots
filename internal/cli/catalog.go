@@ -54,8 +54,27 @@ func newCatalogCommand() *cobra.Command {
 
 	cmd.AddCommand(newCatalogProfilesCommand(load))
 	cmd.AddCommand(newCatalogProfileCommand())
+	cmd.AddCommand(newCatalogCompareCommand())
 	cmd.AddCommand(newCatalogTagsCommand(load))
 	cmd.AddCommand(newCatalogTagCommand())
+	return cmd
+}
+
+func newCatalogCompareCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "compare FROM TO",
+		Short:        "Compare the portable surfaces of two profiles",
+		Args:         cobra.ExactArgs(2),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			report, err := loadCatalogComparison(cmd, args[0], args[1])
+			if err != nil {
+				return err
+			}
+			return renderOrEmitCatalog(cmd, report, renderCatalogComparison)
+		},
+	}
+	cmd.ValidArgsFunction = completeCatalogComparisonProfiles
 	return cmd
 }
 
@@ -153,6 +172,18 @@ func loadCatalogTag(cmd *cobra.Command, name string) (catalog.Report, error) {
 	return catalog.Tag(*m, name, catalog.Options{OS: osName})
 }
 
+func loadCatalogComparison(cmd *cobra.Command, from, to string) (catalog.Report, error) {
+	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
+	if err != nil {
+		return catalog.Report{}, err
+	}
+	m, err := loadCatalogManifest(cmd, file, sourceRoot)
+	if err != nil {
+		return catalog.Report{}, err
+	}
+	return catalog.CompareProfiles(*m, from, to, catalog.Options{OS: osName})
+}
+
 func renderOrEmitCatalog(cmd *cobra.Command, report catalog.Report, render func(*cobra.Command, catalog.Report)) error {
 	if wantsJSON(cmd) {
 		return emitOK(cmd, report)
@@ -176,6 +207,23 @@ func completeCatalogProfiles(cmd *cobra.Command, args []string, toComplete strin
 	values := make([]string, 0, len(report.Profiles))
 	for _, profile := range report.Profiles {
 		values = append(values, profile.Name)
+	}
+	return matchingCatalogValues(values, toComplete), cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeCatalogComparisonProfiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) >= 2 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	report, err := loadCatalogCompletionReport(cmd)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	values := make([]string, 0, len(report.Profiles))
+	for _, profile := range report.Profiles {
+		if len(args) == 0 || profile.Name != args[0] {
+			values = append(values, profile.Name)
+		}
 	}
 	return matchingCatalogValues(values, toComplete), cobra.ShellCompDirectiveNoFileComp
 }

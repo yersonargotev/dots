@@ -90,6 +90,59 @@ func renderCatalogTagDetail(cmd *cobra.Command, report catalog.Report) {
 	renderCatalogDetail(cmd.OutOrStdout(), "Tag", report, report.Tag)
 }
 
+func renderCatalogComparison(cmd *cobra.Command, report catalog.Report) {
+	comparison := report.Comparison
+	if comparison == nil {
+		return
+	}
+	w := cmd.OutOrStdout()
+	fmt.Fprintf(w, "Profile comparison: %s -> %s\n", comparison.From, comparison.To)
+	fmt.Fprintf(w, "OS: %s\n", report.OS)
+	fmt.Fprintf(w, "Metadata origin: %s\n", report.MetadataOrigin)
+	renderCatalogComparisonSurface(w, "Added", "+", comparison.Added)
+	renderCatalogComparisonSurface(w, "Removed", "-", comparison.Removed)
+	fmt.Fprintln(w, "Shared:")
+	fmt.Fprintf(w, "  %d tags, %d dependencies, %d entries, %d source overrides, %d provisioners, %d behaviors\n",
+		comparison.Shared.ResolvedTags,
+		comparison.Shared.Dependencies,
+		comparison.Shared.Entries,
+		comparison.Shared.SourceOverrides,
+		comparison.Shared.Provisioners,
+		comparison.Shared.Behaviors,
+	)
+}
+
+func renderCatalogComparisonSurface(w io.Writer, heading, marker string, surface catalog.ComparisonSurface) {
+	fmt.Fprintf(w, "%s:\n", heading)
+	empty := len(surface.ResolvedTags) == 0 && len(surface.Dependencies) == 0 && len(surface.Entries) == 0 && len(surface.SourceOverrides) == 0 && len(surface.Provisioners) == 0 && len(surface.Behaviors) == 0
+	if empty {
+		fmt.Fprintln(w, "  none")
+		return
+	}
+	for _, tag := range surface.ResolvedTags {
+		fmt.Fprintf(w, "  %s tag %s\n", marker, tag)
+	}
+	for _, dependency := range surface.Dependencies {
+		fmt.Fprintf(w, "  %s dependency %s (%s)\n", marker, dependency.Name, dependency.Requirement)
+	}
+	for _, entry := range surface.Entries {
+		fmt.Fprintf(w, "  %s entry %s -> %s (%s)\n", marker, entry.Source, entry.Target, entry.Strategy)
+	}
+	for _, override := range surface.SourceOverrides {
+		fmt.Fprintf(w, "  %s source override %s: %s -> %s\n", marker, override.Tag, override.Source, override.Target)
+	}
+	for _, provisioner := range surface.Provisioners {
+		fmt.Fprintf(w, "  %s provisioner %s (%s", marker, provisioner.Tool, provisioner.Operation)
+		if provisioner.Identity != "" {
+			fmt.Fprintf(w, ": %s", provisioner.Identity)
+		}
+		fmt.Fprintln(w, ")")
+	}
+	for _, behavior := range surface.Behaviors {
+		fmt.Fprintf(w, "  %s behavior %s\n", marker, behavior.Action)
+	}
+}
+
 func renderCatalogDetail(w io.Writer, label string, report catalog.Report, detail *catalog.Detail) {
 	if detail == nil {
 		return

@@ -1,0 +1,13 @@
+Profile comparison: core -> desktop
+OS: all
+Metadata origin: declared
+Added:
+  + tag theme
+  + dependency theme-tool (required)
+  + entry adaptive -> ~/.example (copy)
+  + source override theme: adaptive -> ~/.example
+  + provisioner codex (mcp: demo)
+Removed:
+  none
+Shared:
+  1 tags, 0 dependencies, 0 entries, 0 source overrides, 0 provisioners, 0 behaviors
