@@ -122,6 +122,74 @@ func TestApplyComposedJSONSubsetCreatesAndUpdatesOneSharedTarget(t *testing.T) {
 	}
 }
 
+func TestApplyMigrationCreatesContentBackupAndRegularTarget(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "app.json")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	current := []byte("{\"owned\":2}\n")
+	if err := os.WriteFile(source, current, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(home, ".config", "app.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(source, target); err != nil {
+		t.Fatal(err)
+	}
+	captured := []byte("{\"owned\":1,\"runtime\":true}\n")
+	final := []byte("{\n  \"owned\": 2,\n  \"runtime\": true\n}\n")
+	p := plan.Plan{Actions: []plan.Action{{
+		Source: "configs/app.json", ResolvedSource: source, Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusMigrate,
+		Migration: &plan.LegacyMigration{LinkDestination: source, CapturedContent: captured, ExpectedLinkContent: current, FinalContent: final},
+	}}}
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(target)
+	if err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("migrated target mode = %v, err=%v", info, err)
+	}
+	got, _ := os.ReadFile(target)
+	if string(got) != string(final) {
+		t.Fatalf("target = %q", got)
+	}
+	metadata, err := backups.Load(backups.Path(stateRoot))
+	if err != nil || len(metadata.Sets) != 1 {
+		t.Fatalf("backup metadata = %#v, err=%v", metadata, err)
+	}
+	backup, err := os.ReadFile(backups.FilePath(stateRoot, metadata.Sets[0].ID, 1, target))
+	if err != nil || string(backup) != string(captured) {
+		t.Fatalf("backup = %q, err=%v", backup, err)
+	}
+}
+
+func TestApplyMigrationRejectsConcurrentTargetChangeBeforeBackup(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".state")
+	source := filepath.Join(sourceRoot, "app")
+	if err := os.WriteFile(source, []byte("changed after plan\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(home, ".app")
+	if err := os.Symlink(source, target); err != nil {
+		t.Fatal(err)
+	}
+	p := plan.Plan{Actions: []plan.Action{{Source: "app", ResolvedSource: source, Target: target, Strategy: "copy", Status: plan.StatusMigrate, Migration: &plan.LegacyMigration{LinkDestination: source, CapturedContent: []byte("old\n"), ExpectedLinkContent: []byte("expected\n"), FinalContent: []byte("final\n")}}}}
+	err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot})
+	if err == nil || !strings.Contains(err.Error(), "content changed") {
+		t.Fatalf("error = %v", err)
+	}
+	if _, statErr := os.Lstat(backups.Path(stateRoot)); !os.IsNotExist(statErr) {
+		t.Fatalf("backup metadata created after stale plan: %v", statErr)
+	}
+}
+
 func TestApplyCreatesSymlinkForCreateAction(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

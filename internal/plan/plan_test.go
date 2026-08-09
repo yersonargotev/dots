@@ -453,6 +453,56 @@ func TestBuildCopyJSONSubsetOwnership(t *testing.T) {
 	}
 }
 
+func TestBuildPlansProvenanceBackedLegacyJSONMigration(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	source := writeSource(t, sourceRoot, "configs/app.json", "{\"owned\":2}\n")
+	target := filepath.Join(home, ".config", "app.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(source, target); err != nil {
+		t.Fatal(err)
+	}
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{{Source: "configs/app.json", Target: "~/.config/app.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"}}},
+	}
+	p, err := plan.Build(m, plan.Options{
+		Profiles: []string{"core"}, OS: "linux", SourceRoot: sourceRoot, Home: home,
+		LegacyMigrations: map[string]plan.LegacyMigration{target: {
+			LinkDestination: source, CapturedContent: []byte("{\"owned\":1,\"runtime\":true}\n"), PreviousSourceContent: []byte("{\"owned\":1}\n"),
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.StatusMigrate || p.Actions[0].Migration == nil {
+		t.Fatalf("actions = %#v, want migrate", p.Actions)
+	}
+	if got := string(p.Actions[0].Migration.FinalContent); got != "{\n  \"owned\": 2,\n  \"runtime\": true\n}\n" {
+		t.Fatalf("migration content = %q", got)
+	}
+}
+
+func TestBuildKeepsAmbiguousLegacyContentAsConflict(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	source := writeSource(t, sourceRoot, "configs/app", "new\n")
+	target := filepath.Join(home, ".app")
+	if err := os.Symlink(source, target); err != nil {
+		t.Fatal(err)
+	}
+	m := manifest.Manifest{Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}}, Entries: []manifest.Entry{{Source: "configs/app", Target: "~/.app", Strategy: "copy", Tags: []string{"core"}}}}
+	p, err := plan.Build(m, plan.Options{Profiles: []string{"core"}, OS: "linux", SourceRoot: sourceRoot, Home: home, LegacyMigrations: map[string]plan.LegacyMigration{target: {LinkDestination: source, CapturedContent: []byte("locally changed\n"), PreviousSourceContent: []byte("old\n")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Actions[0].Status != plan.StatusConflict {
+		t.Fatalf("status = %q, want conflict", p.Actions[0].Status)
+	}
+}
+
 func TestBuildJSONSubsetUsesRecordedContributionForReversibleRemoval(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

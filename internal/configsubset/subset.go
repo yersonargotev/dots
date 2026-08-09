@@ -5,6 +5,7 @@ package configsubset
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -277,14 +278,6 @@ func TOMLFileContains(target, source string) (bool, error) {
 // more important than reformatting the whole file. Scalar/table value changes
 // remain conflicts unless a caller adds a dedicated migration.
 func MergeTOMLFile(target, source string) error {
-	contains, err := TOMLFileContains(target, source)
-	if err != nil {
-		return err
-	}
-	if contains {
-		return nil
-	}
-
 	sourceData, err := os.ReadFile(source)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", source, err)
@@ -293,16 +286,50 @@ func MergeTOMLFile(target, source string) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", target, err)
 	}
+	merged, err := MergeTOML(targetData, sourceData)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(merged, targetData) {
+		return nil
+	}
 	info, err := os.Stat(target)
 	if err != nil {
 		return fmt.Errorf("stat %s: %w", target, err)
 	}
+	if err := os.WriteFile(target, merged, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("write %s: %w", target, err)
+	}
+	return nil
+}
+
+// MergeTOML returns the conservative co-owned TOML merge without touching the
+// filesystem. It is used by repository-refresh migration planning so dry-run
+// can prove the exact regular-file content before any checkout or target write.
+func MergeTOML(targetData, sourceData []byte) ([]byte, error) {
+	sourceValues, err := parseSimpleTOML(sourceData, nil)
+	if err != nil {
+		return nil, fmt.Errorf("parse source TOML: %w", err)
+	}
+	targetValues, err := parseSimpleTOML(targetData, sourceValuePaths(sourceValues))
+	if err == nil {
+		contains := true
+		for key, sourceValue := range sourceValues {
+			if targetValues[key] != sourceValue {
+				contains = false
+				break
+			}
+		}
+		if contains {
+			return append([]byte(nil), targetData...), nil
+		}
+	}
 	blocks, err := missingArrayTableBlocks(targetData, sourceData)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(blocks) == 0 {
-		return fmt.Errorf("source-owned TOML differences cannot be merged safely")
+		return nil, errors.New("source-owned TOML differences cannot be merged safely")
 	}
 
 	merged := append([]byte(nil), targetData...)
@@ -314,17 +341,16 @@ func MergeTOMLFile(target, source string) error {
 		merged = append(merged, strings.TrimRight(block, "\n")...)
 		merged = append(merged, '\n', '\n')
 	}
-	if err := os.WriteFile(target, merged, info.Mode().Perm()); err != nil {
-		return fmt.Errorf("write %s: %w", target, err)
-	}
-	contains, err = TOMLFileContains(target, source)
+	mergedValues, err := parseSimpleTOML(merged, sourceValuePaths(sourceValues))
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("parse merged TOML: %w", err)
 	}
-	if !contains {
-		return fmt.Errorf("merged TOML target still misses source-owned values")
+	for key, sourceValue := range sourceValues {
+		if mergedValues[key] != sourceValue {
+			return nil, errors.New("merged TOML target still misses source-owned values")
+		}
 	}
-	return nil
+	return merged, nil
 }
 
 type jsonMergeResult struct {

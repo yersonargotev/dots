@@ -189,8 +189,89 @@ entries:
 		t.Fatalf("source after update = %q, want upstream content", got)
 	}
 	stashes := runGitOutput(t, sourceRoot, "stash", "list")
-	if !strings.Contains(stashes, "dots update preserved local Installed Repository changes") {
+	if !strings.Contains(stashes, "dots preserved local Installed Repository changes") {
 		t.Fatalf("local edit was not preserved in stash\nstash list:\n%s", stashes)
+	}
+}
+
+func TestUpdatePreviewsAndAppliesLegacyWritableTargetMigration(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	legacyManifest := `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/app/settings.json
+    target: ~/.config/app/settings.json
+    strategy: symlink
+    tags: [core]
+`
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{"configs/app/settings.json": "{\"owned\":1}\n", "dots.yaml": legacyManifest})
+
+	installCmd := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	installCmd.SetOut(&installOut)
+	installCmd.SetErr(&installOut)
+	installCmd.SetArgs([]string{"install", "--yes", "--skip-deps", "--profile", "default", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := installCmd.Execute(); err != nil {
+		t.Fatalf("initial install: %v\n%s", err, installOut.String())
+	}
+	target := filepath.Join(home, ".config", "app", "settings.json")
+	if err := os.WriteFile(target, []byte("{\"owned\":1,\"runtime\":true}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	advanceUpstream(t, origin, "materialize writable target", map[string]string{
+		"configs/app/settings.json": "{\"owned\":2}\n",
+		"dots.yaml": `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/app/settings.json
+    target: ~/.config/app/settings.json
+    strategy: copy
+    ownership: json-subset
+    tags: [core]
+`,
+	})
+	oldHead := strings.TrimSpace(runGitOutput(t, sourceRoot, "rev-parse", "HEAD"))
+	dryOutput := runUpdate(t, "--dry-run", "--profile", "default", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	if !strings.Contains(dryOutput, "migrate") {
+		t.Fatalf("dry-run output missing migrate:\n%s", dryOutput)
+	}
+	if got := strings.TrimSpace(runGitOutput(t, sourceRoot, "rev-parse", "HEAD")); got != oldHead {
+		t.Fatalf("dry-run changed checkout: %s != %s", got, oldHead)
+	}
+	if info, err := os.Lstat(target); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("dry-run changed target: mode=%v err=%v", info, err)
+	}
+	before, err := backups.Load(backups.Path(stateRoot))
+	if err != nil || len(before.Sets) != 0 {
+		t.Fatalf("dry-run created backup: %#v err=%v", before, err)
+	}
+
+	output := runUpdate(t, "--yes", "--profile", "default", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	if !strings.Contains(output, "migrate") || !strings.Contains(output, "stash@{0}") {
+		t.Fatalf("update output missing migration evidence:\n%s", output)
+	}
+	info, err := os.Lstat(target)
+	if err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("target not migrated to regular file: mode=%v err=%v", info, err)
+	}
+	content, _ := os.ReadFile(target)
+	if string(content) != "{\n  \"owned\": 2,\n  \"runtime\": true\n}\n" {
+		t.Fatalf("migrated content = %q", content)
+	}
+	after, err := backups.Load(backups.Path(stateRoot))
+	if err != nil || len(after.Sets) != 1 {
+		t.Fatalf("migration backup sets = %#v err=%v", after, err)
+	}
+	preserved, err := os.ReadFile(backups.FilePath(stateRoot, after.Sets[0].ID, 1, target))
+	if err != nil || string(preserved) != "{\"owned\":1,\"runtime\":true}\n" {
+		t.Fatalf("migration backup = %q err=%v", preserved, err)
 	}
 }
 
@@ -249,7 +330,7 @@ entries:
 		t.Fatalf("dirty work tree was not preserved\nstatus:\n%s", status)
 	}
 	stashes := runGitOutput(t, sourceRoot, "stash", "list")
-	if strings.Contains(stashes, "dots update preserved local Installed Repository changes") {
+	if strings.Contains(stashes, "dots preserved local Installed Repository changes") {
 		t.Fatalf("diverged update stashed before proving fast-forwardability\nstash list:\n%s", stashes)
 	}
 }

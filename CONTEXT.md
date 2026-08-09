@@ -153,7 +153,7 @@ A workstation state where a managed target no longer matches the repository-owne
 _Avoid_: local change, mismatch, dirty config
 
 **Dotfiles Update**:
-The `dots update` workflow that fast-forwards the Installed Repository to its upstream and re-runs the safe install flow so managed configuration stays aligned with the Source of Truth. It refuses to touch a repository with local changes and only ever applies a clean fast-forward, never a merge or rebase. Shipped in v1.1.
+The `dots update` workflow that preserves local Installed Repository changes in a reported stash, fast-forwards the repository to its upstream, and re-runs the safe install flow so Managed Configuration stays aligned with the Source of Truth. It shares repository preservation with default-path install, captures provenance-backed legacy writable targets before checkout, and never merges, rebases, or automatically restores a stash. Shipped in v1.1.
 _Avoid_: sync, pull, upgrade
 
 **Repository Layout**:

@@ -38,7 +38,7 @@ state.
 
 ```json
 {
-  "schema_version": "5",
+  "schema_version": "6",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -59,7 +59,7 @@ Schema version `3` introduced this partial-error report allowance:
 
 ```json
 {
-  "schema_version": "5",
+  "schema_version": "6",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
@@ -176,10 +176,14 @@ prose the text surface prints:
   portable, structured fields (`source`, `present`, `warning`, and the
   `deps plan` install action).
 - `plan` action `status` values are portable intent, not prose. `create`,
-  `update`, and `unchanged` are non-findings; `conflict` and `missing-source`
+  `update`, `migrate`, and `unchanged` are non-findings; `conflict` and `missing-source`
   are findings. `update` means dots has enough Installation Metadata and
   Entry Ownership proof to safely mutate a previously managed target, creating a
-  Backup Set before writing, while preserving the conservative conflict model
+  Backup Set before writing. `migrate` means a repository refresh proved a
+  legacy symlink through Installation Metadata provenance, captured its content
+  before checkout, and can safely materialize the new regular target after
+  last-moment type and content revalidation. Schema version `6` adds this
+  semantic status while preserving the conservative conflict model
   for unmanaged or incompatible targets.
 - Plan actions and Status Managed Entry items may add the optional reason
   `source-override-not-selected` and a deterministic `matching_tags` array when
@@ -224,6 +228,9 @@ prose the text surface prints:
   `install --yes --backup-and-replace --output json` replaces Conflicts,
   `data.backup_sets` lists the Backup Sets created by that run, including each
   set ID, target list, and state-root path.
+- Confirmed `update` reports the same optional `data.backup_sets` evidence for
+  any safe `update` or `migrate` action that created Backup Sets after repository
+  refresh.
 
 Profile-aware reports retain the compatibility `profile`, `profiles`, and
 `tags` fields. For selection-aware commands, agents should prefer the

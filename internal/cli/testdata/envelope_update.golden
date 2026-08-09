@@ -1,5 +1,5 @@
 {
-  "schema_version": "5",
+  "schema_version": "6",
   "command": "update",
   "status": "ok",
   "data": {
@@ -160,6 +160,17 @@
         "work"
       ],
       "steps": []
-    }
+    },
+    "backup_sets": [
+      {
+        "id": "backup-20260808T120000Z",
+        "createdAt": "2026-08-08T12:00:00Z",
+        "reason": "pre-install legacy target migration",
+        "targets": [
+          "/home/user/.config/app/settings.json"
+        ],
+        "path": "/home/user/.local/state/dots/backups/backup-20260808T120000Z"
+      }
+    ]
   }
 }

@@ -128,6 +128,35 @@ func TestPreviewReportsIncomingWithoutModifyingWorkingTree(t *testing.T) {
 	}
 }
 
+func TestCheckoutRefSameRevisionPreservesDirtyWorktreeWithoutDetaching(t *testing.T) {
+	requireGit(t)
+	_, clone := setupRemoteAndClone(t)
+	localPath := filepath.Join(clone, "configs", "zsh", "zshrc")
+	writeFile(t, localPath, "local edit\n")
+
+	preview, err := gitrepo.RefPreview(clone, "main")
+	if err != nil {
+		t.Fatalf("RefPreview() error = %v", err)
+	}
+	if preview.Changed() {
+		t.Fatalf("same-ref preview = %#v, want unchanged", preview)
+	}
+	result, err := gitrepo.CheckoutRef(clone, preview)
+	if err != nil {
+		t.Fatalf("CheckoutRef() error = %v", err)
+	}
+	if result.PreservedChanges != "stash@{0}" {
+		t.Fatalf("same-ref checkout preserved changes in %q, want stash@{0}", result.PreservedChanges)
+	}
+	content, err := os.ReadFile(localPath)
+	if err != nil || string(content) == "local edit\n" {
+		t.Fatalf("dirty content remained in checkout: %q, err=%v", content, err)
+	}
+	if got := gitOutput(t, clone, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Fatalf("same-ref checkout detached branch: %s", got)
+	}
+}
+
 func TestReadFileAtRevisionReadsIncomingFileWithoutModifyingWorkingTree(t *testing.T) {
 	requireGit(t)
 	origin, clone := setupRemoteAndClone(t)

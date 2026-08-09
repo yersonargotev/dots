@@ -10,6 +10,7 @@ func TestPlanHasFindings(t *testing.T) {
 	}{
 		{"create is not a finding", StatusCreate, false},
 		{"update is not a finding", StatusUpdate, false},
+		{"migrate is not a finding", StatusMigrate, false},
 		{"unchanged is not a finding", StatusUnchanged, false},
 		{"conflict is a finding", StatusConflict, true},
 		{"missing-source is a finding", StatusMissingSource, true},

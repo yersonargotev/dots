@@ -57,6 +57,10 @@ func Apply(p plan.Plan, opts Options) error {
 			if err := applyUpdate(action, source, opts); err != nil {
 				return err
 			}
+		case plan.StatusMigrate:
+			if err := applyMigration(action, source, opts); err != nil {
+				return err
+			}
 		case plan.StatusConflict:
 			switch conflictDecision(action, opts) {
 			case DecisionSkip:
@@ -253,6 +257,25 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
 				return nil, err
 			}
+		case plan.StatusMigrate:
+			if opts.StateRoot == "" {
+				return nil, fmt.Errorf("migration for %s requires state root for Backup Set metadata", action.Target)
+			}
+			if action.Strategy != "copy" || action.Migration == nil {
+				return nil, fmt.Errorf("migration for %s requires captured copy content", action.Target)
+			}
+			if err := validateBackupStateRoot(opts.StateRoot, home); err != nil {
+				return nil, err
+			}
+			if err := validateTargetParentInsideHome(action.Target, home); err != nil {
+				return nil, err
+			}
+			if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
+				return nil, err
+			}
+			if err := validateMigrationTarget(action); err != nil {
+				return nil, err
+			}
 		case plan.StatusConflict:
 			switch conflictDecision(action, opts) {
 			case DecisionSkip:
@@ -321,7 +344,7 @@ func conflictDecision(action plan.Action, opts Options) ConflictDecision {
 }
 
 func recordsMetadata(action plan.Action, decision ConflictDecision) bool {
-	if action.Status == plan.StatusCreate || action.Status == plan.StatusUpdate || action.Status == plan.StatusUnchanged {
+	if action.Status == plan.StatusCreate || action.Status == plan.StatusUpdate || action.Status == plan.StatusMigrate || action.Status == plan.StatusUnchanged {
 		return true
 	}
 	return action.Status == plan.StatusConflict && (decision == DecisionReplace || decision == DecisionAdopt)
@@ -507,6 +530,53 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 		}
 	default:
 		return fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)
+	}
+	return nil
+}
+
+func validateMigrationTarget(action plan.Action) error {
+	info, err := os.Lstat(action.Target)
+	if err != nil {
+		return fmt.Errorf("install plan is stale: migration target %s changed: %w", action.Target, err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return fmt.Errorf("install plan is stale: migration target %s is no longer a symlink", action.Target)
+	}
+	destination, err := os.Readlink(action.Target)
+	if err != nil {
+		return fmt.Errorf("read migration target %s: %w", action.Target, err)
+	}
+	if filepath.Clean(destination) != filepath.Clean(action.Migration.LinkDestination) {
+		return fmt.Errorf("install plan is stale: migration target %s changed destination", action.Target)
+	}
+	content, err := os.ReadFile(action.Target)
+	if err != nil {
+		return fmt.Errorf("install plan is stale: read migration target %s: %w", action.Target, err)
+	}
+	if !bytes.Equal(content, action.Migration.ExpectedLinkContent) {
+		return fmt.Errorf("install plan is stale: migration target %s content changed", action.Target)
+	}
+	return nil
+}
+
+func applyMigration(action plan.Action, source string, opts Options) error {
+	if err := validateMigrationTarget(action); err != nil {
+		return err
+	}
+	info, err := os.Stat(source)
+	if err != nil {
+		return fmt.Errorf("stat migration source %s: %w", source, err)
+	}
+	if _, err := backups.CreateContentSet(opts.StateRoot, action.Target, action.Migration.CapturedContent, info.Mode(), backups.CreateOptions{
+		Reason: "pre-install legacy target migration", Machine: backups.MachineName(), Repo: opts.SourceRoot,
+	}); err != nil {
+		return err
+	}
+	if err := os.Remove(action.Target); err != nil {
+		return fmt.Errorf("remove legacy symlink %s: %w", action.Target, err)
+	}
+	if err := writeNewFileFromSourceMode(source, action.Target, action.Migration.FinalContent); err != nil {
+		return fmt.Errorf("materialize migrated target %s: %w", action.Target, err)
 	}
 	return nil
 }
