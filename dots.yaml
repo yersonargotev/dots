@@ -39,12 +39,6 @@ profiles:
     status: current
     tags:
       - desktop
-    dependencies:
-      - name: Desktop Nerd Font
-        brew_cask: font-cascadia-code-nf
-        font_match: "CascadiaCodeNF*"
-        font_fallback_matches:
-          - "CaskaydiaCoveNerdFont*"
   agents:
     description: Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
     status: current
@@ -55,11 +49,6 @@ profiles:
     status: current
     tags:
       - web
-    dependencies:
-      - name: Playwright CLI
-        command: playwright-cli
-        brew: playwright-cli
-        linux_homebrew: true
   mobile:
     description: Optional Dart and Flutter mobile development capabilities.
     status: current
@@ -72,13 +61,28 @@ profiles:
       - core
       - desktop
       - agents
+dependencies:
+  - tags:
+      - desktop
+    os:
+      - darwin
+      - linux
     dependencies:
       - name: Desktop Nerd Font
         brew_cask: font-cascadia-code-nf
         font_match: "CascadiaCodeNF*"
         font_fallback_matches:
           - "CaskaydiaCoveNerdFont*"
-dependencies:
+  - tags:
+      - web
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: Playwright CLI
+        command: playwright-cli
+        brew: playwright-cli
+        linux_homebrew: true
   - tags:
       - core
     os:

@@ -318,7 +318,7 @@ entries:
 	}
 }
 
-func TestLoadFileParsesProfileDependencies(t *testing.T) {
+func TestLoadFileRejectsProfileDependenciesWithMigrationGuidance(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")
 	content := []byte(`version: 1
@@ -342,17 +342,18 @@ entries:
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	got, err := manifest.LoadFile(path)
-	if err != nil {
-		t.Fatalf("LoadFile() error = %v", err)
+	_, err := manifest.LoadFile(path)
+	if err == nil || !strings.Contains(err.Error(), "profiles[\"desktop\"].dependencies is retired") || !strings.Contains(err.Error(), "tag-scoped dependency set") {
+		t.Fatalf("LoadFile() error = %v, want actionable retired profile dependency guidance", err)
 	}
 
-	deps := got.Profiles["desktop"].Dependencies
-	if len(deps) != 1 {
-		t.Fatalf("Profile dependencies len = %d, want 1 (%#v)", len(deps), deps)
+	got, err := manifest.LoadPreviousFile(path)
+	if err != nil {
+		t.Fatalf("LoadPreviousFile() error = %v", err)
 	}
-	if deps[0].Name != "Desktop Nerd Font" || deps[0].Requirement != "optional" || deps[0].BrewCask != "font-cascadia-code-nf" || deps[0].FontMatch != "CascadiaCodeNF*" || !sameStrings(deps[0].FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
-		t.Fatalf("Profile dependency = %#v, want desktop font dependency with fallback match", deps[0])
+	deps := got.LegacyProfileDependencies("desktop")
+	if len(deps) != 1 || deps[0].Name != "Desktop Nerd Font" || deps[0].Requirement != "optional" || deps[0].BrewCask != "font-cascadia-code-nf" || deps[0].FontMatch != "CascadiaCodeNF*" || !sameStrings(deps[0].FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
+		t.Fatalf("legacy Profile dependencies = %#v, want desktop font dependency with fallback match", deps)
 	}
 }
 
@@ -761,7 +762,7 @@ func TestRepositoryManifestIncludesMobileAgentMCPConfigEntries(t *testing.T) {
 	}
 }
 
-func TestRepositoryManifestWebProfileIncludesPlaywrightCLI(t *testing.T) {
+func TestRepositoryManifestWebDependencySetIncludesPlaywrightCLI(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -770,16 +771,15 @@ func TestRepositoryManifestWebProfileIncludesPlaywrightCLI(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	web := got.Profiles["web"]
-	if !hasDependency(web.Dependencies, "Playwright CLI") {
-		t.Fatalf("web profile dependencies = %#v, want Playwright CLI dependency", web.Dependencies)
-	}
-
 	var dep manifest.Dependency
-	for _, candidate := range web.Dependencies {
-		if candidate.Name == "Playwright CLI" {
-			dep = candidate
-			break
+	for _, set := range got.Dependencies {
+		if !hasString(set.Tags, "web") {
+			continue
+		}
+		for _, candidate := range set.Dependencies {
+			if candidate.Name == "Playwright CLI" {
+				dep = candidate
+			}
 		}
 	}
 	if dep.Command != "playwright-cli" || dep.Brew != "playwright-cli" || !dep.LinuxHomebrew {
@@ -891,11 +891,6 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 	}
 
 	dependencies := make(map[string][]manifest.Dependency)
-	for _, profile := range got.Profiles {
-		for _, dep := range profile.Dependencies {
-			dependencies[dep.Name] = append(dependencies[dep.Name], dep)
-		}
-	}
 	for _, depSet := range got.Dependencies {
 		for _, dep := range depSet.Dependencies {
 			dependencies[dep.Name] = append(dependencies[dep.Name], dep)
@@ -1456,7 +1451,7 @@ entries:
     strategy: symlink
     tags: [core]
 `,
-			want: `profiles["default"].dependencies[0].name is required`,
+			want: `profiles["default"].dependencies is retired; move the dependencies to a tag-scoped dependency set under dependencies using the profile's tags`,
 		},
 		{
 			name: "unsupported strategy",

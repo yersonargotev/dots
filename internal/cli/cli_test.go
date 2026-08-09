@@ -362,6 +362,8 @@ func TestDoctorCommandReportsProfileFontDependencyPresentThroughFallbackFile(t *
 profiles:
   desktop:
     tags: [desktop]
+dependencies:
+  - tags: [desktop]
     dependencies:
       - name: Desktop Nerd Font
         brew_cask: font-cascadia-code-nf

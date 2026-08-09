@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"testing"
 
@@ -93,21 +92,20 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	if !manifest.SharesTag(ghosttyEntry.Tags, []string{"desktop"}) {
 		t.Fatalf("Ghostty managed entry tags = %#v, want desktop", ghosttyEntry.Tags)
 	}
-	desktopProfile, ok := manifestFile.Profiles["desktop"]
-	if !ok {
-		t.Fatal("dots manifest missing desktop profile")
-	}
 	foundDesktopFontDependency := false
-	for _, dep := range desktopProfile.Dependencies {
-		if dep.BrewCask == "font-cascadia-code-nf" &&
-			dep.FontMatch == "CascadiaCodeNF*" &&
-			slices.Equal(dep.FontFallbackMatches, []string{"CaskaydiaCoveNerdFont*"}) {
-			foundDesktopFontDependency = true
-			break
+	for _, set := range manifestFile.Dependencies {
+		if !manifest.SharesTag(set.Tags, []string{"desktop"}) {
+			continue
+		}
+		for _, dep := range set.Dependencies {
+			if dep.BrewCask == "font-cascadia-code-nf" && dep.FontMatch == "CascadiaCodeNF*" && len(dep.FontFallbackMatches) == 1 && dep.FontFallbackMatches[0] == "CaskaydiaCoveNerdFont*" {
+				foundDesktopFontDependency = true
+				break
+			}
 		}
 	}
 	if !foundDesktopFontDependency {
-		t.Fatalf("desktop profile dependencies = %#v, want font-cascadia-code-nf with CascadiaCodeNF* and Caskaydia fallback", desktopProfile.Dependencies)
+		t.Fatalf("desktop dependency set is missing font-cascadia-code-nf with CascadiaCodeNF* and Caskaydia fallback")
 	}
 
 	localExample := filepath.Join(repoRoot, "configs", "ghostty", "config.local.ghostty.example")

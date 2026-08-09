@@ -19,6 +19,8 @@ const fontManifest = `version: 1
 profiles:
   default:
     tags: [core]
+dependencies:
+  - tags: [core]
     dependencies:
       - name: Dots Home Flag Probe Font
         brew_cask: font-dots-home-flag-probe
@@ -34,6 +36,8 @@ const darwinAppManifest = `version: 1
 profiles:
   default:
     tags: [desktop]
+dependencies:
+  - tags: [desktop]
     dependencies:
       - name: Dots Sandbox App
         command: dots-sandbox-app

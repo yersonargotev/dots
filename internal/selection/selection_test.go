@@ -3,6 +3,7 @@ package selection_test
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -14,13 +15,53 @@ import (
 	"github.com/yersonargotev/dots/internal/state"
 )
 
+func TestCompareEvolutionRetainsHistoricalProfileDependenciesForComparison(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "dots.yaml")
+	previousSource := []byte(`version: 1
+profiles:
+  desktop:
+    tags: [desktop]
+    dependencies:
+      - name: Desktop Nerd Font
+        brew_cask: font-cascadia-code-nf
+        font_match: "CascadiaCodeNF*"
+entries:
+  - source: configs/ghostty/config
+    target: ~/.config/ghostty/config
+    strategy: copy
+    tags: [desktop]
+`)
+	if err := os.WriteFile(path, previousSource, 0o600); err != nil {
+		t.Fatalf("write previous manifest: %v", err)
+	}
+	previousManifest, err := manifest.LoadPreviousFile(path)
+	if err != nil {
+		t.Fatalf("load previous manifest: %v", err)
+	}
+	currentManifest := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"desktop": {Tags: []string{"desktop"}}},
+		Dependencies: []manifest.DependencySet{{Tags: []string{"desktop"}, Dependencies: []manifest.Dependency{{
+			Name: "Desktop Nerd Font", BrewCask: "font-cascadia-code-nf", FontMatch: "CascadiaCodeNF*",
+		}}}},
+		Entries: []manifest.Entry{{Source: "configs/ghostty/config", Target: "~/.config/ghostty/config", Strategy: "copy", Tags: []string{"desktop"}}},
+	}
+	previous, err := selection.ResolveIntent(*previousManifest, selection.Intent{Source: selection.SourceRecorded, Profiles: []string{"desktop"}})
+	if err != nil {
+		t.Fatalf("resolve previous selection: %v", err)
+	}
+	evolved, err := selection.CompareEvolution(*previousManifest, currentManifest, previous, "darwin")
+	if err != nil {
+		t.Fatalf("compare evolution: %v", err)
+	}
+	if delta := evolved.Report.Delta; delta == nil || len(delta.Added.Dependencies) != 0 || len(delta.Removed.Dependencies) != 0 {
+		t.Fatalf("dependency evolution = %#v, want unchanged historical font selection", delta)
+	}
+}
+
 func TestCompareEvolutionReportsSelectedSurfaceChangesInManifestOrder(t *testing.T) {
 	oldManifest := manifest.Manifest{
 		Profiles: map[string]manifest.Profile{
-			"core": {
-				Tags:         []string{"core"},
-				Dependencies: []manifest.Dependency{{Name: "profile-old"}, {Name: "shared"}},
-			},
+			"core": {Tags: []string{"core"}},
 		},
 		Entries: []manifest.Entry{
 			{Target: ".old", Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "entry-old"}}},
@@ -30,10 +71,7 @@ func TestCompareEvolutionReportsSelectedSurfaceChangesInManifestOrder(t *testing
 	}
 	newManifest := manifest.Manifest{
 		Profiles: map[string]manifest.Profile{
-			"core": {
-				Tags:         []string{"core", "new"},
-				Dependencies: []manifest.Dependency{{Name: "shared"}, {Name: "profile-new"}},
-			},
+			"core": {Tags: []string{"core", "new"}},
 		},
 		Dependencies: []manifest.DependencySet{{
 			Tags: []string{"new"}, Dependencies: []manifest.Dependency{{Name: "set-new"}, {Name: "shared"}},
@@ -67,7 +105,7 @@ func TestCompareEvolutionReportsSelectedSurfaceChangesInManifestOrder(t *testing
 	if want := []string{".new"}; !reflect.DeepEqual(delta.Added.ManagedEntries, want) {
 		t.Fatalf("added Managed Entries = %#v, want %#v", delta.Added.ManagedEntries, want)
 	}
-	if want := []string{"profile-new", "set-new", "entry-new", "provisioner-new"}; !reflect.DeepEqual(delta.Added.Dependencies, want) {
+	if want := []string{"set-new", "entry-new", "provisioner-new"}; !reflect.DeepEqual(delta.Added.Dependencies, want) {
 		t.Fatalf("added Dependencies = %#v, want %#v", delta.Added.Dependencies, want)
 	}
 	if want := []string{"new-tool"}; !reflect.DeepEqual(delta.Added.Provisioners, want) {
@@ -76,7 +114,7 @@ func TestCompareEvolutionReportsSelectedSurfaceChangesInManifestOrder(t *testing
 	if want := []string{".old"}; !reflect.DeepEqual(delta.Removed.ManagedEntries, want) {
 		t.Fatalf("removed Managed Entries = %#v, want %#v", delta.Removed.ManagedEntries, want)
 	}
-	if want := []string{"profile-old", "entry-old"}; !reflect.DeepEqual(delta.Removed.Dependencies, want) {
+	if want := []string{"entry-old"}; !reflect.DeepEqual(delta.Removed.Dependencies, want) {
 		t.Fatalf("removed Dependencies = %#v, want %#v", delta.Removed.Dependencies, want)
 	}
 	if want := []string{"old-tool"}; !reflect.DeepEqual(delta.Removed.Provisioners, want) {

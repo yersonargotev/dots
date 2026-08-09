@@ -20,19 +20,19 @@ var (
 )
 
 type Manifest struct {
-	Version      int                `yaml:"version"`
-	Tags         map[string]Tag     `yaml:"tags,omitempty"`
-	Profiles     map[string]Profile `yaml:"profiles"`
-	Dependencies []DependencySet    `yaml:"dependencies,omitempty"`
-	Entries      []Entry            `yaml:"entries"`
-	Provisioners []Provisioner      `yaml:"provisioners,omitempty"`
+	Version                   int                `yaml:"version"`
+	Tags                      map[string]Tag     `yaml:"tags,omitempty"`
+	Profiles                  map[string]Profile `yaml:"profiles"`
+	Dependencies              []DependencySet    `yaml:"dependencies,omitempty"`
+	Entries                   []Entry            `yaml:"entries"`
+	Provisioners              []Provisioner      `yaml:"provisioners,omitempty"`
+	legacyProfileDependencies map[string][]Dependency
 }
 
 type Profile struct {
-	Description  string       `yaml:"description,omitempty"`
-	Status       string       `yaml:"status,omitempty"`
-	Tags         []string     `yaml:"tags"`
-	Dependencies []Dependency `yaml:"dependencies,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+	Status      string   `yaml:"status,omitempty"`
+	Tags        []string `yaml:"tags"`
 }
 
 // Tag describes a declared selection tag. The registry is optional for v1
@@ -285,6 +285,9 @@ func LoadFile(path string) (*Manifest, error) {
 
 // Parse strictly decodes and validates a current Install Manifest.
 func Parse(data []byte) (*Manifest, error) {
+	if profileName, ok := profileDependenciesDeclaration(data); ok {
+		return nil, fmt.Errorf("profiles[%q].dependencies is retired; move the dependencies to a tag-scoped dependency set under dependencies using the profile's tags", profileName)
+	}
 	var manifest Manifest
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
@@ -314,6 +317,10 @@ func LoadPreviousFile(path string) (*Manifest, error) {
 	if err := yaml.Unmarshal(data, &document); err != nil {
 		return nil, fmt.Errorf("parse previous manifest: %w", err)
 	}
+	legacyProfileDependencies, err := discardPreviousProfileDependencies(&document)
+	if err != nil {
+		return nil, err
+	}
 	discardPreviousProvisionerSpecs(&document)
 	projected, err := yaml.Marshal(&document)
 	if err != nil {
@@ -329,7 +336,101 @@ func LoadPreviousFile(path string) (*Manifest, error) {
 	if err := previous.validateEvolutionInventory(); err != nil {
 		return nil, err
 	}
+	for name, dependencies := range legacyProfileDependencies {
+		if _, ok := previous.Profiles[name]; !ok {
+			return nil, fmt.Errorf("previous manifest profiles[%q] is not declared", name)
+		}
+		for i, dependency := range dependencies {
+			if err := validateDependency(dependency, fmt.Sprintf("profiles[%q].dependencies[%d]", name, i)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	previous.legacyProfileDependencies = legacyProfileDependencies
 	return &previous, nil
+}
+
+// LegacyProfileDependencies returns inventory retained exclusively from a
+// previous Install Manifest for selection evolution. Current Install Manifests
+// never populate this retired declaration.
+func (m Manifest) LegacyProfileDependencies(profile string) []Dependency {
+	return append([]Dependency(nil), m.legacyProfileDependencies[profile]...)
+}
+
+func profileDependenciesDeclaration(data []byte) (string, bool) {
+	var document yaml.Node
+	if yaml.Unmarshal(data, &document) != nil {
+		return "", false
+	}
+	if document.Kind != yaml.DocumentNode || len(document.Content) == 0 {
+		return "", false
+	}
+	root := document.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return "", false
+	}
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value != "profiles" || root.Content[i+1].Kind != yaml.MappingNode {
+			continue
+		}
+		profiles := root.Content[i+1]
+		for j := 0; j+1 < len(profiles.Content); j += 2 {
+			profile := profiles.Content[j+1]
+			if profile.Kind != yaml.MappingNode {
+				continue
+			}
+			for k := 0; k+1 < len(profile.Content); k += 2 {
+				if profile.Content[k].Value == "dependencies" {
+					return profiles.Content[j].Value, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+func discardPreviousProfileDependencies(document *yaml.Node) (map[string][]Dependency, error) {
+	legacy := make(map[string][]Dependency)
+	if document == nil || document.Kind != yaml.DocumentNode || len(document.Content) == 0 {
+		return legacy, nil
+	}
+	root := document.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return legacy, nil
+	}
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value != "profiles" || root.Content[i+1].Kind != yaml.MappingNode {
+			continue
+		}
+		profiles := root.Content[i+1]
+		for j := 0; j+1 < len(profiles.Content); j += 2 {
+			profileName := profiles.Content[j].Value
+			profile := profiles.Content[j+1]
+			if profile.Kind != yaml.MappingNode {
+				continue
+			}
+			for k := 0; k+1 < len(profile.Content); k += 2 {
+				if profile.Content[k].Value != "dependencies" {
+					continue
+				}
+				data, err := yaml.Marshal(profile.Content[k+1])
+				if err != nil {
+					return nil, fmt.Errorf("project previous manifest profiles[%q].dependencies: %w", profileName, err)
+				}
+				var dependencies []Dependency
+				decoder := yaml.NewDecoder(bytes.NewReader(data))
+				decoder.KnownFields(true)
+				if err := decoder.Decode(&dependencies); err != nil {
+					return nil, fmt.Errorf("parse previous manifest profiles[%q].dependencies: %w", profileName, err)
+				}
+				legacy[profileName] = dependencies
+				profile.Content = append(profile.Content[:k], profile.Content[k+2:]...)
+				break
+			}
+		}
+		return legacy, nil
+	}
+	return legacy, nil
 }
 
 func discardPreviousProvisionerSpecs(document *yaml.Node) {
@@ -427,11 +528,6 @@ func (m Manifest) Validate() error {
 		}
 		if err := m.validateDeclaredTags(tags, fmt.Sprintf("profiles[%q].tags", name)); err != nil {
 			return err
-		}
-		for j, dep := range profile.Dependencies {
-			if err := validateDependency(dep, fmt.Sprintf("profiles[%q].dependencies[%d]", name, j)); err != nil {
-				return err
-			}
 		}
 	}
 
