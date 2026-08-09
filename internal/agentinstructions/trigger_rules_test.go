@@ -348,6 +348,50 @@ func TestRemoveMarkedBlocksRejectsSymlinkReplacementAfterOpen(t *testing.T) {
 	}
 }
 
+func TestRemoveMarkedBlocksRejectsSymlinkReplacementBeforeMutation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "instructions.md")
+	checked := filepath.Join(dir, "checked-instructions.md")
+	target := filepath.Join(dir, "user-owned.md")
+	owned := gentleAITriggerRulesStart + "\nowned\n" + gentleAITriggerRulesEnd + "\n"
+	userOwned := "keep user-owned target\n"
+	if err := os.WriteFile(path, []byte(owned), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(userOwned), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ops := systemMarkedBlockFileOps()
+	ops.beforeWrite = func() {
+		if err := os.Rename(path, checked); err != nil {
+			t.Fatalf("move checked instructions: %v", err)
+		}
+		if err := os.Symlink(target, path); err != nil {
+			t.Fatalf("replace instructions with symlink: %v", err)
+		}
+	}
+
+	removed, manual, err := removeMarkedBlocksWithFileOps(
+		path,
+		ops,
+		textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd},
+	)
+	if err == nil {
+		t.Fatal("removeMarkedBlocksWithFileOps() error = nil, want replacement failure")
+	}
+	if removed || manual {
+		t.Fatalf("removeMarkedBlocksWithFileOps() = (%v, %v, %v), want no reported mutation", removed, manual, err)
+	}
+	got, readErr := os.ReadFile(target)
+	if readErr != nil || string(got) != userOwned {
+		t.Fatalf("replacement symlink target changed: %q, %v", got, readErr)
+	}
+	if info, statErr := os.Lstat(path); statErr != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("replacement symlink changed: %v, %v", info, statErr)
+	}
+}
+
 func TestRemoveMarkedBlocksRejectsDeletionAfterOpen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "instructions.md")

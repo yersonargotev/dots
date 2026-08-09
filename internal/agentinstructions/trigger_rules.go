@@ -337,6 +337,9 @@ func addCopilotPortablePolicyTargets(add func(agent, path string), agent, home s
 type markedBlockFileOps struct {
 	lstat    func(string) (os.FileInfo, error)
 	openFile func(string, int, os.FileMode) (*os.File, error)
+	// beforeWrite is a deterministic test seam for replacement immediately
+	// before descriptor-scoped mutation. Production leaves it nil.
+	beforeWrite func()
 }
 
 func systemMarkedBlockFileOps() markedBlockFileOps {
@@ -429,6 +432,9 @@ func removeMarkedBlocksWithFileOps(path string, ops markedBlockFileOps, markers 
 	}
 	if err := validateMarkedBlockPath(path, writeInfo, ops.lstat); err != nil {
 		return false, false, err
+	}
+	if ops.beforeWrite != nil {
+		ops.beforeWrite()
 	}
 	if err := file.Truncate(0); err != nil {
 		return false, false, fmt.Errorf("truncate agent instructions %s: %w", path, err)
