@@ -1,6 +1,7 @@
 package configsubset
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -102,7 +103,7 @@ func RemoveJSONC(targetData, ownedData []byte) (content []byte, changed, empty, 
 	if err != nil {
 		return nil, false, false, false, err
 	}
-	return content, changed, jsonValueEmpty(desired), true, nil
+	return content, changed, jsonValueEmpty(desired) && !jsonCContainsComments(content), true, nil
 }
 
 func decodeJSONC(data []byte) (any, error) {
@@ -170,10 +171,11 @@ func reconcileJSONCValue(target, previous, current any) (any, bool, bool) {
 				}
 				if jsonValueEmpty(value) {
 					delete(result, key)
+					changed = true
 				} else {
 					result[key] = value
+					changed = changed || childChanged
 				}
-				changed = changed || childChanged
 				continue
 			}
 			value, childChanged, compatible := reconcileJSONCValue(targetChild, previousChild, currentChild)
@@ -239,10 +241,11 @@ func subtractJSONCValue(target, owned any) (any, bool, bool) {
 		}
 		if jsonValueEmpty(value) {
 			delete(result, key)
+			changed = true
 		} else {
 			result[key] = value
+			changed = changed || childChanged
 		}
-		changed = changed || childChanged
 	}
 	return result, changed, true
 }
@@ -253,6 +256,42 @@ func cloneJSONObject(input map[string]any) map[string]any {
 		result[key] = value
 	}
 	return result
+}
+
+func jsonCContainsComments(data []byte) bool {
+	value, err := hujson.Parse(data)
+	return err == nil && jsonCValueContainsComments(value)
+}
+
+func jsonCValueContainsComments(value hujson.Value) bool {
+	if jsonCExtraContainsComment(value.BeforeExtra) || jsonCExtraContainsComment(value.AfterExtra) {
+		return true
+	}
+	switch typed := value.Value.(type) {
+	case *hujson.Object:
+		if jsonCExtraContainsComment(typed.AfterExtra) {
+			return true
+		}
+		for _, member := range typed.Members {
+			if jsonCValueContainsComments(member.Name) || jsonCValueContainsComments(member.Value) {
+				return true
+			}
+		}
+	case *hujson.Array:
+		if jsonCExtraContainsComment(typed.AfterExtra) {
+			return true
+		}
+		for _, element := range typed.Elements {
+			if jsonCValueContainsComments(element) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func jsonCExtraContainsComment(extra hujson.Extra) bool {
+	return bytes.Contains(extra, []byte("//")) || bytes.Contains(extra, []byte("/*"))
 }
 
 func patchJSONC(original []byte, target, desired any) ([]byte, error) {

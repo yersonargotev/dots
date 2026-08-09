@@ -306,7 +306,8 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		if err != nil {
 			return "", fmt.Errorf("read source JSONC %s: %w", sourceAbs, err)
 		}
-		if rec, recorded := meta.FindByTarget(target); recorded && rec.Strategy == entry.Strategy {
+		if meta.MatchesEntry(target, entry.Source, entry.Strategy) {
+			rec, _ := meta.FindByTarget(target)
 			if rec.Ownership == "jsonc-subset" && len(rec.OwnedContent) > 0 {
 				reconciliation, err := configsubset.ReconcileJSONC(targetData, rec.OwnedContent, sourceData)
 				if err != nil {

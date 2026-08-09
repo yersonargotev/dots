@@ -82,6 +82,20 @@ func TestReconcileJSONCRemovesRetiredKeysAndPreservesTargetOnlyContent(t *testin
 	}
 }
 
+func TestReconcileJSONCReportsRemovingEmptyOwnedObjectAsChange(t *testing.T) {
+	got, err := ReconcileJSONC(
+		[]byte(`{"settings":{},"local":true}`),
+		[]byte(`{"settings":{}}`),
+		[]byte(`{}`),
+	)
+	if err != nil {
+		t.Fatalf("ReconcileJSONC() error = %v", err)
+	}
+	if !got.Compatible || !got.Changed || bytes.Contains(got.Content, []byte(`"settings"`)) || !bytes.Contains(got.Content, []byte(`"local"`)) {
+		t.Fatalf("ReconcileJSONC() = %#v, want changed removal of empty owned object", got)
+	}
+}
+
 func TestRemoveJSONCRemovesOnlyOwnedObjectValues(t *testing.T) {
 	target := []byte("{\n  // root\n  \"owned\": true,\n  \"local\": false,\n}\n")
 	content, changed, empty, compatible, err := RemoveJSONC(target, []byte(`{"owned":true}`))
@@ -90,6 +104,17 @@ func TestRemoveJSONCRemovesOnlyOwnedObjectValues(t *testing.T) {
 	}
 	if !compatible || !changed || empty || !bytes.Contains(content, []byte("// root")) || !bytes.Contains(content, []byte(`"local": false`)) {
 		t.Fatalf("RemoveJSONC() = %s, %t, %t, %t", content, changed, empty, compatible)
+	}
+}
+
+func TestRemoveJSONCPreservesCommentOnlyExternalContent(t *testing.T) {
+	target := []byte("{\n  // Added locally and not proven dots-owned.\n  \"owned\": true,\n}\n")
+	content, changed, empty, compatible, err := RemoveJSONC(target, []byte(`{"owned":true}`))
+	if err != nil {
+		t.Fatalf("RemoveJSONC() error = %v", err)
+	}
+	if !compatible || !changed || empty || !bytes.Contains(content, []byte("Added locally")) {
+		t.Fatalf("RemoveJSONC() = %s, changed=%t empty=%t compatible=%t; want preserved comment-only target", content, changed, empty, compatible)
 	}
 }
 

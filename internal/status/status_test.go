@@ -310,6 +310,33 @@ func TestBuildReportsConflictForClaudeSettingsSubsetWithoutInstallMetadata(t *te
 	}
 }
 
+func TestBuildReportsConflictForJSONCRecordFromDifferentSource(t *testing.T) {
+	f := newFixture(manifest.Entry{
+		Source:    "configs/zed/settings.json",
+		Target:    "~/.config/zed/settings.json",
+		Strategy:  "copy",
+		Ownership: "jsonc-subset",
+		Tags:      []string{"core"},
+	})
+	f.sourceRoot = t.TempDir()
+	f.home = t.TempDir()
+	writeSource(t, f.sourceRoot, "configs/zed/settings.json", `{"theme":"dark"}`)
+	target := filepath.Join(f.home, ".config", "zed", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target parent: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"theme":"dark","runtime":true}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	meta := state.Metadata{Entries: []state.Record{{
+		Target: target, Source: "configs/other/settings.json", Strategy: "copy", Ownership: "jsonc-subset", OwnedContent: []byte(`{"theme":"dark"}`),
+	}}}
+
+	if got := onlyEntry(t, f.build(t, meta)).State; got != status.StateConflict {
+		t.Fatalf("state = %q, want conflict because metadata belongs to a different Source of Truth", got)
+	}
+}
+
 func TestBuildEvaluatesEveryContributorRecordedForSharedJSONTarget(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()
