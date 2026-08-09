@@ -275,6 +275,120 @@ entries:
 	}
 }
 
+func TestUpdateMigratesLegacyZedSymlinkToCoOwnedJSONC(t *testing.T) {
+	requireGitCLI(t)
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	legacyManifest := `version: 1
+profiles:
+  default:
+    tags: [desktop]
+entries:
+  - source: configs/zed/settings.json
+    target: ~/.config/zed/settings.json
+    strategy: symlink
+    tags: [desktop]
+`
+	previous := `// Zed settings
+{
+  "theme": "dark",
+  "languages": { "Go": { "format_on_save": "on", }, },
+  "features": ["one", "two"],
+}
+`
+	origin, sourceRoot := newInstalledRepo(t, map[string]string{"configs/zed/settings.json": previous, "dots.yaml": legacyManifest})
+
+	installCmd := cli.NewRootCommand()
+	var installOut bytes.Buffer
+	installCmd.SetOut(&installOut)
+	installCmd.SetErr(&installOut)
+	installCmd.SetArgs([]string{"install", "--yes", "--skip-deps", "--profile", "default", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	if err := installCmd.Execute(); err != nil {
+		t.Fatalf("initial install: %v\n%s", err, installOut.String())
+	}
+	target := filepath.Join(home, ".config", "zed", "settings.json")
+	zedEdited := `// Zed settings
+{
+  "theme": "dark",
+  "languages": {
+    "Go": { "format_on_save": "on", },
+    "Rust": { "language_servers": ["rust-analyzer"], },
+  },
+  "features": ["one", "two"],
+  // Added by Zed.
+  "runtime": true,
+}
+`
+	if err := os.WriteFile(target, []byte(zedEdited), 0o600); err != nil {
+		t.Fatalf("simulate Zed write through legacy symlink: %v", err)
+	}
+	current := `// Zed settings
+{
+  "languages": { "Go": { "format_on_save": "on", "tab_size": 2, }, },
+  "features": ["one", "two"],
+}
+`
+	advanceUpstream(t, origin, "materialize Zed JSONC settings", map[string]string{
+		"configs/zed/settings.json": current,
+		"dots.yaml": `version: 1
+profiles:
+  default:
+    tags: [desktop]
+entries:
+  - source: configs/zed/settings.json
+    target: ~/.config/zed/settings.json
+    strategy: copy
+    ownership: jsonc-subset
+    tags: [desktop]
+`,
+	})
+
+	oldHead := strings.TrimSpace(runGitOutput(t, sourceRoot, "rev-parse", "HEAD"))
+	dryOutput := runUpdate(t, "--dry-run", "--profile", "default", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	if !strings.Contains(dryOutput, "migrate") {
+		t.Fatalf("dry-run output missing JSONC migration:\n%s", dryOutput)
+	}
+	if got := strings.TrimSpace(runGitOutput(t, sourceRoot, "rev-parse", "HEAD")); got != oldHead {
+		t.Fatalf("dry-run changed checkout: %s != %s", got, oldHead)
+	}
+	if info, err := os.Lstat(target); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("dry-run changed legacy target: mode=%v err=%v", info, err)
+	}
+
+	output := runUpdate(t, "--yes", "--profile", "default", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	if !strings.Contains(output, "migrate") || !strings.Contains(output, "stash@{0}") {
+		t.Fatalf("update output missing JSONC migration evidence:\n%s", output)
+	}
+	info, err := os.Lstat(target)
+	if err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("Zed target not migrated to regular file: mode=%v err=%v", info, err)
+	}
+	content, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read migrated target: %v", err)
+	}
+	for _, want := range []string{`"Rust"`, `"runtime": true`, `Added by Zed`, `"tab_size": 2`, `"features": ["one", "two"]`} {
+		if !strings.Contains(string(content), want) {
+			t.Fatalf("migrated JSONC missing %s:\n%s", want, content)
+		}
+	}
+	if strings.Contains(string(content), `"theme"`) {
+		t.Fatalf("migrated JSONC retained retired theme:\n%s", content)
+	}
+	if dirty := strings.TrimSpace(runGitOutput(t, sourceRoot, "status", "--porcelain")); dirty != "" {
+		t.Fatalf("Installed Repository remains dirty after Zed migration:\n%s", dirty)
+	}
+	after, err := backups.Load(backups.Path(stateRoot))
+	if err != nil || len(after.Sets) != 1 {
+		t.Fatalf("migration backup sets = %#v err=%v", after, err)
+	}
+	preserved, err := os.ReadFile(backups.FilePath(stateRoot, after.Sets[0].ID, 1, target))
+	if err != nil || string(preserved) != zedEdited {
+		t.Fatalf("migration backup = %q err=%v", preserved, err)
+	}
+}
+
 func TestUpdateDirtyDivergedRepoDoesNotStash(t *testing.T) {
 	requireGitCLI(t)
 	home := t.TempDir()

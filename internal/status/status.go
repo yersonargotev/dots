@@ -287,6 +287,48 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		}
 		return StateConflict, nil
 	}
+	if entry.Ownership == "jsonc-subset" {
+		info, err := os.Lstat(target)
+		if err != nil {
+			return "", fmt.Errorf("stat target %s: %w", target, err)
+		}
+		if !info.Mode().IsRegular() {
+			if meta.MatchesEntry(target, entry.Source, entry.Strategy) {
+				return StateDrifted, nil
+			}
+			return StateConflict, nil
+		}
+		targetData, err := os.ReadFile(target)
+		if err != nil {
+			return "", fmt.Errorf("read JSONC target %s: %w", target, err)
+		}
+		sourceData, err := os.ReadFile(sourceAbs)
+		if err != nil {
+			return "", fmt.Errorf("read source JSONC %s: %w", sourceAbs, err)
+		}
+		if meta.MatchesEntry(target, entry.Source, entry.Strategy) {
+			rec, _ := meta.FindByTarget(target)
+			if rec.Ownership == "jsonc-subset" && len(rec.OwnedContent) > 0 {
+				reconciliation, err := configsubset.ReconcileJSONC(targetData, rec.OwnedContent, sourceData)
+				if err != nil {
+					return "", fmt.Errorf("reconcile JSONC target %s: %w", target, err)
+				}
+				if reconciliation.Compatible && !reconciliation.Changed {
+					return StateOK, nil
+				}
+				return StateDrifted, nil
+			}
+			relation, err := configsubset.AnalyzeJSONC(targetData, sourceData)
+			if err != nil {
+				return "", fmt.Errorf("analyze JSONC target %s: %w", target, err)
+			}
+			if relation.Contains {
+				return StateOK, nil
+			}
+			return StateDrifted, nil
+		}
+		return StateConflict, nil
+	}
 
 	if isSubsetOwned(entry.Ownership) && meta.MatchesEntry(target, entry.Source, entry.Strategy) {
 		subset, err := subsetContent(entry.Ownership, target, sourceAbs)
@@ -403,13 +445,24 @@ func sameContent(a, b string) (bool, error) {
 }
 
 func isSubsetOwned(ownership string) bool {
-	return ownership == "json-subset" || ownership == "toml-subset"
+	return ownership == "json-subset" || ownership == "jsonc-subset" || ownership == "toml-subset"
 }
 
 func subsetContent(ownership, target, sourceAbs string) (bool, error) {
 	switch ownership {
 	case "json-subset":
 		return configsubset.JSONFileContains(target, sourceAbs)
+	case "jsonc-subset":
+		targetData, err := os.ReadFile(target)
+		if err != nil {
+			return false, fmt.Errorf("read %s: %w", target, err)
+		}
+		sourceData, err := os.ReadFile(sourceAbs)
+		if err != nil {
+			return false, fmt.Errorf("read %s: %w", sourceAbs, err)
+		}
+		relation, err := configsubset.AnalyzeJSONC(targetData, sourceData)
+		return relation.Contains, err
 	case "toml-subset":
 		return configsubset.TOMLFileContains(target, sourceAbs)
 	default:

@@ -77,7 +77,7 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 			// The plan references a target dots no longer records; never act on it.
 			continue
 		}
-		if rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+		if (rec.Ownership == "json-subset" || rec.Ownership == "jsonc-subset") && len(rec.OwnedContent) > 0 {
 			if action.Status != plan.UninstallRemove {
 				continue
 			}
@@ -155,7 +155,13 @@ func removeOwnedJSON(rec state.Record, home string) (applied, deleted bool, err 
 	if err != nil {
 		return false, false, fmt.Errorf("stat owned JSON target %s: %w", rec.Target, err)
 	}
-	content, changed, empty, compatible, err := configsubset.RemoveJSON(targetData, rec.OwnedContent)
+	var content []byte
+	var changed, empty, compatible bool
+	if rec.Ownership == "jsonc-subset" {
+		content, changed, empty, compatible, err = configsubset.RemoveJSONC(targetData, rec.OwnedContent)
+	} else {
+		content, changed, empty, compatible, err = configsubset.RemoveJSON(targetData, rec.OwnedContent)
+	}
 	if err != nil {
 		return false, false, fmt.Errorf("remove owned JSON from %s: %w", rec.Target, err)
 	}

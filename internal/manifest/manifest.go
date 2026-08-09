@@ -451,7 +451,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("entries[%d].strategy must be one of copy, symlink, template", i)
 		}
 		if !allowedOwnership(entry.Ownership) {
-			return fmt.Errorf("entries[%d].ownership must be one of json-subset, toml-subset", i)
+			return fmt.Errorf("entries[%d].ownership must be one of json-subset, jsonc-subset, toml-subset", i)
 		}
 		if entry.Ownership != "" && entry.Strategy != "copy" {
 			return fmt.Errorf("entries[%d].ownership %s requires strategy copy", i, entry.Ownership)
@@ -1000,7 +1000,7 @@ func allowedStrategy(strategy string) bool {
 
 func allowedOwnership(ownership string) bool {
 	switch ownership {
-	case "", "json-subset", "toml-subset":
+	case "", "json-subset", "jsonc-subset", "toml-subset":
 		return true
 	default:
 		return false

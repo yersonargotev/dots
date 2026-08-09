@@ -491,7 +491,8 @@ entries:
             linux_arm64: e055af73fa9c72b37456da8d204fa5c09850bc07e80e9176fe3b87d4afb7a3fc
   - source: configs/zed/settings.json
     target: ~/.config/zed/settings.json
-    strategy: symlink
+    strategy: copy
+    ownership: jsonc-subset
     tags:
       - desktop
     os:

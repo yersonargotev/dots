@@ -150,12 +150,17 @@ func uninstallStatus(rec state.Record, sourceRoot, home string) (UninstallStatus
 		if !info.Mode().IsRegular() {
 			return UninstallNotOwned, nil
 		}
-		if rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
+		if (rec.Ownership == "json-subset" || rec.Ownership == "jsonc-subset") && len(rec.OwnedContent) > 0 {
 			targetData, err := os.ReadFile(rec.Target)
 			if err != nil {
 				return "", fmt.Errorf("read uninstall target %s: %w", rec.Target, err)
 			}
-			_, _, _, compatible, err := configsubset.RemoveJSON(targetData, rec.OwnedContent)
+			var compatible bool
+			if rec.Ownership == "jsonc-subset" {
+				_, _, _, compatible, err = configsubset.RemoveJSONC(targetData, rec.OwnedContent)
+			} else {
+				_, _, _, compatible, err = configsubset.RemoveJSON(targetData, rec.OwnedContent)
+			}
 			if err != nil {
 				return "", fmt.Errorf("analyze owned JSON for %s: %w", rec.Target, err)
 			}

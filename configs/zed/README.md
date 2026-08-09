@@ -1,18 +1,22 @@
 # Zed configuration
 
 `configs/zed/` is the repository-managed authored configuration for the
-[Zed](https://zed.dev) editor, installed under `~/.config/zed/` with the
-`symlink` strategy (`desktop` tag, `darwin`+`linux`). Managed files:
+[Zed](https://zed.dev) editor (`desktop` tag, `darwin`+`linux`). Zed settings
+are a regular co-owned JSONC target; keymaps and the authored theme remain
+repository-owned symlinks:
 
-| Source | Target |
-| --- | --- |
-| `configs/zed/settings.json` | `~/.config/zed/settings.json` |
-| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` |
-| `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` |
+| Source | Target | Strategy / ownership |
+| --- | --- | --- |
+| `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` / `jsonc-subset` |
+| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `symlink` / whole target |
+| `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` / whole target |
 
-The Source of Truth is this repository. The installed files are links to the
-tracked sources; runtime state, generated files, conversations, prompts, and
-compiled extensions stay outside version control.
+The Source of Truth owns the portable settings baseline. Zed may add object
+keys to its regular target without writing through to the Installed Repository.
+Dots preserves those keys, comments, trailing commas, and untouched formatting;
+owned scalars and arrays remain atomic ordered values. Runtime state, generated
+files, conversations, prompts, and compiled extensions stay outside version
+control.
 
 ## Prerequisites
 
@@ -63,16 +67,17 @@ The live `~/.config/zed/` directory was classified before adoption:
 
 ## Resolving existing local Zed files
 
-If `dots status --profile desktop` reports the Zed targets as `conflict`, the
-profile is only partially managed: local files already exist where `dots` wants
-to install repository-owned symlinks. That is a safety stop, not a failure.
-Choose the resolution explicitly:
+If `dots status --profile desktop` reports a Zed target as `conflict`, the
+profile is only partially managed. A compatible regular `settings.json` can be
+reconciled only when Installation Metadata proves its prior dots contribution;
+untrusted or incompatible content remains a safety stop. Choose the resolution
+explicitly:
 
 | Choice | Effect | Tradeoff |
 | --- | --- | --- |
 | **Skip / keep local** | Leaves the existing `~/.config/zed/...` file untouched for this run. | Safest when you are unsure, but Zed remains outside the completed managed state. |
-| **Replace** | Creates a Backup Set, then replaces the local target with the repository-owned symlink. | Fastest path to repository ownership; review backups before deleting anything permanently. |
-| **Adopt** | For supported regular-file conflicts only: copies the existing local target into `configs/zed/...`, then installs the managed symlink. | Preserves your current local content, but it becomes shared Source of Truth and must be reviewed for machine-specific or private data. |
+| **Replace** | Creates a Backup Set, then replaces the local target with the selected managed form. | Fastest path to repository ownership; review backups before deleting anything permanently. |
+| **Adopt** | For supported regular-file conflicts only: copies the existing local target into `configs/zed/...`; symlink entries then install their link. | Preserves your current local content, but it becomes shared Source of Truth and must be reviewed for machine-specific or private data. |
 | **Diff** | Shows target versus source before choosing skip, replace, or adopt. | Read-only preview; it does not resolve the conflict by itself. |
 
 Non-interactive `dots install --profile desktop --yes` and `dots update --yes`
@@ -177,6 +182,6 @@ go run ./cmd/dots status \
   --state-root "$sandbox_state"
 ```
 
-The expected result is that the three Zed files are installed/aligned inside
-`$sandbox_home` as symlinks to the repository sources. The maintainer's real home
-directory must not be touched.
+The expected result is that `settings.json` is an aligned regular co-owned file,
+while keymap and theme are symlinks to the repository sources. The maintainer's
+real home directory must not be touched.
