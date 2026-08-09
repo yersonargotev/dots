@@ -741,6 +741,46 @@ func TestBuildResolvesTarget(t *testing.T) {
 	}
 }
 
+func TestResolveEntryTargetConfinesAllowlistedXDGStateRoot(t *testing.T) {
+	home := t.TempDir()
+	validRoot := filepath.Join(home, "xdg-state")
+	entry := manifest.Entry{Target: "nvim/lazy-lock.json", TargetRoot: "xdg-state"}
+
+	got, err := plan.ResolveEntryTarget(entry, home, validRoot)
+	if err != nil {
+		t.Fatalf("ResolveEntryTarget() error = %v", err)
+	}
+	if want := filepath.Join(validRoot, "nvim/lazy-lock.json"); got != want {
+		t.Fatalf("ResolveEntryTarget() = %q, want %q", got, want)
+	}
+
+	for name, root := range map[string]string{
+		"relative root": "relative/state",
+		"outside home":  t.TempDir(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := plan.ResolveEntryTarget(entry, home, root); err == nil {
+				t.Fatal("ResolveEntryTarget() error = nil, want confinement error")
+			}
+		})
+	}
+
+	escapingEntry := entry
+	escapingEntry.Target = "../outside"
+	if _, err := plan.ResolveEntryTarget(escapingEntry, home, validRoot); err == nil {
+		t.Fatal("ResolveEntryTarget() accepted traversing target")
+	}
+
+	outside := t.TempDir()
+	symlinkRoot := filepath.Join(home, "linked-state")
+	if err := os.Symlink(outside, symlinkRoot); err != nil {
+		t.Fatalf("symlink XDG state root: %v", err)
+	}
+	if _, err := plan.ResolveEntryTarget(entry, home, symlinkRoot); err == nil {
+		t.Fatal("ResolveEntryTarget() accepted XDG state symlink escape")
+	}
+}
+
 func TestBuildRejectsAbsoluteTarget(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

@@ -282,6 +282,7 @@ func resolveDepsReadOnlySelection(m manifest.Manifest, home string, profiles, ex
 	}
 	return resolveReadOnlySelection(m, meta, profiles, extraTags, readOnlySelectionOptions{
 		Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
+		XDGStateHome: paths.XDGStateHome,
 	})
 }
 

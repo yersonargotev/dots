@@ -175,6 +175,10 @@ prose the text surface prints:
   `probe_detail`/`hint` (unstable human prose) are excluded. Agents key on the
   portable, structured fields (`source`, `present`, `warning`, and the
   `deps plan` install action).
+- Plan actions rooted in application XDG state add portable
+  `target_root: "xdg-state"`; the absolute `target` remains the resolved
+  sandbox path, while dots' Installation Metadata directory continues to be
+  reported separately as `state_root` where applicable.
 - `plan` action `status` values are portable intent, not prose. `create`,
   `update`, `migrate`, and `unchanged` are non-findings; `conflict` and `missing-source`
   are findings. `update` means dots has enough Installation Metadata and
@@ -193,6 +197,11 @@ prose the text surface prints:
   item's `conflict` state. To recover the intended selection, omit explicit
   selection flags so dots can reuse an available Installed Selection, or supply
   each intended exact tag with repeated `--tag <tag>`.
+- A seeded plan action or Status item may add reason
+  `seeded-local-evolution`. It means the regular runtime target differs from
+  its recorded seed baseline and is intentionally preserved. Its plan status is
+  `unchanged`, its Status state is `ok`, and it never produces exit code `2`.
+  Uninstall reports the corresponding action as `retain`.
 - Dependency provider availability is an internal planning check, not a JSON
   contract field. `deps plan` and dependency install previews expose the stable
   outcome (`status`, selected `provider`, executable action, `manual` guidance)

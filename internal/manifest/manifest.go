@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -34,11 +35,14 @@ type Entry struct {
 	Source          string            `yaml:"source"`
 	SourceOverrides map[string]string `yaml:"source_overrides,omitempty"`
 	Target          string            `yaml:"target"`
-	Strategy        string            `yaml:"strategy"`
-	Ownership       string            `yaml:"ownership,omitempty"`
-	Tags            []string          `yaml:"tags"`
-	OS              []string          `yaml:"os,omitempty"`
-	Dependencies    []Dependency      `yaml:"dependencies,omitempty"`
+	// TargetRoot selects an allowlisted non-home root for relative targets.
+	// Empty preserves the traditional ~/... target contract.
+	TargetRoot   string       `yaml:"target_root,omitempty"`
+	Strategy     string       `yaml:"strategy"`
+	Ownership    string       `yaml:"ownership,omitempty"`
+	Tags         []string     `yaml:"tags"`
+	OS           []string     `yaml:"os,omitempty"`
+	Dependencies []Dependency `yaml:"dependencies,omitempty"`
 }
 
 // DependencySet declares Dependencies selected directly by tags rather than by
@@ -450,8 +454,19 @@ func (m Manifest) Validate() error {
 		if !allowedStrategy(entry.Strategy) {
 			return fmt.Errorf("entries[%d].strategy must be one of copy, symlink, template", i)
 		}
+		if !allowedTargetRoot(entry.TargetRoot) {
+			return fmt.Errorf("entries[%d].target_root must be xdg-state when set", i)
+		}
+		if entry.TargetRoot == "xdg-state" {
+			if filepath.IsAbs(entry.Target) || !filepath.IsLocal(entry.Target) || entry.Target == "." {
+				return fmt.Errorf("entries[%d].target must be a confined relative path for target_root xdg-state", i)
+			}
+			if entry.Ownership != "seeded" {
+				return fmt.Errorf("entries[%d].target_root xdg-state requires seeded ownership", i)
+			}
+		}
 		if !allowedOwnership(entry.Ownership) {
-			return fmt.Errorf("entries[%d].ownership must be one of json-subset, jsonc-subset, toml-subset", i)
+			return fmt.Errorf("entries[%d].ownership must be one of json-subset, jsonc-subset, toml-subset, seeded", i)
 		}
 		if entry.Ownership != "" && entry.Strategy != "copy" {
 			return fmt.Errorf("entries[%d].ownership %s requires strategy copy", i, entry.Ownership)
@@ -1000,11 +1015,15 @@ func allowedStrategy(strategy string) bool {
 
 func allowedOwnership(ownership string) bool {
 	switch ownership {
-	case "", "json-subset", "jsonc-subset", "toml-subset":
+	case "", "json-subset", "jsonc-subset", "toml-subset", "seeded":
 		return true
 	default:
 		return false
 	}
+}
+
+func allowedTargetRoot(root string) bool {
+	return root == "" || root == "xdg-state"
 }
 
 func allowedOS(osName string) bool {

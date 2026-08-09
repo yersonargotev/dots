@@ -29,6 +29,9 @@ const (
 	// symlink that is missing or points elsewhere, or a path whose type changed),
 	// so removing it could destroy something dots does not own.
 	UninstallNotOwned UninstallStatus = "not-owned"
+	// UninstallRetain removes only dots' ownership record while preserving
+	// application-owned Seeded Runtime State at its native path.
+	UninstallRetain UninstallStatus = "retain"
 )
 
 // UninstallAction is a single planned removal for a recorded Managed Entry.
@@ -113,6 +116,9 @@ func uninstallStatus(rec state.Record, sourceRoot, home string) (UninstallStatus
 	}
 	if err := ValidateTargetParentInsideHome(rec.Target, home); err != nil {
 		return UninstallNotOwned, nil
+	}
+	if rec.Ownership == "seeded" {
+		return UninstallRetain, nil
 	}
 
 	info, err := os.Lstat(rec.Target)

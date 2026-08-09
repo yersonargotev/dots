@@ -468,9 +468,19 @@ entries:
           checksums:
             linux_amd64: 726f04c8f576a7fd18b7634f1bbf2f915c43494c1c0f013baa3287edb0d5a2a3
             linux_arm64: 422eb73e11c854fddd99f5ca8461c2f1d6e6dce0a2a8c3d5daade5ffcb6564aa
-  - source: configs/nvim
-    target: ~/.config/nvim
-    strategy: symlink
+  - source: configs/nvim/lazy-lock.json
+    target: nvim/lazy-lock.json
+    target_root: xdg-state
+    strategy: copy
+    ownership: seeded
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+  - source: configs/nvim/loader.lua
+    target: ~/.config/nvim/init.lua
+    strategy: copy
     tags:
       - core
     os:
@@ -489,6 +499,14 @@ entries:
           checksums:
             linux_amd64: c441b547142860bf01bcce39e36cbed185c41112813e15443b16e5237750724d
             linux_arm64: e055af73fa9c72b37456da8d204fa5c09850bc07e80e9176fe3b87d4afb7a3fc
+  - source: configs/nvim
+    target: ~/.config/dots/nvim
+    strategy: symlink
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
   - source: configs/zed/settings.json
     target: ~/.config/zed/settings.json
     strategy: copy

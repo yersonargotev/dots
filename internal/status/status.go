@@ -14,6 +14,7 @@ import (
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/seededstate"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -75,13 +76,14 @@ func (r Report) HasFindings() bool {
 
 // Options carries the resolved inputs needed to evaluate status.
 type Options struct {
-	Profile    string
-	Profiles   []string
-	ExtraTags  []string
-	Selection  *manifest.Selection
-	OS         string
-	SourceRoot string
-	Home       string
+	Profile      string
+	Profiles     []string
+	ExtraTags    []string
+	Selection    *manifest.Selection
+	OS           string
+	SourceRoot   string
+	Home         string
+	XDGStateHome string
 }
 
 // Build evaluates the Dotfiles Status for the selected Profile. It does not
@@ -116,7 +118,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			continue
 		}
 
-		target, err := plan.ResolveTarget(entry.Target, opts.Home)
+		target, err := plan.ResolveEntryTarget(entry, opts.Home, opts.XDGStateHome)
 		if err != nil {
 			return Report{}, err
 		}
@@ -131,6 +133,15 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			return Report{}, err
 		}
 		evaluated.State = st
+		if st == StateOK && entry.Ownership == "seeded" {
+			local, localErr := seededLocalEvolution(entry, target, source, opts.SourceRoot, meta)
+			if localErr != nil {
+				return Report{}, localErr
+			}
+			if local {
+				evaluated.Reason = plan.ReasonSeededLocalEvolution
+			}
+		}
 		if st == StateConflict {
 			matchingTags, err := plan.MatchingUnselectedSourceOverrideTags(entry, tags, target, opts.SourceRoot)
 			if err != nil {
@@ -155,7 +166,7 @@ func selectedJSONContributions(m manifest.Manifest, tags []string, opts Options)
 			continue
 		}
 		source := manifest.EntrySource(entry, tags)
-		target, err := plan.ResolveTarget(entry.Target, opts.Home)
+		target, err := plan.ResolveEntryTarget(entry, opts.Home, opts.XDGStateHome)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -217,6 +228,23 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		return "", err
 	}
 	if aligned {
+		return StateOK, nil
+	}
+	if entry.Ownership == "seeded" {
+		info, err := os.Lstat(target)
+		if err != nil {
+			return "", fmt.Errorf("stat seeded target %s: %w", target, err)
+		}
+		rec, recorded := meta.FindByTarget(target)
+		if !info.Mode().IsRegular() || !recorded || rec.Strategy != entry.Strategy || rec.Source != entry.Source || rec.Ownership != "seeded" {
+			if recorded && rec.Strategy == entry.Strategy {
+				return StateDrifted, nil
+			}
+			return StateConflict, nil
+		}
+		// Any trusted regular-file difference is either an advanceable old
+		// baseline or expected local evolution. Neither is Drift in status;
+		// install performs the conditional advancement.
 		return StateOK, nil
 	}
 	if entry.Ownership == "json-subset" && len(currentJSON) > 0 {
@@ -350,6 +378,26 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		return StateDrifted, nil
 	}
 	return StateConflict, nil
+}
+
+func seededLocalEvolution(entry manifest.Entry, target, source, sourceRoot string, meta state.Metadata) (bool, error) {
+	rec, ok := meta.FindByTarget(target)
+	if !ok || rec.Strategy != entry.Strategy || rec.Source != source || rec.Ownership != "seeded" {
+		return false, nil
+	}
+	sourceAbs, err := plan.ResolveSource(source, sourceRoot)
+	if err != nil {
+		return false, err
+	}
+	live, err := os.ReadFile(target)
+	if err != nil {
+		return false, fmt.Errorf("read seeded target %s: %w", target, err)
+	}
+	current, err := os.ReadFile(sourceAbs)
+	if err != nil {
+		return false, fmt.Errorf("read seeded source %s: %w", sourceAbs, err)
+	}
+	return seededstate.Reconcile(live, rec.SeededBaseline, current).Classification == seededstate.LocalEvolution, nil
 }
 
 func trustedJSONRecord(meta state.Metadata, target, strategy string, currentSources []string) bool {

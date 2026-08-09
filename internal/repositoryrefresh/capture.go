@@ -3,9 +3,11 @@
 package repositoryrefresh
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -17,7 +19,7 @@ import (
 // Installation Metadata provenance and the old Install Manifest. Missing or
 // stale evidence is deliberately omitted so the later Install Plan reports a
 // Conflict instead of guessing ownership.
-func CaptureLegacyTargets(oldManifest manifest.Manifest, meta state.Metadata, sourceRoot, home, oldRevision string) (map[string]plan.LegacyMigration, error) {
+func CaptureLegacyTargets(oldManifest, newManifest manifest.Manifest, meta state.Metadata, sourceRoot, home, xdgStateHome, oldRevision string) (map[string]plan.LegacyMigration, error) {
 	captures := map[string]plan.LegacyMigration{}
 	if !provenanceMatches(meta.Provenance, sourceRoot, oldRevision) {
 		return captures, nil
@@ -45,6 +47,16 @@ func CaptureLegacyTargets(oldManifest manifest.Manifest, meta state.Metadata, so
 		if err != nil || filepath.Clean(destination) != filepath.Clean(source) {
 			continue
 		}
+		sourceInfo, err := os.Stat(source)
+		if err != nil {
+			continue
+		}
+		if sourceInfo.IsDir() {
+			if err := captureSeededChildren(captures, newManifest, rec, target, source, destination, sourceRoot, home, xdgStateHome, oldRevision); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		content, err := os.ReadFile(source)
 		if err != nil {
 			continue
@@ -64,6 +76,51 @@ func CaptureLegacyTargets(oldManifest manifest.Manifest, meta state.Metadata, so
 		}
 	}
 	return captures, nil
+}
+
+func captureSeededChildren(captures map[string]plan.LegacyMigration, newManifest manifest.Manifest, rec state.Record, legacyTarget, legacySource, destination, sourceRoot, home, xdgStateHome, oldRevision string) error {
+	legacyPrefix := strings.TrimSuffix(filepath.ToSlash(rec.Source), "/") + "/"
+	for _, entry := range newManifest.Entries {
+		if entry.Strategy != "copy" || entry.Ownership != "seeded" || !strings.HasPrefix(filepath.ToSlash(entry.Source), legacyPrefix) {
+			continue
+		}
+		rel := strings.TrimPrefix(filepath.ToSlash(entry.Source), legacyPrefix)
+		if rel == "" || !filepath.IsLocal(filepath.FromSlash(rel)) {
+			continue
+		}
+		livePath := filepath.Join(legacySource, filepath.FromSlash(rel))
+		content, err := os.ReadFile(livePath)
+		if err != nil {
+			continue
+		}
+		previous, err := gitrepo.ReadFileAtRevision(sourceRoot, oldRevision, entry.Source)
+		if err != nil {
+			continue
+		}
+		currentDestination, err := os.Readlink(legacyTarget)
+		if err != nil || filepath.Clean(currentDestination) != filepath.Clean(destination) {
+			continue
+		}
+		currentContent, err := os.ReadFile(livePath)
+		if err != nil || !bytes.Equal(currentContent, content) {
+			continue
+		}
+		resolvedTarget, err := plan.ResolveEntryTarget(entry, home, xdgStateHome)
+		if err != nil {
+			return err
+		}
+		if _, exists := captures[resolvedTarget]; exists {
+			continue
+		}
+		captures[resolvedTarget] = plan.LegacyMigration{
+			LinkDestination:       destination,
+			LegacyTarget:          legacyTarget,
+			LegacyContentTarget:   filepath.Join(legacyTarget, filepath.FromSlash(rel)),
+			CapturedContent:       append([]byte(nil), content...),
+			PreviousSourceContent: append([]byte(nil), previous...),
+		}
+	}
+	return nil
 }
 
 func provenanceMatches(provenance state.Provenance, sourceRoot, revision string) bool {

@@ -105,6 +105,9 @@ func newUninstallCommand() *cobra.Command {
 			if len(res.Updated) > 0 {
 				fmt.Fprintf(out, "\nRemoved dots-owned content from %s.\n", pluralizeTargets(len(res.Updated)))
 			}
+			if len(res.Retained) > 0 {
+				fmt.Fprintf(out, "\nRetained Seeded Runtime State at %s.\n", pluralizeTargets(len(res.Retained)))
+			}
 			if restoreBackups && len(res.RestoredSets) > 0 {
 				fmt.Fprintf(out, "Restored %s from preserved Backup Sets.\n", pluralizeBackupSets(len(res.RestoredSets)))
 			}
@@ -129,6 +132,8 @@ func willRemove(p plan.UninstallPlan, force bool) bool {
 	for _, action := range p.Actions {
 		switch action.Status {
 		case plan.UninstallRemove:
+			return true
+		case plan.UninstallRetain:
 			return true
 		case plan.UninstallModified:
 			if force && action.ForceRemovable {

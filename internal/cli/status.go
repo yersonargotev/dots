@@ -54,18 +54,20 @@ func newStatusCommand() *cobra.Command {
 
 			effective, err := resolveReadOnlySelection(*m, meta, profiles, extraTags, readOnlySelectionOptions{
 				Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
+				XDGStateHome: paths.XDGStateHome,
 			})
 			if err != nil {
 				return err
 			}
 
 			report, err := status.Build(*m, meta, status.Options{
-				Profiles:   effective.Profiles,
-				ExtraTags:  effective.ExtraTags,
-				Selection:  &effective.Selection,
-				OS:         runtime.GOOS,
-				SourceRoot: paths.SourceRoot,
-				Home:       paths.Home,
+				Profiles:     effective.Profiles,
+				ExtraTags:    effective.ExtraTags,
+				Selection:    &effective.Selection,
+				OS:           runtime.GOOS,
+				SourceRoot:   paths.SourceRoot,
+				Home:         paths.Home,
+				XDGStateHome: paths.XDGStateHome,
 			})
 			if err != nil {
 				return err

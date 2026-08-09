@@ -16,10 +16,11 @@ import (
 
 func resolveLegacyUpdateSelection(cmd *cobra.Command, m manifest.Manifest, meta state.Metadata, paths resolvedPaths, opts updateOptions) (selection.Effective, error) {
 	analysis, err := selectionmigration.Analyze(m, meta, selectionmigration.Options{
-		OS:         runtime.GOOS,
-		Home:       paths.Home,
-		SourceRoot: paths.SourceRoot,
-		StatePath:  state.Path(paths.StateRoot),
+		OS:           runtime.GOOS,
+		Home:         paths.Home,
+		SourceRoot:   paths.SourceRoot,
+		StatePath:    state.Path(paths.StateRoot),
+		XDGStateHome: paths.XDGStateHome,
 	})
 	if err != nil {
 		return selection.Effective{}, err

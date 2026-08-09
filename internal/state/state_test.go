@@ -133,6 +133,30 @@ func TestSaveThenLoadRoundTripsOwnedJSONContributionV4(t *testing.T) {
 	}
 }
 
+func TestSaveThenLoadRoundTripsOpaqueSeededBaselineV5(t *testing.T) {
+	path := state.Path(t.TempDir())
+	want := state.Metadata{
+		Version: state.CurrentVersion,
+		Entries: []state.Record{{
+			Target:         "/home/user/.local/state/app/runtime.lock",
+			Source:         "configs/app/runtime.lock",
+			Strategy:       "copy",
+			Ownership:      "seeded",
+			SeededBaseline: []byte{0xff, 0x00, 'a', '\n'},
+		}},
+	}
+	if err := state.Save(path, want); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, err := state.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Load() metadata = %+v, want %+v", got, want)
+	}
+}
+
 func TestLoadLegacyRecordDoesNotGainPartialOwnershipEvidence(t *testing.T) {
 	path := state.Path(t.TempDir())
 	data := `{"version":3,"entries":[{"target":"/home/user/.config/shared.json","source":"configs/shared.json","strategy":"copy","hash":"abc","installedAt":"now"}]}`

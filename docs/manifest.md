@@ -127,17 +127,20 @@ Co-owned files are still documented in [`docs/adaptive-theme-audit.md`](adaptive
 when no safe dots-owned source can be selected.
 
 
-A Managed Entry declares one repository source and one target under `$HOME`.
-Targets must be `~` or `~/...`; `dots` rejects targets that escape the selected
-home directory.
+A Managed Entry declares one repository source and one confined target. Targets
+use `~` or `~/...` by default. The allowlisted `xdg-state` target root instead
+resolves a relative target beneath absolute `$XDG_STATE_HOME`, defaulting to
+`~/.local/state`; it remains confined to the selected home and is distinct from
+dots' own `--state-root`.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
 | `source` | Yes | Repository-relative path to Managed Configuration. |
 | `source_overrides` | No | Map of exact selected tag to alternate repository-relative source for the same target. The base `source` is used when no key matches; overrides do not alter entry tag selection or OS applicability. |
-| `target` | Yes | Home-relative target: `~` or `~/...`. |
+| `target` | Yes | Home-relative `~` or `~/...`; with `target_root: xdg-state`, a confined relative path. |
+| `target_root` | No | `xdg-state`. It requires `ownership: seeded`; empty keeps home-target resolution. |
 | `strategy` | Yes | `symlink`, `copy`, or `template` in the manifest schema. Current install execution supports `symlink` and `copy`. |
-| `ownership` | No | Empty, `json-subset`, `jsonc-subset`, or `toml-subset`. Subset ownership requires `strategy: copy`. |
+| `ownership` | No | Empty, `json-subset`, `jsonc-subset`, `toml-subset`, or `seeded`. Explicit ownership requires `strategy: copy`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `dependencies` | No | Entry-level Dependencies. |
@@ -156,6 +159,13 @@ ownership model, but scalars and arrays are atomic ordered values. Compatible
 updates preserve target-only object keys plus untouched comments, trailing
 commas, ordering, and formatting. A changed owned scalar or array is Drift for
 a recorded target and a Conflict without trusted Installation Metadata.
+
+For `seeded` ownership, dots stores the exact opaque baseline in Installation
+Metadata. Missing state is seeded; live state still equal to the prior baseline
+advances to the current baseline after a Backup Set; and locally evolved state
+is preserved as aligned information with reason `seeded-local-evolution`.
+Uninstall retains the physical runtime state and removes only its ownership
+record.
 
 Current Managed Entries:
 
@@ -181,7 +191,9 @@ Current Managed Entries:
 | `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
 | `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
 | `configs/bat/config` | `~/.config/bat/config` | `symlink` | `core` | `darwin`, `linux` | `bat` |
-| `configs/nvim` | `~/.config/nvim` | `symlink` | `core` | `darwin`, `linux` | `neovim` |
+| `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `core` | `darwin`, `linux` | None |
+| `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `core` | `darwin`, `linux` | `neovim` |
+| `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `core` | `darwin`, `linux` | None |
 | `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |

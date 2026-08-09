@@ -100,12 +100,20 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
 
 	now := time.Now().UTC().Format(time.RFC3339)
+	legacyTargets := map[string]struct{}{}
 	for i, action := range p.Actions {
 		if !recordsMetadata(action, conflictDecision(action, opts)) {
 			continue
 		}
+		if action.Ownership == "seeded" && action.Reason == plan.ReasonSeededLocalEvolution {
+			// Preserve the baseline that originally seeded locally evolved state.
+			// Replacing it with the new Source of Truth baseline would destroy the
+			// evidence needed to recognize a later reset and advance safely.
+			continue
+		}
 		hash := ""
 		var ownedContent []byte
+		var seededBaseline []byte
 		recordedOwnership := action.Ownership
 		if recordedOwnership == "" {
 			recordedOwnership = "whole"
@@ -136,21 +144,37 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 					if err != nil {
 						return fmt.Errorf("canonicalize owned JSONC contribution %s: %w", resolvedSources[i][0], err)
 					}
+				} else if action.Ownership == "seeded" {
+					if action.Migration != nil && action.Migration.RecordedBaseline != nil {
+						seededBaseline = append([]byte(nil), action.Migration.RecordedBaseline...)
+					} else {
+						seededBaseline, err = os.ReadFile(resolvedSources[i][0])
+						if err != nil {
+							return fmt.Errorf("read seeded baseline %s: %w", resolvedSources[i][0], err)
+						}
+					}
 				}
 			}
 		}
 		upsertRecord(&meta, state.Record{
-			Target:       action.Target,
-			Source:       action.Source,
-			Sources:      append([]string(nil), action.Sources...),
-			Strategy:     action.Strategy,
-			Ownership:    recordedOwnership,
-			OwnedContent: ownedContent,
-			Hash:         hash,
-			InstalledAt:  now,
-			Profiles:     append([]string(nil), p.Profiles...),
-			Tags:         append([]string(nil), p.Tags...),
+			Target:         action.Target,
+			Source:         action.Source,
+			Sources:        append([]string(nil), action.Sources...),
+			Strategy:       action.Strategy,
+			Ownership:      recordedOwnership,
+			OwnedContent:   ownedContent,
+			SeededBaseline: seededBaseline,
+			Hash:           hash,
+			InstalledAt:    now,
+			Profiles:       append([]string(nil), p.Profiles...),
+			Tags:           append([]string(nil), p.Tags...),
 		})
+		if action.Migration != nil && action.Migration.LegacyTarget != "" {
+			legacyTargets[action.Migration.LegacyTarget] = struct{}{}
+		}
+	}
+	for target := range legacyTargets {
+		meta = meta.Remove(target)
 	}
 
 	return state.Save(path, meta)
@@ -186,6 +210,7 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 	}
 
 	seenTargets := map[string]struct{}{}
+	validatedLegacyRemovals := map[string]struct{}{}
 	resolvedSources := make([][]string, len(p.Actions))
 	for i, action := range p.Actions {
 		if err := plan.ValidateResolvedTarget(action.Target, home); err != nil {
@@ -239,7 +264,17 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			if !supportedStrategy(action.Strategy) {
 				return nil, fmt.Errorf("install strategy %q is not supported for %s", action.Strategy, action.Target)
 			}
-			if err := validateCreate(action, source, sourceRoot, home); err != nil {
+			if action.LegacyParent != "" {
+				if _, ok := validatedLegacyRemovals[action.LegacyParent]; !ok {
+					return nil, fmt.Errorf("create target %s requires an earlier validated migration of %s", action.Target, action.LegacyParent)
+				}
+				if !plan.InsideRoot(action.Target, action.LegacyParent) {
+					return nil, fmt.Errorf("unsafe create target %s outside legacy parent %s", action.Target, action.LegacyParent)
+				}
+				if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
+					return nil, err
+				}
+			} else if err := validateCreate(action, source, sourceRoot, home); err != nil {
 				return nil, err
 			}
 		case plan.StatusUnchanged:
@@ -248,8 +283,8 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			if opts.StateRoot == "" {
 				return nil, fmt.Errorf("update for %s requires state root for Backup Set metadata", action.Target)
 			}
-			if action.Strategy != "copy" || (action.Ownership != "json-subset" && action.Ownership != "jsonc-subset" && action.Ownership != "toml-subset") {
-				return nil, fmt.Errorf("update for %s requires copy strategy with subset ownership", action.Target)
+			if action.Strategy != "copy" || (action.Ownership != "json-subset" && action.Ownership != "jsonc-subset" && action.Ownership != "toml-subset" && action.Ownership != "seeded") {
+				return nil, fmt.Errorf("update for %s requires copy strategy with reconcilable ownership", action.Target)
 			}
 			if err := validateBackupStateRoot(opts.StateRoot, home); err != nil {
 				return nil, err
@@ -279,11 +314,25 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			if err := validateTargetParentInsideHome(action.Target, home); err != nil {
 				return nil, err
 			}
+			if action.Migration.LegacyTarget != "" {
+				if err := plan.ValidateResolvedTarget(action.Migration.LegacyTarget, home); err != nil {
+					return nil, err
+				}
+				if err := plan.ValidateTargetParentInsideHome(action.Migration.LegacyTarget, home); err != nil {
+					return nil, err
+				}
+				if !plan.InsideRoot(action.Migration.LegacyContentTarget, action.Migration.LegacyTarget) {
+					return nil, fmt.Errorf("unsafe legacy content target %s", action.Migration.LegacyContentTarget)
+				}
+			}
 			if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
 				return nil, err
 			}
 			if err := validateMigrationTarget(action); err != nil {
 				return nil, err
+			}
+			if action.Migration.LegacyTarget != "" {
+				validatedLegacyRemovals[action.Migration.LegacyTarget] = struct{}{}
 			}
 		case plan.StatusConflict:
 			switch conflictDecision(action, opts) {
@@ -551,6 +600,25 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 		if err := configsubset.MergeTOMLFile(action.Target, source); err != nil {
 			return fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
 		}
+	case "seeded":
+		live, err := os.ReadFile(action.Target)
+		if err != nil {
+			return fmt.Errorf("read seeded target %s: %w", action.Target, err)
+		}
+		if !bytes.Equal(live, action.PreviousContent) {
+			return fmt.Errorf("install plan is stale: seeded target %s evolved before baseline advancement", action.Target)
+		}
+		current, err := os.ReadFile(source)
+		if err != nil {
+			return fmt.Errorf("read seeded baseline %s: %w", source, err)
+		}
+		info, err := os.Stat(action.Target)
+		if err != nil {
+			return fmt.Errorf("stat seeded target %s: %w", action.Target, err)
+		}
+		if err := os.WriteFile(action.Target, current, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("advance seeded target %s: %w", action.Target, err)
+		}
 	default:
 		return fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)
 	}
@@ -558,26 +626,32 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 }
 
 func validateMigrationTarget(action plan.Action) error {
-	info, err := os.Lstat(action.Target)
+	target := action.Target
+	contentTarget := action.Target
+	if action.Migration.LegacyTarget != "" {
+		target = action.Migration.LegacyTarget
+		contentTarget = action.Migration.LegacyContentTarget
+	}
+	info, err := os.Lstat(target)
 	if err != nil {
-		return fmt.Errorf("install plan is stale: migration target %s changed: %w", action.Target, err)
+		return fmt.Errorf("install plan is stale: migration target %s changed: %w", target, err)
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
-		return fmt.Errorf("install plan is stale: migration target %s is no longer a symlink", action.Target)
+		return fmt.Errorf("install plan is stale: migration target %s is no longer a symlink", target)
 	}
-	destination, err := os.Readlink(action.Target)
+	destination, err := os.Readlink(target)
 	if err != nil {
-		return fmt.Errorf("read migration target %s: %w", action.Target, err)
+		return fmt.Errorf("read migration target %s: %w", target, err)
 	}
 	if filepath.Clean(destination) != filepath.Clean(action.Migration.LinkDestination) {
-		return fmt.Errorf("install plan is stale: migration target %s changed destination", action.Target)
+		return fmt.Errorf("install plan is stale: migration target %s changed destination", target)
 	}
-	content, err := os.ReadFile(action.Target)
+	content, err := os.ReadFile(contentTarget)
 	if err != nil {
-		return fmt.Errorf("install plan is stale: read migration target %s: %w", action.Target, err)
+		return fmt.Errorf("install plan is stale: read migration target %s: %w", contentTarget, err)
 	}
 	if !bytes.Equal(content, action.Migration.ExpectedLinkContent) {
-		return fmt.Errorf("install plan is stale: migration target %s content changed", action.Target)
+		return fmt.Errorf("install plan is stale: migration target %s content changed", contentTarget)
 	}
 	return nil
 }
@@ -590,13 +664,22 @@ func applyMigration(action plan.Action, source string, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("stat migration source %s: %w", source, err)
 	}
-	if _, err := backups.CreateContentSet(opts.StateRoot, action.Target, action.Migration.CapturedContent, info.Mode(), backups.CreateOptions{
+	backupTarget := action.Target
+	removeTarget := action.Target
+	if action.Migration.LegacyTarget != "" {
+		backupTarget = action.Migration.LegacyContentTarget
+		removeTarget = action.Migration.LegacyTarget
+	}
+	if _, err := backups.CreateContentSet(opts.StateRoot, backupTarget, action.Migration.CapturedContent, info.Mode(), backups.CreateOptions{
 		Reason: "pre-install legacy target migration", Machine: backups.MachineName(), Repo: opts.SourceRoot,
 	}); err != nil {
 		return err
 	}
-	if err := os.Remove(action.Target); err != nil {
-		return fmt.Errorf("remove legacy symlink %s: %w", action.Target, err)
+	if err := os.Remove(removeTarget); err != nil {
+		return fmt.Errorf("remove legacy symlink %s: %w", removeTarget, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(action.Target), 0o755); err != nil {
+		return fmt.Errorf("create migrated target parent %s: %w", filepath.Dir(action.Target), err)
 	}
 	if err := writeNewFileFromSourceMode(source, action.Target, action.Migration.FinalContent); err != nil {
 		return fmt.Errorf("materialize migrated target %s: %w", action.Target, err)

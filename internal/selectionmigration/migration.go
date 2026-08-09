@@ -56,10 +56,11 @@ type Analysis struct {
 }
 
 type Options struct {
-	OS         string
-	Home       string
-	SourceRoot string
-	StatePath  string
+	OS           string
+	Home         string
+	SourceRoot   string
+	StatePath    string
+	XDGStateHome string
 }
 
 func (c Candidate) Unambiguous() bool {
@@ -180,7 +181,7 @@ func Analyze(m manifest.Manifest, meta state.Metadata, opts Options) (Analysis, 
 	} else {
 		candidate.EffectiveTags = append([]string{}, selection.Tags...)
 		statusReport, statusErr := status.Build(m, meta, status.Options{
-			Selection: &selection, OS: opts.OS, Home: opts.Home, SourceRoot: opts.SourceRoot,
+			Selection: &selection, OS: opts.OS, Home: opts.Home, SourceRoot: opts.SourceRoot, XDGStateHome: opts.XDGStateHome,
 		})
 		if statusErr != nil {
 			if errors.Is(statusErr, os.ErrNotExist) {

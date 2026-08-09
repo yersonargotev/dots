@@ -38,6 +38,9 @@ type Result struct {
 	// Updated lists co-owned targets that remained after dots removed or pruned
 	// its recorded contribution.
 	Updated []string `json:"updated,omitempty"`
+	// Retained lists Seeded Runtime State left untouched while its dots
+	// ownership metadata was removed.
+	Retained []string `json:"retained,omitempty"`
 	// RestoredSets lists the IDs of Backup Sets restored when RestoreBackups is
 	// set, each restored at most once even if it covers several removed targets.
 	RestoredSets []string `json:"restored_sets"`
@@ -75,6 +78,10 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 		rec, ok := meta.FindByTarget(action.Target)
 		if !ok {
 			// The plan references a target dots no longer records; never act on it.
+			continue
+		}
+		if rec.Ownership == "seeded" && action.Status == plan.UninstallRetain {
+			result.Retained = append(result.Retained, action.Target)
 			continue
 		}
 		if (rec.Ownership == "json-subset" || rec.Ownership == "jsonc-subset") && len(rec.OwnedContent) > 0 {
@@ -116,7 +123,7 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 		}
 	}
 
-	prunedTargets := append(append([]string(nil), result.Removed...), result.Updated...)
+	prunedTargets := append(append(append([]string(nil), result.Removed...), result.Updated...), result.Retained...)
 	if err := pruneMetadata(opts.StateRoot, meta, prunedTargets); err != nil {
 		return result, err
 	}

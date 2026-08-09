@@ -56,7 +56,15 @@ func prepareInstallRepository(cmd *cobra.Command, paths resolvedPaths, dryRun bo
 	if err != nil {
 		return result, err
 	}
-	captures, err := repositoryrefresh.CaptureLegacyTargets(*oldManifest, meta, paths.SourceRoot, paths.Home, preview.OldRev)
+	incomingManifestData, err := gitrepo.ReadFileAtRevision(paths.SourceRoot, preview.NewRev, "dots.yaml")
+	if err != nil {
+		return result, err
+	}
+	incomingManifest, err := manifest.Parse(incomingManifestData)
+	if err != nil {
+		return result, err
+	}
+	captures, err := repositoryrefresh.CaptureLegacyTargets(*oldManifest, *incomingManifest, meta, paths.SourceRoot, paths.Home, paths.XDGStateHome, preview.OldRev)
 	if err != nil {
 		return result, err
 	}
