@@ -43,12 +43,8 @@ retired Engram instructions
 retired global rules
 <!-- /dots:rules -->
 
-<!-- dots:delegation -->
-independent delegation
-<!-- /dots:delegation -->
-
-## Personality
-Unmarked user-owned personality.
+## User instructions
+Keep this unmarked user-owned content.
 `
 	if err := os.WriteFile(instructions, []byte(legacy), 0o600); err != nil {
 		t.Fatalf("write legacy instructions: %v", err)
@@ -108,7 +104,7 @@ Unmarked user-owned personality.
 			t.Errorf("retirement kept %q:\n%s", removed, gotInstructions)
 		}
 	}
-	for _, preserved := range []string{"user-owned before", "dots:delegation", "independent delegation", "Unmarked user-owned personality."} {
+	for _, preserved := range []string{"user-owned before", "## User instructions", "Keep this unmarked user-owned content."} {
 		if !strings.Contains(string(gotInstructions), preserved) {
 			t.Errorf("retirement removed %q:\n%s", preserved, gotInstructions)
 		}

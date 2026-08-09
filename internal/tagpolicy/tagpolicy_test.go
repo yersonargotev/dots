@@ -1,15 +1,11 @@
 package tagpolicy
 
-import (
-	"reflect"
-	"testing"
-)
+import "testing"
 
-func TestActionsUsesClosedPolicyAndRemovalPrecedence(t *testing.T) {
+func TestActionsUsesClosedPolicy(t *testing.T) {
 	got := Actions([]string{"agents", "codex-delegation", "without-codex-spark-delegation", "unrelated"})
-	want := []Action{ActionRetireGentleAIState, ActionRemoveCodexDelegation}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Actions() = %#v, want %#v", got, want)
+	if len(got) != 1 || got[0] != ActionRetireGentleAIState {
+		t.Fatalf("Actions() = %#v, want only %q", got, ActionRetireGentleAIState)
 	}
 }
 
@@ -33,19 +29,15 @@ func TestRegistryValuesAreAllowlisted(t *testing.T) {
 }
 
 func TestExpectedKindMatchesEachBehaviorTag(t *testing.T) {
-	for tag, want := range map[string]string{
-		"agents":                         "surface",
-		"codex-delegation":               "surface",
-		"without-codex-delegation":       "cleanup",
-		"codex-spark-delegation":         "compatibility",
-		"without-codex-spark-delegation": "compatibility",
-	} {
+	for tag, want := range map[string]string{"agents": "surface"} {
 		got, ok := ExpectedKind(tag)
 		if !ok || got != want {
 			t.Errorf("ExpectedKind(%q) = %q, %t; want %q, true", tag, got, ok, want)
 		}
 	}
-	if _, ok := ExpectedKind("unrelated"); ok {
-		t.Fatal("ExpectedKind(unrelated) reports a behavior policy")
+	for _, retired := range []string{"codex-delegation", "without-codex-delegation", "codex-spark-delegation", "without-codex-spark-delegation"} {
+		if _, ok := ExpectedKind(retired); ok {
+			t.Fatalf("ExpectedKind(%q) reports retired behavior", retired)
+		}
 	}
 }

@@ -1010,6 +1010,11 @@ func resolveSelection(m Manifest, profileNames []string, extraTags []string, all
 		}
 	}
 	for _, tag := range extraTags {
+		if m.Tags != nil {
+			if _, declared := m.Tags[tag]; !declared && !tagpolicy.IsBehaviorTag(tag) {
+				return Selection{}, fmt.Errorf("tag %q is not declared", tag)
+			}
+		}
 		addTag(tag)
 	}
 	return Selection{Profile: strings.Join(profiles, ","), Profiles: profiles, Tags: tags}, nil

@@ -63,15 +63,6 @@ tags:
     kind: surface
     status: legacy
     replaced_by: core
-  codex-delegation:
-    description: install Codex delegation guidance
-    kind: surface
-    status: current
-  codex-spark-delegation:
-    description: old Codex delegation selector
-    kind: compatibility
-    status: legacy
-    replaced_by: codex-delegation
   agents:
     description: retire Gentle AI state
     kind: surface
@@ -116,8 +107,8 @@ provisioners:
 		{"entry reference", strings.Replace(valid, "    tags: [core]\nprovisioners:", "    tags: [missing]\nprovisioners:", 1), `entries[0].tags[0] tag "missing" is not declared`},
 		{"override key", strings.Replace(valid, "source_overrides: {legacy-core:", "source_overrides: {missing:", 1), `entries[0].source_overrides[0] tag "missing" is not declared`},
 		{"provisioner reference", strings.Replace(valid, "    tags: [agents]\n    spec:", "    tags: [missing]\n    spec:", 1), `provisioners[0].tags[0] tag "missing" is not declared`},
-		{"invalid kind", strings.Replace(valid, "kind: compatibility", "kind: command", 1), `tags["codex-spark-delegation"].kind must be one of surface, cleanup, compatibility`},
-		{"behavior kind mismatch", strings.Replace(valid, "  codex-delegation:\n    description: install Codex delegation guidance\n    kind: surface", "  codex-delegation:\n    description: install Codex delegation guidance\n    kind: cleanup", 1), `tags["codex-delegation"].kind must be "surface"`},
+		{"invalid kind", strings.Replace(valid, "kind: surface", "kind: command", 1), `tags["core"].kind must be one of surface, cleanup, compatibility`},
+		{"behavior kind mismatch", strings.Replace(valid, "  agents:\n    description: retire Gentle AI state\n    kind: surface", "  agents:\n    description: retire Gentle AI state\n    kind: cleanup", 1), `tags["agents"].kind must be "surface"`},
 		{"unallowlisted behavior tag", strings.Replace(valid, "  legacy-core:\n    description: old baseline selector\n    kind: surface", "  legacy-core:\n    description: old baseline selector\n    kind: cleanup", 1), `tags["legacy-core"].kind "cleanup" requires a supported behavior tag`},
 		{"replacement source current", strings.Replace(valid, "status: legacy\n    replaced_by", "status: current\n    replaced_by", 1), `tags["legacy-core"].replaced_by requires status legacy`},
 		{"replacement target legacy", strings.Replace(valid, "status: current", "status: legacy", 1), `tags["legacy-core"].replaced_by "core" must reference a current tag`},
@@ -1143,7 +1134,7 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 	}
 }
 
-func TestRepositoryManifestScopesDelegationSkillProvisioners(t *testing.T) {
+func TestRepositoryManifestDoesNotIncludeRetiredDelegationSkillProvisioner(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -1152,45 +1143,10 @@ func TestRepositoryManifestScopesDelegationSkillProvisioners(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	selectProvisioners := func(opts provision.Options) []manifest.Provisioner {
-		t.Helper()
-		selected, selectErr := provision.Select(*got, opts)
-		if selectErr != nil {
-			t.Fatalf("provision.Select(%#v) error = %v", opts, selectErr)
+	for _, prov := range got.Provisioners {
+		if prov.Tool == "skills" && prov.Spec.Package == "yersonargotev/dots/skills/delegation" {
+			t.Fatal("repository manifest still includes the retired delegation skill provisioner")
 		}
-		return selected
-	}
-	delegationProvisioners := func(selected []manifest.Provisioner) []manifest.Provisioner {
-		t.Helper()
-		var delegation []manifest.Provisioner
-		for _, prov := range selected {
-			if prov.Tool == "skills" && prov.Spec.Package == "yersonargotev/dots/skills/delegation" {
-				delegation = append(delegation, prov)
-			}
-		}
-		return delegation
-	}
-
-	codexSelected := selectProvisioners(provision.Options{Profile: "codex-delegation", OS: "darwin"})
-	if len(codexSelected) != 1 {
-		t.Fatalf("codex-delegation selected %d total provisioners, want only its delegation provisioner", len(codexSelected))
-	}
-	codexOnly := delegationProvisioners(codexSelected)
-	if len(codexOnly) != 1 {
-		t.Fatalf("codex-delegation selected %d delegation provisioners, want 1", len(codexOnly))
-	}
-	if !sameStrings(codexOnly[0].Spec.Agents, []string{"codex"}) {
-		t.Errorf("codex-delegation agents = %#v, want [codex]", codexOnly[0].Spec.Agents)
-	}
-
-	agents := delegationProvisioners(selectProvisioners(provision.Options{Profile: "agents", OS: "darwin"}))
-	if len(agents) != 0 {
-		t.Fatalf("agents selected %d delegation provisioners, want none", len(agents))
-	}
-
-	combined := delegationProvisioners(selectProvisioners(provision.Options{Profiles: []string{"agents", "codex-delegation"}, OS: "darwin"}))
-	if len(combined) != 1 {
-		t.Fatalf("agents + codex-delegation selected %d delegation provisioners, want one Codex provisioner", len(combined))
 	}
 }
 
@@ -3766,6 +3722,16 @@ func TestResolveReadOnlySelectionAllowsTagsWithoutInferringDefault(t *testing.T)
 	}
 	if want := []string{"web"}; !reflect.DeepEqual(got.Tags, want) {
 		t.Fatalf("Tags = %#v, want %#v", got.Tags, want)
+	}
+}
+
+func TestResolveSelectionRejectsUndeclaredExtraTagWhenRegistryExists(t *testing.T) {
+	m := manifest.Manifest{
+		Tags:     map[string]manifest.Tag{"core": {Kind: "surface", Status: "current"}},
+		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
+	}
+	if _, err := manifest.ResolveSelection(m, []string{"core"}, []string{"retired"}); err == nil || !strings.Contains(err.Error(), `tag "retired" is not declared`) {
+		t.Fatalf("ResolveSelection() error = %v, want undeclared Tag rejection", err)
 	}
 }
 

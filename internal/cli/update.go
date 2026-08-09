@@ -319,9 +319,16 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		if _, err := runProvisionersWithOptions(cmd, *m, provisionOpts, paths.Home, paths.StateRoot, paths.SourceRoot); err != nil {
 			return updateReport{}, err
 		}
+		report.Retirement, err = retireHistoricalDelegation(meta, paths.Home)
+		if err != nil {
+			return updateReport{}, err
+		}
 		installedSelection := effective.InstalledSelection(state.CaptureProvenance(paths.SourceRoot, version.Value))
 		if err := recordInstalledSelection(state.Path(paths.StateRoot), installedSelection); err != nil {
 			return updateReport{}, err
+		}
+		if !wantsJSON(cmd) {
+			renderDelegationRetirement(out, report.Retirement)
 		}
 	}
 	if wantsJSON(cmd) && emit {

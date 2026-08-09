@@ -82,31 +82,6 @@ checkpoint with the PR link and exact merge action required. Resume in the same
 session after the user merges, or through the same issue invocation later, to
 verify `main` CI and clean up.
 
-## Delegation
-
-The main agent owns admission, requirements decisions, GitHub mutations,
-commits, integration, and final verification.
-
-For non-trivial work, delegate bounded exploration or implementation when the
-work has independent slices and non-overlapping file ownership. The main agent
-inspects, integrates, and verifies all delegated results. For a small change or
-one coherent module, work directly and record a concise skip reason in the
-Delivery Result.
-
-For non-trivial work, load the repository `delegation` skill when available and
-run its Delegation Preflight before implementation. Follow
-`docs/agents/delegation.md` for installed runtime artifacts and tool-level
-permission conflicts. If a stricter agent runtime still requires explicit
-permission despite this workflow's authorization, record
-`tool-level permission required` and continue directly rather than silently
-claiming delegation occurred.
-
-Subagents never change labels, comment on issues, create or update PRs, merge,
-or otherwise mutate external project state. Select their model or tier for the
-job according to repository guidance rather than encoding one provider-specific
-model in this workflow. Independent review remains mandatory whether or not
-implementation work was delegated.
-
 ## Admission
 
 Before creating a branch or changing code:
@@ -309,8 +284,7 @@ Update that block in place after every fix or push. It records:
 - acceptance-criterion coverage;
 - automated validation commands/results;
 - manual verification commands/results or not-applicable reason;
-- independent Spec and Standards review results; and
-- delegation slices/results or skip reason plus main-agent verification.
+- independent Spec and Standards review results.
 
 Do not edit a contributor-owned PR body to add this block. Recompute its local
 gates and use native checks/reviews as retained evidence.
@@ -402,8 +376,6 @@ For `complete` and `already-complete`, return a Delivery Result containing:
 - automated validation result;
 - manual verification result or not-applicable reason;
 - independent review result;
-- delegation result: slices used or skip reason, returned work accepted or
-  rejected, and main-agent verification;
 - post-merge `main` CI result;
 - remote/local cleanup result, including any intentionally pending local sync;
   and

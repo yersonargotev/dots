@@ -479,10 +479,6 @@ func behaviorDescription(action tagpolicy.Action) string {
 	switch action {
 	case tagpolicy.ActionRetireGentleAIState:
 		return "Retire dots-owned Gentle AI state."
-	case tagpolicy.ActionRemoveCodexDelegation:
-		return "Remove the dots-owned Codex delegation overlay and native agents."
-	case tagpolicy.ActionConvergeCodexDelegation:
-		return "Converge the dots-owned Codex delegation overlay and native agents."
 	default:
 		return "Allowlisted selection behavior."
 	}

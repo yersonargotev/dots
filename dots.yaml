@@ -12,10 +12,6 @@ tags:
     description: Native Agent CLI Baseline for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
     kind: surface
     status: current
-  codex-delegation:
-    description: Codex-only delegation skill, generic delegation overlay, and native explorer/worker agents.
-    kind: surface
-    status: current
   web:
     description: Optional frontend/browser workbench with web skills and Chrome DevTools integrations.
     kind: surface
@@ -32,20 +28,6 @@ tags:
     description: Opt-in CodeGraph provisioner and Codex SessionStart hook source override.
     kind: surface
     status: current
-  without-codex-delegation:
-    description: Remove the dots-owned generic delegation overlay and native Codex explorer/worker agents.
-    kind: cleanup
-    status: current
-  codex-spark-delegation:
-    description: Legacy Spark-specific delegation alias that converges the current generic delegation overlay and native agents.
-    kind: compatibility
-    status: legacy
-    replaced_by: codex-delegation
-  without-codex-spark-delegation:
-    description: Legacy Spark-specific cleanup alias for the supported delegation cleanup behavior.
-    kind: compatibility
-    status: legacy
-    replaced_by: without-codex-delegation
 profiles:
   core:
     description: Core dotfiles and general developer tooling without agent, web, or mobile provisioners.
@@ -68,11 +50,6 @@ profiles:
     status: current
     tags:
       - agents
-  codex-delegation:
-    description: Codex-only delegation capability without the broader Agent CLI Baseline.
-    status: current
-    tags:
-      - codex-delegation
   web:
     description: Optional frontend and browser workbench.
     status: current
@@ -900,20 +877,6 @@ provisioners:
           add the SDK's bin directory (for example ~/develop/flutter/bin) to
           PATH, verify with dart --version, then rerun dots deps check and dots
           install --profile mobile.
-  - tool: skills
-    tags:
-      - codex-delegation
-    spec:
-      package: yersonargotev/dots/skills/delegation
-      agents:
-        - codex
-      skills:
-        - delegation
-      global: true
-      copy: true
-    dependencies:
-      - name: npx
-        command: npx
   - tool: claude
     tags:
       - web

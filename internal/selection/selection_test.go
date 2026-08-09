@@ -345,28 +345,42 @@ func TestCompareEvolutionRejectsStaleExplicitExtraTag(t *testing.T) {
 	}
 }
 
-func TestCompareEvolutionPreservesSupportedSelectionModifiers(t *testing.T) {
-	m := manifest.Manifest{
-		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
-		Entries:  []manifest.Entry{{Target: "~/.core", Tags: []string{"core"}}},
+func TestRepositoryEvolutionReportsRemovedCodexDelegationProfileAndTag(t *testing.T) {
+	oldManifest := manifest.Manifest{
+		Tags: map[string]manifest.Tag{
+			"core":             {Kind: "surface", Status: "current"},
+			"codex-delegation": {Kind: "surface", Status: "current"},
+		},
+		Profiles: map[string]manifest.Profile{
+			"core":             {Tags: []string{"core"}},
+			"codex-delegation": {Tags: []string{"codex-delegation"}},
+		},
+		Provisioners: []manifest.Provisioner{{Tool: "skills", Tags: []string{"codex-delegation"}}},
 	}
-	for _, tag := range []string{
-		"codex-delegation",
-		"without-codex-delegation",
-		"codex-spark-delegation",
-		"without-codex-spark-delegation",
-	} {
-		t.Run(tag, func(t *testing.T) {
-			previous, err := selection.ResolveIntent(m, selection.Intent{
-				Source: selection.SourceExplicit, Profiles: []string{"core"}, ExtraTags: []string{tag},
-			})
-			if err != nil {
-				t.Fatalf("resolve previous: %v", err)
-			}
-			if _, err := selection.CompareEvolution(m, m, previous, "linux"); err != nil {
-				t.Fatalf("CompareEvolution() error = %v", err)
-			}
-		})
+	newManifest, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatalf("load current manifest: %v", err)
+	}
+
+	previous, err := selection.ResolveIntent(oldManifest, selection.Intent{
+		Source:    selection.SourceExplicit,
+		Profiles:  []string{"core", "codex-delegation"},
+		ExtraTags: []string{"codex-delegation"},
+	})
+	if err != nil {
+		t.Fatalf("resolve previous selection: %v", err)
+	}
+
+	_, err = selection.CompareEvolution(oldManifest, *newManifest, previous, "linux")
+	var evolutionErr *selection.EvolutionError
+	if !errors.As(err, &evolutionErr) {
+		t.Fatalf("CompareEvolution() error = %T %v, want *EvolutionError", err, err)
+	}
+	if want := []string{"codex-delegation"}; !reflect.DeepEqual(evolutionErr.SelectionDelta.MissingProfiles, want) {
+		t.Fatalf("missing Profiles = %#v, want %#v", evolutionErr.SelectionDelta.MissingProfiles, want)
+	}
+	if want := []string{"codex-delegation"}; !reflect.DeepEqual(evolutionErr.SelectionDelta.StaleExtraTags, want) {
+		t.Fatalf("stale extra Tags = %#v, want %#v", evolutionErr.SelectionDelta.StaleExtraTags, want)
 	}
 }
 
@@ -389,14 +403,11 @@ func TestCompareEvolutionUsesTagRegistryForStaleExtraTags(t *testing.T) {
 		t.Fatalf("CompareEvolution() error = %v, want declared legacy tag to remain selectable", err)
 	}
 
-	previous, err = selection.ResolveIntent(m, selection.Intent{
+	_, err = selection.ResolveIntent(m, selection.Intent{
 		Source: selection.SourceExplicit, Profiles: []string{"core"}, ExtraTags: []string{"unknown"},
 	})
-	if err != nil {
-		t.Fatalf("ResolveIntent() error = %v", err)
-	}
-	if _, err := selection.CompareEvolution(m, m, previous, "linux"); err == nil {
-		t.Fatal("CompareEvolution() error = nil, want undeclared registry tag rejection")
+	if err == nil || !strings.Contains(err.Error(), `tag "unknown" is not declared`) {
+		t.Fatalf("ResolveIntent() error = %v, want undeclared registry Tag rejection", err)
 	}
 }
 
