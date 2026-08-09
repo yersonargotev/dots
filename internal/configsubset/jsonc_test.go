@@ -22,6 +22,17 @@ func TestMergeJSONCPreservesCommentsAndAddsNestedOwnedKey(t *testing.T) {
 	}
 }
 
+func TestMergeJSONCDoesNotDuplicateCommentBeforeLastTargetMember(t *testing.T) {
+	target := []byte("{\n  // local rationale\n  \"local\": true,\n}\n")
+	got, err := MergeJSONC(target, []byte(`{"owned":true}`))
+	if err != nil {
+		t.Fatalf("MergeJSONC() error = %v", err)
+	}
+	if count := bytes.Count(got, []byte("// local rationale")); count != 1 {
+		t.Fatalf("MergeJSONC() comment count = %d, want 1:\n%s", count, got)
+	}
+}
+
 func TestAnalyzeJSONCUsesAtomicArraysAndScalars(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -115,6 +126,17 @@ func TestRemoveJSONCPreservesCommentOnlyExternalContent(t *testing.T) {
 	}
 	if !compatible || !changed || empty || !bytes.Contains(content, []byte("Added locally")) {
 		t.Fatalf("RemoveJSONC() = %s, changed=%t empty=%t compatible=%t; want preserved comment-only target", content, changed, empty, compatible)
+	}
+}
+
+func TestRemoveJSONCPreservesCommentNestedInsideRemovedOwnedObject(t *testing.T) {
+	target := []byte("{\n  \"owned\": { /* local note */ },\n}\n")
+	content, changed, empty, compatible, err := RemoveJSONC(target, []byte(`{"owned":{}}`))
+	if err != nil {
+		t.Fatalf("RemoveJSONC() error = %v", err)
+	}
+	if !compatible || !changed || empty || !bytes.Contains(content, []byte("local note")) || bytes.Contains(content, []byte(`"owned"`)) {
+		t.Fatalf("RemoveJSONC() = %s, changed=%t empty=%t compatible=%t; want lifted nested comment without owned key", content, changed, empty, compatible)
 	}
 }
 

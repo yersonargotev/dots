@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/tailscale/hujson"
 )
@@ -362,7 +361,10 @@ func applyJSONCDesired(value *hujson.Value, target, desired any) error {
 }
 
 func moveJSONCMemberExtra(object *hujson.Object, index int) {
-	extra := object.Members[index].Name.BeforeExtra
+	member := object.Members[index]
+	extra := append(hujson.Extra(nil), member.Name.BeforeExtra...)
+	extra = appendJSONCCommentExtra(extra, member.Name.AfterExtra)
+	extra = appendJSONCValueComments(extra, member.Value)
 	if len(extra) == 0 {
 		return
 	}
@@ -371,6 +373,32 @@ func moveJSONCMemberExtra(object *hujson.Object, index int) {
 		return
 	}
 	object.AfterExtra = append(extra, object.AfterExtra...)
+}
+
+func appendJSONCValueComments(extra hujson.Extra, value hujson.Value) hujson.Extra {
+	extra = appendJSONCCommentExtra(extra, value.BeforeExtra)
+	extra = appendJSONCCommentExtra(extra, value.AfterExtra)
+	switch typed := value.Value.(type) {
+	case *hujson.Object:
+		extra = appendJSONCCommentExtra(extra, typed.AfterExtra)
+		for _, member := range typed.Members {
+			extra = appendJSONCValueComments(extra, member.Name)
+			extra = appendJSONCValueComments(extra, member.Value)
+		}
+	case *hujson.Array:
+		extra = appendJSONCCommentExtra(extra, typed.AfterExtra)
+		for _, element := range typed.Elements {
+			extra = appendJSONCValueComments(extra, element)
+		}
+	}
+	return extra
+}
+
+func appendJSONCCommentExtra(dst, src hujson.Extra) hujson.Extra {
+	if jsonCExtraContainsComment(src) {
+		return append(dst, src...)
+	}
+	return dst
 }
 
 func newJSONCMember(key string, value any) (hujson.ObjectMember, error) {
@@ -400,18 +428,18 @@ func newJSONCMember(key string, value any) (hujson.ObjectMember, error) {
 func jsonCMemberIndent(object *hujson.Object) hujson.Extra {
 	if len(object.Members) > 0 {
 		extra := object.Members[len(object.Members)-1].Name.BeforeExtra
-		if index := bytesIndexNewline(extra); index >= 0 {
+		if index := bytesLastIndexNewline(extra); index >= 0 {
 			return append(hujson.Extra(nil), extra[index:]...)
 		}
 	}
-	if bytesIndexNewline(object.AfterExtra) >= 0 {
+	if bytesLastIndexNewline(object.AfterExtra) >= 0 {
 		extra := object.AfterExtra
-		return append(hujson.Extra(nil), extra[bytesIndexNewline(extra):]...)
+		return append(hujson.Extra(nil), extra[bytesLastIndexNewline(extra):]...)
 	}
 	return hujson.Extra(" ")
 }
 
-func bytesIndexNewline(extra hujson.Extra) int { return strings.IndexByte(string(extra), '\n') }
+func bytesLastIndexNewline(extra hujson.Extra) int { return bytes.LastIndexByte(extra, '\n') }
 
 func jsonCMemberName(member hujson.ObjectMember) string {
 	var name string
