@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/selection"
 )
 
@@ -242,68 +243,16 @@ func fontProbeLabel(matches []string) string {
 	return strings.Join(matches, ", ")
 }
 
-// selectDependencies gathers the Dependencies declared by tag-scoped Dependency
-// Sets, then every Managed Entry and Provisioner that belongs to the selected
-// Tags and passes the OS filter, deduplicated by name in first-declared order.
-
+// selectDependencies resolves Options before evaluating the selected manifest
+// surface. The surface owns dependency ordering, normalization, deduplication,
+// and required-dependency promotion.
 func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependency, error) {
 	selection, err := resolveOptionsSelection(m, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	var selected []manifest.Dependency
-	seen := make(map[string]bool)
-	addDependencies := func(deps []manifest.Dependency) {
-		for _, dep := range deps {
-			// Normalize the name so padded and unpadded declarations of the same
-			// dependency deduplicate and render consistently with Probe().
-			dep.Name = strings.TrimSpace(dep.Name)
-			if seen[dep.Name] {
-				if dep.IsRequired() {
-					for i := range selected {
-						if selected[i].Name == dep.Name && !selected[i].IsRequired() {
-							selected[i].Requirement = manifest.DependencyRequirementRequired
-							break
-						}
-					}
-				}
-				continue
-			}
-			seen[dep.Name] = true
-			selected = append(selected, dep)
-		}
-	}
-
-	tags := selection.Tags
-	for _, set := range m.Dependencies {
-		if !manifest.SharesTag(set.Tags, tags) {
-			continue
-		}
-		if !manifest.MatchesOS(set.OS, opts.OS) {
-			continue
-		}
-		addDependencies(set.Dependencies)
-	}
-	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, tags) {
-			continue
-		}
-		if !manifest.MatchesOS(entry.OS, opts.OS) {
-			continue
-		}
-		addDependencies(entry.Dependencies)
-	}
-	for _, prov := range m.Provisioners {
-		if !manifest.SharesTag(prov.Tags, tags) {
-			continue
-		}
-		if !manifest.MatchesOS(prov.OS, opts.OS) {
-			continue
-		}
-		addDependencies(prov.Dependencies)
-	}
-	return selected, nil
+	return selectedsurface.Evaluate(m, selection.Tags, opts.OS).Dependencies, nil
 }
 
 func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Selection, error) {

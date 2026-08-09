@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/tagpolicy"
 )
@@ -341,6 +342,7 @@ func staleExtraTags(m manifest.Manifest, extraTags []string) []string {
 }
 
 func selectedSurface(m manifest.Manifest, selected manifest.Selection, osName string) Changes {
+	surface := selectedsurface.Evaluate(m, selected.Tags, osName)
 	result := Changes{
 		Profiles:       make([]string, 0),
 		ExtraTags:      make([]string, 0),
@@ -360,30 +362,23 @@ func selectedSurface(m manifest.Manifest, selected manifest.Selection, osName st
 			}
 		}
 	}
+	// Profile dependencies existed only in previous manifest revisions. They
+	// are not part of selectedsurface's current declarative surface, but must
+	// remain visible to evolution while historical manifests are compared.
 	for _, profileName := range selected.Profiles {
 		addDependencies(m.LegacyProfileDependencies(profileName))
 	}
-	for _, set := range m.Dependencies {
-		if manifest.SharesTag(set.Tags, selected.Tags) && manifest.MatchesOS(set.OS, osName) {
-			addDependencies(set.Dependencies)
+	addDependencies(surface.Dependencies)
+	for _, entry := range surface.Entries {
+		if !seenEntries[entry.Entry.Target] {
+			seenEntries[entry.Entry.Target] = true
+			result.ManagedEntries = append(result.ManagedEntries, entry.Entry.Target)
 		}
 	}
-	for _, entry := range m.Entries {
-		if manifest.SharesTag(entry.Tags, selected.Tags) && manifest.MatchesOS(entry.OS, osName) {
-			if !seenEntries[entry.Target] {
-				seenEntries[entry.Target] = true
-				result.ManagedEntries = append(result.ManagedEntries, entry.Target)
-			}
-			addDependencies(entry.Dependencies)
-		}
-	}
-	for _, provisioner := range m.Provisioners {
-		if manifest.SharesTag(provisioner.Tags, selected.Tags) && manifest.MatchesOS(provisioner.OS, osName) {
-			if !seenProvisioners[provisioner.Tool] {
-				seenProvisioners[provisioner.Tool] = true
-				result.Provisioners = append(result.Provisioners, provisioner.Tool)
-			}
-			addDependencies(provisioner.Dependencies)
+	for _, provisioner := range surface.Provisioners {
+		if !seenProvisioners[provisioner.Tool] {
+			seenProvisioners[provisioner.Tool] = true
+			result.Provisioners = append(result.Provisioners, provisioner.Tool)
 		}
 	}
 	return result

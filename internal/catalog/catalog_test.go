@@ -62,6 +62,64 @@ func TestTagDetailIsPortableSafeAndDescribesExclusions(t *testing.T) {
 	}
 }
 
+func TestDetailUsesSelectedSurfaceForResolvedEntriesAndActiveOverrides(t *testing.T) {
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{
+			"theme": {Tags: []string{"core", "theme"}},
+		},
+		Dependencies: []manifest.DependencySet{{
+			Tags:         []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "set-tool"}},
+		}},
+		Entries: []manifest.Entry{
+			{Source: "base", Target: "selected", Strategy: "copy", Tags: []string{"core"}, SourceOverrides: map[string]string{"theme": "selected-theme"}, Dependencies: []manifest.Dependency{{Name: "entry-tool"}}},
+			{Source: "other", Target: "unselected", Strategy: "copy", Tags: []string{"other"}, SourceOverrides: map[string]string{"theme": "unselected-theme"}},
+		},
+		Provisioners: []manifest.Provisioner{{
+			Tool:         "theme-tool",
+			Tags:         []string{"theme"},
+			Dependencies: []manifest.Dependency{{Name: "provisioner-tool"}},
+		}},
+	}
+
+	got, err := Profile(m, "theme", Options{OS: "linux"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail := got.Profile
+	if detail == nil {
+		t.Fatal("Profile detail = nil")
+	}
+	if len(detail.Entries) != 1 || detail.Entries[0].Source != "selected-theme" {
+		t.Fatalf("Entries = %#v", detail.Entries)
+	}
+	if got := detail.Dependencies; !reflect.DeepEqual(dependencyNames(got), []string{"set-tool", "entry-tool", "provisioner-tool"}) {
+		t.Fatalf("Dependency origins = %#v", got)
+	}
+	if got := detail.SourceOverrides; !reflect.DeepEqual(overrideSources(got), []string{"selected-theme", "unselected-theme"}) || !allApplicable(got) {
+		t.Fatalf("active SourceOverrides = %#v", got)
+	}
+}
+
+func TestAllOSDetailCombinesSelectedSurfacesInManifestOrder(t *testing.T) {
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{
+			{Source: "linux", Target: "linux", Strategy: "copy", Tags: []string{"core"}, OS: []string{"linux"}},
+			{Source: "portable", Target: "portable", Strategy: "copy", Tags: []string{"core"}},
+			{Source: "darwin", Target: "darwin", Strategy: "copy", Tags: []string{"core"}, OS: []string{"darwin"}},
+		},
+	}
+
+	got, err := Profile(m, "core", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if targets := entryTargets(got.Profile.Entries); !reflect.DeepEqual(targets, []string{"linux", "portable", "darwin"}) {
+		t.Fatalf("Entries = %#v", targets)
+	}
+}
+
 func TestRegistrylessCatalogDerivesSurfaceTags(t *testing.T) {
 	m := fixtureManifest()
 	m.Tags = nil
@@ -165,4 +223,37 @@ func tagNames(items []TagSummary) []string {
 		result = append(result, item.Name)
 	}
 	return result
+}
+
+func dependencyNames(items []Dependency) []string {
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		result = append(result, item.Name)
+	}
+	return result
+}
+
+func overrideSources(items []SourceOverride) []string {
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		result = append(result, item.Source)
+	}
+	return result
+}
+
+func entryTargets(items []Entry) []string {
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		result = append(result, item.Target)
+	}
+	return result
+}
+
+func allApplicable(items []SourceOverride) bool {
+	for _, item := range items {
+		if !item.Applicable {
+			return false
+		}
+	}
+	return true
 }
