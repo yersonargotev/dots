@@ -324,6 +324,7 @@ func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, p
 		SourceRoot:       paths.SourceRoot,
 		SourceReadRoot:   sourceReadRoot,
 		Home:             paths.Home,
+		XDGStateHome:     paths.XDGStateHome,
 		Metadata:         meta,
 		LegacyMigrations: legacyMigrations,
 	})

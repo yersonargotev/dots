@@ -125,7 +125,7 @@ The preview of filesystem changes, conflicts, dependency findings, and backup re
 _Avoid_: preview, dry run output, change list
 
 **Uninstall Plan**:
-The preview of removals the Dotfiles CLI computes from the Installation Metadata before reversing an install, classifying each recorded target as remove, skip, modified, or not-owned. It is the mirror of the Install Plan and is the output of `dots uninstall --dry-run`.
+The preview of removals the Dotfiles CLI computes from the Installation Metadata before reversing an install, classifying each recorded target as remove, retain, skip, modified, or not-owned. It is the mirror of the Install Plan and is the output of `dots uninstall --dry-run`.
 _Avoid_: removal preview, deletion list, reverse plan
 
 **Dotfiles Status**:
@@ -133,7 +133,7 @@ The current alignment between a workstation and the repository-owned Source of T
 _Avoid_: health, sync state, installed state
 
 **Installation Metadata**:
-The state file stored under `~/.local/state/dots/installed.json` that records what the Dotfiles CLI installed, including Managed Entries, Provisioners, strategies, hashes, timestamps, optional structured-ownership evidence, and an optional Installed Selection. It lets the CLI detect Drift and reconcile or remove only proven contributions for copied subset-owned targets while preserving machine-level selection intent separately from historical inventory.
+The state file stored under `~/.local/state/dots/installed.json` that records what the Dotfiles CLI installed, including Managed Entries, Provisioners, strategies, hashes, timestamps, optional structured-ownership or seeded-baseline evidence, and an optional Installed Selection. It lets the CLI detect Drift, reconcile or remove only proven contributions for copied subset-owned targets, and advance Seeded Runtime State without conflating it with dots' own state root, while preserving machine-level selection intent separately from historical inventory.
 _Avoid_: install log, state file, tracking file
 
 **Installed Selection**:

@@ -43,6 +43,7 @@ func newPlanCommand() *cobra.Command {
 
 			effective, err := resolveReadOnlySelection(*m, meta, profiles, extraTags, readOnlySelectionOptions{
 				Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
+				XDGStateHome: paths.XDGStateHome,
 			})
 			if err != nil {
 				return err
@@ -52,13 +53,14 @@ func newPlanCommand() *cobra.Command {
 			// (e.g. plan a Linux install from macOS); for now the OS is locked
 			// to the host so the dry-run reflects this machine.
 			p, err := plan.Build(*m, plan.Options{
-				Profiles:   effective.Profiles,
-				ExtraTags:  effective.ExtraTags,
-				Selection:  &effective.Selection,
-				OS:         runtime.GOOS,
-				SourceRoot: paths.SourceRoot,
-				Home:       paths.Home,
-				Metadata:   meta,
+				Profiles:     effective.Profiles,
+				ExtraTags:    effective.ExtraTags,
+				Selection:    &effective.Selection,
+				OS:           runtime.GOOS,
+				SourceRoot:   paths.SourceRoot,
+				Home:         paths.Home,
+				XDGStateHome: paths.XDGStateHome,
+				Metadata:     meta,
 			})
 			if err != nil {
 				return err

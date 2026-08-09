@@ -15,7 +15,7 @@ func renderUninstallPlan(w io.Writer, p plan.UninstallPlan) {
 	fmt.Fprintln(w, "Uninstall Plan")
 	fmt.Fprintln(w)
 
-	var remove, modified, notOwned, skip int
+	var remove, modified, notOwned, skip, retain int
 	for _, action := range p.Actions {
 		fmt.Fprintf(w, "  %-10s %s\n", action.Status, action.Target)
 		switch action.Status {
@@ -27,8 +27,14 @@ func renderUninstallPlan(w io.Writer, p plan.UninstallPlan) {
 			notOwned++
 		case plan.UninstallSkip:
 			skip++
+		case plan.UninstallRetain:
+			retain++
 		}
 	}
 
-	fmt.Fprintf(w, "\nSummary: %d to remove, %d modified, %d not-owned, %d skipped\n", remove, modified, notOwned, skip)
+	if retain > 0 {
+		fmt.Fprintf(w, "\nSummary: %d to remove, %d retained, %d modified, %d not-owned, %d skipped\n", remove, retain, modified, notOwned, skip)
+	} else {
+		fmt.Fprintf(w, "\nSummary: %d to remove, %d modified, %d not-owned, %d skipped\n", remove, modified, notOwned, skip)
+	}
 }

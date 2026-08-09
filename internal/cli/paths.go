@@ -11,9 +11,10 @@ import (
 )
 
 type resolvedPaths struct {
-	Home       string
-	SourceRoot string
-	StateRoot  string
+	Home         string
+	SourceRoot   string
+	StateRoot    string
+	XDGStateHome string
 }
 
 func resolvePaths(home, sourceRoot, stateRoot string) (resolvedPaths, error) {
@@ -32,8 +33,12 @@ func resolvePaths(home, sourceRoot, stateRoot string) (resolvedPaths, error) {
 	if stateRoot == "" {
 		stateRoot = defaultStateRoot(home)
 	}
+	xdgStateHome := os.Getenv("XDG_STATE_HOME")
+	if xdgStateHome == "" {
+		xdgStateHome = filepath.Join(home, ".local", "state")
+	}
 
-	return resolvedPaths{Home: home, SourceRoot: sourceRoot, StateRoot: stateRoot}, nil
+	return resolvedPaths{Home: home, SourceRoot: sourceRoot, StateRoot: stateRoot, XDGStateHome: xdgStateHome}, nil
 }
 
 // defaultSourceRoot is the default location of the Installed Repository: the

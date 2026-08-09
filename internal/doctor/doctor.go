@@ -23,15 +23,16 @@ import (
 
 // Options carries the resolved inputs needed to build read-only diagnostics.
 type Options struct {
-	Profile    string
-	Profiles   []string
-	ExtraTags  []string
-	Selection  *manifest.Selection
-	OS         string
-	SourceRoot string
-	Home       string
-	ToolRunner deps.CommandRunner
-	AppLookup  deps.AppLookup
+	Profile      string
+	Profiles     []string
+	ExtraTags    []string
+	Selection    *manifest.Selection
+	OS           string
+	SourceRoot   string
+	Home         string
+	XDGStateHome string
+	ToolRunner   deps.CommandRunner
+	AppLookup    deps.AppLookup
 }
 
 // Report is the consolidated doctor diagnostic output for a profile.
@@ -114,13 +115,14 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options, look deps.Loo
 	report.Dependencies = depReport
 
 	statusReport, err := status.Build(m, meta, status.Options{
-		Profile:    opts.Profile,
-		Profiles:   opts.Profiles,
-		ExtraTags:  opts.ExtraTags,
-		Selection:  resolved,
-		OS:         opts.OS,
-		SourceRoot: opts.SourceRoot,
-		Home:       opts.Home,
+		Profile:      opts.Profile,
+		Profiles:     opts.Profiles,
+		ExtraTags:    opts.ExtraTags,
+		Selection:    resolved,
+		OS:           opts.OS,
+		SourceRoot:   opts.SourceRoot,
+		Home:         opts.Home,
+		XDGStateHome: opts.XDGStateHome,
 	})
 	if err != nil {
 		return Report{}, err

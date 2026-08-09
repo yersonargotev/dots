@@ -58,7 +58,7 @@ func newInstalledCommand() *cobra.Command {
 				return err
 			}
 			analysis, err := selectionmigration.Analyze(*m, meta, selectionmigration.Options{
-				OS: runtime.GOOS, Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
+				OS: runtime.GOOS, Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot), XDGStateHome: paths.XDGStateHome,
 			})
 			if err != nil {
 				return err

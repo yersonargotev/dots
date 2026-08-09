@@ -1047,11 +1047,18 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("status Execute() error = %v\noutput:\n%s", err, statusOut.String())
 	}
 
-	nvimTarget := filepath.Join(home, ".config/nvim")
-	if target, err := os.Readlink(nvimTarget); err != nil {
-		t.Fatalf("sandbox nvim target is not a symlink: %v", err)
+	nvimLoader := filepath.Join(home, ".config/nvim/init.lua")
+	if info, err := os.Lstat(nvimLoader); err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("sandbox Neovim loader is not a regular file: info=%v err=%v", info, err)
+	}
+	nvimManaged := filepath.Join(home, ".config/dots/nvim")
+	if target, err := os.Readlink(nvimManaged); err != nil {
+		t.Fatalf("sandbox managed Neovim target is not a symlink: %v", err)
 	} else if want := filepath.Join(sourceRoot, "configs/nvim"); target != want {
-		t.Fatalf("sandbox nvim symlink = %q, want %q", target, want)
+		t.Fatalf("sandbox managed Neovim symlink = %q, want %q", target, want)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".local/state/nvim/lazy-lock.json")); err != nil {
+		t.Fatalf("sandbox seeded Neovim lockfile missing: %v", err)
 	}
 
 	// Derive the expected counts from the loaded manifest rather than hardcoded
@@ -1064,11 +1071,13 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 	coreProfile := loaded.Profiles["core"]
+	countHome := t.TempDir()
 	countPlan, err := plan.Build(*loaded, plan.Options{
-		Profile:    "core",
-		OS:         runtime.GOOS,
-		SourceRoot: sourceRoot,
-		Home:       t.TempDir(),
+		Profile:      "core",
+		OS:           runtime.GOOS,
+		SourceRoot:   sourceRoot,
+		Home:         countHome,
+		XDGStateHome: filepath.Join(countHome, ".local", "state"),
 	})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -1091,7 +1100,9 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		"configs/git/gitconfig -> " + gitconfigTarget,
 		"configs/zellij/config.kdl -> " + zellijConfigTarget,
 		"configs/zellij/layouts/default.kdl -> " + zellijLayoutTarget,
-		"configs/nvim -> " + nvimTarget,
+		"configs/nvim/loader.lua -> " + nvimLoader,
+		"configs/nvim -> " + nvimManaged,
+		"configs/nvim/lazy-lock.json -> " + filepath.Join(home, ".local/state/nvim/lazy-lock.json"),
 		wantSummary,
 	} {
 		if !strings.Contains(got, want) {

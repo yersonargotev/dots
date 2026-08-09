@@ -1664,6 +1664,53 @@ entries:
 			want: "entries[0].target is required",
 		},
 		{
+			name: "unsupported target root",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/nvim/lazy-lock.json
+    target: nvim/lazy-lock.json
+    target_root: arbitrary
+    strategy: copy
+    ownership: seeded
+    tags: [core]
+`,
+			want: "entries[0].target_root must be xdg-state when set",
+		},
+		{
+			name: "xdg state target traversal",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/nvim/lazy-lock.json
+    target: ../lazy-lock.json
+    target_root: xdg-state
+    strategy: copy
+    ownership: seeded
+    tags: [core]
+`,
+			want: "entries[0].target must be a confined relative path for target_root xdg-state",
+		},
+		{
+			name: "xdg state target requires seeded ownership",
+			content: `version: 1
+profiles:
+  default:
+    tags: [core]
+entries:
+  - source: configs/nvim/lazy-lock.json
+    target: nvim/lazy-lock.json
+    target_root: xdg-state
+    strategy: copy
+    tags: [core]
+`,
+			want: "entries[0].target_root xdg-state requires seeded ownership",
+		},
+		{
 			name: "unsupported ownership",
 			content: `version: 1
 profiles:
@@ -1676,7 +1723,7 @@ entries:
     ownership: merge
     tags: [core]
 `,
-			want: "entries[0].ownership must be one of json-subset, jsonc-subset, toml-subset",
+			want: "entries[0].ownership must be one of json-subset, jsonc-subset, toml-subset, seeded",
 		},
 		{
 			name: "json subset ownership on non-copy strategy",
@@ -3009,11 +3056,13 @@ func TestRepositoryManifestPlansMVPConfigurationSetSafely(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
+	home := t.TempDir()
 	p, err := plan.Build(*got, plan.Options{
-		Profile:    "core",
-		OS:         "darwin",
-		SourceRoot: root,
-		Home:       t.TempDir(),
+		Profile:      "core",
+		OS:           "darwin",
+		SourceRoot:   root,
+		Home:         home,
+		XDGStateHome: filepath.Join(home, ".local", "state"),
 	})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -3092,15 +3141,15 @@ func TestRepositoryManifestNeovimEntry(t *testing.T) {
 		entriesByTarget[entry.Target] = entry
 	}
 
-	entry, ok := entriesByTarget["~/.config/nvim"]
+	entry, ok := entriesByTarget["~/.config/nvim/init.lua"]
 	if !ok {
-		t.Fatal("repository manifest missing Neovim entry for target ~/.config/nvim")
+		t.Fatal("repository manifest missing Neovim loader entry")
 	}
-	if entry.Source != "configs/nvim" {
-		t.Errorf("Source = %q, want %q", entry.Source, "configs/nvim")
+	if entry.Source != "configs/nvim/loader.lua" {
+		t.Errorf("Source = %q, want %q", entry.Source, "configs/nvim/loader.lua")
 	}
-	if entry.Strategy != "symlink" {
-		t.Errorf("Strategy = %q, want symlink", entry.Strategy)
+	if entry.Strategy != "copy" {
+		t.Errorf("Strategy = %q, want copy", entry.Strategy)
 	}
 	if !hasString(entry.Tags, "core") {
 		t.Errorf("Tags = %#v, want core tag", entry.Tags)
@@ -3111,15 +3160,23 @@ func TestRepositoryManifestNeovimEntry(t *testing.T) {
 	if !hasDependency(entry.Dependencies, "neovim") {
 		t.Errorf("Dependencies = %#v, want neovim dependency", entry.Dependencies)
 	}
+	managed, ok := entriesByTarget["~/.config/dots/nvim"]
+	if !ok || managed.Source != "configs/nvim" || managed.Strategy != "symlink" {
+		t.Fatalf("managed Neovim entry = %#v, want configs/nvim symlink", managed)
+	}
+	lock, ok := entriesByTarget["nvim/lazy-lock.json"]
+	if !ok || lock.TargetRoot != "xdg-state" || lock.Ownership != "seeded" || lock.Strategy != "copy" {
+		t.Fatalf("Neovim lock entry = %#v, want xdg-state seeded copy", lock)
+	}
 
-	// The source directory must exist in the repository.
-	sourcePath := filepath.Join(root, entry.Source)
+	// The separately Managed Configuration directory must exist in the repository.
+	sourcePath := filepath.Join(root, managed.Source)
 	info, err := os.Stat(sourcePath)
 	if err != nil {
 		t.Fatalf("source %q does not exist: %v", sourcePath, err)
 	}
 	if !info.IsDir() {
-		t.Fatalf("source %q is not a directory, want directory for symlink entry", sourcePath)
+		t.Fatalf("source %q is not a directory, want managed Neovim directory", sourcePath)
 	}
 }
 

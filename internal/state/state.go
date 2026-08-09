@@ -18,7 +18,7 @@ import (
 )
 
 // CurrentVersion is the current Installation Metadata schema version.
-const CurrentVersion = 4
+const CurrentVersion = 5
 
 // Metadata is the machine-readable record of installed managed targets.
 type Metadata struct {
@@ -52,10 +52,10 @@ func (p Provenance) Empty() bool {
 }
 
 // Record describes a single managed target the CLI installed. Version 4 records
-// explicit whole or partial Ownership; an empty value is legacy and grants no
-// force-removal authority. Copy-like strategies may record a source content
-// hash; symlink records leave Hash empty because drift is detected from the link
-// destination.
+// explicit whole or partial Ownership; version 5 adds opaque seeded-baseline
+// evidence. An empty Ownership is legacy and grants no force-removal authority.
+// Copy-like strategies may record a source content hash; symlink records leave
+// Hash empty because drift is detected from the link destination.
 type Record struct {
 	Target       string          `json:"target"`
 	Source       string          `json:"source"`
@@ -63,10 +63,14 @@ type Record struct {
 	Strategy     string          `json:"strategy"`
 	Ownership    string          `json:"ownership,omitempty"`
 	OwnedContent json.RawMessage `json:"owned_content,omitempty"`
-	Hash         string          `json:"hash"`
-	InstalledAt  string          `json:"installedAt"`
-	Profiles     []string        `json:"profiles,omitempty"`
-	Tags         []string        `json:"tags,omitempty"`
+	// SeededBaseline is the exact opaque Source of Truth baseline last applied
+	// to Seeded Runtime State. []byte uses JSON base64 encoding, so the state
+	// itself need not be JSON.
+	SeededBaseline []byte   `json:"seeded_baseline,omitempty"`
+	Hash           string   `json:"hash"`
+	InstalledAt    string   `json:"installedAt"`
+	Profiles       []string `json:"profiles,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
 }
 
 // SourceList returns every Source of Truth contribution for the managed target.

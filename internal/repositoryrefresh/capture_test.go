@@ -36,7 +36,7 @@ func TestCaptureLegacyTargetsRequiresMatchingProvenanceAndDeclaredSymlink(t *tes
 		Provenance: state.Provenance{SourceRoot: sourceRoot, SourceRevision: revision[:12]},
 		Entries:    []state.Record{{Target: target, Source: "configs/app.json", Strategy: "symlink"}},
 	}
-	captures, err := repositoryrefresh.CaptureLegacyTargets(m, meta, sourceRoot, home, revision)
+	captures, err := repositoryrefresh.CaptureLegacyTargets(m, m, meta, sourceRoot, home, filepath.Join(home, ".local", "state"), revision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestCaptureLegacyTargetsRequiresMatchingProvenanceAndDeclaredSymlink(t *tes
 	}
 
 	meta.Provenance.SourceRevision = "deadbeef"
-	captures, err = repositoryrefresh.CaptureLegacyTargets(m, meta, sourceRoot, home, revision)
+	captures, err = repositoryrefresh.CaptureLegacyTargets(m, m, meta, sourceRoot, home, filepath.Join(home, ".local", "state"), revision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestCaptureLegacyTargetsRequiresMatchingProvenanceAndDeclaredSymlink(t *tes
 	}
 
 	meta.Provenance.SourceRevision = revision[:1]
-	captures, err = repositoryrefresh.CaptureLegacyTargets(m, meta, sourceRoot, home, revision)
+	captures, err = repositoryrefresh.CaptureLegacyTargets(m, m, meta, sourceRoot, home, filepath.Join(home, ".local", "state"), revision)
 	if err != nil {
 		t.Fatal(err)
 	}

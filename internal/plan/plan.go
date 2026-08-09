@@ -11,6 +11,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/seededstate"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -28,6 +29,8 @@ const (
 )
 
 const ConflictReasonSourceOverrideNotSelected = "source-override-not-selected"
+
+const ReasonSeededLocalEvolution = "seeded-local-evolution"
 
 // Action is a single planned filesystem change for a Managed Entry.
 type Action struct {
@@ -48,6 +51,7 @@ type Action struct {
 	// used only to revalidate a reversible update at apply time.
 	PreviousContent []byte   `json:"-"`
 	Target          string   `json:"target"`
+	TargetRoot      string   `json:"target_root,omitempty"`
 	Strategy        string   `json:"strategy"`
 	Status          Status   `json:"status"`
 	Reason          string   `json:"reason,omitempty"`
@@ -57,17 +61,27 @@ type Action struct {
 	// symlink. It is intentionally excluded from machine output; status is the
 	// portable contract and captured workstation content may be sensitive.
 	Migration *LegacyMigration `json:"-"`
+	// LegacyParent is a proven directory symlink removed by an earlier migrate
+	// action in the same plan. It lets apply validate a later child create
+	// without treating the pre-removal view as an unrelated conflict.
+	LegacyParent string `json:"-"`
 }
 
 // LegacyMigration is provenance-backed content captured before the Installed
 // Repository checkout changed. FinalContent is the exact regular-file content
 // apply may materialize after last-moment symlink and content revalidation.
 type LegacyMigration struct {
-	LinkDestination       string
+	LinkDestination string
+	// LegacyTarget is set when the captured content lived beneath a proven
+	// directory symlink that must be removed before new native targets can be
+	// materialized. Empty retains the single-file migration behavior.
+	LegacyTarget          string
+	LegacyContentTarget   string
 	CapturedContent       []byte
 	PreviousSourceContent []byte
 	ExpectedLinkContent   []byte
 	FinalContent          []byte
+	RecordedBaseline      []byte
 }
 
 // Plan is the preview of changes the installer would apply for a Profile.
@@ -103,8 +117,12 @@ type Options struct {
 	SourceRoot string
 	// SourceReadRoot optionally supplies a snapshot used only to inspect source
 	// existence and content. Empty defaults to SourceRoot.
-	SourceReadRoot   string
-	Home             string
+	SourceReadRoot string
+	Home           string
+	// XDGStateHome is the resolved application state root. It is distinct from
+	// dots' Installation Metadata state root and is required only by entries
+	// whose allowlisted target_root is xdg-state.
+	XDGStateHome     string
 	Metadata         state.Metadata
 	LegacyMigrations map[string]LegacyMigration
 }
@@ -131,6 +149,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	plan := Plan{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
 	actionByTarget := map[string]int{}
 	readSourcesByTarget := map[string][]string{}
+	scheduledLegacyParents := map[string]struct{}{}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue
@@ -141,7 +160,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 
 		defaultSource := entry.Source
 		source := manifest.EntrySource(entry, tags)
-		target, err := ResolveTarget(entry.Target, opts.Home)
+		target, err := ResolveEntryTarget(entry, opts.Home, opts.XDGStateHome)
 		if err != nil {
 			return Plan{}, err
 		}
@@ -158,7 +177,23 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		if err != nil {
 			return Plan{}, err
 		}
+		legacyParent := ""
+		if actionStatus == StatusConflict {
+			legacyParent = scheduledLegacyParent(target, scheduledLegacyParents)
+			if legacyParent != "" {
+				actionStatus = StatusCreate
+			}
+		}
 		var reason string
+		if actionStatus == StatusUnchanged && entry.Ownership == "seeded" {
+			local, localErr := seededLocalEvolution(entry, target, readSourceAbs, opts.Metadata)
+			if localErr != nil {
+				return Plan{}, localErr
+			}
+			if local {
+				reason = ReasonSeededLocalEvolution
+			}
+		}
 		var matchingTags []string
 		if actionStatus == StatusConflict {
 			matchingTags, err = matchingUnselectedSourceOverrideTags(entry, tags, target, readRoot, opts.SourceRoot)
@@ -173,14 +208,16 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			Source:         source,
 			ResolvedSource: sourceAbs,
 			Target:         target,
+			TargetRoot:     entry.TargetRoot,
 			Strategy:       entry.Strategy,
 			Status:         actionStatus,
 			Reason:         reason,
 			MatchingTags:   matchingTags,
 			Ownership:      entry.Ownership,
+			LegacyParent:   legacyParent,
 		}
-		if actionStatus == StatusConflict {
-			if migration, ok := opts.LegacyMigrations[target]; ok {
+		if actionStatus == StatusConflict || actionStatus == StatusCreate {
+			if migration, ok := opts.LegacyMigrations[target]; ok && ((migration.LegacyTarget == "" && actionStatus == StatusConflict) || (migration.LegacyTarget != "" && actionStatus == StatusCreate)) {
 				planned, compatible, migrateErr := planLegacyMigration(entry, readSourceAbs, migration)
 				if migrateErr != nil {
 					return Plan{}, migrateErr
@@ -190,11 +227,18 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 					action.Migration = &planned
 					action.Reason = ""
 					action.MatchingTags = nil
+					if planned.LegacyTarget != "" {
+						scheduledLegacyParents[planned.LegacyTarget] = struct{}{}
+					}
 				}
 			}
 		}
-		if rec, ok := opts.Metadata.FindByTarget(target); ok && rec.Ownership == action.Ownership && isJSONOwnership(rec.Ownership) && len(rec.OwnedContent) > 0 {
-			action.PreviousContent = append([]byte(nil), rec.OwnedContent...)
+		if rec, ok := opts.Metadata.FindByTarget(target); ok && rec.Ownership == action.Ownership {
+			if isJSONOwnership(rec.Ownership) && len(rec.OwnedContent) > 0 {
+				action.PreviousContent = append([]byte(nil), rec.OwnedContent...)
+			} else if rec.Ownership == "seeded" {
+				action.PreviousContent = append([]byte(nil), rec.SeededBaseline...)
+			}
 		}
 		targetKey := filepath.Clean(target)
 		if index, ok := actionByTarget[targetKey]; ok {
@@ -247,6 +291,19 @@ func planLegacyMigration(entry manifest.Entry, currentSource string, migration L
 	planned := migration
 	planned.ExpectedLinkContent = append([]byte(nil), current...)
 	switch entry.Ownership {
+	case "seeded":
+		reconciliation := seededstate.Reconcile(migration.CapturedContent, migration.PreviousSourceContent, current)
+		if reconciliation.Changed {
+			planned.FinalContent = reconciliation.Content
+			planned.RecordedBaseline = append([]byte(nil), current...)
+		} else {
+			planned.FinalContent = append([]byte(nil), migration.CapturedContent...)
+			if reconciliation.Classification == seededstate.LocalEvolution {
+				planned.RecordedBaseline = append([]byte(nil), migration.PreviousSourceContent...)
+			} else {
+				planned.RecordedBaseline = append([]byte(nil), current...)
+			}
+		}
 	case "json-subset":
 		reconciliation, err := configsubset.ReconcileJSON(migration.CapturedContent, migration.PreviousSourceContent, current)
 		if err != nil {
@@ -278,6 +335,15 @@ func planLegacyMigration(entry manifest.Entry, currentSource string, migration L
 		planned.FinalContent = append([]byte(nil), current...)
 	}
 	return planned, true, nil
+}
+
+func scheduledLegacyParent(target string, parents map[string]struct{}) string {
+	for parent := range parents {
+		if InsideRoot(target, parent) && filepath.Clean(target) != filepath.Clean(parent) {
+			return parent
+		}
+	}
+	return ""
 }
 
 func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
@@ -434,6 +500,46 @@ func ResolveTarget(target, home string) (string, error) {
 		return "", fmt.Errorf("unsafe target %q: resolved target escapes home %q", target, resolvedHome)
 	}
 	return resolvedTarget, nil
+}
+
+// ResolveEntryTarget resolves a Managed Entry against its allowlisted target
+// root. Home targets retain the ~/... contract; xdg-state targets must be local
+// relative paths beneath the already resolved XDG state home.
+func ResolveEntryTarget(entry manifest.Entry, home, xdgStateHome string) (string, error) {
+	if entry.TargetRoot == "" {
+		return ResolveTarget(entry.Target, home)
+	}
+	if entry.TargetRoot != "xdg-state" {
+		return "", fmt.Errorf("unsupported target root %q", entry.TargetRoot)
+	}
+	if xdgStateHome == "" {
+		return "", fmt.Errorf("xdg-state target %q requires an XDG state home", entry.Target)
+	}
+	if !filepath.IsAbs(xdgStateHome) {
+		return "", fmt.Errorf("unsafe XDG state home %q: XDG_STATE_HOME must be absolute", xdgStateHome)
+	}
+	if filepath.IsAbs(entry.Target) || !filepath.IsLocal(entry.Target) || entry.Target == "." {
+		return "", fmt.Errorf("unsafe xdg-state target %q: target must be a confined relative path", entry.Target)
+	}
+	root, err := filepath.Abs(xdgStateHome)
+	if err != nil {
+		return "", fmt.Errorf("resolve XDG state home: %w", err)
+	}
+	root = filepath.Clean(root)
+	if err := ValidateResolvedTarget(root, home); err != nil {
+		return "", fmt.Errorf("unsafe XDG state home %q: %w", root, err)
+	}
+	target := filepath.Clean(filepath.Join(root, entry.Target))
+	if !InsideRoot(target, root) {
+		return "", fmt.Errorf("unsafe xdg-state target %q: resolved target escapes XDG state home %q", entry.Target, root)
+	}
+	if err := ValidateResolvedTarget(target, home); err != nil {
+		return "", err
+	}
+	if err := ValidateTargetParentInsideHome(target, home); err != nil {
+		return "", err
+	}
+	return target, nil
 }
 
 // ValidateResolvedTarget verifies that an already-resolved plan target remains
@@ -613,6 +719,24 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 			return StatusConflict, nil
 		}
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
+			if entry.Ownership == "seeded" {
+				rec, ok := meta.FindByTarget(target)
+				if !ok || rec.Strategy != entry.Strategy || rec.Source != entry.Source || rec.Ownership != "seeded" {
+					return StatusConflict, nil
+				}
+				live, readErr := os.ReadFile(target)
+				if readErr != nil {
+					return "", fmt.Errorf("read seeded target %s: %w", target, readErr)
+				}
+				current, readErr := os.ReadFile(sourceAbs)
+				if readErr != nil {
+					return "", fmt.Errorf("read seeded source %s: %w", sourceAbs, readErr)
+				}
+				if seededstate.Reconcile(live, rec.SeededBaseline, current).Classification == seededstate.AdvanceBaseline {
+					return StatusUpdate, nil
+				}
+				return StatusUnchanged, nil
+			}
 			if isSubsetOwned(entry.Ownership) && meta.MatchesEntry(target, entry.Source, entry.Strategy) {
 				if isJSONOwnership(entry.Ownership) {
 					if rec, ok := meta.FindByTarget(target); ok && rec.Ownership == entry.Ownership && len(rec.OwnedContent) > 0 {
@@ -685,6 +809,22 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 	default:
 		return StatusConflict, nil
 	}
+}
+
+func seededLocalEvolution(entry manifest.Entry, target, sourceAbs string, meta state.Metadata) (bool, error) {
+	rec, ok := meta.FindByTarget(target)
+	if !ok || rec.Strategy != entry.Strategy || rec.Source != entry.Source || rec.Ownership != "seeded" {
+		return false, nil
+	}
+	live, err := os.ReadFile(target)
+	if err != nil {
+		return false, fmt.Errorf("read seeded target %s: %w", target, err)
+	}
+	current, err := os.ReadFile(sourceAbs)
+	if err != nil {
+		return false, fmt.Errorf("read seeded source %s: %w", sourceAbs, err)
+	}
+	return seededstate.Reconcile(live, rec.SeededBaseline, current).Classification == seededstate.LocalEvolution, nil
 }
 
 func targetContainsCompatibleRecordedSource(entry manifest.Entry, target, sourceRoot string, meta state.Metadata, defaultSource string) bool {

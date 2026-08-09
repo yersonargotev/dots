@@ -209,7 +209,15 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	legacyMigrations, err := repositoryrefresh.CaptureLegacyTargets(*previousManifest, meta, paths.SourceRoot, paths.Home, preRefresh.OldRev)
+	incomingManifestData, err := gitrepo.ReadFileAtRevision(paths.SourceRoot, preRefresh.NewRev, "dots.yaml")
+	if err != nil {
+		return updateReport{}, err
+	}
+	incomingManifest, err := manifest.Parse(incomingManifestData)
+	if err != nil {
+		return updateReport{}, err
+	}
+	legacyMigrations, err := repositoryrefresh.CaptureLegacyTargets(*previousManifest, *incomingManifest, meta, paths.SourceRoot, paths.Home, paths.XDGStateHome, preRefresh.OldRev)
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -262,7 +270,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 		sourceReadRoot = snapshotRoot
 	}
-	p, err := plan.Build(*m, plan.Options{Selection: &effective.Selection, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, SourceReadRoot: sourceReadRoot, Home: paths.Home, Metadata: meta, LegacyMigrations: legacyMigrations})
+	p, err := plan.Build(*m, plan.Options{Selection: &effective.Selection, OS: runtime.GOOS, SourceRoot: paths.SourceRoot, SourceReadRoot: sourceReadRoot, Home: paths.Home, XDGStateHome: paths.XDGStateHome, Metadata: meta, LegacyMigrations: legacyMigrations})
 	if err != nil {
 		return updateReport{}, err
 	}

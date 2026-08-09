@@ -53,9 +53,10 @@ func (e *selectionMigrationRequiredError) JSONErrorData() any {
 }
 
 type readOnlySelectionOptions struct {
-	Home       string
-	SourceRoot string
-	StatePath  string
+	Home         string
+	SourceRoot   string
+	StatePath    string
+	XDGStateHome string
 }
 
 func resolveReadOnlySelection(m manifest.Manifest, meta state.Metadata, profiles, extraTags []string, opts readOnlySelectionOptions) (selection.Effective, error) {
@@ -70,10 +71,11 @@ func resolveReadOnlySelection(m manifest.Manifest, meta state.Metadata, profiles
 	}
 
 	analysis, err := selectionmigration.Analyze(m, meta, selectionmigration.Options{
-		OS:         runtime.GOOS,
-		Home:       opts.Home,
-		SourceRoot: opts.SourceRoot,
-		StatePath:  opts.StatePath,
+		OS:           runtime.GOOS,
+		Home:         opts.Home,
+		SourceRoot:   opts.SourceRoot,
+		StatePath:    opts.StatePath,
+		XDGStateHome: opts.XDGStateHome,
 	})
 	if err != nil {
 		return selection.Effective{}, err
