@@ -127,6 +127,15 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 					if err != nil {
 						return fmt.Errorf("read owned JSON contribution %s: %w", resolvedSources[i][0], err)
 					}
+				} else if action.Ownership == "jsonc-subset" {
+					rawContent, readErr := os.ReadFile(resolvedSources[i][0])
+					if readErr != nil {
+						return fmt.Errorf("read owned JSONC contribution %s: %w", resolvedSources[i][0], readErr)
+					}
+					ownedContent, err = configsubset.CanonicalJSONC(rawContent)
+					if err != nil {
+						return fmt.Errorf("canonicalize owned JSONC contribution %s: %w", resolvedSources[i][0], err)
+					}
 				}
 			}
 		}
@@ -239,7 +248,7 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			if opts.StateRoot == "" {
 				return nil, fmt.Errorf("update for %s requires state root for Backup Set metadata", action.Target)
 			}
-			if action.Strategy != "copy" || (action.Ownership != "json-subset" && action.Ownership != "toml-subset") {
+			if action.Strategy != "copy" || (action.Ownership != "json-subset" && action.Ownership != "jsonc-subset" && action.Ownership != "toml-subset") {
 				return nil, fmt.Errorf("update for %s requires copy strategy with subset ownership", action.Target)
 			}
 			if err := validateBackupStateRoot(opts.StateRoot, home); err != nil {
@@ -524,6 +533,20 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 		if err := configsubset.MergeJSONFile(action.Target, source); err != nil {
 			return fmt.Errorf("merge JSON update for %s: %w", action.Target, err)
 		}
+	case "jsonc-subset":
+		current, err := os.ReadFile(source)
+		if err != nil {
+			return fmt.Errorf("read current owned JSONC %s: %w", source, err)
+		}
+		if len(action.PreviousContent) > 0 {
+			if err := reconcileJSONCContentFile(action.Target, action.PreviousContent, current); err != nil {
+				return fmt.Errorf("reconcile JSONC update for %s: %w", action.Target, err)
+			}
+			return nil
+		}
+		if err := mergeJSONCContentFile(action.Target, current); err != nil {
+			return fmt.Errorf("merge JSONC update for %s: %w", action.Target, err)
+		}
 	case "toml-subset":
 		if err := configsubset.MergeTOMLFile(action.Target, source); err != nil {
 			return fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
@@ -752,6 +775,47 @@ func reconcileJSONContentFile(target string, previousData, currentData []byte) e
 	}
 	if !reconciliation.Compatible {
 		return fmt.Errorf("live target changed a previously owned JSON value")
+	}
+	if !reconciliation.Changed {
+		return nil
+	}
+	return os.WriteFile(target, reconciliation.Content, info.Mode().Perm())
+}
+
+func mergeJSONCContentFile(target string, sourceData []byte) error {
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return err
+	}
+	merged, err := configsubset.MergeJSONC(targetData, sourceData)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(merged, targetData) {
+		return nil
+	}
+	return os.WriteFile(target, merged, info.Mode().Perm())
+}
+
+func reconcileJSONCContentFile(target string, previousData, currentData []byte) error {
+	targetData, err := os.ReadFile(target)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return err
+	}
+	reconciliation, err := configsubset.ReconcileJSONC(targetData, previousData, currentData)
+	if err != nil {
+		return err
+	}
+	if !reconciliation.Compatible {
+		return fmt.Errorf("live target changed a previously owned JSONC value")
 	}
 	if !reconciliation.Changed {
 		return nil

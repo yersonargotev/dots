@@ -137,7 +137,7 @@ home directory.
 | `source_overrides` | No | Map of exact selected tag to alternate repository-relative source for the same target. The base `source` is used when no key matches; overrides do not alter entry tag selection or OS applicability. |
 | `target` | Yes | Home-relative target: `~` or `~/...`. |
 | `strategy` | Yes | `symlink`, `copy`, or `template` in the manifest schema. Current install execution supports `symlink` and `copy`. |
-| `ownership` | No | Empty, `json-subset`, or `toml-subset`. Subset ownership requires `strategy: copy`. |
+| `ownership` | No | Empty, `json-subset`, `jsonc-subset`, or `toml-subset`. Subset ownership requires `strategy: copy`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `dependencies` | No | Entry-level Dependencies. |
@@ -150,6 +150,12 @@ value remains a Conflict. Every applied update creates a Backup Set. Legacy
 metadata without prior-contribution evidence may establish a new baseline after
 a safe additive or unchanged install, but never authorizes removal retroactively;
 a compatible pre-existing target without matching metadata is still a Conflict.
+
+For a `jsonc-subset` target, object keys use the same recursive three-state
+ownership model, but scalars and arrays are atomic ordered values. Compatible
+updates preserve target-only object keys plus untouched comments, trailing
+commas, ordering, and formatting. A changed owned scalar or array is Drift for
+a recorded target and a Conflict without trusted Installation Metadata.
 
 Current Managed Entries:
 
@@ -176,7 +182,7 @@ Current Managed Entries:
 | `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
 | `configs/bat/config` | `~/.config/bat/config` | `symlink` | `core` | `darwin`, `linux` | `bat` |
 | `configs/nvim` | `~/.config/nvim` | `symlink` | `core` | `darwin`, `linux` | `neovim` |
-| `configs/zed/settings.json` | `~/.config/zed/settings.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
+| `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |

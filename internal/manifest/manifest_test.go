@@ -167,6 +167,33 @@ entries:
 	}
 }
 
+func TestLoadFileParsesJSONCSubsetOwnership(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dots.yaml")
+	content := []byte(`version: 1
+profiles:
+  default:
+    tags: [desktop]
+entries:
+  - source: configs/zed/settings.json
+    target: ~/.config/zed/settings.json
+    strategy: copy
+    ownership: jsonc-subset
+    tags: [desktop]
+`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	got, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+	if got.Entries[0].Ownership != "jsonc-subset" {
+		t.Fatalf("Entry.Ownership = %q, want jsonc-subset", got.Entries[0].Ownership)
+	}
+}
+
 func TestLoadFileParsesEntryDependencies(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")
@@ -763,6 +790,14 @@ func TestRepositoryManifestDefinesNativeAgentCLIBaseline(t *testing.T) {
 	}
 	if opencodeEntry.Source != "configs/opencode/opencode.json" || opencodeEntry.Ownership != "json-subset" || !sameStrings(opencodeEntry.Tags, []string{"agents"}) {
 		t.Errorf("OpenCode Managed Entry = %#v, want agents-tagged configs/opencode/opencode.json with JSON Subset Ownership", *opencodeEntry)
+	}
+
+	zedSettings := findEntry(got.Entries, "~/.config/zed/settings.json")
+	if zedSettings == nil {
+		t.Fatal("desktop profile missing Zed settings Managed Entry")
+	}
+	if zedSettings.Source != "configs/zed/settings.json" || zedSettings.Strategy != "copy" || zedSettings.Ownership != "jsonc-subset" {
+		t.Errorf("Zed settings Managed Entry = %#v, want copy with JSONC Subset Ownership", *zedSettings)
 	}
 
 	selected, err := provision.Select(*got, provision.Options{Profile: "agents", OS: "darwin"})
@@ -1641,7 +1676,7 @@ entries:
     ownership: merge
     tags: [core]
 `,
-			want: "entries[0].ownership must be one of json-subset, toml-subset",
+			want: "entries[0].ownership must be one of json-subset, jsonc-subset, toml-subset",
 		},
 		{
 			name: "json subset ownership on non-copy strategy",

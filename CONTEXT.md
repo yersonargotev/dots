@@ -60,6 +60,10 @@ _Avoid_: copied config, managed runtime file, drifted baseline
 An Entry Ownership mode for co-owned strict-JSON targets where the repository source is the dots-owned baseline and the workstation target may contain additional object keys or array elements added by another supported owner. Installation Metadata records the last dots-owned contribution so a later install can add new values, remove unchanged retired values, and reject externally changed former values. Uninstall subtracts only that proven contribution and preserves the target while external content remains.
 _Avoid_: JSON merge, partial sync, tolerate anything
 
+**JSONC Subset Ownership**:
+An Entry Ownership mode for co-owned JSON-with-comments targets where dots recursively owns baseline object keys while preserving target-only keys and untouched syntax trivia. Baseline scalars and arrays are atomic ordered values: a live difference is Drift or Conflict rather than an additive merge. Installation Metadata records the canonical semantic contribution, while updates and uninstall edit the regular target without reserializing unrelated comments, trailing commas, ordering, or formatting.
+_Avoid_: formatted JSON merge, unordered array merge, strip comments
+
 **Backup Set**:
 A timestamped collection of files preserved before an installation changes existing workstation targets. Backup sets live under `~/.local/state/dots/backups/` and include metadata describing what was protected and why.
 _Avoid_: old files, backup folder, snapshot
