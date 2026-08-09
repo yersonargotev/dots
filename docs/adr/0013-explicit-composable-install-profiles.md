@@ -1,4 +1,4 @@
-# Require explicit, composable install profiles
+# Require explicit, composable Profiles
 
 The Dotfiles CLI previously treated `default` as an implicit install baseline.
 That made bare `dots install` select the `core` tag and install base shell,

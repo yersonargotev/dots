@@ -74,7 +74,7 @@ The CLI should show the Install Plan without writing files:
 dots install --profile workstation --dry-run
 ```
 
-There is no implicit install Profile. Repeat `--profile` to compose selections:
+There is no implicit Profile. Repeat `--profile` to compose selections:
 `workstation` covers `core + desktop + agents`, while `web` and `mobile` stay
 explicit opt-ins. For a full workstation plus optional web and mobile setup, run
 `dots install --profile workstation --profile web --profile mobile`.
