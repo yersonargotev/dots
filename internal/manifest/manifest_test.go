@@ -3191,6 +3191,25 @@ func TestRepositoryManifestNeovimEntry(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestZedKeymapIsSeededRuntimeState(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	for _, entry := range got.Entries {
+		if entry.Target != "~/.config/zed/keymap.json" {
+			continue
+		}
+		if entry.Source != "configs/zed/keymap.json" || entry.Strategy != "copy" || entry.Ownership != "seeded" {
+			t.Fatalf("Zed keymap entry = %#v, want seeded copy from configs/zed/keymap.json", entry)
+		}
+		return
+	}
+	t.Fatal("repository manifest missing Zed keymap entry")
+}
+
 func TestDirectorySourceSymlinkStrategyPassesValidation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dots.yaml")

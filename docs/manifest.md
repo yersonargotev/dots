@@ -211,7 +211,7 @@ Current Managed Entries:
 | `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `core` | `darwin`, `linux` | `neovim` |
 | `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `core` | `darwin`, `linux` | None |
 | `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `desktop` | `darwin`, `linux` | `zed` |
-| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
+| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `copy` (`seeded`) | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
 | `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
