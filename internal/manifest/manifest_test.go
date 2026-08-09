@@ -1723,7 +1723,7 @@ entries:
     ownership: merge
     tags: [core]
 `,
-			want: "entries[0].ownership must be one of json-subset, jsonc-subset, toml-subset, seeded",
+			want: "entries[0].ownership must be one of json-subset, jsonc-subset, toml-subset, marked-block, seeded",
 		},
 		{
 			name: "json subset ownership on non-copy strategy",
@@ -2226,7 +2226,7 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 		strategy string
 		dep      string
 	}{
-		{name: "zsh", target: "~/.zshrc", source: "configs/zsh/zshrc", strategy: "symlink", dep: "zsh"},
+		{name: "zsh", target: "~/.zshrc", source: "configs/zsh/loader.zsh", strategy: "copy", dep: "zsh"},
 		{name: "git", target: "~/.gitconfig", source: "configs/git/gitconfig", strategy: "symlink", dep: "git"},
 		{name: "starship", target: "~/.config/starship.toml", source: "configs/starship/starship.toml", strategy: "symlink", dep: "starship"},
 		{name: "tmux", target: "~/.tmux.conf", source: "configs/tmux/tmux.conf", strategy: "symlink", dep: "tmux"},
@@ -2254,6 +2254,13 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 				t.Errorf("Dependencies = %#v, want %q", entry.Dependencies, tt.dep)
 			}
 		})
+	}
+	if got := entriesByTarget["~/.zshrc"].Ownership; got != "marked-block" {
+		t.Errorf("zsh ownership = %q, want marked-block", got)
+	}
+	portable, ok := entriesByTarget["~/.config/dots/zsh/zshrc"]
+	if !ok || portable.Source != "configs/zsh/zshrc" || portable.Strategy != "symlink" {
+		t.Errorf("portable zsh entry = %#v, want managed symlink", portable)
 	}
 }
 

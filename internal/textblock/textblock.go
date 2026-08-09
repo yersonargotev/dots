@@ -3,10 +3,22 @@
 package textblock
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strings"
 )
+
+const (
+	DotsManagedBlockStart = "# >>> dots managed block >>>"
+	DotsManagedBlockEnd   = "# <<< dots managed block <<<"
+)
+
+// DotsManagedMarkers returns the exact portable markers used by partial text
+// ownership in the Install Manifest.
+func DotsManagedMarkers() Markers {
+	return Markers{Start: DotsManagedBlockStart, End: DotsManagedBlockEnd}
+}
 
 // Markers identify the start and end comments around a managed block.
 type Markers struct {
@@ -96,6 +108,103 @@ func Remove(content string, markers ...Markers) (string, error) {
 type blockRange struct {
 	start int
 	end   int
+}
+
+// Reconciliation describes a strict three-way update of one recorded block.
+type Reconciliation struct {
+	Content    []byte
+	Changed    bool
+	Compatible bool
+}
+
+// ValidOwnedSource reports whether source is exactly one complete marked block.
+func ValidOwnedSource(source []byte, markers Markers) bool {
+	b, ok := parseOwned(source, markers)
+	return ok && b.start == 0 && b.end == len(source)
+}
+
+// ReconcileOwned replaces the exact recorded initial block and preserves every
+// byte before and after it. Ambiguous placement or markers fail closed.
+func ReconcileOwned(live, previous, current []byte, markers Markers) Reconciliation {
+	liveBlock, ok := parseOwned(live, markers)
+	if !ok || !ValidOwnedSource(previous, markers) || !ValidOwnedSource(current, markers) ||
+		!bytes.Equal(live[liveBlock.start:liveBlock.end], previous) {
+		return Reconciliation{}
+	}
+	content := replaceOwned(live, liveBlock.start, liveBlock.end, current)
+	return Reconciliation{Content: content, Changed: !bytes.Equal(content, live), Compatible: true}
+}
+
+// MigrateLegacyOwned converts an exact legacy whole-file contribution,
+// optionally followed by appended bytes, into the current marked block.
+func MigrateLegacyOwned(live, previous, current []byte, markers Markers) Reconciliation {
+	if !ValidOwnedSource(current, markers) || len(previous) == 0 || !bytes.HasPrefix(live, previous) {
+		return Reconciliation{}
+	}
+	content := append(append([]byte(nil), current...), live[len(previous):]...)
+	return Reconciliation{Content: content, Changed: !bytes.Equal(content, live), Compatible: true}
+}
+
+// RemoveOwned subtracts only the exact recorded block. Empty is true only when
+// no external bytes remain, allowing removal of the physical container.
+func RemoveOwned(live, owned []byte, markers Markers) (content []byte, changed, empty, compatible bool) {
+	b, ok := parseOwned(live, markers)
+	if !ok || !ValidOwnedSource(owned, markers) || !bytes.Equal(live[b.start:b.end], owned) {
+		return nil, false, false, false
+	}
+	content = replaceOwned(live, b.start, b.end, nil)
+	return content, true, len(content) == 0, true
+}
+
+func parseOwned(content []byte, markers Markers) (blockRange, bool) {
+	if markers.Start == "" || markers.End == "" {
+		return blockRange{}, false
+	}
+	var found blockRange
+	starts, ends := 0, 0
+	for offset := 0; offset < len(content); {
+		next := bytes.IndexByte(content[offset:], '\n')
+		lineEnd := len(content)
+		if next >= 0 {
+			lineEnd = offset + next + 1
+		}
+		text := strings.TrimSuffix(string(content[offset:lineEnd]), "\n")
+		switch text {
+		case markers.Start:
+			starts++
+			if starts == 1 {
+				found.start = offset
+			}
+		case markers.End:
+			ends++
+			if ends == 1 {
+				found.end = lineEnd
+			}
+		}
+		offset = lineEnd
+	}
+	if starts != 1 || ends != 1 || found.end <= found.start || !commentsOnly(content[:found.start]) {
+		return blockRange{}, false
+	}
+	return found, true
+}
+
+func commentsOnly(content []byte) bool {
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			return false
+		}
+	}
+	return true
+}
+
+func replaceOwned(content []byte, start, end int, replacement []byte) []byte {
+	result := make([]byte, 0, len(content)-(end-start)+len(replacement))
+	result = append(result, content[:start]...)
+	result = append(result, replacement...)
+	result = append(result, content[end:]...)
+	return result
 }
 
 func findRanges(content string, markers []Markers) ([]blockRange, error) {

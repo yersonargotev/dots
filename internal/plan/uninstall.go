@@ -6,6 +6,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/textblock"
 )
 
 // UninstallStatus describes what removing a recorded target would do, mirroring
@@ -170,6 +171,17 @@ func uninstallStatus(rec state.Record, sourceRoot, home string) (UninstallStatus
 			if err != nil {
 				return "", fmt.Errorf("analyze owned JSON for %s: %w", rec.Target, err)
 			}
+			if compatible {
+				return UninstallRemove, nil
+			}
+			return UninstallModified, nil
+		}
+		if rec.Ownership == "marked-block" && len(rec.OwnedBytes) > 0 {
+			targetData, err := os.ReadFile(rec.Target)
+			if err != nil {
+				return "", fmt.Errorf("read uninstall target %s: %w", rec.Target, err)
+			}
+			_, _, _, compatible := textblock.RemoveOwned(targetData, rec.OwnedBytes, textblock.DotsManagedMarkers())
 			if compatible {
 				return UninstallRemove, nil
 			}

@@ -2,9 +2,8 @@
 # Portable, modular, and safe to source on a fresh machine.
 # Machine-specific values and secrets live in ~/.zshrc.local (not managed).
 
-# Resolve this file's real directory even when sourced through a symlink, so the
+# Resolve this portable file's real directory through its managed symlink so the
 # modular config and the Zim runtime can be located relative to the repository.
-# This requires the symlink install strategy (see configs/zsh/README.md).
 ZSH_CONFIG_DIR="${${(%):-%x}:A:h}"
 
 # Pre-init modular config: must run before Zim loads its modules, because some

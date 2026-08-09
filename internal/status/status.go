@@ -17,6 +17,7 @@ import (
 	"github.com/yersonargotev/dots/internal/seededstate"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/textblock"
 )
 
 // State classifies a managed target's alignment with the Source of Truth.
@@ -245,6 +246,32 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		// Any trusted regular-file difference is either an advanceable old
 		// baseline or expected local evolution. Neither is Drift in status;
 		// install performs the conditional advancement.
+		return StateOK, nil
+	}
+	if entry.Ownership == "marked-block" {
+		info, err := os.Lstat(target)
+		if err != nil {
+			return "", fmt.Errorf("stat marked-block target %s: %w", target, err)
+		}
+		rec, recorded := meta.FindByTarget(target)
+		if !info.Mode().IsRegular() || !recorded || rec.Strategy != entry.Strategy || rec.Source != entry.Source || rec.Ownership != "marked-block" || len(rec.OwnedBytes) == 0 {
+			return StateConflict, nil
+		}
+		live, err := os.ReadFile(target)
+		if err != nil {
+			return "", fmt.Errorf("read marked-block target %s: %w", target, err)
+		}
+		current, err := os.ReadFile(sourceAbs)
+		if err != nil {
+			return "", fmt.Errorf("read marked-block source %s: %w", sourceAbs, err)
+		}
+		reconciliation := textblock.ReconcileOwned(live, rec.OwnedBytes, current, textblock.DotsManagedMarkers())
+		if !reconciliation.Compatible {
+			return StateConflict, nil
+		}
+		if reconciliation.Changed {
+			return StateDrifted, nil
+		}
 		return StateOK, nil
 	}
 	if entry.Ownership == "json-subset" && len(currentJSON) > 0 {

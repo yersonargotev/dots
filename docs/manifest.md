@@ -140,7 +140,7 @@ dots' own `--state-root`.
 | `target` | Yes | Home-relative `~` or `~/...`; with `target_root: xdg-state`, a confined relative path. |
 | `target_root` | No | `xdg-state`. It requires `ownership: seeded`; empty keeps home-target resolution. |
 | `strategy` | Yes | `symlink`, `copy`, or `template` in the manifest schema. Current install execution supports `symlink` and `copy`. |
-| `ownership` | No | Empty, `json-subset`, `jsonc-subset`, `toml-subset`, or `seeded`. Explicit ownership requires `strategy: copy`. |
+| `ownership` | No | Empty, `json-subset`, `jsonc-subset`, `toml-subset`, `marked-block`, or `seeded`. Explicit ownership requires `strategy: copy`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `dependencies` | No | Entry-level Dependencies. |
@@ -167,11 +167,19 @@ is preserved as aligned information with reason `seeded-local-evolution`.
 Uninstall retains the physical runtime state and removes only its ownership
 record.
 
+For `marked-block` ownership, dots records one exact initial delimited block in
+Installation Metadata. Blank lines and comments may precede it; executable
+content may not. Updates replace only an unchanged prior contribution after a
+Backup Set and preserve surrounding bytes. Duplicate, incomplete, moved, or
+edited blocks remain Conflicts. Uninstall subtracts only the recorded block and
+removes the regular-file container only when no external bytes remain.
+
 Current Managed Entries:
 
 | Source | Target | Strategy | Tags | OS | Dependencies |
 |--------|--------|----------|------|----|--------------|
-| `configs/zsh/zshrc` | `~/.zshrc` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
+| `configs/zsh/loader.zsh` | `~/.zshrc` | `copy` (`marked-block`) | `core` | `darwin`, `linux` | `zsh` |
+| `configs/zsh/zshrc` | `~/.config/dots/zsh/zshrc` | `symlink` | `core` | `darwin`, `linux` | None |
 | `configs/zsh/zimrc` | `~/.zimrc` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
 | `configs/zsh/zshenv` | `~/.zshenv` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
 | `configs/git/gitconfig` | `~/.gitconfig` | `symlink` | `core` | `darwin`, `linux` | `git` |
