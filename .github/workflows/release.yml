@@ -54,7 +54,7 @@ jobs:
         run: scripts/build-release-artifacts.sh --version "${{ steps.release.outputs.tag }}" --out-dir dist
 
       - name: Preserve release checksums for Homebrew publication
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-checksums
           path: dist/checksums.txt
@@ -92,7 +92,7 @@ jobs:
           ref: ${{ needs.release.outputs.tag }}
 
       - name: Download release checksums
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-checksums
           path: dist
