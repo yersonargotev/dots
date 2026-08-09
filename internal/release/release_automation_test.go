@@ -111,7 +111,7 @@ func TestReleaseWorkflowGatesHomebrewPublishingBehindEnvironment(t *testing.T) {
 	})
 	uploadChecksumsIndex := workflowStepIndex(t, releaseSteps, "release checksum workflow artifact upload", func(step map[string]any) bool {
 		with := stepWith(step)
-		return stepUses(step) == "actions/upload-artifact@v4" &&
+		return stepUses(step) == "actions/upload-artifact@v7" &&
 			with["name"] == "release-checksums" &&
 			with["path"] == "dist/checksums.txt"
 	})
@@ -129,7 +129,7 @@ func TestReleaseWorkflowGatesHomebrewPublishingBehindEnvironment(t *testing.T) {
 
 	downloadChecksumsIndex := workflowStepIndex(t, homebrewSteps, "release checksum workflow artifact download", func(step map[string]any) bool {
 		with := stepWith(step)
-		return stepUses(step) == "actions/download-artifact@v4" &&
+		return stepUses(step) == "actions/download-artifact@v7" &&
 			with["name"] == "release-checksums" &&
 			with["path"] == "dist"
 	})
