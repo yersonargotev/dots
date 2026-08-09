@@ -1,0 +1,157 @@
+{
+  "schema_version": "7",
+  "command": "catalog tag",
+  "status": "ok",
+  "data": {
+    "os": "all",
+    "metadata_origin": "declared",
+    "profiles": [
+      {
+        "name": "core",
+        "description": "Core profile",
+        "status": "current",
+        "tags": [
+          "core"
+        ]
+      },
+      {
+        "name": "old",
+        "description": "",
+        "status": "legacy",
+        "tags": [
+          "old"
+        ]
+      }
+    ],
+    "tags": [
+      {
+        "name": "core",
+        "description": "Core configuration",
+        "kind": "surface",
+        "status": "current",
+        "origin": "declared"
+      },
+      {
+        "name": "old",
+        "description": "Compatibility profile",
+        "kind": "surface",
+        "status": "legacy",
+        "replaced_by": "core",
+        "origin": "declared"
+      },
+      {
+        "name": "theme",
+        "description": "Theme configuration",
+        "kind": "surface",
+        "status": "current",
+        "origin": "declared"
+      }
+    ],
+    "hidden": {
+      "profiles": 0,
+      "tags": 0
+    },
+    "tag": {
+      "name": "theme",
+      "description": "Theme configuration",
+      "status": "current",
+      "kind": "surface",
+      "resolved_tags": [
+        "theme"
+      ],
+      "dependencies": [
+        {
+          "name": "theme-tool",
+          "requirement": "required",
+          "probes": [
+            "theme-tool"
+          ],
+          "origin": {
+            "type": "dependency_set",
+            "tags": [
+              "theme"
+            ]
+          }
+        }
+      ],
+      "dependency_sets": [
+        {
+          "tags": [
+            "theme"
+          ],
+          "os": [
+            "darwin",
+            "linux"
+          ],
+          "dependencies": [
+            {
+              "name": "theme-tool",
+              "requirement": "required",
+              "probes": [
+                "theme-tool"
+              ],
+              "origin": {
+                "type": "dependency_set",
+                "tags": [
+                  "theme"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "profile_dependencies": [],
+      "entries": [
+        {
+          "source": "adaptive",
+          "target": "~/.example",
+          "strategy": "copy",
+          "tags": [
+            "theme"
+          ],
+          "os": [
+            "darwin"
+          ],
+          "dependencies": []
+        }
+      ],
+      "source_overrides": [
+        {
+          "tag": "theme",
+          "source": "adaptive",
+          "entry": "base",
+          "target": "~/.example",
+          "os": [
+            "darwin"
+          ],
+          "applicable": true
+        }
+      ],
+      "provisioners": [
+        {
+          "tool": "codex",
+          "operation": "mcp",
+          "identity": "demo",
+          "agents": [],
+          "skills": [],
+          "command": [
+            "demo",
+            "serve"
+          ],
+          "environment_names": [
+            "SECRET"
+          ],
+          "tags": [
+            "theme"
+          ],
+          "os": [
+            "darwin"
+          ],
+          "dependencies": []
+        }
+      ],
+      "behaviors": [],
+      "excluded": []
+    }
+  }
+}

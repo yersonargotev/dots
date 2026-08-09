@@ -1,9 +1,60 @@
 version: 1
+tags:
+  core:
+    description: "Core Development Baseline: shell, terminal, Git, editor, and common developer tooling."
+    kind: surface
+    status: current
+  desktop:
+    description: Desktop terminal/editor configuration and integrations.
+    kind: surface
+    status: current
+  agents:
+    description: Native Agent CLI Baseline for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
+    kind: surface
+    status: current
+  codex-delegation:
+    description: Codex-only delegation skill, generic delegation overlay, and native explorer/worker agents.
+    kind: surface
+    status: current
+  web:
+    description: Optional frontend/browser workbench with web skills and Chrome DevTools integrations.
+    kind: surface
+    status: current
+  mobile:
+    description: Optional Dart, Flutter, and Android development skills and MCP integrations.
+    kind: surface
+    status: current
+  adaptive-theme:
+    description: Opt-in adaptive-theme marker and supported app-specific sources or fragments.
+    kind: surface
+    status: current
+  codegraph:
+    description: Opt-in CodeGraph provisioner and Codex SessionStart hook source override.
+    kind: surface
+    status: current
+  without-codex-delegation:
+    description: Remove the dots-owned generic delegation overlay and native Codex explorer/worker agents.
+    kind: cleanup
+    status: current
+  codex-spark-delegation:
+    description: Legacy Spark-specific delegation alias that converges the current generic delegation overlay and native agents.
+    kind: compatibility
+    status: legacy
+    replaced_by: codex-delegation
+  without-codex-spark-delegation:
+    description: Legacy Spark-specific cleanup alias for the supported delegation cleanup behavior.
+    kind: compatibility
+    status: legacy
+    replaced_by: without-codex-delegation
 profiles:
   core:
+    description: Core dotfiles and general developer tooling without agent, web, or mobile provisioners.
+    status: current
     tags:
       - core
   desktop:
+    description: Desktop-only configuration and integrations; compose with core when core dotfiles are desired too.
+    status: current
     tags:
       - desktop
     dependencies:
@@ -13,12 +64,18 @@ profiles:
         font_fallback_matches:
           - "CaskaydiaCoveNerdFont*"
   agents:
+    description: Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
+    status: current
     tags:
       - agents
   codex-delegation:
+    description: Codex-only delegation capability without the broader Agent CLI Baseline.
+    status: current
     tags:
       - codex-delegation
   web:
+    description: Optional frontend and browser workbench.
+    status: current
     tags:
       - web
     dependencies:
@@ -27,9 +84,13 @@ profiles:
         brew: playwright-cli
         linux_homebrew: true
   mobile:
+    description: Optional Dart and Flutter mobile development capabilities.
+    status: current
     tags:
       - mobile
   workstation:
+    description: Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in.
+    status: current
     tags:
       - core
       - desktop

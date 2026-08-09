@@ -132,6 +132,10 @@ _Avoid_: latest installer, unpinned download, auto-updater
 The preview of filesystem changes, conflicts, dependency findings, and backup requirements that the Dotfiles CLI computes before applying installation. It is shown during normal installation and is the output of dry-run mode.
 _Avoid_: preview, dry run output, change list
 
+**Install Catalog**:
+The read-only, Source of Truth-derived description of available Profiles, Tags, and their portable selected surfaces. It explains what the current Install Manifest offers without reading Installation Metadata, historical inventory, workstation alignment, or an Install Plan, and it never implies or changes an Installed Selection.
+_Avoid_: installed catalog, status report, selection preview
+
 **Uninstall Plan**:
 The preview of removals the Dotfiles CLI computes from the Installation Metadata before reversing an install, classifying each recorded target as remove, retain, skip, modified, or not-owned. It is the mirror of the Install Plan and is the output of `dots uninstall --dry-run`.
 _Avoid_: removal preview, deletion list, reverse plan
