@@ -1,0 +1,27 @@
+Tag "theme"
+OS: all
+Metadata origin: declared
+Description: Theme configuration
+Status: current
+Kind: surface
+Resolved tags: theme
+Profile dependencies:
+  none
+Dependency sets:
+  - tags: theme; OS: darwin, linux
+    - theme-tool (required)
+Dependencies:
+  - theme-tool (required; origin: dependency_set tags=theme)
+    probes: theme-tool
+Entries:
+  - adaptive -> ~/.example (copy; tags: theme; OS: darwin)
+Source overrides:
+  - theme: adaptive -> ~/.example (entry: base; OS: darwin; applicable)
+Provisioners:
+  - codex (mcp: demo; tags: theme; OS: darwin)
+    command: demo serve
+    environment names: SECRET
+Behaviors:
+  none
+Excluded surfaces:
+  none

@@ -51,6 +51,87 @@ entries:
 	}
 }
 
+func TestParseValidatesOptionalTagRegistry(t *testing.T) {
+	valid := `version: 1
+tags:
+  core:
+    description: shared baseline
+    kind: surface
+    status: current
+  legacy-core:
+    description: old baseline selector
+    kind: surface
+    status: legacy
+    replaced_by: core
+  codex-delegation:
+    description: install Codex delegation guidance
+    kind: surface
+    status: current
+  codex-spark-delegation:
+    description: old Codex delegation selector
+    kind: compatibility
+    status: legacy
+    replaced_by: codex-delegation
+  agents:
+    description: retire Gentle AI state
+    kind: surface
+    status: current
+profiles:
+  default:
+    description: default workstation
+    status: current
+    tags: [core]
+dependencies:
+  - tags: [core]
+    dependencies: [{name: git}]
+entries:
+  - source: configs/zsh/zshrc
+    source_overrides: {legacy-core: configs/zsh/legacy-zshrc}
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [core]
+provisioners:
+  - tool: claude
+    tags: [agents]
+    spec: {marketplace: example/tools}
+`
+	got, err := manifest.Parse([]byte(valid))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if got.Profiles["default"].Description != "default workstation" || got.Profiles["default"].Status != "current" {
+		t.Fatalf("Profile = %#v, want description and status", got.Profiles["default"])
+	}
+	if got.Tags["legacy-core"].ReplacedBy != "core" {
+		t.Fatalf("legacy tag = %#v, want replacement", got.Tags["legacy-core"])
+	}
+
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"profile reference", strings.Replace(valid, "tags: [core]\ndependencies:", "tags: [missing]\ndependencies:", 1), `profiles["default"].tags[0] tag "missing" is not declared`},
+		{"dependency reference", strings.Replace(valid, "  - tags: [core]\n    dependencies", "  - tags: [missing]\n    dependencies", 1), `dependencies[0].tags[0] tag "missing" is not declared`},
+		{"entry reference", strings.Replace(valid, "    tags: [core]\nprovisioners:", "    tags: [missing]\nprovisioners:", 1), `entries[0].tags[0] tag "missing" is not declared`},
+		{"override key", strings.Replace(valid, "source_overrides: {legacy-core:", "source_overrides: {missing:", 1), `entries[0].source_overrides[0] tag "missing" is not declared`},
+		{"provisioner reference", strings.Replace(valid, "    tags: [agents]\n    spec:", "    tags: [missing]\n    spec:", 1), `provisioners[0].tags[0] tag "missing" is not declared`},
+		{"invalid kind", strings.Replace(valid, "kind: compatibility", "kind: command", 1), `tags["codex-spark-delegation"].kind must be one of surface, cleanup, compatibility`},
+		{"behavior kind mismatch", strings.Replace(valid, "  codex-delegation:\n    description: install Codex delegation guidance\n    kind: surface", "  codex-delegation:\n    description: install Codex delegation guidance\n    kind: cleanup", 1), `tags["codex-delegation"].kind must be "surface"`},
+		{"unallowlisted behavior tag", strings.Replace(valid, "  legacy-core:\n    description: old baseline selector\n    kind: surface", "  legacy-core:\n    description: old baseline selector\n    kind: cleanup", 1), `tags["legacy-core"].kind "cleanup" requires a supported behavior tag`},
+		{"replacement source current", strings.Replace(valid, "status: legacy\n    replaced_by", "status: current\n    replaced_by", 1), `tags["legacy-core"].replaced_by requires status legacy`},
+		{"replacement target legacy", strings.Replace(valid, "status: current", "status: legacy", 1), `tags["legacy-core"].replaced_by "core" must reference a current tag`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := manifest.Parse([]byte(tt.content))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Parse() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadPreviousFileProjectsRetiredProvisionerInventoryWithoutAcceptingItsDialect(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "dots.yaml")
 	content := []byte(`version: 1

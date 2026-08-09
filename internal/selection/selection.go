@@ -8,6 +8,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/tagpolicy"
 )
 
 // Source identifies where a selection-aware command obtained its intent.
@@ -304,6 +305,16 @@ func missingProfiles(m manifest.Manifest, profiles []string) []string {
 }
 
 func staleExtraTags(m manifest.Manifest, extraTags []string) []string {
+	if m.Tags != nil {
+		var stale []string
+		for _, tag := range orderedUnique(extraTags) {
+			if _, declared := m.Tags[tag]; !declared && !tagpolicy.IsBehaviorTag(tag) {
+				stale = append(stale, tag)
+			}
+		}
+		return cloneStrings(stale)
+	}
+
 	declared := make(map[string]bool)
 	for _, entry := range m.Entries {
 		for _, tag := range entry.Tags {
@@ -322,21 +333,11 @@ func staleExtraTags(m manifest.Manifest, extraTags []string) []string {
 	}
 	var stale []string
 	for _, tag := range orderedUnique(extraTags) {
-		if !declared[tag] && !supportedSelectionModifier(tag) {
+		if !declared[tag] && !tagpolicy.IsBehaviorTag(tag) {
 			stale = append(stale, tag)
 		}
 	}
 	return cloneStrings(stale)
-}
-
-func supportedSelectionModifier(tag string) bool {
-	switch tag {
-	case "codex-delegation", "without-codex-delegation",
-		"codex-spark-delegation", "without-codex-spark-delegation":
-		return true
-	default:
-		return false
-	}
 }
 
 func selectedSurface(m manifest.Manifest, selected manifest.Selection, osName string) Changes {

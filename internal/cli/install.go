@@ -25,6 +25,7 @@ import (
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
+	"github.com/yersonargotev/dots/internal/tagpolicy"
 	"github.com/yersonargotev/dots/internal/tui"
 	"github.com/yersonargotev/dots/internal/version"
 )
@@ -512,18 +513,17 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 	if recordErr := recordProvisionerMetadata(stateRoot, sourceRoot, report); recordErr != nil {
 		return report, recordErr
 	}
-	selectedTags := report.Tags
-	if containsString(selectedTags, "agents") {
-		if cleanupErr := agentinstructions.RetireGentleAIState(home); cleanupErr != nil {
-			return report, errors.Join(err, cleanupErr)
+	for _, action := range tagpolicy.Actions(report.Tags) {
+		var cleanupErr error
+		switch action {
+		case tagpolicy.ActionRetireGentleAIState:
+			cleanupErr = agentinstructions.RetireGentleAIState(home)
+		case tagpolicy.ActionRemoveCodexDelegation:
+			cleanupErr = agentinstructions.RemoveCodexDelegation(home)
+		case tagpolicy.ActionConvergeCodexDelegation:
+			cleanupErr = agentinstructions.ConvergeCodexDelegation(home)
 		}
-	}
-	if containsString(selectedTags, "without-codex-delegation") || containsString(selectedTags, "without-codex-spark-delegation") {
-		if cleanupErr := agentinstructions.RemoveCodexDelegation(home); cleanupErr != nil {
-			return report, errors.Join(err, cleanupErr)
-		}
-	} else if containsString(selectedTags, "codex-delegation") || containsString(selectedTags, "codex-spark-delegation") {
-		if cleanupErr := agentinstructions.ConvergeCodexDelegation(home); cleanupErr != nil {
+		if cleanupErr != nil {
 			return report, errors.Join(err, cleanupErr)
 		}
 	}
@@ -534,15 +534,6 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 		return report, codexconfig.EnsureCodeGraphMode(home, agents...)
 	}
 	return report, nil
-}
-
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
 }
 
 func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {

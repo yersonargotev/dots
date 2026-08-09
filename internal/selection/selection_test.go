@@ -370,6 +370,36 @@ func TestCompareEvolutionPreservesSupportedSelectionModifiers(t *testing.T) {
 	}
 }
 
+func TestCompareEvolutionUsesTagRegistryForStaleExtraTags(t *testing.T) {
+	m := manifest.Manifest{
+		Tags: map[string]manifest.Tag{
+			"core":          {Kind: "surface", Status: "current"},
+			"legacy-option": {Kind: "compatibility", Status: "legacy", ReplacedBy: "core"},
+		},
+		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{{Target: ".core", Tags: []string{"core"}}},
+	}
+	previous, err := selection.ResolveIntent(m, selection.Intent{
+		Source: selection.SourceExplicit, Profiles: []string{"core"}, ExtraTags: []string{"legacy-option"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+	if _, err := selection.CompareEvolution(m, m, previous, "linux"); err != nil {
+		t.Fatalf("CompareEvolution() error = %v, want declared legacy tag to remain selectable", err)
+	}
+
+	previous, err = selection.ResolveIntent(m, selection.Intent{
+		Source: selection.SourceExplicit, Profiles: []string{"core"}, ExtraTags: []string{"unknown"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+	if _, err := selection.CompareEvolution(m, m, previous, "linux"); err == nil {
+		t.Fatal("CompareEvolution() error = nil, want undeclared registry tag rejection")
+	}
+}
+
 func TestCompareEvolutionDeltaJSONUsesDeterministicEmptyArrays(t *testing.T) {
 	m := manifest.Manifest{
 		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},

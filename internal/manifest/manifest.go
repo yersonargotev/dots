@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/yersonargotev/dots/internal/tagpolicy"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,6 +21,7 @@ var (
 
 type Manifest struct {
 	Version      int                `yaml:"version"`
+	Tags         map[string]Tag     `yaml:"tags,omitempty"`
 	Profiles     map[string]Profile `yaml:"profiles"`
 	Dependencies []DependencySet    `yaml:"dependencies,omitempty"`
 	Entries      []Entry            `yaml:"entries"`
@@ -27,8 +29,20 @@ type Manifest struct {
 }
 
 type Profile struct {
+	Description  string       `yaml:"description,omitempty"`
+	Status       string       `yaml:"status,omitempty"`
 	Tags         []string     `yaml:"tags"`
 	Dependencies []Dependency `yaml:"dependencies,omitempty"`
+}
+
+// Tag describes a declared selection tag. The registry is optional for v1
+// compatibility; when present, every tag referenced by the manifest must be
+// declared here.
+type Tag struct {
+	Description string `yaml:"description,omitempty"`
+	Kind        string `yaml:"kind"`
+	Status      string `yaml:"status"`
+	ReplacedBy  string `yaml:"replaced_by,omitempty"`
 }
 
 type Entry struct {
@@ -387,6 +401,9 @@ func (m Manifest) Validate() error {
 	if len(m.Entries) == 0 {
 		return fmt.Errorf("entries is required")
 	}
+	if err := m.validateTagRegistry(); err != nil {
+		return err
+	}
 
 	names := make([]string, 0, len(m.Profiles))
 	for name := range m.Profiles {
@@ -395,12 +412,21 @@ func (m Manifest) Validate() error {
 	sort.Strings(names)
 	for _, name := range names {
 		profile := m.Profiles[name]
+		if profile.Description != "" && strings.TrimSpace(profile.Description) == "" {
+			return fmt.Errorf("profiles[%q].description must not be empty", name)
+		}
+		if profile.Status != "" && !tagpolicy.IsAllowedStatus(profile.Status) {
+			return fmt.Errorf("profiles[%q].status must be one of current, legacy", name)
+		}
 		tags := profile.Tags
 		if len(tags) == 0 {
 			return fmt.Errorf("profiles[%q].tags is required", name)
 		}
 		if i, ok := indexOfEmptyTag(tags); ok {
 			return fmt.Errorf("profiles[%q].tags[%d] must not be empty", name, i)
+		}
+		if err := m.validateDeclaredTags(tags, fmt.Sprintf("profiles[%q].tags", name)); err != nil {
+			return err
 		}
 		for j, dep := range profile.Dependencies {
 			if err := validateDependency(dep, fmt.Sprintf("profiles[%q].dependencies[%d]", name, j)); err != nil {
@@ -415,6 +441,9 @@ func (m Manifest) Validate() error {
 		}
 		if j, ok := indexOfEmptyTag(set.Tags); ok {
 			return fmt.Errorf("dependencies[%d].tags[%d] must not be empty", i, j)
+		}
+		if err := m.validateDeclaredTags(set.Tags, fmt.Sprintf("dependencies[%d].tags", i)); err != nil {
+			return err
 		}
 		for j, osName := range set.OS {
 			if !allowedOS(osName) {
@@ -450,6 +479,9 @@ func (m Manifest) Validate() error {
 			if strings.TrimSpace(entry.SourceOverrides[tag]) == "" {
 				return fmt.Errorf("entries[%d].source_overrides[%q] must not be empty", i, tag)
 			}
+			if err := m.validateDeclaredTags([]string{tag}, fmt.Sprintf("entries[%d].source_overrides", i)); err != nil {
+				return err
+			}
 		}
 		if !allowedStrategy(entry.Strategy) {
 			return fmt.Errorf("entries[%d].strategy must be one of copy, symlink, template", i)
@@ -477,6 +509,9 @@ func (m Manifest) Validate() error {
 		if j, ok := indexOfEmptyTag(entry.Tags); ok {
 			return fmt.Errorf("entries[%d].tags[%d] must not be empty", i, j)
 		}
+		if err := m.validateDeclaredTags(entry.Tags, fmt.Sprintf("entries[%d].tags", i)); err != nil {
+			return err
+		}
 		for j, osName := range entry.OS {
 			if !allowedOS(osName) {
 				return fmt.Errorf("entries[%d].os[%d] must be one of darwin, linux", i, j)
@@ -501,6 +536,9 @@ func (m Manifest) Validate() error {
 		}
 		if j, ok := indexOfEmptyTag(prov.Tags); ok {
 			return fmt.Errorf("provisioners[%d].tags[%d] must not be empty", i, j)
+		}
+		if err := m.validateDeclaredTags(prov.Tags, fmt.Sprintf("provisioners[%d].tags", i)); err != nil {
+			return err
 		}
 		for j, osName := range prov.OS {
 			if !allowedOS(osName) {
@@ -539,6 +577,64 @@ func (m Manifest) Validate() error {
 		}
 	}
 
+	return nil
+}
+
+func (m Manifest) validateTagRegistry() error {
+	if m.Tags == nil {
+		return nil
+	}
+	names := make([]string, 0, len(m.Tags))
+	for name := range m.Tags {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("tags contains an empty tag name")
+		}
+		tag := m.Tags[name]
+		if tag.Description != "" && strings.TrimSpace(tag.Description) == "" {
+			return fmt.Errorf("tags[%q].description must not be empty", name)
+		}
+		if !tagpolicy.IsAllowedKind(tag.Kind) {
+			return fmt.Errorf("tags[%q].kind must be one of surface, cleanup, compatibility", name)
+		}
+		if expectedKind, isBehaviorTag := tagpolicy.ExpectedKind(name); isBehaviorTag && tag.Kind != expectedKind {
+			return fmt.Errorf("tags[%q].kind must be %q", name, expectedKind)
+		}
+		if (tag.Kind == "cleanup" || tag.Kind == "compatibility") && !tagpolicy.IsBehaviorTag(name) {
+			return fmt.Errorf("tags[%q].kind %q requires a supported behavior tag", name, tag.Kind)
+		}
+		if !tagpolicy.IsAllowedStatus(tag.Status) {
+			return fmt.Errorf("tags[%q].status must be one of current, legacy", name)
+		}
+		if tag.ReplacedBy == "" {
+			continue
+		}
+		if tag.Status != "legacy" {
+			return fmt.Errorf("tags[%q].replaced_by requires status legacy", name)
+		}
+		replacement, ok := m.Tags[tag.ReplacedBy]
+		if !ok {
+			return fmt.Errorf("tags[%q].replaced_by %q is not declared", name, tag.ReplacedBy)
+		}
+		if replacement.Status != "current" {
+			return fmt.Errorf("tags[%q].replaced_by %q must reference a current tag", name, tag.ReplacedBy)
+		}
+	}
+	return nil
+}
+
+func (m Manifest) validateDeclaredTags(tags []string, path string) error {
+	if m.Tags == nil {
+		return nil
+	}
+	for i, tag := range tags {
+		if _, ok := m.Tags[tag]; !ok {
+			return fmt.Errorf("%s[%d] tag %q is not declared", path, i, tag)
+		}
+	}
 	return nil
 }
 
