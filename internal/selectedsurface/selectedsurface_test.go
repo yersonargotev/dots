@@ -91,6 +91,20 @@ func TestEvaluateResolvesLastTagOverrideAndKeepsActiveOverrides(t *testing.T) {
 	}
 }
 
+func TestEvaluatePreservesAndCopiesEntrySourceOverrides(t *testing.T) {
+	m := manifest.Manifest{Entries: []manifest.Entry{{
+		Source: "base", SourceOverrides: map[string]string{"theme": "theme-source"}, Target: "target", Strategy: "copy", Tags: []string{"core"},
+	}}}
+	got := selectedsurface.Evaluate(m, []string{"core", "theme"}, "linux")
+	if len(got.Entries) != 1 || got.Entries[0].Entry.SourceOverrides["theme"] != "theme-source" {
+		t.Fatalf("Entries = %#v, want preserved source override declaration", got.Entries)
+	}
+	got.Entries[0].Entry.SourceOverrides["theme"] = "changed"
+	if m.Entries[0].SourceOverrides["theme"] != "theme-source" {
+		t.Fatalf("Evaluate result mutated manifest source overrides: %#v", m.Entries[0].SourceOverrides)
+	}
+}
+
 func TestEvaluateSameTagsHaveNoProvenanceInputOrOutput(t *testing.T) {
 	m := manifest.Manifest{Entries: []manifest.Entry{{Source: "base", Target: "target", Strategy: "copy", Tags: []string{"core"}}}}
 	first := selectedsurface.Evaluate(m, []string{"core"}, "linux")

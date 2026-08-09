@@ -3,6 +3,7 @@ package status_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -726,6 +727,42 @@ func TestBuildExcludesEntriesOutsideProfileTags(t *testing.T) {
 	}
 	if report.Entries[0].Source != "configs/zsh/zshrc" {
 		t.Fatalf("unexpected entry %q in report", report.Entries[0].Source)
+	}
+}
+
+func TestBuildProfileAndEquivalentTagsHaveSameDiagnosticScope(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"work": {Tags: []string{"core", "theme"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base", SourceOverrides: map[string]string{"theme": "configs/theme"}, Target: "~/.selected", Strategy: "copy", Tags: []string{"core"}, OS: []string{"linux"}},
+			{Source: "configs/darwin", Target: "~/.darwin", Strategy: "copy", Tags: []string{"core"}, OS: []string{"darwin"}},
+			{Source: "configs/other", Target: "~/.other", Strategy: "copy", Tags: []string{"other"}},
+		},
+	}
+	fromProfile, err := manifest.ResolveReadOnlySelection(m, []string{"work"}, nil)
+	if err != nil {
+		t.Fatalf("resolve Profile selection: %v", err)
+	}
+	fromTags, err := manifest.ResolveReadOnlySelection(m, nil, []string{"core", "theme"})
+	if err != nil {
+		t.Fatalf("resolve Tag selection: %v", err)
+	}
+	build := func(selected manifest.Selection) status.Report {
+		report, buildErr := status.Build(m, state.Metadata{}, status.Options{Selection: &selected, OS: "linux", SourceRoot: sourceRoot, Home: home})
+		if buildErr != nil {
+			t.Fatalf("Build() error = %v", buildErr)
+		}
+		return report
+	}
+	profileReport := build(fromProfile)
+	tagReport := build(fromTags)
+	if !reflect.DeepEqual(profileReport.Entries, tagReport.Entries) {
+		t.Fatalf("diagnostic scope differs\nProfile: %+v\nTags: %+v", profileReport.Entries, tagReport.Entries)
+	}
+	if len(profileReport.Entries) != 2 || profileReport.Entries[0].Source != "configs/theme" || profileReport.Entries[0].State != status.StateMissing || profileReport.Entries[1].State != status.StateSkipped {
+		t.Fatalf("diagnostic entries = %+v, want selected override plus OS-skipped entry", profileReport.Entries)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/doctor"
@@ -88,6 +89,45 @@ func TestScanSecretsIgnoresPlaceholdersAndUnselectedSources(t *testing.T) {
 	}
 	if len(report.Findings) != 0 {
 		t.Fatalf("Findings = %#v, want placeholders and unselected sources ignored", report.Findings)
+	}
+}
+
+func TestScanSecretsProfileAndEquivalentTagsHaveSameDiagnosticScope(t *testing.T) {
+	sourceRoot := t.TempDir()
+	writeFile(t, sourceRoot, "configs/base", "safe = true\n")
+	writeFile(t, sourceRoot, "configs/theme", "api_key = realthemevalue\n")
+	writeFile(t, sourceRoot, "configs/darwin", "token = darwinsecret\n")
+	writeFile(t, sourceRoot, "configs/other", "password = othersecret\n")
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"work": {Tags: []string{"core", "theme"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/base", SourceOverrides: map[string]string{"theme": "configs/theme"}, Target: "~/.selected", Strategy: "copy", Tags: []string{"core"}, OS: []string{"linux"}},
+			{Source: "configs/darwin", Target: "~/.darwin", Strategy: "copy", Tags: []string{"core"}, OS: []string{"darwin"}},
+			{Source: "configs/other", Target: "~/.other", Strategy: "copy", Tags: []string{"other"}},
+		},
+	}
+	fromProfile, err := manifest.ResolveReadOnlySelection(m, []string{"work"}, nil)
+	if err != nil {
+		t.Fatalf("resolve Profile selection: %v", err)
+	}
+	fromTags, err := manifest.ResolveReadOnlySelection(m, nil, []string{"core", "theme"})
+	if err != nil {
+		t.Fatalf("resolve Tag selection: %v", err)
+	}
+	scan := func(selected manifest.Selection) doctor.SecretReport {
+		report, scanErr := doctor.ScanSecrets(m, doctor.Options{Selection: &selected, OS: "linux", SourceRoot: sourceRoot})
+		if scanErr != nil {
+			t.Fatalf("ScanSecrets() error = %v", scanErr)
+		}
+		return report
+	}
+	profileReport := scan(fromProfile)
+	tagReport := scan(fromTags)
+	if !reflect.DeepEqual(profileReport, tagReport) {
+		t.Fatalf("Secret Scan scope differs\nProfile: %+v\nTags: %+v", profileReport, tagReport)
+	}
+	if len(profileReport.Findings) != 1 || profileReport.Findings[0].Source != "configs/theme" {
+		t.Fatalf("Findings = %+v, want only selected override source", profileReport.Findings)
 	}
 }
 

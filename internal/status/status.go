@@ -10,11 +10,13 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"reflect"
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/seededstate"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/textblock"
@@ -99,21 +101,25 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 		resolved = &selection
 	}
 	tags := resolved.Tags
-	jsonContentByTarget, jsonSourcesByTarget, err := selectedJSONContributions(m, tags, opts)
+	surface := selectedsurface.Evaluate(m, tags, opts.OS)
+	jsonContentByTarget, jsonSourcesByTarget, err := selectedJSONContributions(m, surface, opts)
 	if err != nil {
 		return Report{}, err
 	}
 
 	report := Report{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
 	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, tags) {
+		selected, applicable := selectedSurfaceEntry(surface, entry)
+		if !applicable && !manifest.SharesTag(entry.Tags, tags) {
 			continue
 		}
 
-		defaultSource := entry.Source
-		source := manifest.EntrySource(entry, tags)
+		source := entry.Source
+		if applicable {
+			source = selected.Source
+		}
 		evaluated := Entry{Source: source, Target: entry.Target, Strategy: entry.Strategy}
-		if !manifest.MatchesOS(entry.OS, opts.OS) {
+		if !applicable {
 			evaluated.State = StateSkipped
 			report.Entries = append(report.Entries, evaluated)
 			continue
@@ -129,7 +135,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 		}
 
 		entry.Source = source
-		st, err := evaluate(entry, target, meta, opts.SourceRoot, defaultSource, jsonContentByTarget[target], jsonSourcesByTarget[target])
+		st, err := evaluate(entry, target, meta, opts.SourceRoot, selected.Entry.Source, jsonContentByTarget[target], jsonSourcesByTarget[target])
 		if err != nil {
 			return Report{}, err
 		}
@@ -159,14 +165,15 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 	return report, nil
 }
 
-func selectedJSONContributions(m manifest.Manifest, tags []string, opts Options) (map[string][]byte, map[string][]string, error) {
+func selectedJSONContributions(m manifest.Manifest, surface selectedsurface.Surface, opts Options) (map[string][]byte, map[string][]string, error) {
 	pathsByTarget := map[string][]string{}
 	sourcesByTarget := map[string][]string{}
 	for _, entry := range m.Entries {
-		if entry.Strategy != "copy" || entry.Ownership != "json-subset" || !manifest.SharesTag(entry.Tags, tags) || !manifest.MatchesOS(entry.OS, opts.OS) {
+		selected, applicable := selectedSurfaceEntry(surface, entry)
+		if !applicable || entry.Strategy != "copy" || entry.Ownership != "json-subset" {
 			continue
 		}
-		source := manifest.EntrySource(entry, tags)
+		source := selected.Source
 		target, err := plan.ResolveEntryTarget(entry, opts.Home, opts.XDGStateHome)
 		if err != nil {
 			return nil, nil, err
@@ -200,6 +207,15 @@ func selectedJSONContributions(m manifest.Manifest, tags []string, opts Options)
 		contentByTarget[target] = content
 	}
 	return contentByTarget, sourcesByTarget, nil
+}
+
+func selectedSurfaceEntry(surface selectedsurface.Surface, entry manifest.Entry) (selectedsurface.SelectedEntry, bool) {
+	for _, selected := range surface.Entries {
+		if reflect.DeepEqual(selected.Entry, entry) {
+			return selected, true
+		}
+	}
+	return selectedsurface.SelectedEntry{}, false
 }
 
 func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRoot string, defaultSource string, currentJSON []byte, currentSources []string) (State, error) {

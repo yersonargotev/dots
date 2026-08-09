@@ -223,6 +223,29 @@ func TestBuildDoesNotPromoteLegacyInventoryToInstalledSelection(t *testing.T) {
 	}
 }
 
+func TestBuildUsesSelectedSurfaceForCurrentProfileCoverageWithoutPromotingInventory(t *testing.T) {
+	home := t.TempDir()
+	entry := manifest.Entry{Source: "configs/zsh/zshrc", Target: "~/.zshrc", Strategy: "symlink", Tags: []string{"core"}, OS: []string{"linux"}}
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
+		Entries:  []manifest.Entry{entry, entry},
+	}
+	meta := state.Metadata{Version: 2, Entries: []state.Record{{
+		Target: filepath.Join(home, ".zshrc"), Source: entry.Source, Strategy: entry.Strategy, Tags: []string{"core"},
+	}}}
+	report, err := inst.Build(m, meta, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	coverage := findProfile(t, report.Profiles, "core")
+	if coverage.TotalEntries != 1 || coverage.CoveredEntries != 1 || coverage.State != inst.CoverageComplete {
+		t.Fatalf("core coverage = %+v, want de-duplicated current Selected Surface coverage", coverage)
+	}
+	if report.InstalledSelection != nil || !sameStrings(report.Tags, []string{"core"}) {
+		t.Fatalf("historical inventory was promoted: selection=%+v tags=%v", report.InstalledSelection, report.Tags)
+	}
+}
+
 func TestBuildReturnsEmptyListsForEmptyMetadata(t *testing.T) {
 	home := t.TempDir()
 	report, err := inst.Build(inventoryManifest(), state.Metadata{}, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})

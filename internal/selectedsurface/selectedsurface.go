@@ -181,7 +181,12 @@ func containsExact[T any](values []T, candidate T) bool {
 	return false
 }
 
-func cloneStrings(values []string) []string { return append([]string(nil), values...) }
+func cloneStrings(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	return append([]string(nil), values...)
+}
 
 func cloneDependency(dependency manifest.Dependency) manifest.Dependency {
 	dependency.FontFallbackMatches = cloneStrings(dependency.FontFallbackMatches)
@@ -215,8 +220,9 @@ func cloneEntry(entry manifest.Entry) manifest.Entry {
 	entry.OS = cloneStrings(entry.OS)
 	entry.Dependencies = cloneDependencies(entry.Dependencies)
 	if entry.SourceOverrides != nil {
-		entry.SourceOverrides = make(map[string]string, len(entry.SourceOverrides))
-		for tag, source := range entry.SourceOverrides {
+		sourceOverrides := entry.SourceOverrides
+		entry.SourceOverrides = make(map[string]string, len(sourceOverrides))
+		for tag, source := range sourceOverrides {
 			entry.SourceOverrides[tag] = source
 		}
 	}
@@ -241,6 +247,9 @@ func cloneProvisioner(provisioner manifest.Provisioner) manifest.Provisioner {
 }
 
 func cloneDependencies(dependencies []manifest.Dependency) []manifest.Dependency {
+	if dependencies == nil {
+		return nil
+	}
 	result := make([]manifest.Dependency, len(dependencies))
 	for index, dependency := range dependencies {
 		result[index] = cloneDependency(dependency)
