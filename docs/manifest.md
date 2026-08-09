@@ -64,6 +64,49 @@ Current Profiles:
 | `mobile` | `mobile` | Optional Dart and Flutter mobile development agent skills plus Dart/Flutter MCP integration for Claude, Codex, Antigravity, and GitHub Copilot in VS Code. | — |
 | `workstation` | `core`, `desktop`, `agents` | Opinionated composite when core, desktop integrations, and the native Agent CLI Baseline are desired; web and mobile remain explicit opt-ins. | Core Development Baseline, GitHub CLI, shared `jq`, the five Agent CLIs, and the Desktop Nerd Font |
 
+### Current Tags
+
+The table below is the canonical catalog of values accepted by repeated
+`--tag`. Ordinary Install Manifest surface Tags select matching Dependency
+Sets, Managed Entries, source overrides, or Provisioners. Behavior-only
+modifiers are accepted selection intent but perform cleanup instead of selecting
+one of those surfaces. Legacy compatibility aliases remain accepted only so an
+existing selection can converge safely; do not use them for new selections.
+
+| Tag | Classification | Status | Selection or cleanup effect |
+|-----|----------------|--------|-----------------------------|
+| `core` | Ordinary manifest surface | Current; prefer `--profile core` or `workstation` | Selects the Core Development Baseline and core shell, terminal, Git, editor, and CLI configuration. |
+| `desktop` | Ordinary manifest surface | Current; prefer `--profile desktop` or `workstation` | Selects desktop terminal/editor configuration and integrations plus the Profile's Nerd Font Dependency. |
+| `agents` | Ordinary manifest surface | Current; prefer `--profile agents` or `workstation` | Selects the native Agent CLI Baseline and dots-owned configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI; it does not include delegation. |
+| `codex-delegation` | Ordinary manifest surface | Current; prefer `--profile codex-delegation` | Selects the Codex-only delegation skill Provisioner and converges the generic delegation overlay plus dots-owned explorer/worker agents. |
+| `web` | Ordinary manifest surface | Current; prefer `--profile web` | Selects the optional browser/frontend workbench, including web skills and Chrome DevTools integrations. |
+| `mobile` | Ordinary manifest surface | Current; prefer `--profile mobile` | Selects optional Dart, Flutter, and Android skills plus Dart/Flutter MCP integrations. |
+| `adaptive-theme` | Ordinary manifest surface | Current; opt-in Tag | Selects the adaptive-theme marker and supported app-specific sources or fragments; dark fallbacks remain when adaptive behavior is unavailable. |
+| `codegraph` | Ordinary manifest surface | Current; opt-in Tag | Selects the CodeGraph Provisioner and the Codex configuration override that adds its SessionStart hook. |
+| `without-codex-delegation` | Behavior-only cleanup modifier | Current; supported cleanup Tag | Removes the dots-owned generic delegation overlay and native Codex explorer/worker agents while preserving unrelated Codex configuration and user-owned agents. |
+| `codex-spark-delegation` | Legacy compatibility alias | Legacy-only; prefer `--profile codex-delegation` | Migrates the old Spark-specific marker and converges the current generic delegation overlay and native agents; it is not the current delegation Profile surface. |
+| `without-codex-spark-delegation` | Legacy compatibility alias | Legacy-only; prefer `without-codex-delegation` | Applies the supported delegation cleanup behavior for selections that still record the old Spark-named Tag. |
+
+Any explicit `--profile` or `--tag` flags describe the complete selection for
+that invocation; they are not merged with an Installed Selection. These
+examples therefore repeat every intended Profile and Tag:
+
+```bash
+# Compose core configuration with the optional web workbench.
+dots install --profile core --profile web
+
+# Add an optional capability to the complete workstation selection.
+dots install --profile workstation --tag adaptive-theme
+
+# Keep the delegation Profile intent while removing its dots-owned overlay and agents.
+dots install --profile codex-delegation --tag without-codex-delegation
+```
+
+See the [adaptive theme audit](adaptive-theme-audit.md), the
+[`codegraph` Provisioner specification](#codegraph-spec), and the
+[delegation inventory and cleanup contract](agents/delegation.md) for the
+detailed behavior behind those focused capabilities.
+
 ## Tag-scoped Dependency Sets
 
 Top-level `dependencies` declare shared toolchain baselines selected by tag,
