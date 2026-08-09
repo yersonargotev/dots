@@ -274,6 +274,48 @@ func evaluate(entry manifest.Entry, target string, meta state.Metadata, sourceRo
 		}
 		return StateOK, nil
 	}
+	if entry.Ownership == "toml-subset" {
+		info, err := os.Lstat(target)
+		if err != nil {
+			return "", fmt.Errorf("stat TOML target %s: %w", target, err)
+		}
+		rec, recorded := meta.FindByTarget(target)
+		if !info.Mode().IsRegular() {
+			if recorded && rec.Strategy == entry.Strategy {
+				return StateDrifted, nil
+			}
+			return StateConflict, nil
+		}
+		targetData, err := os.ReadFile(target)
+		if err != nil {
+			return "", fmt.Errorf("read TOML target %s: %w", target, err)
+		}
+		sourceData, err := os.ReadFile(sourceAbs)
+		if err != nil {
+			return "", fmt.Errorf("read source TOML %s: %w", sourceAbs, err)
+		}
+		if meta.MatchesEntry(target, entry.Source, entry.Strategy) || meta.MatchesEntry(target, defaultSource, entry.Strategy) {
+			if rec.Ownership == "toml-subset" && len(rec.OwnedBytes) > 0 {
+				reconciliation, err := configsubset.ReconcileTOML(targetData, rec.OwnedBytes, sourceData)
+				if err != nil {
+					return "", fmt.Errorf("reconcile TOML target %s: %w", target, err)
+				}
+				if reconciliation.Compatible && !reconciliation.Changed {
+					return StateOK, nil
+				}
+				return StateDrifted, nil
+			}
+			relation, err := configsubset.AnalyzeTOML(targetData, sourceData)
+			if err != nil {
+				return "", fmt.Errorf("analyze TOML target %s: %w", target, err)
+			}
+			if relation.Contains {
+				return StateOK, nil
+			}
+			return StateDrifted, nil
+		}
+		return StateConflict, nil
+	}
 	if entry.Ownership == "json-subset" && len(currentJSON) > 0 {
 		info, err := os.Lstat(target)
 		if err != nil {

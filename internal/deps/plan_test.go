@@ -110,7 +110,7 @@ func TestPlanUsesAtuinUserLocalProviderOnLinuxWhenDistroProviderUnavailable(t *t
 		Version:  1,
 		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
 		Entries: []manifest.Entry{{
-			Source: "configs/atuin/config.toml", Target: "~/.config/atuin/config.toml", Strategy: "symlink", Tags: []string{"core"},
+			Source: "configs/atuin/config.toml", Target: "~/.config/atuin/config.toml", Strategy: "copy", Ownership: "toml-subset", Tags: []string{"core"},
 			Dependencies: []manifest.Dependency{{
 				Name:          "atuin",
 				Command:       "atuin",

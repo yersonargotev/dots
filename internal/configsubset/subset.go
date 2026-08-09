@@ -1,5 +1,5 @@
 // Package configsubset compares dots-owned configuration fragments against
-// co-owned agent configuration files.
+// co-owned structured configuration files.
 package configsubset
 
 import (
@@ -239,74 +239,9 @@ func MergeJSONFile(target, source string) error {
 	return nil
 }
 
-// TOMLFileContains reports whether target contains every scalar/array setting
-// present in source. The source is parsed strictly because it is the dots-owned
-// fragment. The target is parsed only for source-owned paths, so unrelated TOML
-// added by Codex or provisioners cannot make the dots-owned subset drift.
-func TOMLFileContains(target, source string) (bool, error) {
-	sourceData, err := os.ReadFile(source)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("read %s: %w", source, err)
-	}
-	targetData, err := os.ReadFile(target)
-	if err != nil {
-		return false, fmt.Errorf("read %s: %w", target, err)
-	}
-
-	sourceValues, err := parseSimpleTOML(sourceData, nil)
-	if err != nil {
-		return false, fmt.Errorf("parse source TOML %s: %w", source, err)
-	}
-	targetValues, err := parseSimpleTOML(targetData, sourceValuePaths(sourceValues))
-	if err != nil {
-		return false, nil
-	}
-	for key, sourceValue := range sourceValues {
-		if targetValues[key] != sourceValue {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-// MergeTOMLFile appends missing source-owned array-of-table blocks to target.
-// It is intentionally narrower than a full TOML formatter: dots only needs this
-// for co-owned Codex config hooks, where preserving user/Codex-owned settings is
-// more important than reformatting the whole file. Scalar/table value changes
-// remain conflicts unless a caller adds a dedicated migration.
-func MergeTOMLFile(target, source string) error {
-	sourceData, err := os.ReadFile(source)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", source, err)
-	}
-	targetData, err := os.ReadFile(target)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", target, err)
-	}
-	merged, err := MergeTOML(targetData, sourceData)
-	if err != nil {
-		return err
-	}
-	if bytes.Equal(merged, targetData) {
-		return nil
-	}
-	info, err := os.Stat(target)
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", target, err)
-	}
-	if err := os.WriteFile(target, merged, info.Mode().Perm()); err != nil {
-		return fmt.Errorf("write %s: %w", target, err)
-	}
-	return nil
-}
-
-// MergeTOML returns the conservative co-owned TOML merge without touching the
-// filesystem. It is used by repository-refresh migration planning so dry-run
-// can prove the exact regular-file content before any checkout or target write.
-func MergeTOML(targetData, sourceData []byte) ([]byte, error) {
+// mergeLegacyTOML preserves the existing array-of-table append behavior used by
+// Codex hook fragments. Ordinary table/scalar ownership uses toml.go.
+func mergeLegacyTOML(targetData, sourceData []byte) ([]byte, error) {
 	sourceValues, err := parseSimpleTOML(sourceData, nil)
 	if err != nil {
 		return nil, fmt.Errorf("parse source TOML: %w", err)

@@ -420,7 +420,8 @@ entries:
         command: warp-terminal
   - source: configs/atuin/config.toml
     target: ~/.config/atuin/config.toml
-    strategy: symlink
+    strategy: copy
+    ownership: toml-subset
     tags:
       - core
     os:

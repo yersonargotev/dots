@@ -53,7 +53,8 @@ func (p Provenance) Empty() bool {
 
 // Record describes a single managed target the CLI installed. Version 4 records
 // explicit whole or partial Ownership; version 5 adds opaque seeded-baseline
-// evidence, and version 6 adds opaque marked-block contribution evidence. An
+// evidence, and version 6 adds opaque byte contribution evidence for TOML
+// subset and marked-block ownership. An
 // empty Ownership is legacy and grants no force-removal authority.
 // Copy-like strategies may record a source content hash; symlink records leave
 // Hash empty because drift is detected from the link destination.
@@ -64,7 +65,8 @@ type Record struct {
 	Strategy     string          `json:"strategy"`
 	Ownership    string          `json:"ownership,omitempty"`
 	OwnedContent json.RawMessage `json:"owned_content,omitempty"`
-	// OwnedBytes is the exact opaque contribution for non-JSON partial ownership.
+	// OwnedBytes is the exact opaque contribution for non-JSON partial ownership,
+	// including TOML subset and marked-block entries.
 	OwnedBytes []byte `json:"owned_bytes,omitempty"`
 	// SeededBaseline is the exact opaque Source of Truth baseline last applied
 	// to Seeded Runtime State. []byte uses JSON base64 encoding, so the state

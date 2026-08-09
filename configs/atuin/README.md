@@ -1,13 +1,16 @@
 # Atuin configuration
 
 `configs/atuin/config.toml` is the repository-managed Atuin configuration
-installed as `~/.config/atuin/config.toml` (symlink strategy, `core` tag,
-`darwin`+`linux`). The portable Catppuccin Mocha theme it references is installed
-alongside it as `~/.config/atuin/themes/catppuccin-mocha.toml`.
+materialized as a regular `~/.config/atuin/config.toml` file (`copy` strategy,
+TOML Subset Ownership, `core` tag, `darwin`+`linux`). The portable Catppuccin
+Mocha theme it references remains a dots-owned symlink at
+`~/.config/atuin/themes/catppuccin-mocha.toml`.
 
-The Source of Truth is this repository. The installed files are links to the
-tracked sources; shell history, sync/auth state, machine identity, generated
-files, and machine-local overrides stay outside version control.
+The Source of Truth owns only the baseline scalar and array values declared in
+the tracked config. Atuin may add other keys or tables to the regular live file
+without modifying the Installed Repository or creating Drift. Shell history,
+sync/auth state, machine identity, generated files, and machine-local overrides
+stay outside version control.
 
 ## Prerequisites
 
@@ -52,8 +55,9 @@ directory:
 - **Sync records** — `~/.local/share/atuin/records.db`
 - **Machine identity** — `~/.local/share/atuin/host_id`
 
-`dots` only symlinks the two tracked config files into `~/.config/atuin/`; it
-never reads, writes, or links anything in the data directory. The
+`dots` materializes the co-owned config and symlinks only the static theme into
+`~/.config/atuin/`; it never reads, writes, or links anything in the data
+directory. The
 `configs/atuin/.gitignore` additionally guards the config directory against any
 of these files being committed if a machine relocates them there via
 `ATUIN_CONFIG_DIR` or a custom `data_dir`.
@@ -122,5 +126,6 @@ go run ./cmd/dots status \
 
 The expected result is that `~/.config/atuin/config.toml` and
 `~/.config/atuin/themes/catppuccin-mocha.toml` are installed/aligned inside
-`$sandbox_home` as symlinks to the repository sources. The maintainer's real home
-directory must not be touched.
+`$sandbox_home`: the config is a regular co-owned TOML target and the static
+theme is a symlink to the repository source. The maintainer's real home directory
+must not be touched.

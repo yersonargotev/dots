@@ -39,16 +39,19 @@ func TestAtuinDefaultProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	}
 
 	managed := []struct {
-		target string
-		source string
+		target  string
+		source  string
+		symlink bool
 	}{
 		{
-			target: filepath.Join(home, ".config", "atuin", "config.toml"),
-			source: filepath.Join(repoRoot, "configs", "atuin", "config.toml"),
+			target:  filepath.Join(home, ".config", "atuin", "config.toml"),
+			source:  filepath.Join(repoRoot, "configs", "atuin", "config.toml"),
+			symlink: false,
 		},
 		{
-			target: filepath.Join(home, ".config", "atuin", "themes", "catppuccin-mocha.toml"),
-			source: filepath.Join(repoRoot, "configs", "atuin", "themes", "catppuccin-mocha.toml"),
+			target:  filepath.Join(home, ".config", "atuin", "themes", "catppuccin-mocha.toml"),
+			source:  filepath.Join(repoRoot, "configs", "atuin", "themes", "catppuccin-mocha.toml"),
+			symlink: true,
 		},
 	}
 
@@ -57,16 +60,42 @@ func TestAtuinDefaultProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		if err != nil {
 			t.Fatalf("atuin target %q missing after sandbox install: %v\ninstall output:\n%s", entry.target, err, installOut.String())
 		}
-		if info.Mode()&os.ModeSymlink == 0 {
-			t.Fatalf("atuin target %q mode = %v, want symlink", entry.target, info.Mode())
+		if entry.symlink {
+			if info.Mode()&os.ModeSymlink == 0 {
+				t.Fatalf("atuin target %q mode = %v, want symlink", entry.target, info.Mode())
+			}
+			gotSource, err := os.Readlink(entry.target)
+			if err != nil {
+				t.Fatalf("read atuin symlink %q: %v", entry.target, err)
+			}
+			if gotSource != entry.source {
+				t.Fatalf("atuin symlink %q = %q, want %q", entry.target, gotSource, entry.source)
+			}
+		} else if !info.Mode().IsRegular() {
+			t.Fatalf("atuin target %q mode = %v, want regular file", entry.target, info.Mode())
 		}
-		gotSource, err := os.Readlink(entry.target)
-		if err != nil {
-			t.Fatalf("read atuin symlink %q: %v", entry.target, err)
-		}
-		if gotSource != entry.source {
-			t.Fatalf("atuin symlink %q = %q, want %q", entry.target, gotSource, entry.source)
-		}
+	}
+
+	sourceBefore, err := os.ReadFile(managed[0].source)
+	if err != nil {
+		t.Fatalf("read Atuin Source of Truth: %v", err)
+	}
+	target, err := os.OpenFile(managed[0].target, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open live Atuin config: %v", err)
+	}
+	if _, err := target.WriteString("\n# written like atuin config set\nsearch_mode = \"fuzzy\"\n"); err != nil {
+		t.Fatalf("append live Atuin setting: %v", err)
+	}
+	if err := target.Close(); err != nil {
+		t.Fatalf("close live Atuin config: %v", err)
+	}
+	sourceAfter, err := os.ReadFile(managed[0].source)
+	if err != nil {
+		t.Fatalf("reread Atuin Source of Truth: %v", err)
+	}
+	if !bytes.Equal(sourceAfter, sourceBefore) {
+		t.Fatal("Atuin-like target write changed the repository Source of Truth")
 	}
 
 	// History/sync/auth state lives in the data dir, never the config dir, so a

@@ -100,6 +100,21 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 			}
 			continue
 		}
+		if rec.Ownership == "toml-subset" && len(rec.OwnedBytes) > 0 {
+			if action.Status != plan.UninstallRemove {
+				continue
+			}
+			applied, deleted, err := removeOwnedTOML(rec, home)
+			if err != nil {
+				return result, err
+			}
+			if applied && deleted {
+				result.Removed = append(result.Removed, action.Target)
+			} else if applied {
+				result.Updated = append(result.Updated, action.Target)
+			}
+			continue
+		}
 		if rec.Ownership == "marked-block" && len(rec.OwnedBytes) > 0 {
 			if action.Status != plan.UninstallRemove {
 				continue
@@ -239,6 +254,59 @@ func removeOwnedJSON(rec state.Record, home string) (applied, deleted bool, err 
 	}
 	if err := os.WriteFile(rec.Target, content, info.Mode().Perm()); err != nil {
 		return false, false, fmt.Errorf("write JSON target %s after removing owned content: %w", rec.Target, err)
+	}
+	return true, false, nil
+}
+
+// removeOwnedTOML revalidates and subtracts a TOML contribution at apply time.
+// It uses the same path and symlink-escape checks as other partial ownership
+// modes and never lets force broaden dots' ownership.
+func removeOwnedTOML(rec state.Record, home string) (applied, deleted bool, err error) {
+	if err := plan.ValidateResolvedTarget(rec.Target, home); err != nil {
+		return false, false, err
+	}
+	if err := plan.ValidateTargetParentInsideHome(rec.Target, home); err != nil {
+		return false, false, err
+	}
+	if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(rec.Target, home, "owned TOML target"); err != nil {
+		return false, false, err
+	}
+	leaf, err := os.Lstat(rec.Target)
+	if os.IsNotExist(err) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, fmt.Errorf("stat owned TOML target %s: %w", rec.Target, err)
+	}
+	if !leaf.Mode().IsRegular() {
+		return false, false, nil
+	}
+	targetData, err := os.ReadFile(rec.Target)
+	if err != nil {
+		return false, false, fmt.Errorf("read owned TOML target %s: %w", rec.Target, err)
+	}
+	info, err := os.Stat(rec.Target)
+	if err != nil {
+		return false, false, fmt.Errorf("stat owned TOML target %s: %w", rec.Target, err)
+	}
+	content, changed, empty, compatible, err := configsubset.RemoveTOML(targetData, rec.OwnedBytes)
+	if err != nil {
+		return false, false, fmt.Errorf("remove owned TOML from %s: %w", rec.Target, err)
+	}
+	if !compatible {
+		return false, false, nil
+	}
+	if empty {
+		if err := removeTarget(rec.Target); err != nil {
+			return false, false, fmt.Errorf("remove emptied TOML target %s: %w", rec.Target, err)
+		}
+		return true, true, nil
+	}
+	if !changed {
+		return true, false, nil
+	}
+	if err := os.WriteFile(rec.Target, content, info.Mode().Perm()); err != nil {
+		return false, false, fmt.Errorf("write TOML target %s after removing owned content: %w", rec.Target, err)
 	}
 	return true, false, nil
 }

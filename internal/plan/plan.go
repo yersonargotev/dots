@@ -237,6 +237,8 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		if rec, ok := opts.Metadata.FindByTarget(target); ok && rec.Ownership == action.Ownership {
 			if isJSONOwnership(rec.Ownership) && len(rec.OwnedContent) > 0 {
 				action.PreviousContent = append([]byte(nil), rec.OwnedContent...)
+			} else if rec.Ownership == "toml-subset" && len(rec.OwnedBytes) > 0 {
+				action.PreviousContent = append([]byte(nil), rec.OwnedBytes...)
 			} else if rec.Ownership == "seeded" {
 				action.PreviousContent = append([]byte(nil), rec.SeededBaseline...)
 			} else if rec.Ownership == "marked-block" {
@@ -334,11 +336,14 @@ func planLegacyMigration(entry manifest.Entry, currentSource string, migration L
 		}
 		planned.FinalContent = reconciliation.Content
 	case "toml-subset":
-		merged, err := configsubset.MergeTOML(migration.CapturedContent, current)
+		reconciliation, err := configsubset.ReconcileTOML(migration.CapturedContent, migration.PreviousSourceContent, current)
 		if err != nil {
+			return LegacyMigration{}, false, err
+		}
+		if !reconciliation.Compatible {
 			return LegacyMigration{}, false, nil
 		}
-		planned.FinalContent = merged
+		planned.FinalContent = reconciliation.Content
 	case "marked-block":
 		reconciliation := textblock.MigrateLegacyOwned(migration.CapturedContent, migration.PreviousSourceContent, current, textblock.DotsManagedMarkers())
 		if !reconciliation.Compatible {
@@ -785,7 +790,7 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 				}
 				return StatusUnchanged, nil
 			}
-			if isSubsetOwned(entry.Ownership) && meta.MatchesEntry(target, entry.Source, entry.Strategy) {
+			if isSubsetOwned(entry.Ownership) && (meta.MatchesEntry(target, entry.Source, entry.Strategy) || meta.MatchesEntry(target, defaultSource, entry.Strategy)) {
 				if isJSONOwnership(entry.Ownership) {
 					if rec, ok := meta.FindByTarget(target); ok && rec.Ownership == entry.Ownership && len(rec.OwnedContent) > 0 {
 						targetData, readErr := os.ReadFile(target)
@@ -837,6 +842,35 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 					}
 					if relation.Mergeable {
 						return StatusUpdate, nil
+					}
+				} else if entry.Ownership == "toml-subset" {
+					if rec, ok := meta.FindByTarget(target); ok && rec.Ownership == "toml-subset" && len(rec.OwnedBytes) > 0 {
+						targetData, readErr := os.ReadFile(target)
+						if readErr != nil {
+							return "", fmt.Errorf("read TOML target %s: %w", target, readErr)
+						}
+						currentData, readErr := os.ReadFile(sourceAbs)
+						if readErr != nil {
+							return "", fmt.Errorf("read source TOML %s: %w", sourceAbs, readErr)
+						}
+						reconciliation, reconcileErr := configsubset.ReconcileTOML(targetData, rec.OwnedBytes, currentData)
+						if reconcileErr != nil {
+							return "", fmt.Errorf("reconcile TOML target %s: %w", target, reconcileErr)
+						}
+						if reconciliation.Compatible {
+							if reconciliation.Changed {
+								return StatusUpdate, nil
+							}
+							return StatusUnchanged, nil
+						}
+						return StatusConflict, nil
+					}
+					subset, subsetErr := subsetContent(entry.Ownership, target, sourceAbs)
+					if subsetErr != nil {
+						return "", subsetErr
+					}
+					if subset {
+						return StatusUnchanged, nil
 					}
 				} else {
 					subset, subsetErr := subsetContent(entry.Ownership, target, sourceAbs)

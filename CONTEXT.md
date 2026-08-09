@@ -64,6 +64,10 @@ _Avoid_: JSON merge, partial sync, tolerate anything
 An Entry Ownership mode for co-owned JSON-with-comments targets where dots recursively owns baseline object keys while preserving target-only keys and untouched syntax trivia. Baseline scalars and arrays are atomic ordered values: a live difference is Drift or Conflict rather than an additive merge. Installation Metadata records the canonical semantic contribution, while updates and uninstall edit the regular target without reserializing unrelated comments, trailing commas, ordering, or formatting.
 _Avoid_: formatted JSON merge, unordered array merge, strip comments
 
+**TOML Subset Ownership**:
+An Entry Ownership mode for co-owned TOML targets where dots owns the baseline values declared at root or in ordinary tables while preserving target-only keys, tables, comments, and untouched formatting. Baseline scalars, arrays, and inline-table values are atomic. Installation Metadata records the exact prior dots contribution so updates can add new values, remove unchanged retired values, and reject externally changed owned values; uninstall subtracts only that proven contribution.
+_Avoid_: reformat TOML, merge array items, own the whole table
+
 **Marked Block Ownership**:
 An Entry Ownership mode for co-owned text entrypoints where dots owns exactly one initial, explicitly delimited block and preserves every external byte around it. Installation Metadata records the last dots-owned block so updates and uninstall fail closed when markers, placement, or prior contribution evidence are ambiguous.
 _Avoid_: append-only config, loose marker matching, shell parsing

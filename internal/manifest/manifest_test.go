@@ -2258,6 +2258,10 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	if got := entriesByTarget["~/.zshrc"].Ownership; got != "marked-block" {
 		t.Errorf("zsh ownership = %q, want marked-block", got)
 	}
+	atuin, ok := entriesByTarget["~/.config/atuin/config.toml"]
+	if !ok || atuin.Source != "configs/atuin/config.toml" || atuin.Strategy != "copy" || atuin.Ownership != "toml-subset" {
+		t.Errorf("Atuin config entry = %#v, want copy with TOML Subset Ownership", atuin)
+	}
 	portable, ok := entriesByTarget["~/.config/dots/zsh/zshrc"]
 	if !ok || portable.Source != "configs/zsh/zshrc" || portable.Strategy != "symlink" {
 		t.Errorf("portable zsh entry = %#v, want managed symlink", portable)
