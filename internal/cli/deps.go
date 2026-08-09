@@ -473,18 +473,34 @@ func (r *depsExecRunner) prependPath(dir string) {
 
 func lookPathInEnvironment(command string, env []string) (string, bool) {
 	if strings.ContainsRune(command, os.PathSeparator) {
-		return command, filepath.IsAbs(command) && executableFile(command)
+		return command, filepath.IsAbs(command) && executableFile(command) && !processPrivateCommand(command, command)
 	}
 	for _, dir := range filepath.SplitList(environmentValue(env, "PATH")) {
 		if !filepath.IsAbs(dir) {
 			continue
 		}
 		candidate := filepath.Join(dir, command)
-		if executableFile(candidate) {
+		if executableFile(candidate) && !processPrivateCommand(command, candidate) {
 			return candidate, true
 		}
 	}
 	return "", false
+}
+
+func processPrivateCommand(command, path string) bool {
+	if filepath.Base(command) != "codex" {
+		return false
+	}
+	if chatGPTBundledCodexPath(path) {
+		return true
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	return err == nil && chatGPTBundledCodexPath(resolved)
+}
+
+func chatGPTBundledCodexPath(path string) bool {
+	const suffix = "/ChatGPT.app/Contents/Resources/codex"
+	return strings.HasSuffix(filepath.ToSlash(filepath.Clean(path)), suffix)
 }
 
 func executableFile(path string) bool {
@@ -519,6 +535,10 @@ func replaceEnvironmentValue(env []string, name, value string) []string {
 // lookupCommand reports whether a command resolves on the current PATH. It is
 // the production Lookup used by the deps commands.
 func lookupCommand(command string) bool {
+	if command == "codex" {
+		_, ok := lookPathInEnvironment(command, os.Environ())
+		return ok
+	}
 	_, err := exec.LookPath(command)
 	return err == nil
 }
