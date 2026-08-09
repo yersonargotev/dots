@@ -368,8 +368,8 @@ entries:
 			t.Fatalf("output missing %q:\n%s", want, out.String())
 		}
 	}
-	if _, err := os.Stat(filepath.Join(sourceRoot, "configs/work")); err != nil {
-		t.Fatalf("Source of Truth did not refresh before stale selection was detected: %v", err)
+	if _, err := os.Stat(filepath.Join(sourceRoot, "configs/work")); !os.IsNotExist(err) {
+		t.Fatalf("Installed Repository changed before stale selection was rejected: %v", err)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".work")); !os.IsNotExist(err) {
 		t.Fatalf("Managed Configuration applied after stale selection: %v", err)
@@ -630,6 +630,9 @@ entries:
 	}
 	if got, want := env.Data.SelectionDelta.Removed.ManagedEntries, []string{"~/.retired"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("removed managed_entries = %#v, want %#v", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(sourceRoot, "configs/core")); !os.IsNotExist(err) {
+		t.Fatalf("Installed Repository changed before stale extra Tag was rejected: %v", err)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".core")); !os.IsNotExist(err) {
 		t.Fatalf("Managed Configuration applied after stale extra Tag: %v", err)

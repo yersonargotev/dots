@@ -217,6 +217,14 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
+	effective, err = selection.CompareEvolution(*previousManifest, *incomingManifest, effective, runtime.GOOS)
+	if err != nil {
+		var evolutionErr *selection.EvolutionError
+		if !wantsJSON(cmd) && errors.As(err, &evolutionErr) {
+			renderSelectionEvolution(cmd.OutOrStdout(), evolutionErr.SelectionDelta)
+		}
+		return updateReport{}, err
+	}
 	legacyMigrations, err := repositoryrefresh.CaptureLegacyTargets(*previousManifest, *incomingManifest, meta, paths.SourceRoot, paths.Home, paths.XDGStateHome, preRefresh.OldRev)
 	if err != nil {
 		return updateReport{}, err
@@ -248,14 +256,6 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 
 	m, err := loadUpdatedManifest(manifestPath, paths.SourceRoot, update, opts.dryRun)
 	if err != nil {
-		return updateReport{}, err
-	}
-	effective, err = selection.CompareEvolution(*previousManifest, *m, effective, runtime.GOOS)
-	if err != nil {
-		var evolutionErr *selection.EvolutionError
-		if !wantsJSON(cmd) && errors.As(err, &evolutionErr) {
-			renderSelectionEvolution(out, evolutionErr.SelectionDelta)
-		}
 		return updateReport{}, err
 	}
 	sourceReadRoot := paths.SourceRoot

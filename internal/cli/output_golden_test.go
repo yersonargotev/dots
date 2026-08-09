@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/agentinstructions"
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/deps/pkgmgr"
@@ -308,6 +309,10 @@ func TestEnvelopeGolden(t *testing.T) {
 						BackupSet: backups.BackupSet{ID: "backup-20260627T140000.000000000Z", CreatedAt: "2026-06-27T14:00:00Z", Reason: "pre-install conflict protection", Targets: []string{"/home/user/.gitconfig"}},
 						Path:      "/home/user/.local/state/dots/backups/backup-20260627T140000.000000000Z",
 					}},
+					Retirement: &agentinstructions.RetirementReport{
+						Removed:       []string{"~/.codex/AGENTS.md delegation blocks", "~/.codex/agents/dots-explorer.toml"},
+						ManualCleanup: []string{"~/.agents/skills/delegation"},
+					},
 				},
 			},
 			golden: "envelope_install.golden",
