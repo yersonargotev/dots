@@ -39,8 +39,9 @@ Check exactly one and add the matching `type:*` label to the PR.
 
 ## Contributor Checklist
 
-- [ ] Linked an approved / `ready-for-agent` issue with `Closes #<issue-number>`.
+- [ ] Linked one issue with an admitted Delivery Contract using `Closes #<issue-number>`.
 - [ ] Added exactly one `type:*` label.
+- [ ] Delivery Evidence records the Contract Source snapshot, Acceptance coverage, and Independent review.
 - [ ] Kept the PR scoped to one reviewable work unit.
 - [ ] Updated docs or agent instructions when workflow behavior changed.
 - [ ] Used conventional commit format.

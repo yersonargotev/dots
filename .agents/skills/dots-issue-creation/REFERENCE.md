@@ -60,6 +60,9 @@ CLI | Dotfiles configuration | Installation workflow | Documentation | CI / rele
 ### Requirements
 - The workflow must ...
 
+### Key interfaces
+- Interface or workflow contract — expected change
+
 ### Non-goals
 
 ### Acceptance criteria
@@ -71,6 +74,11 @@ CLI | Dotfiles configuration | Installation workflow | Documentation | CI / rele
 - `go run ./cmd/dots manifest validate --file dots.yaml`
 - Use temporary directories for home/config behavior.
 ```
+
+For a delivery ticket, keep the ticket body focused on its independently
+reviewable outcome, current gap, acceptance criteria, and non-goals. Compose it
+with the complete parent specification through a native `parent` relationship;
+do not copy the parent body into every ticket.
 
 ## Optional relationship mirrors for sliced issues
 

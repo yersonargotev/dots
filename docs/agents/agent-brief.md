@@ -1,17 +1,23 @@
-# Writing Agent Briefs
+# Historical Agent Brief Contract
 
-This document is the repository-owned Agent Brief contract.
-`dots-issue-creation` is the sole readiness producer and must satisfy this
-contract before applying `ready-for-agent`.
+An Agent Brief is the structured comment shape used by historical
+repository-owned triage. One complete Agent Brief remains the highest-precedence
+Contract Source for delivery, so existing issues require no migration. New
+standalone issue bodies and native ticket graphs may also form complete Delivery
+Contracts; see [`delivery-contract.md`](delivery-contract.md).
+Each historical Agent Brief must still be a complete Agent Brief under the
+semantic rules below.
 
-An agent brief is a structured comment posted on a GitHub issue when it moves to `ready-for-agent`. It is the authoritative specification that an AFK agent will work from. The original issue body and discussion are context — the agent brief is the contract.
+When an approved workflow chooses to publish an Agent Brief, it is the
+authoritative source body for that issue. The original issue body and discussion
+remain context unless admission finds the brief incomplete or contradictory.
 
-Each issue has exactly one comment headed `## Agent Brief`. The repository's
-required AI-triage disclaimer and blank lines may precede that heading; no other
-preface may. Revise that comment in place so its comment ID remains the stable
-contract identity. Multiple comments with that heading make the contract
-ambiguous and require the issue to return to triage; delivery must not silently
-choose the newest one.
+An issue that publishes an Agent Brief has exactly one comment headed
+`## Agent Brief`. The repository's required AI-triage disclaimer and blank lines
+may precede that heading; no other preface may. Revise that comment in place so
+its comment ID remains the stable contract identity. Multiple comments with that
+heading make the contract ambiguous and require the issue to return to triage;
+delivery must not silently choose the newest one.
 
 A complete brief has non-empty `Category`, `Summary`, `Current behavior`,
 `Desired behavior`, `Key interfaces`, `Acceptance criteria`, and `Out of scope`
@@ -20,8 +26,9 @@ Completeness is semantic: the fields must be internally consistent, contain no
 open questions, cover relevant errors and edge cases, and provide independently
 verifiable acceptance criteria. Each criterion must map to automated evidence,
 manual evidence, or both. A complete brief may be prepared while its issue is
-natively blocked, but external dependencies and blocking issues must be
-resolved before the issue moves to `ready-for-agent`.
+natively blocked. `ready-for-agent` still records specification completeness;
+native blockers keep the Delivery Unit outside the Execution Frontier until
+they close.
 
 ## Principles
 

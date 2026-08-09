@@ -14,18 +14,25 @@ Read these when context is stale or the workflow may have changed:
 - `.github/ISSUE_TEMPLATE/*.yml`
 - `docs/agents/issue-tracker.md`
 - `docs/agents/triage-labels.md`
+- `docs/agents/delivery-contract.md`
 - `CONTEXT.md` when issue text touches domain concepts
 
 ## Repository conventions
 
-- Treat this repository's issue, relationship, Agent Brief, and readiness rules
-  as authoritative when composing with generic planning skills such as
-  `to-spec` or `to-tickets`. Those skills may shape or slice the plan, but they
-  must not choose repository labels or replace native GitHub relationships with
-  prose.
-- Use `needs-triage` for unreviewed work and `ready-for-agent` only for the
-  current unblocked delivery frontier. Do not use either label to represent a
-  native dependency state.
+- This is the direct repository-specific publication workflow for real
+  templates, duplicate detection, category/readiness labels, native
+  relationships, and publication verification. It is not the exclusive
+  readiness producer or a mandatory post-processor for external planning and
+  triage skills.
+- External `to-spec` or `to-tickets` results may go directly to
+  `delivery-issue` when they already publish a complete Delivery Contract and
+  native relationships. Never copy, modify, or vendor those skills.
+- The supported external route is `to-spec` → `to-tickets` → `delivery-issue`;
+  this skill is optional when that route already satisfied repository
+  publication requirements.
+- Use `needs-triage` for raw, ambiguous, rejected, or incomplete work. Apply
+  `ready-for-agent` to every complete Delivery Contract; open native blockers
+  determine Execution Frontier membership without readiness-label churn.
 - `gh issue create --template ... --body-file ...` does not work. Use a template-shaped body file plus explicit labels.
 - Inspect `gh issue create --help`, `gh issue edit --help`, and
   `gh issue view --help` before sliced publication. When the installed CLI
@@ -33,9 +40,11 @@ Read these when context is stale or the workflow may have changed:
 
 ## Delivery handoff
 
-Every issue handed to `delivery-issue` requires exactly one complete Agent Brief
-before it receives `ready-for-agent`. There is no delivery fast path around that
-contract. Use the format in `../../../docs/agents/agent-brief.md`.
+Every issue handed to `delivery-issue` needs one complete, unambiguous Delivery
+Contract. This skill normally publishes a complete standalone body or a native
+ticket-plus-parent graph. A complete historical Agent Brief remains compatible
+but is not required for new work. Follow
+`../../../docs/agents/delivery-contract.md`.
 
 ## Workflow
 
@@ -54,18 +63,18 @@ contract. Use the format in `../../../docs/agents/agent-brief.md`.
    publication. Create blockers before dependents, attach every child to its
    tracking parent, and add every blocking edge with native GitHub
    relationships when supported.
-5. Create with `--body-file` and explicit category/type labels. Start ordinary
-   unsliced issues in `needs-triage`; use the state transitions below for a
-   sliced plan.
-6. Create or update exactly one complete Agent Brief for every delivery issue.
-   Then apply the readiness state only after relationships and briefs verify.
+5. Create with `--body-file` and an explicit `bug` or `enhancement` category
+   label. Do not add issue-level `type:*` labels. Start raw or incomplete work in
+   `needs-triage`; apply `ready-for-agent` only after completeness verifies.
+6. For standalone work, make the issue body a complete Contract Source. For
+   sliced work, make the parent specification and each ticket body complete in
+   composition with their native relationships.
 7. Verify each published issue's body, `parent`, `subIssues`, `blockedBy`,
-   `blocking`, labels, and Agent Brief count. Every delivery child requires
-   exactly one complete brief; a tracking parent must never have duplicate
-   briefs. Stop and repair missing edges, unresolved placeholders, incorrect
-   labels, or incorrect brief counts before reporting success.
-8. Return issue URL(s), native relationship evidence, labels, Agent Brief
-   evidence, and duplicate search results.
+   `blocking`, labels, and selected Contract Source. Stop and repair missing
+   edges, unresolved placeholders, incomplete sources, or incorrect labels
+   before reporting success.
+8. Return issue URL(s), native relationship evidence, category/readiness labels,
+   Contract Source evidence, and duplicate search results.
 
 ## CLI patterns
 
@@ -83,14 +92,11 @@ gh issue create --title "feat(scope): concise feature" \
   --label enhancement --label needs-triage
 ```
 
-Agent-ready PRD or approved implementation issue:
+Agent-ready PRD or approved standalone implementation issue:
 ```bash
 gh issue create --title "feat(scope): concise outcome" \
   --body-file /tmp/dots-issue.md \
-  --label enhancement --label needs-triage
-
-gh issue comment <N> --body-file /tmp/dots-agent-brief.md
-gh issue edit <N> --remove-label needs-triage --add-label ready-for-agent
+  --label enhancement --label ready-for-agent
 ```
 
 ## Slicing rules
@@ -123,22 +129,18 @@ fallback explicitly.
 ### Readiness states
 
 - **Unreviewed:** keep `needs-triage`; do not apply `ready-for-agent`.
-- **Fully specified and blocked:** create or update its one complete Agent
-  Brief, remove both `needs-triage` and `ready-for-agent`, and rely on the native
-  blocked state while any `blockedBy` issue remains open.
-- **Unblocked delivery frontier:** after verifying exactly one complete Agent
-  Brief and no open blockers, remove `needs-triage` and apply
-  `ready-for-agent`.
-- **Tracking parent:** after slicing a PRD, remove `ready-for-agent` and
-  `needs-triage`. The parent tracks the plan and is not a `delivery-issue` unit;
-  its children carry delivery readiness. Retain at most one existing Agent
-  Brief as historical context, but do not create another brief solely for the
-  tracking parent.
+- **Fully specified and blocked:** apply `ready-for-agent` and rely on the native
+  blocked state to keep the Delivery Unit outside the Execution Frontier.
+- **Unblocked delivery frontier:** after verifying a complete Delivery Contract
+  and no open blockers, apply `ready-for-agent`; the issue is in the Execution
+  Frontier.
+- **Tracking Issue:** apply `ready-for-agent` after its complete specification
+  and native sub-issues verify. Delivery returns `tracking`; its children carry
+  implementation.
 
 When a blocker closes, re-read the dependent issue's native `blockedBy` state
-and Agent Brief. Promote each newly unblocked, fully specified child to
-`ready-for-agent`; leave descendants with open blockers label-free. There is no
-automatic label transition, so repeat this check whenever the frontier moves.
+and Delivery Contract. The issue enters the Execution Frontier without a label
+transition. Repeat relationship verification whenever the frontier moves.
 
 ### Publication verification
 
@@ -147,13 +149,14 @@ Use machine-readable output rather than body prose:
 ```bash
 gh issue view <issue-number> \
   --json body,parent,subIssues,blockedBy,blocking,labels,comments \
-  --jq '{body, parent, subIssues, blockedBy, blocking, labels: [.labels[].name], agentBriefCount: ([.comments[].body | select(test("(?m)^## Agent Brief$"))] | length)}'
+  --jq '{body, parent, subIssues, blockedBy, blocking, labels: [.labels[].name], historicalAgentBriefs: [.comments[].body | select(test("(?m)^## Agent Brief$"))]}'
 ```
 
 Check both ends of the graph where applicable: the parent lists the child under
 `subIssues`, the child reports `parent`, blockers and dependents agree through
-`blockedBy`/`blocking`, labels match the four states above, every delivery child
-has one Agent Brief, and a tracking parent has no duplicate briefs. Inspect
-`body` for unresolved placeholders such as `<issue-number>`, `<N>`, or `TBD`.
+`blockedBy`/`blocking`, labels match the states above, and the selected standalone
+or composed Contract Source is complete. Historical Agent Briefs are optional;
+if present, their count and completeness must remain unambiguous. Inspect `body`
+for unresolved placeholders such as `<issue-number>`, `<N>`, or `TBD`.
 
 See [REFERENCE.md](REFERENCE.md) for body templates and field guidance.

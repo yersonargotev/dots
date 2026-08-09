@@ -288,58 +288,238 @@ func TestDeliverySkillIsExplicitThinAdapter(t *testing.T) {
 	}
 }
 
-func TestReadinessProducerRequiresRepositoryAgentBrief(t *testing.T) {
+func TestDeliveryContractVocabularyIsConsistent(t *testing.T) {
 	root := filepath.Join("..", "..")
-	cases := map[string][]string{
-		filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md"): {
-			"one complete Agent Brief",
-			"docs/agents/agent-brief.md",
-		},
-		filepath.Join(root, "docs", "agents", "agent-brief.md"): {
-			"exactly one comment headed `## Agent Brief`",
-			"`Category`, `Summary`, `Current behavior`",
-			"`Desired behavior`, `Key interfaces`, `Acceptance criteria`, and `Out of scope`",
-			"Revise that comment in place",
-		},
+	terms := []string{
+		"Delivery Contract",
+		"Contract Source",
+		"Delivery Unit",
+		"Tracking Issue",
+		"Execution Frontier",
 	}
-	for path, wants := range cases {
-		got, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s: %v", path, err)
+	for _, path := range []string{
+		filepath.Join(root, "CONTEXT.md"),
+		filepath.Join(root, "docs", "agents", "delivery-contract.md"),
+		filepath.Join(root, "workflows", "delivery-issue.md"),
+	} {
+		assertDocumentContainsAll(t, path, terms)
+	}
+}
+
+func TestDeliveryContractAdmissionSupportsProducerNeutralSources(t *testing.T) {
+	root := filepath.Join("..", "..")
+	contractPath := filepath.Join(root, "docs", "agents", "delivery-contract.md")
+	contract := readContractDocument(t, contractPath)
+
+	sources := []string{
+		"complete historical Agent Brief",
+		"complete standalone issue body",
+		"delivery ticket body composed",
+		"native parent specification",
+	}
+	assertDocumentContainsAll(t, contractPath, sources)
+	for i := 1; i < 3; i++ {
+		if strings.Index(contract, sources[i-1]) >= strings.Index(contract, sources[i]) {
+			t.Fatalf("Contract Source precedence is not documented in order: %q before %q", sources[i-1], sources[i])
 		}
-		for _, want := range wants {
-			if !strings.Contains(string(got), want) {
-				t.Fatalf("readiness contract %s missing %q", path, want)
-			}
+	}
+
+	workflowPath := filepath.Join(root, "workflows", "delivery-issue.md")
+	assertDocumentContainsAll(t, workflowPath, []string{
+		"complete historical Agent Brief",
+		"complete standalone issue body",
+		"delivery ticket body composed",
+		"native parent",
+		"issue-level `type:*` label is not part of admission",
+		"historical Agent Brief issues remain deliverable without migration",
+	})
+	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "agent-brief.md"), []string{
+		"historical Agent Brief",
+		"complete Agent Brief",
+		"An issue that publishes an Agent Brief",
+	})
+	assertDocumentContainsAll(t, contractPath, []string{"or add an Agent Brief before delivery"})
+	assertDocumentContainsAll(t, filepath.Join(root, "NOTES.md"), []string{
+		"selected Delivery Contract",
+		"complete historical Agent Brief",
+		"complete standalone issue body",
+		"delivery ticket composed with its native parent specification and relationships",
+		"not a mandatory comment for every issue",
+	})
+}
+
+func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T) {
+	root := filepath.Join("..", "..")
+	contractPath := filepath.Join(root, "docs", "agents", "delivery-contract.md")
+	workflowPath := filepath.Join(root, "workflows", "delivery-issue.md")
+
+	assertDocumentContainsAll(t, contractPath, []string{
+		"needs-triage",
+		"Incomplete, contradictory, or ambiguous",
+		"readiness-label churn",
+		"Tracking Issue",
+		"non-mutating `tracking` result",
+		"creates no branch, commit, or pull",
+		"SHA-256 digest",
+		"updatedAt",
+		"Revalidate the snapshot immediately before code mutation",
+		"pull-request\ncreation, and merge",
+	})
+	assertDocumentContainsAll(t, workflowPath, []string{
+		"needs-triage",
+		"missing, incomplete, contradictory, or ambiguous",
+		"Open native blockers do not invalidate completeness",
+		"Tracking Issue",
+		"non-mutating `tracking` Delivery Result",
+		"Do not create a branch, commit, or PR",
+		"SHA-256 digest",
+		"updatedAt",
+		"Revalidate the complete snapshot before modifying code",
+		"before opening the PR",
+		"before merge",
+		"category; triage/readiness label",
+		"issue identity, state, and `updatedAt`",
+		"Any difference restarts",
+		"only semantic change is blocker state",
+	})
+
+	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "triage-labels.md"), []string{
+		"specification is complete",
+		"Execution Frontier",
+		"Do not use `needs-triage` as a blocked-work label",
+	})
+}
+
+func TestDeliveryContractAdmissionScenarioMatrix(t *testing.T) {
+	root := filepath.Join("..", "..")
+	path := filepath.Join(root, "docs", "agents", "delivery-contract.md")
+	scenarios := readMarkdownScenarioMatrix(t, path)
+
+	wants := map[string][2]string{
+		"historical-agent-brief": {"complete Agent Brief", "using the Agent Brief as the Contract Source"},
+		"standalone-body":        {"complete issue body", "using the standalone body as the Contract Source"},
+		"composed-ticket":        {"native parent specification", "using the composed ticket Contract Source"},
+		"blocked-unit":           {"open native `blockedBy`", "retain `ready-for-agent`, and create no branch or PR"},
+		"tracking-issue":         {"native sub-issues", "Return `tracking`"},
+		"incomplete-source":      {"omits required scope", "Return `needs-triage`"},
+		"contradictory-source":   {"Duplicate or conflicting", "Return `needs-triage`"},
+		"stale-snapshot":         {"relationship identity, state, or `updatedAt` snapshot differs", "Restart admission before code mutation, PR creation, or merge"},
+	}
+	if len(scenarios) != len(wants) {
+		t.Fatalf("admission scenario count = %d, want %d: %#v", len(scenarios), len(wants), scenarios)
+	}
+	for name, want := range wants {
+		got, ok := scenarios[name]
+		if !ok {
+			t.Errorf("admission scenario %q is missing", name)
+			continue
+		}
+		if !strings.Contains(got[0], want[0]) {
+			t.Errorf("admission scenario %q evidence = %q, want %q", name, got[0], want[0])
+		}
+		if !strings.Contains(got[1], want[1]) {
+			t.Errorf("admission scenario %q result = %q, want %q", name, got[1], want[1])
 		}
 	}
 }
 
-func TestIssueCreationDocumentsNativeRelationshipsAndReadiness(t *testing.T) {
+func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t *testing.T) {
 	root := filepath.Join("..", "..")
-	cases := map[string][]string{
-		filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md"): {
-			"--parent <parent-number>",
-			"--add-sub-issue <child-number>",
-			"--add-blocked-by <blocker-number>",
-			"parent,subIssues,blockedBy,blocking,labels,comments",
-			"`to-spec` or `to-tickets`",
-		},
-		filepath.Join(root, "docs", "agents", "triage-labels.md"): {
-			"Fully specified with one complete Agent Brief, but with an open native blocker",
-			"Sliced tracking parent",
-			"Do not use `needs-triage` as a blocked-work label",
-		},
-	}
-	for path, wants := range cases {
-		got, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s: %v", path, err)
-		}
-		for _, want := range wants {
-			if !strings.Contains(string(got), want) {
-				t.Fatalf("native relationship contract %s missing %q", path, want)
-			}
+	issueCreationPath := filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md")
+	assertDocumentContainsAll(t, issueCreationPath, []string{
+		"--parent <parent-number>",
+		"--add-sub-issue <child-number>",
+		"--add-blocked-by <blocker-number>",
+		"parent,subIssues,blockedBy,blocking,labels",
+		"`to-spec` → `to-tickets` → `delivery-issue`",
+		"mandatory post-processor",
+	})
+	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "issue-tracker.md"), []string{
+		"`to-spec` → `to-tickets` → `delivery-issue`",
+		"unmodified and unvendored",
+		"not a mandatory post-processor",
+	})
+
+	for _, externalSkill := range []string{"grill-with-docs", "to-spec", "to-tickets", "triage"} {
+		path := filepath.Join(root, ".agents", "skills", externalSkill)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("external skill %q must not be vendored at %s; stat error = %v", externalSkill, path, err)
 		}
 	}
+}
+
+func TestDeliveryContractEvidenceAndRepositoryLanguage(t *testing.T) {
+	root := filepath.Join("..", "..")
+	assertDocumentContainsAll(t, filepath.Join(root, ".github", "PULL_REQUEST_TEMPLATE.md"), []string{
+		"exactly one `type:*` label",
+		"Delivery Contract",
+		"Contract Source snapshot",
+		"Acceptance coverage",
+		"Independent review",
+	})
+
+	for _, path := range []string{
+		filepath.Join(root, "AGENTS.md"),
+		filepath.Join(root, "NOTES.md"),
+		filepath.Join(root, "docs", "agents", "agent-brief.md"),
+		filepath.Join(root, "docs", "agents", "issue-tracker.md"),
+		filepath.Join(root, "docs", "agents", "triage-labels.md"),
+		filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md"),
+		filepath.Join(root, "workflows", "delivery-issue.md"),
+	} {
+		assertDocumentOmitsAll(t, path, []string{
+			"sole readiness producer",
+			"sole producer of `ready-for-agent`",
+			"requires both the label and exactly one complete",
+			"Every issue handed to `delivery-issue` requires exactly one complete Agent Brief",
+			"Each issue has exactly one comment headed `## Agent Brief`",
+			"only an in-place Agent Brief revision does",
+		})
+	}
+}
+
+func readContractDocument(t *testing.T, path string) string {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(got)
+}
+
+func assertDocumentContainsAll(t *testing.T, path string, wants []string) {
+	t.Helper()
+	content := readContractDocument(t, path)
+	for _, want := range wants {
+		if !strings.Contains(content, want) {
+			t.Errorf("delivery contract document %s missing %q", path, want)
+		}
+	}
+}
+
+func assertDocumentOmitsAll(t *testing.T, path string, forbidden []string) {
+	t.Helper()
+	content := readContractDocument(t, path)
+	for _, phrase := range forbidden {
+		if strings.Contains(content, phrase) {
+			t.Errorf("delivery contract document %s retains obsolete language %q", path, phrase)
+		}
+	}
+}
+
+func readMarkdownScenarioMatrix(t *testing.T, path string) map[string][2]string {
+	t.Helper()
+	scenarios := make(map[string][2]string)
+	for _, line := range strings.Split(readContractDocument(t, path), "\n") {
+		if !strings.HasPrefix(line, "| `") {
+			continue
+		}
+		cells := strings.Split(line, "|")
+		if len(cells) != 5 {
+			t.Fatalf("malformed scenario row in %s: %q", path, line)
+		}
+		name := strings.Trim(strings.TrimSpace(cells[1]), "`")
+		scenarios[name] = [2]string{strings.TrimSpace(cells[2]), strings.TrimSpace(cells[3])}
+	}
+	return scenarios
 }

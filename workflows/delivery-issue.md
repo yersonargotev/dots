@@ -4,42 +4,14 @@ Status: Active
 
 ## Purpose
 
-Deliver one approved `dots` issue through implementation, evidence, independent
-review, squash merge, and green CI on the integrated `main` commit without
-requiring routine human checkpoints.
+Process one approved `dots` issue without routine human checkpoints. A Tracking
+Issue returns its executable frontier without mutation; a Delivery Unit proceeds
+through implementation, evidence, independent review, squash merge, and green CI
+on the integrated `main` commit.
 
-This workflow replaces the repository-specific `dots-pr-creation` and
-`dots-pr-fast-path` workflows. Issue creation prepares its input; independent
-review is composed within it. There is no fast path that bypasses the issue
-contract.
-
-## Implementation surface
-
-Keep this file as the single normative workflow specification. Implement
-`.agents/skills/delivery-issue/SKILL.md` as a thin adapter that validates exactly
-one issue argument, reads this specification completely, and executes it. Its
-frontmatter uses `disable-model-invocation: true` where supported and an argument
-hint such as `<issue-number-or-url>`. Add `agents/openai.yaml` with the skill's
-display metadata and explicit default invocation.
-
-Remove the complete `.agents/skills/dots-pr-creation` and
-`.agents/skills/dots-pr-fast-path` trees. Update `dots-issue-creation` to hand
-approved work to `delivery-issue`, not a fast path. Refresh and validate any
-tracked skill registry/cache artifacts, including the ignored-but-tracked
-`.atl` files, without force-adding unrelated runtime state.
-
-Migrate source/tests that name the removed `dots-development-loop.md`, including
-`internal/agentinstructions/trigger_rules_test.go`, to the portable delegation
-invariants in this specification and `docs/agents/delegation.md`. Do not retain
-obsolete workflow names merely to satisfy tests.
-
-Keep the repository-owned Agent Brief contract in
-`docs/agents/agent-brief.md`. `dots-issue-creation` is the sole readiness
-producer: it creates or updates a complete Agent Brief before adding
-`ready-for-agent`. If it cannot produce the complete contract, it leaves the
-issue in `needs-triage`. Triage-label documentation defines `ready-for-agent` as
-both the label and exactly one valid Agent Brief, not merely a sufficiently
-detailed issue body.
+The repository's issue-creation workflow and external planning skills may all
+publish valid input. Delivery selects and snapshots a producer-neutral Delivery
+Contract; independent review is composed within this workflow.
 
 ## Trigger
 
@@ -59,14 +31,21 @@ or discussion of an issue never triggers delivery. Set
 ## Vocabulary
 
 - **Delivery Run**: one resumable execution for exactly one approved issue.
-- **Agent Brief**: the authoritative implementation contract stored as exactly
-  one issue comment headed `## Agent Brief`. It is workflow input, not a human
-  checkpoint brief.
+- **Delivery Contract**: the complete, normalized, and snapshotted scope that
+  authorizes the run.
+- **Contract Source**: the selected authoritative content: a historical Agent
+  Brief, a standalone issue body, or a delivery ticket composed with its native
+  parent specification and relationships.
+- **Delivery Unit**: one reviewable implementation issue with a complete
+  Delivery Contract.
+- **Tracking Issue**: a complete parent specification implemented by native
+  sub-issues rather than by its own branch and PR.
+- **Execution Frontier**: ready Delivery Units without open native blockers.
 - **Delivery Result**: the final user-facing summary of the issue, pull request,
   integrated commit, post-merge CI, and cleanup state.
-- **Actionable finding**: a confirmed problem involving the Agent Brief, a bug
-  or regression, security, documented standards, missing coverage for changed
-  behavior, or unjustified complexity.
+- **Actionable finding**: a confirmed problem involving the Delivery Contract,
+  a bug or regression, security, documented standards, missing coverage for
+  changed behavior, or unjustified complexity.
 - **Observation**: an optional suggestion, personal preference, or out-of-scope
   improvement. It is recorded but does not block delivery.
 
@@ -134,42 +113,66 @@ Before creating a branch or changing code:
 
 1. Verify that the issue is open, has exactly one category label (`bug` or
    `enhancement`), and has `ready-for-agent` as its only triage-state label.
-2. Find exactly one comment headed `## Agent Brief`. Permit only the repository's
-   required AI-triage disclaimer and blank lines before that first heading.
-   Revisions edit the same comment in place; multiple matching comments make the
-   contract ambiguous.
-3. Verify non-empty `Category`, `Summary`, `Current behavior`, `Desired
-   behavior`, `Key interfaces`, `Acceptance criteria`, and `Out of scope`.
+2. Read the issue body, all comments, and native `parent`, `subIssues`,
+   `blockedBy`, and `blocking` relationships. Do not infer relationship state
+   from body prose when GitHub exposes it natively.
+3. Select exactly one Contract Source in this precedence:
+   - one complete historical Agent Brief headed `## Agent Brief`;
+   - otherwise, a complete standalone issue body when the issue has no native
+     parent; or
+   - otherwise, a delivery ticket body composed with its native parent
+     specification and native relationships.
+4. Treat a present Agent Brief that is duplicated, malformed, incomplete, or
+   contradictory as ambiguous instead of silently falling through. Permit only
+   the repository AI-triage disclaimer and blank lines before its heading. A
+   child with a native parent is a composed ticket, not a standalone source.
+   Complete historical Agent Brief issues remain deliverable without migration.
+5. Semantically verify that the selected content determines a summary,
+   current-state gap, desired behavior, relevant failures and edge cases, key
+   interfaces, concrete acceptance criteria, and out-of-scope boundaries.
    Explicit `None` or `Not applicable` is allowed where meaningful.
-4. Semantically verify that the brief is internally consistent, contains no
-   open questions, covers relevant failures and edge cases, and has concrete,
-   independently verifiable acceptance criteria.
-5. Map every acceptance criterion to automated evidence, manual evidence, or
-   both. Verify that external dependencies and blocking issues are resolved.
-6. Record the brief comment ID, `updatedAt`, and SHA-256 digest of the exact raw
-   UTF-8 comment body returned by GitHub.
+6. Map every acceptance criterion to automated evidence, manual evidence, or
+   both. Open native blockers do not invalidate completeness or remove
+   `ready-for-agent`; they keep a Delivery Unit outside the Execution Frontier.
+7. Snapshot every selected source body's node or comment ID, URL when available,
+   `updatedAt`, exact raw UTF-8 body, and SHA-256 digest. Also snapshot category,
+   triage/readiness labels, and all native relationships with issue identifiers,
+   states, and update timestamps.
 
-The brief's `Category` must match the issue category label. Normalize conflicting
-triage-state labels by removing them, applying `needs-triage`, and reporting the
-conflict; never guess which conflicting state was intended.
+An issue-level `type:*` label is not part of admission; that label belongs to the
+eventual PR. Normalize conflicting triage-state labels by removing them, applying
+`needs-triage`, and reporting the conflict; never guess which state was intended.
 
 If the contract is missing, incomplete, contradictory, or ambiguous, post one
 comment listing concrete gaps, replace `ready-for-agent` with `needs-triage`,
 and stop before creating a branch or changing code.
 
-Revalidate the issue state and recorded Agent Brief before modifying code,
-before opening the PR, and immediately before merge. If authorization
-disappears, preserve work and stop. If the brief changed, restart admission
-against the new contract.
+If the issue has native sub-issues and those children carry its implementation
+outcomes, classify it as a Tracking Issue after validating the contract. Return
+a non-mutating `tracking` Delivery Result listing child Delivery Units currently
+in the Execution Frontier. Do not create a branch, commit, or PR.
 
-At each revalidation, inspect issue comments added after the recorded brief
-snapshot. Comments do not change scope; only an in-place Agent Brief revision
-does. Continue past compatible information, ignore requests for additional
-scope, and return to triage when new evidence makes the brief incorrect, unsafe,
-or materially incomplete.
+For a Delivery Unit, stop without label mutation when any native `blockedBy`
+issue is open. Report the blocker as an operational `blocked` outcome and retain
+`ready-for-agent`; resume when native state places the unit in the Execution
+Frontier.
+
+Revalidate the complete snapshot before modifying code, before opening the PR,
+and immediately before merge. Compare every source identity, body, `updatedAt`,
+and digest; category; triage/readiness label; and every native relationship's
+membership, issue identity, state, and `updatedAt`. Any difference restarts
+admission. If readiness or authorization disappears, preserve work and stop;
+conflicting states return to triage under the admission rules. The sole
+exception is a `blockedBy` issue whose only semantic change is blocker state and
+its consequent timestamp; that only recomputes frontier membership.
+
+At each revalidation, inspect issue comments added after the snapshot. Comments
+do not change scope. Continue past compatible information, ignore requests for
+additional scope, and return to triage when new evidence makes the Delivery
+Contract incorrect, unsafe, or materially incomplete.
 
 When a contract failure returns the issue to triage, prefix its issue comment
-with the AI-triage disclaimer required by the repository Agent Brief contract.
+with the repository's AI-triage disclaimer.
 
 ## Resume and isolation
 
@@ -200,17 +203,17 @@ the findings, branch ownership, and available options. Do not create a competing
 PR or close the contributor's PR automatically.
 
 The workflow has no private state file. Derive resumable state from Git, the
-issue, the PR, and GitHub Actions. Store the Agent Brief comment ID and digest in
+issue, the PR, and GitHub Actions. Store the complete Contract Source snapshot in
 the PR body. Before a PR exists, rerun admission and every local gate after a
 restart. With a PR, trust a check or review only when it is tied to the exact
-current head and base; repeat any gate whose evidence cannot be proved for that
-snapshot.
+current head, base, and Delivery Contract snapshot; repeat any gate whose
+evidence cannot be proved for that state.
 
 ## Implementation and local gates
 
 Repeat this loop until it produces a reviewable candidate:
 
-1. Implement the smallest complete change authorized by the Agent Brief.
+1. Implement the smallest complete change authorized by the Delivery Contract.
 2. Run focused checks while iterating.
 3. Run the complete CI-equivalent suite:
    - `gofmt -l .`
@@ -224,9 +227,10 @@ review evidence and restarts the complete gates.
 
 The implementing agent may decide local, reversible matters within scope. If
 implementation reveals a contradiction, public-contract change, material scope
-expansion, or hard-to-reverse decision not authorized by the brief, post the
-evidence and decision needed, replace `ready-for-agent` with `needs-triage`,
-preserve safe work for resumption, and stop without opening a partial PR.
+expansion, or hard-to-reverse decision not authorized by the Delivery Contract,
+post the evidence and decision needed, replace `ready-for-agent` with
+`needs-triage`, preserve safe work for resumption, and stop without opening a
+partial PR.
 
 Delivery orchestrates rather than replaces narrower engineering skills. Load
 and follow any applicable repository, language, framework, diagnosis, testing,
@@ -263,7 +267,7 @@ force-add the whole ignored directory.
 
 Review must be independent from the implementing context and cover both:
 
-- **Spec**: conformance to the Agent Brief, acceptance criteria, and scope.
+- **Spec**: conformance to the Delivery Contract, acceptance criteria, and scope.
 - **Standards**: conformance to `AGENTS.md`, dotfiles safety, tests, relevant
   architecture, and repository conventions.
 
@@ -279,8 +283,8 @@ merge. Observations do not block and stay outside the issue scope.
 
 Do not create follow-up issues automatically for observations. Include each
 observation in the Delivery Result with concise evidence and whether it merits
-later triage. Create a separate issue only when the Agent Brief requires it or
-the user explicitly requests it after delivery.
+later triage. Create a separate issue only when the Delivery Contract requires
+it or the user explicitly requests it after delivery.
 
 ## Pull request and remote loop
 
@@ -298,7 +302,9 @@ For a PR owned by the Delivery Run, append exactly one block delimited by
 `<!-- delivery-issue:evidence:end -->`, with heading `## Delivery Evidence`.
 Update that block in place after every fix or push. It records:
 
-- Agent Brief comment URL/ID and SHA-256 digest;
+- selected Contract Source kind and every source body ID, URL when available,
+  `updatedAt`, and SHA-256 digest;
+- snapshotted category, readiness, and native relationships;
 - current head commit reviewed;
 - acceptance-criterion coverage;
 - automated validation commands/results;
@@ -322,10 +328,10 @@ Wait for CI and required repository rules. Resolve actionable remote review
 findings. Every remote fix restarts all local gates and independent review before
 push. Optional approvals do not block unless repository rules require them.
 
-Immediately before merge, revalidate the issue and Agent Brief and require that
-GitHub reports the PR mergeable with checks for the current head/base. Resolve
-conflicts inside the Delivery Run and restart all gates; return material new
-decisions to triage.
+Immediately before merge, revalidate the issue and complete Delivery Contract
+snapshot and require that GitHub reports the PR mergeable with checks for the
+current head/base. Resolve conflicts inside the Delivery Run and restart all
+gates; return material new decisions to triage.
 
 ## Merge, post-merge CI, and cleanup
 
@@ -344,8 +350,8 @@ If post-merge CI fails, do not report success or clean the delivery worktree.
 Reopen the issue if needed and preserve `ready-for-agent`. Diagnose attribution
 before acting:
 
-- If a safe fix is covered by the same Agent Brief, create a correction branch
-  linked to the issue and repeat the complete workflow.
+- If a safe fix is covered by the same Delivery Contract, create a correction
+  branch linked to the issue and repeat the complete workflow.
 - If the squash commit caused the failure but a safe fix requires a new product
   decision or scope, create a revert branch and PR linked to the issue. Validate
   and independently review the revert, squash-merge it, and require green
@@ -360,6 +366,12 @@ Never push a rollback directly to `main`. If an attributable broken merge cannot
 be safely reverted, raise an urgent operational blocker and preserve all state.
 
 ## Blocked outcomes
+
+An open native blocker is expected Delivery Contract state, not an operational
+failure. Return `blocked` with the blocking issue links and the last completed
+admission gate, create no branch or PR, preserve `ready-for-agent`, and do not
+retry or post a routine issue comment. Resume after native relationship state
+places the Delivery Unit in the Execution Frontier.
 
 Operational blockers do not invalidate issue readiness. Preserve
 `ready-for-agent`, branch/worktree, and PR state. Retry reasonably transient
@@ -402,8 +414,14 @@ evidence, last completed gate, preserved branch/PR/worktree artifacts when any,
 and the exact next action. Never emit placeholders for artifacts that do not
 exist. `awaiting-authority` uses the Authority Brief defined below.
 
+For `tracking`, include the Tracking Issue link and Contract Source snapshot,
+the executable child Delivery Units with links, and confirmation that no branch,
+commit, or PR was created.
+
 Every run reports exactly one outcome:
 
+- `tracking`: the input is a Tracking Issue; list executable child Delivery
+  Units and confirm that no branch or PR mutation occurred.
 - `complete`: the issue is closed, its change is in `main`, post-merge CI is
   green, and cleanup is safe and complete or explicitly pending for an occupied
   local `main`.
@@ -412,7 +430,8 @@ Every run reports exactly one outcome:
 - `needs-triage`: the contract is invalid or a new material decision is needed.
   A successful rollback uses this outcome and explicitly states that `main` was
   restored.
-- `blocked`: an operational impediment persisted after its retry limit.
+- `blocked`: the Delivery Unit has an open native blocker, or an operational
+  impediment persisted after its retry limit.
 - `awaiting-authority`: all possible work is prepared, but a human must merge or
   decide how to handle contributor-owned work.
 
@@ -434,28 +453,17 @@ A Delivery Run is complete only when the approved change is squash-merged into
 safe branch/worktree cleanup is complete or an occupied local `main` is reported
 as intentionally pending synchronization.
 
-## Implementation acceptance criteria
+## Workflow contract
 
-- `workflows/delivery-issue.md` is the sole workflow source of truth and no
-  obsolete `dots-development-loop.md` remains.
-- `delivery-issue` exists as a thin, explicit-only skill adapter with OpenAI
-  interface metadata and exactly-one-issue argument handling.
-- `dots-pr-creation` and `dots-pr-fast-path` are fully removed; active skills,
-  docs, tests, and metadata contain no stale operational references to them.
-- `dots-issue-creation` is the sole readiness producer and creates or updates
-  exactly one valid Agent Brief before applying `ready-for-agent`.
-- Agent Brief parsing supports only the required AI-triage disclaimer and blank
-  lines before `## Agent Brief`, detects duplicates, and validates every
-  required semantic field.
-- The delivery adapter points to this spec instead of duplicating its runtime
-  rules.
-- Tests that referenced the removed workflow validate the new portable
-  delegation contract and documentation.
-- Tracked `.atl` registry/cache files are refreshed and valid; unrelated ignored
-  runtime state is not staged.
-- Markdown links, skill frontmatter, OpenAI YAML, JSON, and affected symlinks or
-  registries pass their focused validation.
-- `gofmt -l .`, `go vet ./...`, `go build ./...`, and `go test ./...` all pass.
-- Because this implementation changes workflow/skills rather than CLI behavior,
-  manual CLI verification is explicitly not applicable and direct artifact
-  validation is recorded instead.
+- Contract Source precedence is historical Agent Brief, standalone issue body,
+  then delivery ticket plus native parent specification and relationships.
+- Admission rejects incomplete, ambiguous, or contradictory sources before
+  branch creation while preserving historical Agent Brief compatibility.
+- `ready-for-agent` records specification completeness; native blockers control
+  Execution Frontier membership without readiness-label churn.
+- A Tracking Issue returns `tracking` without creating a branch or PR.
+- The complete source, category, readiness, and relationship snapshot is
+  revalidated before code mutation, PR creation, and merge.
+- Pull requests retain exactly one `type:*` label and durable Delivery Evidence.
+- The adapter remains explicit-only and delegates all runtime rules to this
+  normative workflow.
