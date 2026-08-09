@@ -89,10 +89,11 @@ type Report struct {
 func (r Report) HasFindings() bool { return false }
 
 type Options struct {
-	StatePath  string
-	SourceRoot string
-	Home       string
-	OS         string
+	StatePath    string
+	SourceRoot   string
+	Home         string
+	XDGStateHome string
+	OS           string
 }
 
 // Build joins Installation Metadata with the current Install Manifest to infer
@@ -121,7 +122,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			return Report{}, err
 		}
 		if matched {
-			matchedEntryKeys[entryKey(entry, opts.Home)] = true
+			matchedEntryKeys[entryKey(entry, opts)] = true
 		}
 
 		tags := append([]string(nil), rec.Tags...)
@@ -251,7 +252,7 @@ func matchEntry(m manifest.Manifest, rec state.Record, opts Options) (manifest.E
 		if !manifest.MatchesOS(entry.OS, opts.OS) {
 			continue
 		}
-		target, err := plan.ResolveTarget(entry.Target, opts.Home)
+		target, err := plan.ResolveEntryTarget(entry, opts.Home, opts.XDGStateHome)
 		if err != nil {
 			return manifest.Entry{}, false, err
 		}
@@ -277,8 +278,8 @@ func compatibleEntrySource(entry manifest.Entry, source string) bool {
 	return false
 }
 
-func entryKey(entry manifest.Entry, home string) string {
-	target, err := plan.ResolveTarget(entry.Target, home)
+func entryKey(entry manifest.Entry, opts Options) string {
+	target, err := plan.ResolveEntryTarget(entry, opts.Home, opts.XDGStateHome)
 	if err != nil {
 		return entry.Target + "\x00" + entry.Strategy
 	}
@@ -344,7 +345,7 @@ func entryCoverageForProfile(m manifest.Manifest, profileName string, opts Optio
 			continue
 		}
 		total++
-		if matchedEntryKeys[entryKey(entry, opts.Home)] {
+		if matchedEntryKeys[entryKey(entry, opts)] {
 			covered++
 		}
 	}

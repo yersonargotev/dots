@@ -765,10 +765,22 @@ func TestResolveEntryTargetConfinesAllowlistedXDGStateRoot(t *testing.T) {
 		})
 	}
 
-	escapingEntry := entry
-	escapingEntry.Target = "../outside"
-	if _, err := plan.ResolveEntryTarget(escapingEntry, home, validRoot); err == nil {
-		t.Fatal("ResolveEntryTarget() accepted traversing target")
+	for name, target := range map[string]string{
+		"absolute target":   filepath.Join(home, "absolute"),
+		"traversing target": "../outside",
+		"current directory": ".",
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalidEntry := entry
+			invalidEntry.Target = target
+			if _, err := plan.ResolveEntryTarget(invalidEntry, home, validRoot); err == nil {
+				t.Fatalf("ResolveEntryTarget() accepted invalid target %q", target)
+			}
+		})
+	}
+
+	if _, err := plan.ResolveTarget(entry.Target, home); err == nil {
+		t.Fatalf("ResolveTarget() accepted arbitrary relative target %q", entry.Target)
 	}
 
 	outside := t.TempDir()

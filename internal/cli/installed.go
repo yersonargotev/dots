@@ -49,10 +49,11 @@ func newInstalledCommand() *cobra.Command {
 				return err
 			}
 			report, err := inst.Build(*m, meta, inst.Options{
-				StatePath:  state.Path(paths.StateRoot),
-				SourceRoot: paths.SourceRoot,
-				Home:       paths.Home,
-				OS:         runtime.GOOS,
+				StatePath:    state.Path(paths.StateRoot),
+				SourceRoot:   paths.SourceRoot,
+				Home:         paths.Home,
+				XDGStateHome: paths.XDGStateHome,
+				OS:           runtime.GOOS,
 			})
 			if err != nil {
 				return err

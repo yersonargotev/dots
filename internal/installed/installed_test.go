@@ -48,6 +48,45 @@ func TestBuildExposesEverySharedTargetContributor(t *testing.T) {
 	}
 }
 
+func TestBuildMatchesXDGStateTargetRoot(t *testing.T) {
+	home := t.TempDir()
+	xdgStateHome := filepath.Join(home, ".local", "state")
+	target := filepath.Join(xdgStateHome, "nvim", "lazy-lock.json")
+	m := manifest.Manifest{
+		Version:  1,
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"editor"}}},
+		Entries: []manifest.Entry{{
+			Source:     "configs/nvim/lazy-lock.json",
+			Target:     "nvim/lazy-lock.json",
+			TargetRoot: "xdg-state",
+			Strategy:   "copy",
+			Ownership:  "seeded",
+			Tags:       []string{"editor"},
+		}},
+	}
+	meta := state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{{
+		Target: target, Source: "configs/nvim/lazy-lock.json", Strategy: "copy",
+		Profiles: []string{"default"}, Tags: []string{"editor"},
+	}}}
+
+	report, err := inst.Build(m, meta, inst.Options{
+		StatePath:    filepath.Join(home, "installed.json"),
+		Home:         home,
+		XDGStateHome: xdgStateHome,
+		OS:           "linux",
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(report.ManagedEntries) != 1 || !report.ManagedEntries[0].ManifestMatched {
+		t.Fatalf("ManagedEntries = %+v, want one manifest match", report.ManagedEntries)
+	}
+	coverage := findProfile(t, report.Profiles, "default")
+	if coverage.TotalEntries != 1 || coverage.CoveredEntries != 1 || coverage.State != inst.CoverageComplete {
+		t.Fatalf("default coverage = %+v, want complete 1/1 coverage", coverage)
+	}
+}
+
 func TestBuildInfersLegacyMetadataAndPartialProfiles(t *testing.T) {
 	home := t.TempDir()
 	m := inventoryManifest()
