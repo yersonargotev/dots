@@ -1013,10 +1013,20 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	}
 
 	gitconfigTarget := filepath.Join(home, ".gitconfig")
-	if target, err := os.Readlink(gitconfigTarget); err != nil {
-		t.Fatalf("sandbox gitconfig target is not a symlink: %v", err)
+	if info, err := os.Lstat(gitconfigTarget); err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("sandbox native gitconfig is not a regular file: info=%v err=%v", info, err)
+	}
+	loaderSource := filepath.Join(sourceRoot, "configs/git/loader.gitconfig")
+	if got, err := os.ReadFile(gitconfigTarget); err != nil {
+		t.Fatalf("read sandbox native gitconfig: %v", err)
+	} else if want, readErr := os.ReadFile(loaderSource); readErr != nil || !bytes.Equal(got, want) {
+		t.Fatalf("sandbox native gitconfig = (%q, %v), want loader (%q, %v)", got, err, want, readErr)
+	}
+	portableGitTarget := filepath.Join(home, ".config/dots/git/gitconfig")
+	if target, err := os.Readlink(portableGitTarget); err != nil {
+		t.Fatalf("sandbox portable gitconfig target is not a symlink: %v", err)
 	} else if want := filepath.Join(sourceRoot, "configs/git/gitconfig"); target != want {
-		t.Fatalf("sandbox gitconfig symlink = %q, want %q", target, want)
+		t.Fatalf("sandbox portable gitconfig symlink = %q, want %q", target, want)
 	}
 	zellijConfigTarget := filepath.Join(home, ".config/zellij/config.kdl")
 	if target, err := os.Readlink(zellijConfigTarget); err != nil {
@@ -1097,7 +1107,8 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	got := statusOut.String()
 	for _, want := range []string{
 		"ok",
-		"configs/git/gitconfig -> " + gitconfigTarget,
+		"configs/git/loader.gitconfig -> " + gitconfigTarget,
+		"configs/git/gitconfig -> " + portableGitTarget,
 		"configs/zellij/config.kdl -> " + zellijConfigTarget,
 		"configs/zellij/layouts/default.kdl -> " + zellijLayoutTarget,
 		"configs/nvim/loader.lua -> " + nvimLoader,
