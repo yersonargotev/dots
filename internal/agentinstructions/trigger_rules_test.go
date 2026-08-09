@@ -339,6 +339,13 @@ func TestDeliveryContractAdmissionSupportsProducerNeutralSources(t *testing.T) {
 		"An issue that publishes an Agent Brief",
 	})
 	assertDocumentContainsAll(t, contractPath, []string{"or add an Agent Brief before delivery"})
+	assertDocumentContainsAll(t, filepath.Join(root, "NOTES.md"), []string{
+		"selected Delivery Contract",
+		"complete historical Agent Brief",
+		"complete standalone issue body",
+		"delivery ticket composed with its native parent specification and relationships",
+		"not a mandatory comment for every issue",
+	})
 }
 
 func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T) {
@@ -453,6 +460,7 @@ func TestDeliveryContractEvidenceAndRepositoryLanguage(t *testing.T) {
 
 	for _, path := range []string{
 		filepath.Join(root, "AGENTS.md"),
+		filepath.Join(root, "NOTES.md"),
 		filepath.Join(root, "docs", "agents", "agent-brief.md"),
 		filepath.Join(root, "docs", "agents", "issue-tracker.md"),
 		filepath.Join(root, "docs", "agents", "triage-labels.md"),

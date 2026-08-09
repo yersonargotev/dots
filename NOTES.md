@@ -3,8 +3,8 @@
 ## Project loops
 
 - Canonical delivery trigger: the user explicitly invokes `delivery-issue` with an approved GitHub issue reference.
-- A Delivery Run is one resumable execution that takes exactly one approved GitHub issue from its authoritative Agent Brief through integration into `main` and green post-merge CI.
-- An Agent Brief is the single authoritative implementation contract stored as one GitHub issue comment headed `## Agent Brief`; it is an input contract, not a human checkpoint brief.
+- A Delivery Run is one resumable execution that takes exactly one approved GitHub issue from its selected Delivery Contract to either a non-mutating `tracking` result or integration into `main` with green post-merge CI.
+- A Delivery Contract selects a complete historical Agent Brief, a complete standalone issue body, or a delivery ticket composed with its native parent specification and relationships. The Agent Brief remains the highest-precedence historical Contract Source, not a mandatory comment for every issue.
 - A Delivery Result is the final user-facing summary of the issue, pull request, integrated commit, post-merge CI, and cleanup state.
 
 ## Workflow conventions
