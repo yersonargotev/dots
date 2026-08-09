@@ -2269,6 +2269,10 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	if !ok || bat.Source != "configs/bat/config" || bat.Strategy != "copy" || bat.Ownership != "" {
 		t.Errorf("bat config entry = %#v, want copy with implicit Whole-Target Ownership", bat)
 	}
+	zellij, ok := entriesByTarget["~/.config/zellij/config.kdl"]
+	if !ok || zellij.Source != "configs/zellij/config.kdl" || zellij.Strategy != "copy" || zellij.Ownership != "" {
+		t.Errorf("Zellij config entry = %#v, want copy with implicit Whole-Target Ownership", zellij)
+	}
 	portable, ok := entriesByTarget["~/.config/dots/zsh/zshrc"]
 	if !ok || portable.Source != "configs/zsh/zshrc" || portable.Strategy != "symlink" {
 		t.Errorf("portable zsh entry = %#v, want managed symlink", portable)
@@ -2742,8 +2746,12 @@ func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
 			if entry.Source != tt.source {
 				t.Errorf("Source = %q, want %q", entry.Source, tt.source)
 			}
-			if entry.Strategy != "symlink" {
-				t.Errorf("Strategy = %q, want symlink", entry.Strategy)
+			wantStrategy := "symlink"
+			if tt.name == "config" {
+				wantStrategy = "copy"
+			}
+			if entry.Strategy != wantStrategy {
+				t.Errorf("Strategy = %q, want %s", entry.Strategy, wantStrategy)
 			}
 			if !hasString(entry.Tags, "core") {
 				t.Errorf("Tags = %#v, want core tag", entry.Tags)

@@ -1029,10 +1029,12 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("sandbox portable gitconfig symlink = %q, want %q", target, want)
 	}
 	zellijConfigTarget := filepath.Join(home, ".config/zellij/config.kdl")
-	if target, err := os.Readlink(zellijConfigTarget); err != nil {
-		t.Fatalf("sandbox Zellij config target is not a symlink: %v", err)
-	} else if want := filepath.Join(sourceRoot, "configs/zellij/config.kdl"); target != want {
-		t.Fatalf("sandbox Zellij config symlink = %q, want %q", target, want)
+	if info, err := os.Lstat(zellijConfigTarget); err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("sandbox Zellij config is not a regular file: info=%v err=%v", info, err)
+	} else if got, readErr := os.ReadFile(zellijConfigTarget); readErr != nil {
+		t.Fatalf("read sandbox Zellij config: %v", readErr)
+	} else if want, sourceErr := os.ReadFile(filepath.Join(sourceRoot, "configs/zellij/config.kdl")); sourceErr != nil || !bytes.Equal(got, want) {
+		t.Fatalf("sandbox Zellij config = (%q, %v), want source (%q, %v)", got, readErr, want, sourceErr)
 	}
 	zellijLayoutTarget := filepath.Join(home, ".config/zellij/layouts/default.kdl")
 	if target, err := os.Readlink(zellijLayoutTarget); err != nil {
