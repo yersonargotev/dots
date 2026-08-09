@@ -149,6 +149,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	plan := Plan{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
 	actionByTarget := map[string]int{}
 	readSourcesByTarget := map[string][]string{}
+	scheduledLegacyParents := map[string]struct{}{}
 	for _, entry := range m.Entries {
 		if !manifest.SharesTag(entry.Tags, tags) {
 			continue
@@ -178,7 +179,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		}
 		legacyParent := ""
 		if actionStatus == StatusConflict {
-			legacyParent = legacyParentRemovedByMigration(target, opts.LegacyMigrations)
+			legacyParent = scheduledLegacyParent(target, scheduledLegacyParents)
 			if legacyParent != "" {
 				actionStatus = StatusCreate
 			}
@@ -216,7 +217,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			LegacyParent:   legacyParent,
 		}
 		if actionStatus == StatusConflict || actionStatus == StatusCreate {
-			if migration, ok := opts.LegacyMigrations[target]; ok && (actionStatus == StatusConflict || migration.LegacyTarget != "") {
+			if migration, ok := opts.LegacyMigrations[target]; ok && ((migration.LegacyTarget == "" && actionStatus == StatusConflict) || (migration.LegacyTarget != "" && actionStatus == StatusCreate)) {
 				planned, compatible, migrateErr := planLegacyMigration(entry, readSourceAbs, migration)
 				if migrateErr != nil {
 					return Plan{}, migrateErr
@@ -226,6 +227,9 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 					action.Migration = &planned
 					action.Reason = ""
 					action.MatchingTags = nil
+					if planned.LegacyTarget != "" {
+						scheduledLegacyParents[planned.LegacyTarget] = struct{}{}
+					}
 				}
 			}
 		}
@@ -333,10 +337,10 @@ func planLegacyMigration(entry manifest.Entry, currentSource string, migration L
 	return planned, true, nil
 }
 
-func legacyParentRemovedByMigration(target string, migrations map[string]LegacyMigration) string {
-	for _, migration := range migrations {
-		if migration.LegacyTarget != "" && InsideRoot(target, migration.LegacyTarget) && filepath.Clean(target) != filepath.Clean(migration.LegacyTarget) {
-			return migration.LegacyTarget
+func scheduledLegacyParent(target string, parents map[string]struct{}) string {
+	for parent := range parents {
+		if InsideRoot(target, parent) && filepath.Clean(target) != filepath.Clean(parent) {
+			return parent
 		}
 	}
 	return ""

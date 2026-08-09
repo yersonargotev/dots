@@ -781,6 +781,55 @@ func TestResolveEntryTargetConfinesAllowlistedXDGStateRoot(t *testing.T) {
 	}
 }
 
+func TestBuildDoesNotScheduleLegacyDirectoryRemovalWhenXDGSeedTargetExists(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	xdgStateHome := filepath.Join(home, "xdg-state")
+	legacySource := filepath.Join(sourceRoot, "configs/nvim")
+	writeSource(t, sourceRoot, "configs/nvim/lazy-lock.json", "baseline\n")
+	writeSource(t, sourceRoot, "configs/nvim/loader.lua", "loader\n")
+	writeSource(t, sourceRoot, "configs/nvim/init.lua", "managed\n")
+	legacyTarget := filepath.Join(home, ".config/nvim")
+	if err := os.MkdirAll(filepath.Dir(legacyTarget), 0o755); err != nil {
+		t.Fatalf("mkdir legacy parent: %v", err)
+	}
+	if err := os.Symlink(legacySource, legacyTarget); err != nil {
+		t.Fatalf("symlink legacy target: %v", err)
+	}
+	seedTarget := filepath.Join(xdgStateHome, "nvim/lazy-lock.json")
+	if err := os.MkdirAll(filepath.Dir(seedTarget), 0o755); err != nil {
+		t.Fatalf("mkdir seed target parent: %v", err)
+	}
+	if err := os.WriteFile(seedTarget, []byte("pre-existing\n"), 0o600); err != nil {
+		t.Fatalf("write pre-existing seed target: %v", err)
+	}
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+		Entries: []manifest.Entry{
+			{Source: "configs/nvim/lazy-lock.json", Target: "nvim/lazy-lock.json", TargetRoot: "xdg-state", Strategy: "copy", Ownership: "seeded", Tags: []string{"core"}},
+			{Source: "configs/nvim/loader.lua", Target: "~/.config/nvim/init.lua", Strategy: "copy", Tags: []string{"core"}},
+			{Source: "configs/nvim", Target: "~/.config/dots/nvim", Strategy: "symlink", Tags: []string{"core"}},
+		},
+	}
+	p, err := plan.Build(m, plan.Options{
+		Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home, XDGStateHome: xdgStateHome,
+		LegacyMigrations: map[string]plan.LegacyMigration{seedTarget: {
+			LinkDestination: legacySource, LegacyTarget: legacyTarget,
+			LegacyContentTarget: filepath.Join(legacyTarget, "lazy-lock.json"),
+			CapturedContent:     []byte("local\n"), PreviousSourceContent: []byte("baseline\n"),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Actions) != 3 || p.Actions[0].Status != plan.StatusConflict || p.Actions[1].Status != plan.StatusConflict {
+		t.Fatalf("plan actions = %#v, want seed and loader conflicts", p.Actions)
+	}
+	if p.Actions[0].Migration != nil || p.Actions[1].LegacyParent != "" {
+		t.Fatalf("unsafe legacy removal scheduled: %#v", p.Actions)
+	}
+}
+
 func TestBuildRejectsAbsoluteTarget(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

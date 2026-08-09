@@ -86,8 +86,8 @@ func decodeEnvelope(t *testing.T, out string) testEnvelope {
 	if err := json.Unmarshal([]byte(out), &env); err != nil {
 		t.Fatalf("stdout is not a JSON envelope: %v\noutput:\n%s", err, out)
 	}
-	if env.SchemaVersion != "6" {
-		t.Fatalf("schema_version = %q, want \"6\"", env.SchemaVersion)
+	if env.SchemaVersion != "7" {
+		t.Fatalf("schema_version = %q, want \"7\"", env.SchemaVersion)
 	}
 	if env.Command != "status" {
 		t.Fatalf("command = %q, want \"status\"", env.Command)
@@ -101,8 +101,8 @@ func decodeEnvelopeForCommand(t *testing.T, out string, command string) testEnve
 	if err := json.Unmarshal([]byte(out), &env); err != nil {
 		t.Fatalf("stdout is not a JSON envelope: %v\noutput:\n%s", err, out)
 	}
-	if env.SchemaVersion != "6" {
-		t.Fatalf("schema_version = %q, want \"6\"", env.SchemaVersion)
+	if env.SchemaVersion != "7" {
+		t.Fatalf("schema_version = %q, want \"7\"", env.SchemaVersion)
 	}
 	if env.Command != command {
 		t.Fatalf("command = %q, want %q", env.Command, command)
