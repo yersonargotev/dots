@@ -139,16 +139,17 @@ entries:
     strategy: symlink
     tags: [core]
 `)
-	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Provisioners: []state.ProvisionerRecord{{
-		Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "yersonargotev/dots/skills/delegation", "--agent", "codex", "--skill", "delegation", "--global", "--copy"},
-	}}}); err != nil {
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Provisioners: []state.ProvisionerRecord{
+		{Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "yersonargotev/dots/skills/delegation", "--agent", "codex", "--skill", "delegation", "--global", "--copy"}},
+		{Profiles: []string{"agents"}, Tags: []string{"agents"}, Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global", "--agents", "codex"}, Status: "provisioned"},
+	}}); err != nil {
 		t.Fatalf("save historical metadata: %v", err)
 	}
 	agentsPath := filepath.Join(home, ".codex", "AGENTS.md")
 	if err := os.MkdirAll(filepath.Dir(agentsPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	legacy := "before\n<!-- dots:delegation -->\nowned\n<!-- /dots:delegation -->\nafter\n"
+	legacy := "before\n<!-- gentle-ai:trigger-rules -->\nretired\n<!-- /gentle-ai:trigger-rules -->\n<!-- dots:delegation -->\nowned\n<!-- /dots:delegation -->\nafter\n"
 	if err := os.WriteFile(agentsPath, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +166,7 @@ entries:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(got), "dots:delegation") || !strings.Contains(out.String(), "Delegation retirement:") {
+	if strings.Contains(string(got), "dots:delegation") || strings.Contains(string(got), "gentle-ai:trigger-rules") || !strings.Contains(out.String(), "Historical retirement:") || !strings.Contains(out.String(), "Gentle AI blocks") {
 		t.Fatalf("historical retirement was not reported and applied\ninstructions:\n%s\noutput:\n%s", got, out.String())
 	}
 

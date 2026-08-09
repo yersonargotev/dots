@@ -9,7 +9,7 @@
 3. **Fast-forwards only.** `update` fetches the upstream and advances the branch with `git merge --ff-only`. If the branch has diverged from its upstream, it cannot be fast-forwarded; `update` reports the divergence and asks you to resolve it manually with Git. It never performs an automatic merge or rebase.
 4. **Recomputes the Install Plan.** After the fast-forward, the manifest is loaded from the updated repository (so a manifest change pulled from upstream is honored) and a fresh Install Plan is computed against the current workstation state, surfacing any new Conflicts or Drift.
 5. **Applies safely.** The post-update install resolves conflicts exactly like `dots install`: interactive TUI by default, text prompts with `--no-tui`, or the conservative skip default with `--yes`. Any `replace` still creates a [Backup Set](../CONTEXT.md) before touching an existing target.
-6. **Runs provisioners and convergence.** After the file plan is applied, `update` runs the same selected Provisioners as `install`, then converges marker-owned instruction cleanup for the native Agent CLI Baseline. Provisioners run only when file application was not canceled; `--dry-run` renders the plan without executing it. If Conflict Resolution is canceled, the whole run aborts before any tool-managed configuration changes.
+6. **Runs provisioners and historical retirement.** After the file plan is applied, `update` runs the same selected Provisioners as `install`, then evaluates historical retirement from Installation Metadata evidence. Current Tags never authorize cleanup. Provisioners and retirement run only when file application was not canceled; `--dry-run` renders the plan without executing either. If Conflict Resolution is canceled, the whole run aborts before any tool-managed configuration changes.
 
 ## Versioning model
 
@@ -149,20 +149,20 @@ During update or upgrade, selection evolution reports gentle-ai and Engram
 Dependencies plus their gentle-ai/skills Provisioners as removed surfaces. This
 report is informational: dots does not uninstall binaries, delete directories,
 remove Dependency Installation Metadata, or erase historical Provisioner
-receipts. After Managed Configuration succeeds, dots removes only known
+receipts. After Managed Configuration succeeds, a successful historical
+`gentle-ai install` Provisioner receipt authorizes dots to remove only known
 marker-delimited gentle-ai trigger/persona/Engram blocks and the dots-owned
-global-rules block from supported instruction files. Unmarked and co-owned
-content, complete files, authentication, and Secret state are
-preserved.
+global-rules block from supported instruction files. An Installed Selection or
+current `agents` Tag alone is never evidence. Unmarked and co-owned content,
+complete files, authentication, symlinks, and Secret state are preserved;
+non-regular targets are reported for manual cleanup.
 
 To remove residual gentle-ai state, first review it outside dots (for example
 `~/.gentle-ai`, agent instruction files, generated skills, and any external
 gentle-ai/Engram installation). Use the vendor's explicit uninstall flow or
 remove reviewed residual paths manually only after confirming their ownership.
 Do not delete entire shared agent configuration directories, authentication
-files, or historical dots receipts. The retired implementation remains under a
-non-Profile manifest tag only until #371 removes it; production Profiles never
-select that tag. OpenCode's `web` Managed Entry composes its MCP subset directly
+files, or historical dots receipts. OpenCode's `web` Managed Entry composes its MCP subset directly
 into the native `~/.config/opencode/opencode.json`, so
 `--profile agents --profile web` does not depend on `core` shell configuration.
 

@@ -696,12 +696,6 @@ func (m Manifest) validateTagRegistry() error {
 		if !tagpolicy.IsAllowedKind(tag.Kind) {
 			return fmt.Errorf("tags[%q].kind must be one of surface, cleanup, compatibility", name)
 		}
-		if expectedKind, isBehaviorTag := tagpolicy.ExpectedKind(name); isBehaviorTag && tag.Kind != expectedKind {
-			return fmt.Errorf("tags[%q].kind must be %q", name, expectedKind)
-		}
-		if (tag.Kind == "cleanup" || tag.Kind == "compatibility") && !tagpolicy.IsBehaviorTag(name) {
-			return fmt.Errorf("tags[%q].kind %q requires a supported behavior tag", name, tag.Kind)
-		}
 		if !tagpolicy.IsAllowedStatus(tag.Status) {
 			return fmt.Errorf("tags[%q].status must be one of current, legacy", name)
 		}
@@ -1107,7 +1101,7 @@ func resolveSelection(m Manifest, profileNames []string, extraTags []string, all
 	}
 	for _, tag := range extraTags {
 		if m.Tags != nil {
-			if _, declared := m.Tags[tag]; !declared && !tagpolicy.IsBehaviorTag(tag) {
+			if _, declared := m.Tags[tag]; !declared {
 				return Selection{}, fmt.Errorf("tag %q is not declared", tag)
 			}
 		}

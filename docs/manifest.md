@@ -95,6 +95,11 @@ dots install --profile workstation --tag adaptive-theme
 
 ```
 
+Tags are declarative selection only: they select Managed Entries, Dependencies,
+Provisioners, and source overrides, but never authorize hidden built-in cleanup
+or historical migration behavior. Historical retirement uses sufficiently
+specific Installation Metadata receipts independently from current selection.
+
 See the [adaptive theme audit](adaptive-theme-audit.md) and the
 [`codegraph` Provisioner specification](#codegraph-spec) for the detailed
 behavior behind those focused capabilities.

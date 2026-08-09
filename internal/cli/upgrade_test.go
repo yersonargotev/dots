@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 func TestUpgradeDryRunPreviewsBinaryAndSourceOfTruthWithoutModifying(t *testing.T) {
@@ -143,6 +144,21 @@ entries:
 `,
 	})
 	saveInstalledSelection(t, stateRoot, "default")
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta.Provisioners = []state.ProvisionerRecord{{Profile: "agents", Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global"}, Status: "provisioned"}}
+	if err := state.Save(state.Path(stateRoot), meta); err != nil {
+		t.Fatal(err)
+	}
+	instructions := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(instructions), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(instructions, []byte("before\n<!-- gentle-ai:persona -->\nretired\n<!-- /gentle-ai:persona -->\nafter\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -157,6 +173,10 @@ entries:
 	}
 	if _, err := os.Readlink(filepath.Join(home, ".tmux.conf")); err != nil {
 		t.Fatalf("continuation did not install updated Managed Entry: %v", err)
+	}
+	got, err := os.ReadFile(instructions)
+	if err != nil || strings.Contains(string(got), "gentle-ai:persona") || !strings.Contains(out.String(), "Historical retirement:") {
+		t.Fatalf("upgrade continuation did not expose historical retirement: %q, %v\noutput:\n%s", got, err, out.String())
 	}
 }
 

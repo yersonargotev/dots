@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/textblock"
 )
@@ -166,30 +167,40 @@ type instructionTarget struct {
 	path  string
 }
 
+// RetirementReport records only state that a narrow historical migration
+// removed or deliberately left for the user. Paths are home-relative for
+// portable reports.
+type RetirementReport struct {
+	Removed       []string `json:"removed"`
+	ManualCleanup []string `json:"manual_cleanup"`
+}
+
 // RetireGentleAIState removes only marker-delimited instruction content whose
-// ownership is explicit. It preserves instruction files and unmarked content;
-// retired Codex delegation state is handled by a separate evidence-gated migration.
-func RetireGentleAIState(home string) error {
+// ownership is explicit. It preserves instruction files and unmarked content,
+// and reports non-regular targets for manual cleanup instead of following them.
+func RetireGentleAIState(home string) (RetirementReport, error) {
+	report := RetirementReport{Removed: []string{}, ManualCleanup: []string{}}
 	var errs []error
-	for _, path := range instructionPaths(home, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
-		if err := removeMarkedBlocks(
-			path,
+	for _, target := range instructionTargets(home, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
+		removed, manual, err := removeMarkedBlocks(
+			target.path,
 			textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd},
 			textblock.Markers{Start: gentleAIPersonaStart, End: gentleAIPersonaEnd},
 			textblock.Markers{Start: gentleAIEngramStart, End: gentleAIEngramEnd},
 			textblock.Markers{Start: dotsRulesStart, End: dotsRulesEnd},
-		); err != nil {
+		)
+		label := homeRelativePath(home, target.path)
+		if removed {
+			report.Removed = append(report.Removed, label+" Gentle AI blocks")
+		}
+		if manual {
+			report.ManualCleanup = append(report.ManualCleanup, label)
+		}
+		if err != nil {
 			errs = append(errs, err)
 		}
 	}
-	return errors.Join(errs...)
-}
-
-// RetirementReport records only state that the narrow migration removed or
-// deliberately left for the user. Paths are home-relative for portable reports.
-type RetirementReport struct {
-	Removed       []string `json:"removed"`
-	ManualCleanup []string `json:"manual_cleanup"`
+	return report, errors.Join(errs...)
 }
 
 // RetireCodexDelegation removes exact dots-owned delegation state. It fails
@@ -311,29 +322,40 @@ func addCopilotPortablePolicyTargets(add func(agent, path string), agent, home s
 	add(agent, filepath.Join(home, ".copilot", "copilot-instructions.md"))
 }
 
-func removeMarkedBlocks(path string, markers ...textblock.Markers) error {
-	content, err := os.ReadFile(path)
+func removeMarkedBlocks(path string, markers ...textblock.Markers) (removed, manual bool, err error) {
+	info, err := os.Lstat(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil
+			return false, false, nil
 		}
-		return fmt.Errorf("read agent instructions %s: %w", path, err)
+		return false, false, fmt.Errorf("inspect agent instructions %s: %w", path, err)
 	}
-	info, err := os.Stat(path)
+	if !info.Mode().IsRegular() {
+		return false, true, nil
+	}
+	content, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("stat agent instructions %s: %w", path, err)
+		return false, false, fmt.Errorf("read agent instructions %s: %w", path, err)
 	}
 	updated, err := textblock.Remove(string(content), markers...)
 	if err != nil {
-		return fmt.Errorf("remove marked agent instruction blocks from %s: %w", path, err)
+		return false, false, fmt.Errorf("remove marked agent instruction blocks from %s: %w", path, err)
 	}
 	if updated == string(content) {
-		return nil
+		return false, false, nil
 	}
 	if err := os.WriteFile(path, []byte(updated), info.Mode().Perm()); err != nil {
-		return fmt.Errorf("write agent instructions %s: %w", path, err)
+		return false, false, fmt.Errorf("write agent instructions %s: %w", path, err)
 	}
-	return nil
+	return true, false, nil
+}
+
+func homeRelativePath(home, path string) string {
+	relative, err := filepath.Rel(home, path)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return path
+	}
+	return "~/" + filepath.ToSlash(relative)
 }
 
 func removeCodexDelegation(path string) (removed, manual bool, err error) {

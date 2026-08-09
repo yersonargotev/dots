@@ -3,6 +3,7 @@ package agentinstructions
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -153,8 +154,12 @@ func TestRetireGentleAIStateRemovesOnlyOwnedMarkerBlocks(t *testing.T) {
 		}
 	}
 
-	if err := RetireGentleAIState(home); err != nil {
+	report, err := RetireGentleAIState(home)
+	if err != nil {
 		t.Fatalf("RetireGentleAIState() error = %v", err)
+	}
+	if len(report.Removed) != len(paths) || len(report.ManualCleanup) != 0 {
+		t.Fatalf("RetireGentleAIState() report = %#v, want one removal per instruction target", report)
 	}
 
 	for _, path := range paths {
@@ -182,6 +187,69 @@ func TestRetireGentleAIStateRemovesOnlyOwnedMarkerBlocks(t *testing.T) {
 		if err != nil || info.Mode().Perm() != 0o640 {
 			t.Errorf("instruction file mode = %v, %v; want 0640", info, err)
 		}
+	}
+}
+
+func TestRetireGentleAIStatePreservesAndReportsSymlinks(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, "user-owned.md")
+	content := gentleAITriggerRulesStart + "\nowned\n" + gentleAITriggerRulesEnd + "\n"
+	if err := os.WriteFile(target, []byte(content), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := RetireGentleAIState(home)
+	if err != nil {
+		t.Fatalf("RetireGentleAIState() error = %v", err)
+	}
+	if len(report.Removed) != 0 || !reflect.DeepEqual(report.ManualCleanup, []string{"~/.codex/AGENTS.md"}) {
+		t.Fatalf("RetireGentleAIState() report = %#v", report)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil || string(got) != content {
+		t.Fatalf("symlink target changed: %q, %v", got, err)
+	}
+}
+
+func TestRetireGentleAIStateReportsPartialFailureWithoutChangingMalformedFile(t *testing.T) {
+	home := t.TempDir()
+	codexPath := filepath.Join(home, ".codex", "AGENTS.md")
+	claudePath := filepath.Join(home, ".claude", "CLAUDE.md")
+	for _, path := range []string{codexPath, claudePath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	malformed := "before\n" + gentleAITriggerRulesStart + "\nunclosed\n"
+	if err := os.WriteFile(codexPath, []byte(malformed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	owned := gentleAIPersonaStart + "\nowned\n" + gentleAIPersonaEnd + "\nuser\n"
+	if err := os.WriteFile(claudePath, []byte(owned), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := RetireGentleAIState(home)
+	if err == nil {
+		t.Fatal("RetireGentleAIState() error = nil, want malformed marker failure")
+	}
+	if !reflect.DeepEqual(report.Removed, []string{"~/.claude/CLAUDE.md Gentle AI blocks"}) {
+		t.Fatalf("RetireGentleAIState() report = %#v", report)
+	}
+	got, readErr := os.ReadFile(codexPath)
+	if readErr != nil || string(got) != malformed {
+		t.Fatalf("malformed instructions changed: %q, %v", got, readErr)
+	}
+	got, readErr = os.ReadFile(claudePath)
+	if readErr != nil || string(got) != "\nuser\n" {
+		t.Fatalf("independent valid target was not retired: %q, %v", got, readErr)
 	}
 }
 

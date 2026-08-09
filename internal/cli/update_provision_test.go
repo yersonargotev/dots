@@ -99,16 +99,17 @@ func TestUpdateRetiresHistoricalDelegationAfterSuccessfulApply(t *testing.T) {
 	stubDir := t.TempDir()
 	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 0\n")
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Provisioners: []state.ProvisionerRecord{{
-		Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "yersonargotev/dots/skills/delegation", "--agent", "codex", "--skill", "delegation", "--global", "--copy"},
-	}}}); err != nil {
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Provisioners: []state.ProvisionerRecord{
+		{Tool: "skills", Executable: "npx", Args: []string{"--yes", "skills@1.5.12", "add", "yersonargotev/dots/skills/delegation", "--agent", "codex", "--skill", "delegation", "--global", "--copy"}},
+		{Profile: "agents", Tool: "gentle-ai", Executable: "gentle-ai", Args: []string{"install", "--scope", "global"}, Status: "provisioned"},
+	}}); err != nil {
 		t.Fatalf("save historical metadata: %v", err)
 	}
 	agentsPath := filepath.Join(home, ".codex", "AGENTS.md")
 	if err := os.MkdirAll(filepath.Dir(agentsPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(agentsPath, []byte("before\n<!-- argote:subagent-delegation -->\nowned\n<!-- /argote:subagent-delegation -->\nafter\n"), 0o600); err != nil {
+	if err := os.WriteFile(agentsPath, []byte("before\n<!-- gentle-ai:engram-protocol -->\nretired\n<!-- /gentle-ai:engram-protocol -->\n<!-- argote:subagent-delegation -->\nowned\n<!-- /argote:subagent-delegation -->\nafter\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, sourceRoot := newInstalledRepo(t, map[string]string{
@@ -121,7 +122,7 @@ func TestUpdateRetiresHistoricalDelegationAfterSuccessfulApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(got), "argote:subagent-delegation") || !strings.Contains(out, "Delegation retirement:") {
+	if strings.Contains(string(got), "argote:subagent-delegation") || strings.Contains(string(got), "gentle-ai:engram-protocol") || !strings.Contains(out, "Historical retirement:") || !strings.Contains(out, "Gentle AI blocks") {
 		t.Fatalf("historical retirement was not reported and applied\ninstructions:\n%s\noutput:\n%s", got, out)
 	}
 }

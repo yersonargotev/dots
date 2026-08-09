@@ -38,3 +38,15 @@ whether supplied by Profiles or explicit `--tag` values. Historical manifests
 may be read only for update-evolution inventory when they contain retired
 Profile Dependencies; current manifest loading rejects that field with migration
 guidance.
+
+## Amendment: evidence-gated historical retirement
+
+Tags select declarative surface only and do not trigger built-in Go cleanup.
+Gentle AI retirement runs in the terminal historical-retirement workflow after
+successful application and before Installed Selection recording. Its authority
+is a successful historical `gentle-ai install` Provisioner receipt in
+Installation Metadata; Profile fields, Provisioner Tag fields, and Installed
+Selection containing `agents` are insufficient by themselves. The filesystem
+adapter continues to remove only recognized marker-owned blocks, preserves
+regular-file modes and unrelated bytes, reports non-regular targets for manual
+cleanup, and fails closed before terminal Installed Selection recording.

@@ -109,8 +109,6 @@ provisioners:
 		{"override key", strings.Replace(valid, "source_overrides: {legacy-core:", "source_overrides: {missing:", 1), `entries[0].source_overrides[0] tag "missing" is not declared`},
 		{"provisioner reference", strings.Replace(valid, "    tags: [agents]\n    spec:", "    tags: [missing]\n    spec:", 1), `provisioners[0].tags[0] tag "missing" is not declared`},
 		{"invalid kind", strings.Replace(valid, "kind: surface", "kind: command", 1), `tags["core"].kind must be one of surface, cleanup, compatibility`},
-		{"behavior kind mismatch", strings.Replace(valid, "  agents:\n    description: retire Gentle AI state\n    kind: surface", "  agents:\n    description: retire Gentle AI state\n    kind: cleanup", 1), `tags["agents"].kind must be "surface"`},
-		{"unallowlisted behavior tag", strings.Replace(valid, "  legacy-core:\n    description: old baseline selector\n    kind: surface", "  legacy-core:\n    description: old baseline selector\n    kind: cleanup", 1), `tags["legacy-core"].kind "cleanup" requires a supported behavior tag`},
 		{"replacement source current", strings.Replace(valid, "status: legacy\n    replaced_by", "status: current\n    replaced_by", 1), `tags["legacy-core"].replaced_by requires status legacy`},
 		{"replacement target legacy", strings.Replace(valid, "status: current", "status: legacy", 1), `tags["legacy-core"].replaced_by "core" must reference a current tag`},
 	}
