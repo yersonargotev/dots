@@ -3,6 +3,7 @@ package agentinstructions
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,10 +181,18 @@ type RetirementReport struct {
 // and reports non-regular targets for manual cleanup instead of following them.
 func RetireGentleAIState(home string) (RetirementReport, error) {
 	report := RetirementReport{Removed: []string{}, ManualCleanup: []string{}}
+	ops, root, err := rootedMarkedBlockFileOps(home)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return report, nil
+		}
+		return report, fmt.Errorf("open agent instructions home %s: %w", home, err)
+	}
 	var errs []error
 	for _, target := range instructionTargets(home, []string{"codex", "claude-code", "opencode", "antigravity", "vscode-copilot"}) {
-		removed, manual, err := removeMarkedBlocks(
+		removed, manual, err := removeMarkedBlocksWithFileOps(
 			target.path,
+			ops,
 			textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd},
 			textblock.Markers{Start: gentleAIPersonaStart, End: gentleAIPersonaEnd},
 			textblock.Markers{Start: gentleAIEngramStart, End: gentleAIEngramEnd},
@@ -199,6 +208,9 @@ func RetireGentleAIState(home string) (RetirementReport, error) {
 		if err != nil {
 			errs = append(errs, err)
 		}
+	}
+	if err := root.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close agent instructions home %s: %w", home, err))
 	}
 	return report, errors.Join(errs...)
 }
@@ -322,8 +334,36 @@ func addCopilotPortablePolicyTargets(add func(agent, path string), agent, home s
 	add(agent, filepath.Join(home, ".copilot", "copilot-instructions.md"))
 }
 
-func removeMarkedBlocks(path string, markers ...textblock.Markers) (removed, manual bool, err error) {
-	info, err := os.Lstat(path)
+type markedBlockFileOps struct {
+	lstat    func(string) (os.FileInfo, error)
+	openFile func(string, int, os.FileMode) (*os.File, error)
+}
+
+func systemMarkedBlockFileOps() markedBlockFileOps {
+	return markedBlockFileOps{lstat: os.Lstat, openFile: os.OpenFile}
+}
+
+func rootedMarkedBlockFileOps(home string) (markedBlockFileOps, *os.Root, error) {
+	root, err := os.OpenRoot(home)
+	if err != nil {
+		return markedBlockFileOps{}, nil, err
+	}
+	ops := systemMarkedBlockFileOps()
+	ops.openFile = func(path string, flag int, perm os.FileMode) (*os.File, error) {
+		relative, err := filepath.Rel(home, path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve agent instructions relative to home: %w", err)
+		}
+		if !filepath.IsLocal(relative) {
+			return nil, fmt.Errorf("agent instructions path %s escapes home %s", path, home)
+		}
+		return root.OpenFile(relative, flag, perm)
+	}
+	return ops, root, nil
+}
+
+func removeMarkedBlocksWithFileOps(path string, ops markedBlockFileOps, markers ...textblock.Markers) (removed, manual bool, err error) {
+	info, err := ops.lstat(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, false, nil
@@ -333,9 +373,32 @@ func removeMarkedBlocks(path string, markers ...textblock.Markers) (removed, man
 	if !info.Mode().IsRegular() {
 		return false, true, nil
 	}
-	content, err := os.ReadFile(path)
+	file, err := ops.openFile(path, os.O_RDONLY, 0)
 	if err != nil {
-		return false, false, fmt.Errorf("read agent instructions %s: %w", path, err)
+		return false, false, fmt.Errorf("open agent instructions %s: %w", path, err)
+	}
+	openedInfo, err := file.Stat()
+	if err != nil {
+		return false, false, errors.Join(
+			fmt.Errorf("inspect opened agent instructions %s: %w", path, err),
+			closeMarkedBlockFile(file, path, "after failed inspection"),
+		)
+	}
+	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
+		return false, false, errors.Join(
+			fmt.Errorf("agent instructions %s changed before opening", path),
+			closeMarkedBlockFile(file, path, "after identity mismatch"),
+		)
+	}
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return false, false, errors.Join(
+			fmt.Errorf("read agent instructions %s: %w", path, err),
+			closeMarkedBlockFile(file, path, "after failed read"),
+		)
+	}
+	if err := file.Close(); err != nil {
+		return false, false, fmt.Errorf("close agent instructions %s after reading: %w", path, err)
 	}
 	updated, err := textblock.Remove(string(content), markers...)
 	if err != nil {
@@ -344,10 +407,63 @@ func removeMarkedBlocks(path string, markers ...textblock.Markers) (removed, man
 	if updated == string(content) {
 		return false, false, nil
 	}
-	if err := os.WriteFile(path, []byte(updated), info.Mode().Perm()); err != nil {
+	if err := validateMarkedBlockPath(path, openedInfo, ops.lstat); err != nil {
+		return false, false, err
+	}
+	file, err = ops.openFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return false, false, fmt.Errorf("open agent instructions %s for writing: %w", path, err)
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			removed = false
+			err = errors.Join(err, fmt.Errorf("close agent instructions %s after writing: %w", path, closeErr))
+		}
+	}()
+	writeInfo, err := file.Stat()
+	if err != nil {
+		return false, false, fmt.Errorf("inspect writable agent instructions %s: %w", path, err)
+	}
+	if !writeInfo.Mode().IsRegular() || !os.SameFile(openedInfo, writeInfo) {
+		return false, false, fmt.Errorf("agent instructions %s changed before writing", path)
+	}
+	if err := validateMarkedBlockPath(path, writeInfo, ops.lstat); err != nil {
+		return false, false, err
+	}
+	if err := file.Truncate(0); err != nil {
+		return false, false, fmt.Errorf("truncate agent instructions %s: %w", path, err)
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return false, false, fmt.Errorf("rewind agent instructions %s: %w", path, err)
+	}
+	if _, err := io.WriteString(file, updated); err != nil {
 		return false, false, fmt.Errorf("write agent instructions %s: %w", path, err)
 	}
+	if err := file.Sync(); err != nil {
+		return false, false, fmt.Errorf("sync agent instructions %s: %w", path, err)
+	}
+	if err := validateMarkedBlockPath(path, writeInfo, ops.lstat); err != nil {
+		return false, false, err
+	}
 	return true, false, nil
+}
+
+func validateMarkedBlockPath(path string, openedInfo os.FileInfo, lstat func(string) (os.FileInfo, error)) error {
+	currentInfo, err := lstat(path)
+	if err != nil {
+		return fmt.Errorf("reinspect agent instructions %s: %w", path, err)
+	}
+	if !currentInfo.Mode().IsRegular() || !os.SameFile(openedInfo, currentInfo) {
+		return fmt.Errorf("agent instructions %s changed during retirement", path)
+	}
+	return nil
+}
+
+func closeMarkedBlockFile(file *os.File, path, phase string) error {
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close agent instructions %s %s: %w", path, phase, err)
+	}
+	return nil
 }
 
 func homeRelativePath(home, path string) string {

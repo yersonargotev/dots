@@ -1,11 +1,15 @@
 package agentinstructions
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/yersonargotev/dots/internal/textblock"
 )
 
 func TestRetireCodexDelegationRemovesOnlyKnownOwnedState(t *testing.T) {
@@ -215,6 +219,205 @@ func TestRetireGentleAIStatePreservesAndReportsSymlinks(t *testing.T) {
 	got, err := os.ReadFile(target)
 	if err != nil || string(got) != content {
 		t.Fatalf("symlink target changed: %q, %v", got, err)
+	}
+}
+
+func TestRetireGentleAIStateRejectsInstructionPathOutsideHome(t *testing.T) {
+	home := t.TempDir()
+	outside := t.TempDir()
+	path := filepath.Join(outside, "AGENTS.md")
+	content := gentleAITriggerRulesStart + "\nowned\n" + gentleAITriggerRulesEnd + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(home, ".codex")); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := RetireGentleAIState(home)
+	if err == nil {
+		t.Fatal("RetireGentleAIState() error = nil, want path escape failure")
+	}
+	if len(report.Removed) != 0 {
+		t.Fatalf("RetireGentleAIState() report = %#v, want no removal", report)
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil || string(got) != content {
+		t.Fatalf("outside-home instructions changed: %q, %v", got, readErr)
+	}
+}
+
+func TestRemoveMarkedBlocksRejectsSymlinkReplacementBeforeOpen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "instructions.md")
+	target := filepath.Join(dir, "user-owned.md")
+	owned := gentleAITriggerRulesStart + "\nowned\n" + gentleAITriggerRulesEnd + "\n"
+	userOwned := "keep user-owned target\n"
+	if err := os.WriteFile(path, []byte(owned), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(userOwned), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ops := systemMarkedBlockFileOps()
+	systemLstat := ops.lstat
+	replaced := false
+	ops.lstat = func(name string) (os.FileInfo, error) {
+		info, err := systemLstat(name)
+		if err != nil || replaced {
+			return info, err
+		}
+		replaced = true
+		if err := os.Remove(name); err != nil {
+			t.Fatalf("remove checked instructions: %v", err)
+		}
+		if err := os.Symlink(target, name); err != nil {
+			t.Fatalf("replace instructions with symlink: %v", err)
+		}
+		return info, nil
+	}
+
+	removed, manual, err := removeMarkedBlocksWithFileOps(
+		path,
+		ops,
+		textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd},
+	)
+	if err == nil {
+		t.Fatal("removeMarkedBlocksWithFileOps() error = nil, want replacement failure")
+	}
+	if removed || manual {
+		t.Fatalf("removeMarkedBlocksWithFileOps() = (%v, %v, %v), want no reported mutation", removed, manual, err)
+	}
+	got, readErr := os.ReadFile(target)
+	if readErr != nil || string(got) != userOwned {
+		t.Fatalf("replacement symlink target changed: %q, %v", got, readErr)
+	}
+}
+
+func TestRemoveMarkedBlocksRejectsSymlinkReplacementAfterOpen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "instructions.md")
+	checked := filepath.Join(dir, "checked-instructions.md")
+	target := filepath.Join(dir, "user-owned.md")
+	owned := gentleAITriggerRulesStart + "\nowned\n" + gentleAITriggerRulesEnd + "\n"
+	userOwned := "keep user-owned target\n"
+	if err := os.WriteFile(path, []byte(owned), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(userOwned), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ops := systemMarkedBlockFileOps()
+	systemOpenFile := ops.openFile
+	ops.openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		file, err := systemOpenFile(name, flag, perm)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.Rename(name, checked); err != nil {
+			file.Close()
+			t.Fatalf("move checked instructions: %v", err)
+		}
+		if err := os.Symlink(target, name); err != nil {
+			file.Close()
+			t.Fatalf("replace instructions with symlink: %v", err)
+		}
+		return file, nil
+	}
+
+	removed, manual, err := removeMarkedBlocksWithFileOps(
+		path,
+		ops,
+		textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd},
+	)
+	if err == nil {
+		t.Fatal("removeMarkedBlocksWithFileOps() error = nil, want replacement failure")
+	}
+	if removed || manual {
+		t.Fatalf("removeMarkedBlocksWithFileOps() = (%v, %v, %v), want no reported mutation", removed, manual, err)
+	}
+	got, readErr := os.ReadFile(target)
+	if readErr != nil || string(got) != userOwned {
+		t.Fatalf("replacement symlink target changed: %q, %v", got, readErr)
+	}
+	got, readErr = os.ReadFile(checked)
+	if readErr != nil || string(got) != owned {
+		t.Fatalf("checked instructions changed: %q, %v", got, readErr)
+	}
+}
+
+func TestRemoveMarkedBlocksRejectsDeletionAfterOpen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "instructions.md")
+	owned := gentleAITriggerRulesStart + "\nowned\n" + gentleAITriggerRulesEnd + "\n"
+	if err := os.WriteFile(path, []byte(owned), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	ops := systemMarkedBlockFileOps()
+	systemOpenFile := ops.openFile
+	ops.openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		file, err := systemOpenFile(name, flag, perm)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.Remove(name); err != nil {
+			file.Close()
+			t.Fatalf("delete checked instructions: %v", err)
+		}
+		return file, nil
+	}
+
+	removed, manual, err := removeMarkedBlocksWithFileOps(
+		path,
+		ops,
+		textblock.Markers{Start: gentleAITriggerRulesStart, End: gentleAITriggerRulesEnd},
+	)
+	if err == nil {
+		t.Fatal("removeMarkedBlocksWithFileOps() error = nil, want deletion failure")
+	}
+	if removed || manual {
+		t.Fatalf("removeMarkedBlocksWithFileOps() = (%v, %v, %v), want no reported mutation", removed, manual, err)
+	}
+	if _, statErr := os.Lstat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("deleted instructions recreated: %v", statErr)
+	}
+}
+
+func TestRetireGentleAIStateDoesNotRewriteUnownedInstructions(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".codex", "AGENTS.md")
+	content := "user-owned instructions\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o440); err != nil {
+		t.Fatal(err)
+	}
+	modified := time.Unix(1_700_000_000, 0)
+	if err := os.Chtimes(path, modified, modified); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := RetireGentleAIState(home)
+	if err != nil {
+		t.Fatalf("RetireGentleAIState() error = %v", err)
+	}
+	if len(report.Removed) != 0 || len(report.ManualCleanup) != 0 {
+		t.Fatalf("RetireGentleAIState() report = %#v, want no change", report)
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil || string(got) != content {
+		t.Fatalf("unowned instructions changed: %q, %v", got, readErr)
+	}
+	info, statErr := os.Stat(path)
+	if statErr != nil || info.Mode().Perm() != 0o440 || !info.ModTime().Equal(modified) {
+		t.Fatalf("unowned instructions metadata = (%v, %v), want mode 0440 and mtime %v", info, statErr, modified)
 	}
 }
 
