@@ -315,7 +315,8 @@ entries:
     source_overrides:
       adaptive-theme: configs/herdr/config-adaptive.toml
     target: ~/.config/herdr/config.toml
-    strategy: symlink
+    strategy: copy
+    ownership: toml-subset
     tags:
       - core
     os:

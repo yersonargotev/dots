@@ -3430,6 +3430,9 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 	if herdrEntry == nil {
 		t.Fatalf("manifest missing Herdr managed entry")
 	}
+	if herdrEntry.Strategy != "copy" || herdrEntry.Ownership != "toml-subset" {
+		t.Fatalf("Herdr config entry = %#v, want copy with TOML Subset Ownership", *herdrEntry)
+	}
 	if got := herdrEntry.SourceOverrides["adaptive-theme"]; got != "configs/herdr/config-adaptive.toml" {
 		t.Fatalf("Herdr adaptive source override = %q, want configs/herdr/config-adaptive.toml", got)
 	}
