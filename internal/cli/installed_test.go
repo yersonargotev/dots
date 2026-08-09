@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,6 +48,75 @@ func TestInstalledJSONEnvelope(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "Installed inventory") {
 		t.Fatalf("JSON mode leaked human prose:\n%s", out.String())
+	}
+}
+
+func TestInstalledJSONMatchesXDGStateEntryWithCompleteCoverage(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	sourceRoot := t.TempDir()
+	xdgStateHome := filepath.Join(home, ".local", "state")
+	target := filepath.Join(xdgStateHome, "nvim", "lazy-lock.json")
+	t.Setenv("XDG_STATE_HOME", xdgStateHome)
+	writeCLISource(t, sourceRoot, "configs/nvim/lazy-lock.json", "baseline\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [editor]
+entries:
+  - source: configs/nvim/lazy-lock.json
+    target: nvim/lazy-lock.json
+    target_root: xdg-state
+    strategy: copy
+    ownership: seeded
+    tags: [editor]
+    os: [darwin, linux]
+`)
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: 2, Entries: []state.Record{{
+		Target:   target,
+		Source:   "configs/nvim/lazy-lock.json",
+		Strategy: "copy",
+		Profiles: []string{"default"},
+		Tags:     []string{"editor"},
+	}}}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+	if _, err := os.Stat(xdgStateHome); !os.IsNotExist(err) {
+		t.Fatalf("XDG state home exists before read-only command: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"installed", "--output", "json", "--file", manifestPath,
+		"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
+	}, &out, &errOut)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	env := decodeEnvelopeForCommand(t, out.String(), "installed")
+	var data struct {
+		ManagedEntries []struct {
+			ManifestMatched bool `json:"manifest_matched"`
+		} `json:"managed_entries"`
+		Profiles []struct {
+			Name           string `json:"name"`
+			State          string `json:"state"`
+			CoveredEntries int    `json:"covered_entries"`
+			TotalEntries   int    `json:"total_entries"`
+		} `json:"profiles"`
+	}
+	if err := json.Unmarshal(env.Data, &data); err != nil {
+		t.Fatalf("decode installed data: %v", err)
+	}
+	if len(data.ManagedEntries) != 1 || !data.ManagedEntries[0].ManifestMatched {
+		t.Fatalf("managed entries = %+v, want one manifest match", data.ManagedEntries)
+	}
+	if len(data.Profiles) != 1 || data.Profiles[0].Name != "default" || data.Profiles[0].State != "complete" || data.Profiles[0].CoveredEntries != 1 || data.Profiles[0].TotalEntries != 1 {
+		t.Fatalf("profiles = %+v, want default complete 1/1 coverage", data.Profiles)
+	}
+	if _, err := os.Stat(xdgStateHome); !os.IsNotExist(err) {
+		t.Fatalf("read-only installed command mutated XDG state home: %v", err)
 	}
 }
 
