@@ -19,17 +19,19 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/deps"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 func TestRollingCodexCLIPlanAndInstallUseResolvedFixtureArtifact(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
+	resources := chatGPTCodexResources(t)
 	localBin := filepath.Join(home, ".local", "bin")
 	if err := os.MkdirAll(localBin, 0o755); err != nil {
 		t.Fatalf("mkdir local bin: %v", err)
 	}
-	t.Setenv("PATH", localBin+string(os.PathListSeparator)+"/usr/bin:/bin")
+	t.Setenv("PATH", strings.Join([]string{resources, localBin, "/usr/bin", "/bin"}, string(os.PathListSeparator)))
 
 	assetName, binaryName := codexFixtureNames(t, runtime.GOOS, runtime.GOARCH)
 	archive := codexFixtureArchive(t, binaryName)
@@ -118,6 +120,10 @@ entries:
 	receipt := metadata.Dependencies[0]
 	if receipt.Provider != string(deps.TierUserLocal) || receipt.Version != "rust-v8.7.6" || receipt.URL != server.URL+"/"+assetName || receipt.Artifact != assetName || receipt.Digest != "sha256:"+digest || receipt.Checksum != digest || receipt.Platform != runtime.GOOS+"_"+runtime.GOARCH || receipt.Path != filepath.Join(localBin, "codex") || receipt.InstalledAt == "" {
 		t.Fatalf("receipt = %#v", receipt)
+	}
+	installation, err := state.Load(state.Path(stateRoot))
+	if err != nil || installation.InstalledSelection == nil || len(installation.InstalledSelection.Profiles) != 1 || installation.InstalledSelection.Profiles[0] != "default" {
+		t.Fatalf("Installed Selection = (%#v, %v), want default Profile after durable Codex installation", installation.InstalledSelection, err)
 	}
 	if metadataRequests.Load() != 2 {
 		t.Fatalf("metadata requests = %d, want one dry-run resolution and one pinned install resolution", metadataRequests.Load())
@@ -351,10 +357,55 @@ func TestRollingCodexCLIExistingCommandSkipsReleaseLookup(t *testing.T) {
 	}
 }
 
+func TestDepsCheckRejectsChatGPTBundledCodex(t *testing.T) {
+	home := t.TempDir()
+	resources := chatGPTCodexResources(t)
+	t.Setenv("PATH", resources)
+
+	manifestPath := filepath.Join(t.TempDir(), "dots.yaml")
+	manifest := "version: 1\nprofiles:\n  default:\n    tags: [agents]\nentries:\n  - source: source\n    target: ~/.source\n    strategy: copy\n    tags: [agents]\n    dependencies:\n      - name: codex\n        command: codex\n        rolling_user_local:\n          recipe: codex\n"
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"--output", "json", "deps", "check", "--profile", "default", "--file", manifestPath, "--home", home}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2 (findings)\nstdout:\n%s\nstderr:\n%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"name": "codex"`) || !strings.Contains(stdout.String(), `"present": false`) {
+		t.Fatalf("deps check did not report Codex missing\nstdout:\n%s", stdout.String())
+	}
+}
+
+func TestLookupCommandAcceptsUnrelatedExecutableFromChatGPTResources(t *testing.T) {
+	resources := chatGPTCodexResources(t)
+	if err := os.WriteFile(filepath.Join(resources, "unrelated"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write unrelated stub: %v", err)
+	}
+	t.Setenv("PATH", resources)
+	if !lookupCommand("unrelated") {
+		t.Fatal("lookupCommand(unrelated) = false, want ordinary PATH detection unchanged")
+	}
+}
+
+func TestLookupCommandRejectsSymlinkToChatGPTBundledCodex(t *testing.T) {
+	resources := chatGPTCodexResources(t)
+	bin := t.TempDir()
+	if err := os.Symlink(filepath.Join(resources, "codex"), filepath.Join(bin, "codex")); err != nil {
+		t.Fatalf("symlink bundled Codex: %v", err)
+	}
+	t.Setenv("PATH", bin)
+	if lookupCommand("codex") {
+		t.Fatal("lookupCommand(codex) = true, want symlink into ChatGPT resources rejected")
+	}
+}
+
 func TestRollingCodexCLIResolutionFailurePrecedesManagedConfiguration(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
-	t.Setenv("PATH", t.TempDir())
+	stateRoot := t.TempDir()
+	t.Setenv("PATH", chatGPTCodexResources(t))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
 	}))
@@ -375,7 +426,7 @@ func TestRollingCodexCLIResolutionFailurePrecedesManagedConfiguration(t *testing
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--yes", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", t.TempDir()})
+	cmd.SetArgs([]string{"install", "--yes", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 	err := cmd.Execute()
 	if err == nil || !strings.Contains(err.Error(), "resolve rolling user-local recipe") {
 		t.Fatalf("install error = %v\n%s", err, out.String())
@@ -383,6 +434,21 @@ func TestRollingCodexCLIResolutionFailurePrecedesManagedConfiguration(t *testing
 	if _, statErr := os.Stat(filepath.Join(home, ".managed")); !os.IsNotExist(statErr) {
 		t.Fatalf("Managed Configuration changed after resolution failure: %v", statErr)
 	}
+	if _, statErr := os.Stat(filepath.Join(stateRoot, "installed.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("Installed Selection was recorded after dependency failure: %v", statErr)
+	}
+}
+
+func chatGPTCodexResources(t *testing.T) string {
+	t.Helper()
+	resources := filepath.Join(t.TempDir(), "ChatGPT.app", "Contents", "Resources")
+	if err := os.MkdirAll(resources, 0o755); err != nil {
+		t.Fatalf("mkdir ChatGPT resources: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(resources, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write bundled codex stub: %v", err)
+	}
+	return resources
 }
 
 func codexFixtureNames(t *testing.T, goos, goarch string) (asset, binary string) {
