@@ -17,9 +17,20 @@ func TestApplicationWritableTargetsKeepInstalledRepositoryCleanAcrossLifecycle(t
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
 	}
-	sourceRoot := filepath.Join(t.TempDir(), "installed-repository")
+	repositoryFixture := t.TempDir()
+	sourceRoot := filepath.Join(repositoryFixture, "installed-repository")
 	runGit(t, "", "clone", "--local", repositoryRoot, sourceRoot)
 	gitIdentity(t, sourceRoot)
+	// CI checks out the repository at a detached commit. Give the Installed
+	// Repository a complete local upstream so update exercises the same branch
+	// discovery path on developer machines and detached CI runners.
+	runGit(t, sourceRoot, "switch", "-C", "main")
+	origin := filepath.Join(repositoryFixture, "origin.git")
+	runGit(t, "", "clone", "--bare", "--local", sourceRoot, origin)
+	runGit(t, sourceRoot, "remote", "set-url", "origin", origin)
+	runGit(t, sourceRoot, "fetch", "origin", "main")
+	runGit(t, sourceRoot, "remote", "set-head", "origin", "main")
+	runGit(t, sourceRoot, "branch", "--set-upstream-to=origin/main", "main")
 
 	home := t.TempDir()
 	stateRoot := filepath.Join(home, ".local", "state", "dots")
