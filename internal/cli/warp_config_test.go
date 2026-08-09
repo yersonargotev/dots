@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -115,7 +116,7 @@ func TestWarpDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		if entry.Strategy != "copy" {
 			t.Fatalf("Warp entry %s -> %s strategy = %q, want copy", entry.Source, entry.Target, entry.Strategy)
 		}
-		if !manifest.SharesTag(entry.Tags, []string{"desktop"}) {
+		if !slices.Contains(entry.Tags, "desktop") {
 			t.Fatalf("Warp entry %s -> %s tags = %#v, want desktop", entry.Source, entry.Target, entry.Tags)
 		}
 		wantOS := "linux"

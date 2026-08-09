@@ -13,6 +13,7 @@ import (
 	"github.com/yersonargotev/dots/internal/cli"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 )
 
 func TestRootHelpIdentifiesDotsCLI(t *testing.T) {
@@ -1101,8 +1102,8 @@ func TestRepositoryGitConfigInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		t.Fatalf("no managed entries apply to profile \"default\" on %s; derived plan is empty", runtime.GOOS)
 	}
 	wantSkipped := 0
-	for _, entry := range loaded.Entries {
-		if manifest.SharesTag(entry.Tags, coreProfile.Tags) && !manifest.MatchesOS(entry.OS, runtime.GOOS) {
+	for _, entry := range selectedsurface.EvaluateEntries(*loaded, coreProfile.Tags, runtime.GOOS) {
+		if !entry.Applicable {
 			wantSkipped++
 		}
 	}
