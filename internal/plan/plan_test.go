@@ -1164,6 +1164,40 @@ func TestBuildUsesSourceOverrideForSelectedExtraTag(t *testing.T) {
 	}
 }
 
+func TestBuildProfileAndEquivalentExplicitTagsProduceSameActions(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	writeSource(t, sourceRoot, "core.conf", "core\n")
+	writeSource(t, sourceRoot, "desktop.conf", "desktop\n")
+	writeSource(t, sourceRoot, "linux.conf", "linux\n")
+
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"workstation": {Tags: []string{"core", "desktop"}},
+		},
+		Entries: []manifest.Entry{
+			{Source: "core.conf", Target: "~/.core", Strategy: "copy", Tags: []string{"core"}},
+			{Source: "desktop.conf", Target: "~/.desktop", Strategy: "copy", Tags: []string{"desktop"}, OS: []string{"darwin"}},
+			{Source: "linux.conf", Target: "~/.linux", Strategy: "copy", Tags: []string{"desktop"}, OS: []string{"linux"}},
+		},
+	}
+	profileSelection := manifest.Selection{Profile: "workstation", Profiles: []string{"workstation"}, Tags: []string{"core", "desktop"}}
+	explicitTagSelection := manifest.Selection{Tags: []string{"core", "desktop"}}
+
+	fromProfile, err := plan.Build(m, plan.Options{Selection: &profileSelection, OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() from Profile error = %v", err)
+	}
+	fromTags, err := plan.Build(m, plan.Options{Selection: &explicitTagSelection, OS: "darwin", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() from explicit Tags error = %v", err)
+	}
+	if !reflect.DeepEqual(fromProfile.Actions, fromTags.Actions) {
+		t.Fatalf("Profile actions = %#v, explicit Tag actions = %#v", fromProfile.Actions, fromTags.Actions)
+	}
+}
+
 func TestBuildDiagnosesUnselectedSourceOverrides(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

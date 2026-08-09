@@ -2,16 +2,16 @@ package plan
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/profilesel"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 )
 
-// selectedEntryIndices returns the set of m.Entries positions a profile would
-// select on the given OS. Working in index space lets SkippedEntries reason about
-// entry identity across profiles (which entry, not just how many) without
-// depending on struct equality, and keeps Build and SkippedEntries filtering
-// through one tag/OS rule. It mirrors provision.selectedIndices for provisioners.
+// selectedEntryIndices maps the Selected Surface back to manifest positions so
+// SkippedEntries can compare entry identity across Profiles without repeating
+// Tag or OS selection. It mirrors provision.selectedIndices for Provisioners.
 func selectedEntryIndices(m manifest.Manifest, profileName, os string) (map[int]bool, error) {
 	profile, ok := m.Profiles[profileName]
 	if !ok {
@@ -19,9 +19,12 @@ func selectedEntryIndices(m manifest.Manifest, profileName, os string) (map[int]
 	}
 
 	indices := make(map[int]bool)
-	for i, entry := range m.Entries {
-		if manifest.SharesTag(entry.Tags, profile.Tags) && manifest.MatchesOS(entry.OS, os) {
-			indices[i] = true
+	for _, selected := range selectedsurface.Evaluate(m, profile.Tags, os).Entries {
+		for i, entry := range m.Entries {
+			if !indices[i] && reflect.DeepEqual(entry, selected.Entry) {
+				indices[i] = true
+				break
+			}
 		}
 	}
 	return indices, nil

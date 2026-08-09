@@ -12,6 +12,7 @@ import (
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/seededstate"
+	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/textblock"
@@ -151,16 +152,11 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	actionByTarget := map[string]int{}
 	readSourcesByTarget := map[string][]string{}
 	scheduledLegacyParents := map[string]struct{}{}
-	for _, entry := range m.Entries {
-		if !manifest.SharesTag(entry.Tags, tags) {
-			continue
-		}
-		if !manifest.MatchesOS(entry.OS, opts.OS) {
-			continue
-		}
-
+	surface := selectedsurface.Evaluate(m, tags, opts.OS)
+	for _, selected := range surface.Entries {
+		entry := selected.Entry
 		defaultSource := entry.Source
-		source := manifest.EntrySource(entry, tags)
+		source := selected.Source
 		target, err := ResolveEntryTarget(entry, opts.Home, opts.XDGStateHome)
 		if err != nil {
 			return Plan{}, err

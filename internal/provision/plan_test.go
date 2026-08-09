@@ -125,6 +125,28 @@ func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 	}
 }
 
+func TestBuildProfileAndEquivalentExplicitTagsProduceSameSteps(t *testing.T) {
+	core := manifest.Provisioner{Tool: "zimfw", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Yes: true}}
+	desktop := manifest.Provisioner{Tool: "claude", Tags: []string{"desktop"}, OS: []string{"darwin"}, Spec: manifest.ProvisionerSpec{Marketplace: "example/tools"}}
+	linux := manifest.Provisioner{Tool: "codex", Tags: []string{"desktop"}, OS: []string{"linux"}, Spec: manifest.ProvisionerSpec{MCP: "example", Command: []string{"npx"}}}
+	m := manifestWithProvisioners(core, desktop, linux)
+	m.Profiles["workstation"] = manifest.Profile{Tags: []string{"core", "desktop"}}
+	profileSelection := manifest.Selection{Profile: "workstation", Profiles: []string{"workstation"}, Tags: []string{"core", "desktop"}}
+	explicitTagSelection := manifest.Selection{Tags: []string{"core", "desktop"}}
+
+	fromProfile, err := provision.Build(m, provision.Options{Selection: &profileSelection, OS: "darwin"})
+	if err != nil {
+		t.Fatalf("Build() from Profile error = %v", err)
+	}
+	fromTags, err := provision.Build(m, provision.Options{Selection: &explicitTagSelection, OS: "darwin"})
+	if err != nil {
+		t.Fatalf("Build() from explicit Tags error = %v", err)
+	}
+	if !reflect.DeepEqual(fromProfile.Steps, fromTags.Steps) {
+		t.Fatalf("Profile steps = %#v, explicit Tag steps = %#v", fromProfile.Steps, fromTags.Steps)
+	}
+}
+
 func TestPlanResolvesClaudeProvisioner(t *testing.T) {
 	market := manifest.Provisioner{
 		Tool: "claude", Tags: []string{"core"},
