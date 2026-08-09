@@ -48,7 +48,7 @@ func RefPreview(dir, ref string) (Update, error) {
 	if _, err := run(dir, "fetch", "--depth", "1", "origin", ref); err != nil {
 		return Update{}, fmt.Errorf("fetch Installed Repository ref %s: %w", ref, err)
 	}
-	newRev, err := resolveRevision(dir, "FETCH_HEAD")
+	newRev, err := shortRevision(dir, "FETCH_HEAD")
 	if err != nil {
 		return Update{}, fmt.Errorf("resolve Installed Repository ref %s: %w", ref, err)
 	}
@@ -74,6 +74,9 @@ func CheckoutRef(dir string, preview Update) (Update, error) {
 	if current != preview.OldRev || !validRevision(preview.NewRev) {
 		return Update{}, errors.New("installed repository changed after ref preview")
 	}
+	if preview.OldRev == preview.NewRev {
+		return preview, nil
+	}
 	preserved, stashed, err := PreserveLocalChanges(dir)
 	if err != nil {
 		return Update{}, err
@@ -81,9 +84,6 @@ func CheckoutRef(dir string, preview Update) (Update, error) {
 	result := preview
 	if stashed {
 		result.PreservedChanges = preserved
-	}
-	if preview.OldRev == preview.NewRev {
-		return result, nil
 	}
 	if _, err := run(dir, "checkout", "--detach", preview.NewRev); err != nil {
 		return Update{}, fmt.Errorf("checkout Installed Repository ref %s: %w", preview.NewRev, err)
@@ -221,6 +221,14 @@ func validRevision(revision string) bool {
 
 func resolveRevision(dir, ref string) (string, error) {
 	out, err := run(dir, "rev-parse", "--verify", ref+"^{commit}")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func shortRevision(dir, ref string) (string, error) {
+	out, err := run(dir, "rev-parse", "--short", "--verify", ref+"^{commit}")
 	if err != nil {
 		return "", err
 	}
