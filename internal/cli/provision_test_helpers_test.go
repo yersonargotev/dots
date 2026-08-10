@@ -56,6 +56,7 @@ func writeManifestDependencyStubs(t *testing.T, dir string) {
 		"rg",
 		"starship",
 		"tmux",
+		"tuicr",
 		"unzip",
 		"uv",
 		"warp-terminal",
