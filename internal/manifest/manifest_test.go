@@ -2314,6 +2314,61 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestIncludesTuicrCoreConfiguration(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	if _, ok := got.Profiles["tuicr"]; ok {
+		t.Fatal("repository manifest defines a dedicated tuicr Profile, want core ownership")
+	}
+	if _, ok := got.Tags["tuicr"]; ok {
+		t.Fatal("repository manifest defines a dedicated tuicr Tag, want core ownership")
+	}
+
+	var entry *manifest.Entry
+	for i := range got.Entries {
+		if got.Entries[i].Target == "~/.config/tuicr/config.toml" {
+			entry = &got.Entries[i]
+			break
+		}
+	}
+	if entry == nil {
+		t.Fatal("repository manifest missing tuicr Managed Entry")
+	}
+	if entry.Source != "configs/tuicr/config.toml" || entry.Strategy != "copy" || entry.Ownership != "toml-subset" {
+		t.Fatalf("tuicr config entry = %#v, want copy with TOML Subset Ownership", *entry)
+	}
+	if !sameStrings(entry.Tags, []string{"core"}) || !sameStrings(entry.OS, []string{"darwin", "linux"}) {
+		t.Fatalf("tuicr config scope = tags %#v, OS %#v; want core on darwin and linux", entry.Tags, entry.OS)
+	}
+	if len(entry.Dependencies) != 1 {
+		t.Fatalf("tuicr dependencies = %#v, want one dependency", entry.Dependencies)
+	}
+	dependency := entry.Dependencies[0]
+	if dependency.Name != "tuicr" || dependency.Command != "tuicr" || dependency.Brew != "agavra/tap/tuicr" || !dependency.LinuxHomebrew {
+		t.Fatalf("tuicr dependency = %#v, want command tuicr through agavra/tap/tuicr with Linuxbrew enabled", dependency)
+	}
+
+	config, err := os.ReadFile(filepath.Join(root, entry.Source))
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", entry.Source, err)
+	}
+	if string(config) != "theme = \"catppuccin-mocha\"\n" {
+		t.Fatalf("tuicr config = %q, want Catppuccin Mocha baseline", config)
+	}
+
+	for _, provisioner := range got.Provisioners {
+		if provisioner.Spec.Package == "agavra/tuicr" {
+			t.Fatalf("repository manifest includes tuicr skill Provisioner: %#v", provisioner)
+		}
+	}
+}
+
 func hasString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

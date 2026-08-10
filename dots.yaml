@@ -303,6 +303,20 @@ entries:
     os:
       - darwin
       - linux
+  - source: configs/tuicr/config.toml
+    target: ~/.config/tuicr/config.toml
+    strategy: copy
+    ownership: toml-subset
+    tags:
+      - core
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: tuicr
+        command: tuicr
+        brew: agavra/tap/tuicr
+        linux_homebrew: true
   - source: configs/dots/theme.sh
     target: ~/.config/dots/theme.sh
     strategy: symlink
