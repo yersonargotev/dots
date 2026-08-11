@@ -12,11 +12,6 @@ import (
 )
 
 func TestRepositoryNeovimLoaderKeepsManagedPluginSpecsDiscoverable(t *testing.T) {
-	nvim, err := exec.LookPath("nvim")
-	if err != nil {
-		t.Skip("nvim is not installed; CI installs it for this repository-level integration test")
-	}
-
 	repositoryRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
@@ -39,6 +34,12 @@ profiles:
   default:
     tags: [core]
 entries:
+  - source: configs/nvim/lazy-lock.json
+    target: nvim/lazy-lock.json
+    target_root: xdg-state
+    strategy: copy
+    ownership: seeded
+    tags: [core]
   - source: configs/nvim/loader.lua
     target: ~/.config/nvim/init.lua
     strategy: copy
@@ -73,6 +74,26 @@ entries:
 	if target, err := os.Readlink(managedRoot); err != nil || target != managedSource {
 		t.Fatalf("managed Neovim root = (%q, %v), want symlink to %q", target, err, managedSource)
 	}
+	if info, err := os.Stat(filepath.Join(stateHome, "nvim", "lazy-lock.json")); err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("seeded Neovim lockfile = (%v, %v), want regular XDG state file", info, err)
+	}
+	lazyConfig, err := os.ReadFile(filepath.Join(managedRoot, "lua", "config", "lazy.lua"))
+	if err != nil {
+		t.Fatalf("read installed lazy config: %v", err)
+	}
+	const managedPathOption = `paths = { vim.fn.expand("~/.config/dots/nvim") }`
+	if !strings.Contains(string(lazyConfig), managedPathOption) {
+		t.Fatalf("lazy config does not preserve the managed root through performance.rtp.paths")
+	}
+	if pluginSpecs, err := filepath.Glob(filepath.Join(managedRoot, "lua", "plugins", "*.lua")); err != nil || len(pluginSpecs) == 0 {
+		t.Fatalf("installed managed plugin specs = (%v, %v), want at least one", pluginSpecs, err)
+	}
+
+	nvim, err := exec.LookPath("nvim")
+	if err != nil {
+		t.Log("nvim is not installed; the hermetic installed-configuration assertions passed")
+		return
+	}
 
 	// This local lazy.nvim stub reproduces the runtime-path reset at the public
 	// setup boundary without cloning plugins or reading the operator's home.
@@ -96,6 +117,12 @@ local function find_colorscheme(spec)
 end
 
 function M.setup(opts)
+	local original_notify = vim.notify
+	local notifications = {}
+	vim.notify = function(message, level, notify_opts)
+		table.insert(notifications, message)
+		return original_notify(message, level, notify_opts)
+	end
   local reset = vim.tbl_get(opts, "performance", "rtp", "reset") ~= false
   if reset then
     vim.opt.runtimepath = {
@@ -113,6 +140,9 @@ function M.setup(opts)
   vim.g.dots_test_managed_on_rtp = vim.tbl_contains(vim.opt.runtimepath:get(), vim.fn.expand("~/.config/dots/nvim"))
   local plugin_specs = vim.api.nvim_get_runtime_file("lua/plugins/*.lua", true)
   vim.g.dots_test_plugin_specs = #plugin_specs
+	if #plugin_specs == 0 then
+		vim.notify('No specs found for module "plugins"', vim.log.levels.ERROR, { title = "lazy.nvim" })
+	end
   for _, spec_path in ipairs(plugin_specs) do
     if spec_path:match("/colorscheme.lua$") then
       vim.g.dots_test_requested_colorscheme = find_colorscheme(dofile(spec_path))
@@ -121,6 +151,8 @@ function M.setup(opts)
   if vim.g.dots_test_requested_colorscheme then
     vim.cmd("colorscheme " .. vim.g.dots_test_requested_colorscheme)
   end
+	vim.g.dots_test_lazy_notifications = #notifications
+	vim.notify = original_notify
 end
 
 return M
@@ -134,9 +166,10 @@ return M
 		`local reset = vim.g.dots_test_rtp_reset == true`,
 		`local managed = vim.g.dots_test_managed_on_rtp == true`,
 		`local specs = (vim.g.dots_test_plugin_specs or 0) > 0`,
+		`local notifications = vim.g.dots_test_lazy_notifications == 0`,
 		`local requested = vim.g.dots_test_requested_colorscheme == "catppuccin-mocha"`,
 		`local active = vim.g.colors_name == "catppuccin-mocha"`,
-		`if not (reset and managed and specs and requested and active) then vim.api.nvim_err_writeln("lazy reset=" .. tostring(reset) .. ", managed root=" .. tostring(managed) .. ", plugin specs=" .. tostring(specs) .. ", requested theme=" .. tostring(requested) .. ", active theme=" .. tostring(active)); vim.cmd("cquit 42") end`,
+		`if not (reset and managed and specs and notifications and requested and active) then vim.api.nvim_err_writeln("lazy reset=" .. tostring(reset) .. ", managed root=" .. tostring(managed) .. ", plugin specs=" .. tostring(specs) .. ", notifications=" .. tostring(notifications) .. ", requested theme=" .. tostring(requested) .. ", active theme=" .. tostring(active)); vim.cmd("cquit 42") end`,
 	}, "; ")
 	cmd := exec.Command(nvim, "--headless", "-c", "lua "+assertion, "-c", "qa!")
 	cmd.Env = append(issue446BaseEnv(),
