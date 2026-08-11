@@ -27,6 +27,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install Neovim for managed configuration tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes neovim
+
       - name: Check formatting
         run: |
           set -euo pipefail

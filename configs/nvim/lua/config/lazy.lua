@@ -42,6 +42,7 @@ require("lazy").setup({
   }, -- automatically check for plugin updates
   performance = {
     rtp = {
+      paths = { vim.fn.expand("~/.config/dots/nvim") },
       -- disable some rtp plugins
       disabled_plugins = {
         "gzip",
