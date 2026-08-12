@@ -351,22 +351,6 @@ func TestCatalogJSONAndErrorsUseTheOutputContract(t *testing.T) {
 	}
 }
 
-func TestCatalogWhyTextOutputIsStable(t *testing.T) {
-	manifestPath := writeCatalogManifest(t)
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"catalog", "why", "desktop", "theme-tool", "--file", manifestPath, "--os", "all"}, &stdout, &stderr); code != ExitOK {
-		t.Fatalf("Run() exit code = %d, stderr = %s", code, stderr.String())
-	}
-	want := "Why profile \"desktop\" selects \"theme-tool\" (OS: all)\n" +
-		"desktop\n" +
-		"└─ dependency theme-tool\n" +
-		"   ├─ selected by tags: theme\n" +
-		"   └─ declared by dependency_set tags=theme (required)\n"
-	if stdout.String() != want {
-		t.Fatalf("output:\n%s\nwant:\n%s", stdout.String(), want)
-	}
-}
-
 func TestCatalogDetailsRequireExactlyOneName(t *testing.T) {
 	cmd := NewRootCommand()
 	var out bytes.Buffer

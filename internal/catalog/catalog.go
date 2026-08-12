@@ -420,10 +420,10 @@ func contributingDependencyTags(profileTags []string, declarations []Dependency)
 	return contributingTags(profileTags, declared, "")
 }
 
-func contributingTags(profileTags, itemTags []string, extra string) []string {
+func contributingTags(profileTags, itemTags []string, sourceOverrideTag string) []string {
 	result := []string{}
 	for _, profileTag := range profileTags {
-		if contains(itemTags, profileTag) || profileTag == extra {
+		if contains(itemTags, profileTag) || profileTag == sourceOverrideTag {
 			result = append(result, profileTag)
 		}
 	}

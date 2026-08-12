@@ -294,6 +294,43 @@ func TestExplainProfileItemReportsEntryOverrideAndProvisioners(t *testing.T) {
 	}
 }
 
+func TestExplainProfileItemReportsAllProvisionerMatchesAcrossPlatforms(t *testing.T) {
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"agents": {Tags: []string{"agents"}}},
+		Provisioners: []manifest.Provisioner{
+			{Tool: "codex", Tags: []string{"agents"}, OS: []string{"darwin"}, Spec: manifest.ProvisionerSpec{MCP: "alpha"}},
+			{Tool: "codex", Tags: []string{"agents"}, OS: []string{"linux"}, Spec: manifest.ProvisionerSpec{MCP: "beta"}},
+		},
+	}
+
+	all, err := ExplainProfileItem(m, "agents", "codex", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all.Why.Matches) != 2 {
+		t.Fatalf("all-platform matches = %#v", all.Why.Matches)
+	}
+	if got := []string{all.Why.Matches[0].Identity, all.Why.Matches[1].Identity}; !reflect.DeepEqual(got, []string{"alpha", "beta"}) {
+		t.Fatalf("all-platform identities = %#v", got)
+	}
+
+	darwin, err := ExplainProfileItem(m, "agents", "codex", Options{OS: "darwin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(darwin.Why.Matches) != 1 || darwin.Why.Matches[0].Identity != "alpha" {
+		t.Fatalf("darwin matches = %#v", darwin.Why.Matches)
+	}
+
+	linux, err := ExplainProfileItem(m, "agents", "codex", Options{OS: "linux"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(linux.Why.Matches) != 1 || linux.Why.Matches[0].Identity != "beta" {
+		t.Fatalf("linux matches = %#v", linux.Why.Matches)
+	}
+}
+
 func TestExplainProfileItemHonorsOSAndRejectsUnknownQueries(t *testing.T) {
 	m := fixtureManifest()
 	_, err := ExplainProfileItem(m, "desktop", "adaptive", Options{OS: "linux"})

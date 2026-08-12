@@ -1,0 +1,5 @@
+Why profile "desktop" selects "theme-tool" (OS: all)
+desktop
+└─ dependency theme-tool
+   ├─ selected by tags: theme
+   └─ declared by dependency_set tags=theme (required)

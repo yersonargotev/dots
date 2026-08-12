@@ -187,54 +187,36 @@ func newCatalogTagCommand() *cobra.Command {
 }
 
 func loadCatalogProfile(cmd *cobra.Command, name string) (catalog.Report, error) {
-	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	m, err := loadCatalogManifest(cmd, file, sourceRoot)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	return catalog.Profile(*m, name, catalog.Options{OS: osName})
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.Profile(m, name, opts)
+	})
 }
 
 func loadCatalogTag(cmd *cobra.Command, name string) (catalog.Report, error) {
-	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	m, err := loadCatalogManifest(cmd, file, sourceRoot)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	return catalog.Tag(*m, name, catalog.Options{OS: osName})
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.Tag(m, name, opts)
+	})
 }
 
 func loadCatalogComparison(cmd *cobra.Command, from, to string) (catalog.Report, error) {
-	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	m, err := loadCatalogManifest(cmd, file, sourceRoot)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	return catalog.CompareProfiles(*m, from, to, catalog.Options{OS: osName})
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.CompareProfiles(m, from, to, opts)
+	})
 }
 
 func loadCatalogMap(cmd *cobra.Command, name string) (catalog.Report, error) {
-	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	m, err := loadCatalogManifest(cmd, file, sourceRoot)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	return catalog.MapProfile(*m, name, catalog.Options{OS: osName})
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.MapProfile(m, name, opts)
+	})
 }
 
 func loadCatalogWhy(cmd *cobra.Command, profile, query string) (catalog.Report, error) {
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.ExplainProfileItem(m, profile, query, opts)
+	})
+}
+
+func loadCatalogReport(cmd *cobra.Command, build func(manifest.Manifest, catalog.Options) (catalog.Report, error)) (catalog.Report, error) {
 	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
 	if err != nil {
 		return catalog.Report{}, err
@@ -243,7 +225,7 @@ func loadCatalogWhy(cmd *cobra.Command, profile, query string) (catalog.Report, 
 	if err != nil {
 		return catalog.Report{}, err
 	}
-	return catalog.ExplainProfileItem(*m, profile, query, catalog.Options{OS: osName})
+	return build(*m, catalog.Options{OS: osName})
 }
 
 func renderOrEmitCatalog(cmd *cobra.Command, report catalog.Report, render func(*cobra.Command, catalog.Report)) error {
