@@ -3628,8 +3628,8 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 		"spaces": `[ui.sidebar.spaces]
 row_gap = 1
 rows = [
-  ["state_icon", { token = "workspace", fg = "#89b4fa", bold = true }],
-  [{ token = "branch", fg = "#6c7086", dim = true }, "git_status"],
+  ["state_icon", "workspace"],
+  ["branch", "git_status"],
 ]`,
 		"agents": `[ui.sidebar.agents]
 row_gap = 1
