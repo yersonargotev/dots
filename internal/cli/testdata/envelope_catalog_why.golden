@@ -1,0 +1,99 @@
+{
+  "schema_version": "7",
+  "command": "catalog why",
+  "status": "ok",
+  "data": {
+    "os": "all",
+    "metadata_origin": "declared",
+    "profiles": [
+      {
+        "name": "core",
+        "description": "Core profile",
+        "status": "current",
+        "tags": [
+          "core"
+        ]
+      },
+      {
+        "name": "desktop",
+        "description": "Desktop profile",
+        "status": "current",
+        "tags": [
+          "core",
+          "theme"
+        ]
+      },
+      {
+        "name": "old",
+        "description": "",
+        "status": "legacy",
+        "tags": [
+          "old"
+        ]
+      }
+    ],
+    "tags": [
+      {
+        "name": "core",
+        "description": "Core configuration",
+        "kind": "surface",
+        "status": "current",
+        "origin": "declared"
+      },
+      {
+        "name": "old",
+        "description": "Compatibility profile",
+        "kind": "surface",
+        "status": "legacy",
+        "replaced_by": "core",
+        "origin": "declared"
+      },
+      {
+        "name": "theme",
+        "description": "Theme configuration",
+        "kind": "surface",
+        "status": "current",
+        "origin": "declared"
+      }
+    ],
+    "hidden": {
+      "profiles": 0,
+      "tags": 0
+    },
+    "why": {
+      "profile": "desktop",
+      "query": "theme-tool",
+      "resolved_tags": [
+        "core",
+        "theme"
+      ],
+      "matches": [
+        {
+          "type": "dependency",
+          "identity": "theme-tool",
+          "contributing_tags": [
+            "theme"
+          ],
+          "dependency": {
+            "name": "theme-tool",
+            "declarations": [
+              {
+                "name": "theme-tool",
+                "requirement": "required",
+                "probes": [
+                  "theme-tool"
+                ],
+                "origin": {
+                  "type": "dependency_set",
+                  "tags": [
+                    "theme"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

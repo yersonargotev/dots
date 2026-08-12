@@ -56,8 +56,27 @@ func newCatalogCommand() *cobra.Command {
 	cmd.AddCommand(newCatalogProfileCommand())
 	cmd.AddCommand(newCatalogCompareCommand())
 	cmd.AddCommand(newCatalogMapCommand())
+	cmd.AddCommand(newCatalogWhyCommand())
 	cmd.AddCommand(newCatalogTagsCommand(load))
 	cmd.AddCommand(newCatalogTagCommand())
+	return cmd
+}
+
+func newCatalogWhyCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "why PROFILE QUERY",
+		Short:        "Explain why a profile selects an item",
+		Args:         cobra.ExactArgs(2),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			report, err := loadCatalogWhy(cmd, args[0], args[1])
+			if err != nil {
+				return err
+			}
+			return renderOrEmitCatalog(cmd, report, renderCatalogWhy)
+		},
+	}
+	cmd.ValidArgsFunction = completeCatalogWhy
 	return cmd
 }
 
@@ -168,42 +187,36 @@ func newCatalogTagCommand() *cobra.Command {
 }
 
 func loadCatalogProfile(cmd *cobra.Command, name string) (catalog.Report, error) {
-	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	m, err := loadCatalogManifest(cmd, file, sourceRoot)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	return catalog.Profile(*m, name, catalog.Options{OS: osName})
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.Profile(m, name, opts)
+	})
 }
 
 func loadCatalogTag(cmd *cobra.Command, name string) (catalog.Report, error) {
-	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	m, err := loadCatalogManifest(cmd, file, sourceRoot)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	return catalog.Tag(*m, name, catalog.Options{OS: osName})
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.Tag(m, name, opts)
+	})
 }
 
 func loadCatalogComparison(cmd *cobra.Command, from, to string) (catalog.Report, error) {
-	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	m, err := loadCatalogManifest(cmd, file, sourceRoot)
-	if err != nil {
-		return catalog.Report{}, err
-	}
-	return catalog.CompareProfiles(*m, from, to, catalog.Options{OS: osName})
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.CompareProfiles(m, from, to, opts)
+	})
 }
 
 func loadCatalogMap(cmd *cobra.Command, name string) (catalog.Report, error) {
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.MapProfile(m, name, opts)
+	})
+}
+
+func loadCatalogWhy(cmd *cobra.Command, profile, query string) (catalog.Report, error) {
+	return loadCatalogReport(cmd, func(m manifest.Manifest, opts catalog.Options) (catalog.Report, error) {
+		return catalog.ExplainProfileItem(m, profile, query, opts)
+	})
+}
+
+func loadCatalogReport(cmd *cobra.Command, build func(manifest.Manifest, catalog.Options) (catalog.Report, error)) (catalog.Report, error) {
 	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
 	if err != nil {
 		return catalog.Report{}, err
@@ -212,7 +225,7 @@ func loadCatalogMap(cmd *cobra.Command, name string) (catalog.Report, error) {
 	if err != nil {
 		return catalog.Report{}, err
 	}
-	return catalog.MapProfile(*m, name, catalog.Options{OS: osName})
+	return build(*m, catalog.Options{OS: osName})
 }
 
 func renderOrEmitCatalog(cmd *cobra.Command, report catalog.Report, render func(*cobra.Command, catalog.Report)) error {
@@ -272,6 +285,45 @@ func completeCatalogTags(cmd *cobra.Command, args []string, toComplete string) (
 		values = append(values, tag.Name)
 	}
 	return matchingCatalogValues(values, toComplete), cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeCatalogWhy(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) == 0 {
+		return completeCatalogProfiles(cmd, args, toComplete)
+	}
+	if len(args) > 1 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	report, err := loadCatalogProfile(cmd, args[0])
+	if err != nil || report.Profile == nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	detail := report.Profile
+	values := []string{}
+	for _, dependency := range detail.Dependencies {
+		values = appendUniqueCatalogValue(values, dependency.Name)
+	}
+	for _, entry := range detail.Entries {
+		values = appendUniqueCatalogValue(values, entry.Target)
+		values = appendUniqueCatalogValue(values, entry.Source)
+	}
+	for _, provisioner := range detail.Provisioners {
+		values = appendUniqueCatalogValue(values, provisioner.Tool)
+		values = appendUniqueCatalogValue(values, provisioner.Identity)
+	}
+	return matchingCatalogValues(values, toComplete), cobra.ShellCompDirectiveNoFileComp
+}
+
+func appendUniqueCatalogValue(values []string, value string) []string {
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func loadCatalogCompletionReport(cmd *cobra.Command) (catalog.Report, error) {

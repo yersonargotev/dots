@@ -50,3 +50,26 @@ func TestCatalogComparisonJSONGolden(t *testing.T) {
 	}
 	assertGolden(t, "envelope_catalog_compare.golden", stdout.Bytes())
 }
+
+func TestCatalogWhyTextGolden(t *testing.T) {
+	manifestPath := writeCatalogManifest(t)
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"catalog", "why", "desktop", "theme-tool", "--file", manifestPath, "--os", "all"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	assertGolden(t, "catalog_why.golden", out.Bytes())
+}
+
+func TestCatalogWhyJSONGolden(t *testing.T) {
+	manifestPath := writeCatalogManifest(t)
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"catalog", "why", "desktop", "theme-tool", "--file", manifestPath, "--os", "all", "--output", "json"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("Run() exit code = %d\nstderr:\n%s\nstdout:\n%s", code, stderr.String(), stdout.String())
+	}
+	assertGolden(t, "envelope_catalog_why.golden", stdout.Bytes())
+}

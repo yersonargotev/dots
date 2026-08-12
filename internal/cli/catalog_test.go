@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/yersonargotev/dots/internal/catalog"
 )
 
 func TestCatalogCommandsRenderManifestOnlyViews(t *testing.T) {
@@ -60,6 +61,24 @@ func TestCatalogCommandsRenderManifestOnlyViews(t *testing.T) {
 			name:  "profile comparison renders a directional delta",
 			args:  []string{"catalog", "compare", "core", "desktop", "--file", manifestPath, "--os", "all"},
 			want:  []string{"Profile comparison: core -> desktop", "Added:", "+ tag theme", "+ dependency theme-tool", "+ entry adaptive -> ~/.example (copy)", "+ provisioner codex (mcp: demo)", "Removed:", "Shared:"},
+			avoid: []string{"must-not-leak"},
+		},
+		{
+			name:  "why traces a dependency to its profile tag",
+			args:  []string{"catalog", "why", "desktop", "theme-tool", "--file", manifestPath, "--os", "all"},
+			want:  []string{"Why profile \"desktop\" selects \"theme-tool\" (OS: all)", "desktop", "dependency theme-tool", "selected by tags: theme", "declared by dependency_set tags=theme"},
+			avoid: []string{"must-not-leak", "Installed Selection", "Drift"},
+		},
+		{
+			name:  "why explains the winning entry source override",
+			args:  []string{"catalog", "why", "desktop", "adaptive", "--file", manifestPath, "--os", "all"},
+			want:  []string{"entry ~/.example", "selected by tags: theme", "adaptive -> ~/.example (copy; source override: theme)"},
+			avoid: []string{"must-not-leak"},
+		},
+		{
+			name:  "why matches a provisioner identity",
+			args:  []string{"catalog", "why", "desktop", "demo", "--file", manifestPath, "--os", "all"},
+			want:  []string{"provisioner demo", "selected by tags: theme", "codex mcp: demo"},
 			avoid: []string{"must-not-leak"},
 		},
 	}
@@ -156,6 +175,29 @@ func TestCatalogDetailCompletionUsesManifestNames(t *testing.T) {
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Fatalf("tag completion directive = %v", directive)
 	}
+
+	whyCmd, _, err := root.Find([]string{"catalog", "why"})
+	if err != nil {
+		t.Fatalf("find why: %v", err)
+	}
+	if err := whyCmd.InheritedFlags().Set("file", manifestPath); err != nil {
+		t.Fatalf("set why file: %v", err)
+	}
+	if err := whyCmd.InheritedFlags().Set("os", "all"); err != nil {
+		t.Fatalf("set why os: %v", err)
+	}
+	profiles, directive = whyCmd.ValidArgsFunction(whyCmd, nil, "d")
+	if !reflect.DeepEqual(profiles, []string{"desktop"}) {
+		t.Fatalf("why profile completion = %#v", profiles)
+	}
+	items, directive := whyCmd.ValidArgsFunction(whyCmd, []string{"desktop"}, "")
+	wantItems := []string{"theme-tool", "~/.example", "adaptive", "codex", "demo"}
+	if !reflect.DeepEqual(items, wantItems) {
+		t.Fatalf("why item completion = %#v, want %#v", items, wantItems)
+	}
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("why completion directive = %v", directive)
+	}
 }
 
 func TestCatalogJSONAndErrorsUseTheOutputContract(t *testing.T) {
@@ -178,6 +220,56 @@ func TestCatalogJSONAndErrorsUseTheOutputContract(t *testing.T) {
 	}
 	if _, ok := data["profile"].(map[string]any); !ok {
 		t.Fatalf("profile detail missing from data: %#v", data)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"catalog", "why", "desktop", "theme-tool", "--file", manifestPath, "--os", "all", "--output", "json"}, &stdout, &stderr); code != ExitOK {
+		t.Fatalf("why Run() exit code = %d, stderr = %s", code, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode why JSON: %v\n%s", err, stdout.String())
+	}
+	if result.Command != "catalog why" || result.Status != statusOK {
+		t.Fatalf("why envelope = %#v", result)
+	}
+	data, ok = result.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("why data = %#v", result.Data)
+	}
+	why, ok := data["why"].(map[string]any)
+	if !ok || why["profile"] != "desktop" || why["query"] != "theme-tool" {
+		t.Fatalf("why explanation missing from data: %#v", data)
+	}
+	var stableWhy struct {
+		Data struct {
+			Why catalog.Why `json:"why"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &stableWhy); err != nil {
+		t.Fatalf("decode stable why payload: %v", err)
+	}
+	wantWhy := catalog.Why{
+		Profile:      "desktop",
+		Query:        "theme-tool",
+		ResolvedTags: []string{"core", "theme"},
+		Matches: []catalog.WhyMatch{{
+			Type:             "dependency",
+			Identity:         "theme-tool",
+			ContributingTags: []string{"theme"},
+			Dependency: &catalog.WhyDependency{
+				Name: "theme-tool",
+				Declarations: []catalog.Dependency{{
+					Name:        "theme-tool",
+					Requirement: "required",
+					Probes:      []string{"theme-tool"},
+					Origin:      catalog.Origin{Type: "dependency_set", Tags: []string{"theme"}},
+				}},
+			},
+		}},
+	}
+	if !reflect.DeepEqual(stableWhy.Data.Why, wantWhy) {
+		t.Fatalf("why payload = %#v, want %#v", stableWhy.Data.Why, wantWhy)
 	}
 
 	stdout.Reset()
@@ -245,6 +337,18 @@ func TestCatalogJSONAndErrorsUseTheOutputContract(t *testing.T) {
 	if result.Command != "catalog profile" || result.Status != statusError || result.Error != `profile "missing" not found` {
 		t.Fatalf("unknown-profile envelope = %#v", result)
 	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"catalog", "why", "desktop", "missing", "--file", manifestPath, "--os", "linux", "--output", "json"}, &stdout, &stderr); code != ExitError {
+		t.Fatalf("unknown why query exit code = %d", code)
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode why error JSON: %v\n%s", err, stdout.String())
+	}
+	if result.Command != "catalog why" || result.Status != statusError || result.Error != `profile "desktop" does not select an item matching "missing" for OS linux` {
+		t.Fatalf("unknown why-query envelope = %#v", result)
+	}
 }
 
 func TestCatalogDetailsRequireExactlyOneName(t *testing.T) {
@@ -254,6 +358,17 @@ func TestCatalogDetailsRequireExactlyOneName(t *testing.T) {
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"catalog", "profile"})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "accepts 1 arg(s), received 0") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
+func TestCatalogWhyRequiresProfileAndQuery(t *testing.T) {
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"catalog", "why", "desktop"})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "accepts 2 arg(s), received 1") {
 		t.Fatalf("Execute() error = %v", err)
 	}
 }
