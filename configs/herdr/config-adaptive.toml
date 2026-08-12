@@ -42,6 +42,20 @@ position = "bottom-center"
 [ui.sound]
 enabled = true
 
+[ui.sidebar.spaces]
+row_gap = 1
+rows = [
+  ["state_icon", { token = "workspace", fg = "#89b4fa", bold = true }],
+  [{ token = "branch", fg = "#6c7086", dim = true }, "git_status"],
+]
+
+[ui.sidebar.agents]
+row_gap = 1
+rows = [
+  ["state_icon", { token = "agent", fg = "#cba6f7", bold = true }, "state_text"],
+  [{ token = "workspace", fg = "#6c7086" }, "tab"],
+]
+
 [keys]
 prefix = "ctrl+a"
 

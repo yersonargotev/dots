@@ -3624,6 +3624,24 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 	}
 
 	defaultText := string(defaultConfig)
+	for section, want := range map[string]string{
+		"spaces": `[ui.sidebar.spaces]
+row_gap = 1
+rows = [
+  ["state_icon", { token = "workspace", fg = "#89b4fa", bold = true }],
+  [{ token = "branch", fg = "#6c7086", dim = true }, "git_status"],
+]`,
+		"agents": `[ui.sidebar.agents]
+row_gap = 1
+rows = [
+  ["state_icon", { token = "agent", fg = "#cba6f7", bold = true }, "state_text"],
+  [{ token = "workspace", fg = "#6c7086" }, "tab"],
+]`,
+	} {
+		if got := herdrConfigSection(t, defaultText, "[ui.sidebar."+section+"]"); got != want {
+			t.Fatalf("default Herdr %s sidebar section =:\n%s\nwant:\n%s", section, got, want)
+		}
+	}
 	for _, want := range []string{
 		`previous_workspace = "prefix+alt+k"`,
 		`next_workspace = "prefix+alt+j"`,
@@ -3672,6 +3690,19 @@ func herdrConfigWithoutTheme(t *testing.T, config string) string {
 	}
 	themeEnd := themeStart + len("[theme]") + nextSection + 1
 	return body[:themeStart] + body[themeEnd:]
+}
+
+func herdrConfigSection(t *testing.T, config, header string) string {
+	t.Helper()
+	start := strings.Index(config, header)
+	if start == -1 {
+		t.Fatalf("Herdr config missing %s section:\n%s", header, config)
+	}
+	section := config[start:]
+	if nextSection := strings.Index(section[len(header):], "\n["); nextSection != -1 {
+		section = section[:len(header)+nextSection]
+	}
+	return strings.TrimSpace(section)
 }
 
 func TestRepositoryGhosttyConfigDoesNotForwardObsoleteHerdrCommandShortcuts(t *testing.T) {
