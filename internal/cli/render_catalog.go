@@ -147,6 +147,69 @@ func renderCatalogMap(cmd *cobra.Command, report catalog.Report) {
 	)
 }
 
+func renderCatalogWhy(cmd *cobra.Command, report catalog.Report) {
+	why := report.Why
+	if why == nil {
+		return
+	}
+	w := cmd.OutOrStdout()
+	fmt.Fprintf(w, "Why profile %q selects %q (OS: %s)\n", why.Profile, why.Query, report.OS)
+	fmt.Fprintf(w, "%s\n", why.Profile)
+	for matchIndex, match := range why.Matches {
+		matchBranch := "├─"
+		continuation := "│  "
+		if matchIndex == len(why.Matches)-1 {
+			matchBranch = "└─"
+			continuation = "   "
+		}
+		fmt.Fprintf(w, "%s %s %s\n", matchBranch, match.Type, match.Identity)
+		fmt.Fprintf(w, "%s├─ selected by tags: %s\n", continuation, catalogList(match.ContributingTags))
+		switch match.Type {
+		case "dependency":
+			renderCatalogWhyDependency(w, continuation, match.Dependency)
+		case "entry":
+			renderCatalogWhyEntry(w, continuation, match.Entry)
+		case "provisioner":
+			renderCatalogWhyProvisioner(w, continuation, match.Provisioner)
+		}
+	}
+}
+
+func renderCatalogWhyDependency(w io.Writer, prefix string, dependency *catalog.WhyDependency) {
+	if dependency == nil {
+		return
+	}
+	for index, declaration := range dependency.Declarations {
+		branch := "├─"
+		if index == len(dependency.Declarations)-1 {
+			branch = "└─"
+		}
+		fmt.Fprintf(w, "%s%s declared by %s (%s)\n", prefix, branch, renderCatalogOrigin(declaration.Origin), declaration.Requirement)
+	}
+}
+
+func renderCatalogWhyEntry(w io.Writer, prefix string, entry *catalog.WhyEntry) {
+	if entry == nil {
+		return
+	}
+	if entry.SourceOverrideTag != "" {
+		fmt.Fprintf(w, "%s└─ %s -> %s (%s; source override: %s)\n", prefix, entry.Entry.Source, entry.Entry.Target, entry.Entry.Strategy, entry.SourceOverrideTag)
+		return
+	}
+	fmt.Fprintf(w, "%s└─ %s -> %s (%s)\n", prefix, entry.Entry.Source, entry.Entry.Target, entry.Entry.Strategy)
+}
+
+func renderCatalogWhyProvisioner(w io.Writer, prefix string, provisioner *catalog.Provisioner) {
+	if provisioner == nil {
+		return
+	}
+	identity := provisioner.Identity
+	if identity == "" {
+		identity = provisioner.Tool
+	}
+	fmt.Fprintf(w, "%s└─ %s %s: %s\n", prefix, provisioner.Tool, provisioner.Operation, identity)
+}
+
 func countLabel(count int, singular, plural string) string {
 	if count == 1 {
 		return singular

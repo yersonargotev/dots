@@ -86,6 +86,7 @@ state:
 ```bash
 dots catalog profiles
 dots catalog map workstation
+dots catalog why workstation atuin
 dots catalog compare core workstation
 dots catalog compare core workstation --output json
 ```
@@ -93,7 +94,15 @@ dots catalog compare core workstation --output json
 `catalog map` keeps composite Profiles readable by grouping the portable
 surface under each resolved Tag and showing compact Managed Entry, unique
 Dependency, and Provisioner counts. Use `catalog profile` when you need the
-exhaustive item-by-item view.
+exhaustive item-by-item view. Use `catalog why PROFILE QUERY` for the inverse
+question: it traces an exact Dependency name, Managed Entry target or resolved
+source, or Provisioner tool or identity back to the Profile Tags and manifest
+declarations that selected it. For example,
+`dots catalog why workstation ~/.config/zed/settings.json` explains the winning
+Source of Truth source and any source override. This is a portable catalog
+answer only; it does not inspect Installed Selection, Drift, or other machine
+state. Add `--os darwin`, `--os linux`, or `--os all` to choose the catalog
+surface, and `--output json` for the machine-readable explanation.
 
 Then inspect the current machine state:
 

@@ -228,6 +228,84 @@ func TestMapProfileRejectsUnknownProfile(t *testing.T) {
 	}
 }
 
+func TestExplainProfileItemPreservesDependencyOrigins(t *testing.T) {
+	m := manifest.Manifest{
+		Profiles: map[string]manifest.Profile{"workstation": {Tags: []string{"core", "agents"}}},
+		Dependencies: []manifest.DependencySet{{
+			Tags:         []string{"core"},
+			Dependencies: []manifest.Dependency{{Name: "shared-tool"}},
+		}},
+		Entries: []manifest.Entry{{
+			Source: "base", Target: "~/.shared", Strategy: "copy", Tags: []string{"agents"},
+			Dependencies: []manifest.Dependency{{Name: "shared-tool", Requirement: manifest.DependencyRequirementRequired}},
+		}},
+	}
+
+	got, err := ExplainProfileItem(m, "workstation", "shared-tool", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Profile != nil || got.Why == nil {
+		t.Fatalf("report = %#v", got)
+	}
+	if !reflect.DeepEqual(got.Why.ResolvedTags, []string{"core", "agents"}) {
+		t.Fatalf("resolved tags = %#v", got.Why.ResolvedTags)
+	}
+	if len(got.Why.Matches) != 1 {
+		t.Fatalf("matches = %#v", got.Why.Matches)
+	}
+	match := got.Why.Matches[0]
+	if match.Type != "dependency" || !reflect.DeepEqual(match.ContributingTags, []string{"core", "agents"}) {
+		t.Fatalf("match = %#v", match)
+	}
+	if match.Dependency == nil || len(match.Dependency.Declarations) != 2 {
+		t.Fatalf("dependency = %#v", match.Dependency)
+	}
+	if got := match.Dependency.Declarations[1].Origin; got.Type != "entry" || got.Name != "~/.shared" {
+		t.Fatalf("second origin = %#v", got)
+	}
+}
+
+func TestExplainProfileItemReportsEntryOverrideAndProvisioners(t *testing.T) {
+	m := fixtureManifest()
+
+	entryReport, err := ExplainProfileItem(m, "desktop", "adaptive", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := entryReport.Why.Matches[0]
+	if entry.Type != "entry" || entry.Identity != "~/.example" || entry.Entry == nil {
+		t.Fatalf("entry match = %#v", entry)
+	}
+	if entry.Entry.SourceOverrideTag != "theme" || !reflect.DeepEqual(entry.ContributingTags, []string{"theme"}) {
+		t.Fatalf("entry explanation = %#v", entry)
+	}
+
+	provisionerReport, err := ExplainProfileItem(m, "desktop", "codex", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisioner := provisionerReport.Why.Matches[0]
+	if provisioner.Type != "provisioner" || provisioner.Identity != "demo" || provisioner.Provisioner == nil {
+		t.Fatalf("provisioner match = %#v", provisioner)
+	}
+	if provisioner.Provisioner.Operation != "mcp" || !reflect.DeepEqual(provisioner.ContributingTags, []string{"theme"}) {
+		t.Fatalf("provisioner explanation = %#v", provisioner)
+	}
+}
+
+func TestExplainProfileItemHonorsOSAndRejectsUnknownQueries(t *testing.T) {
+	m := fixtureManifest()
+	_, err := ExplainProfileItem(m, "desktop", "adaptive", Options{OS: "linux"})
+	if err == nil || err.Error() != `profile "desktop" does not select an item matching "adaptive" for OS linux` {
+		t.Fatalf("error = %v", err)
+	}
+	_, err = ExplainProfileItem(m, "missing", "adaptive", Options{OS: "all"})
+	if err == nil || err.Error() != `profile "missing" not found` {
+		t.Fatalf("unknown profile error = %v", err)
+	}
+}
+
 func fixtureManifest() manifest.Manifest {
 	return manifest.Manifest{
 		Tags: map[string]manifest.Tag{

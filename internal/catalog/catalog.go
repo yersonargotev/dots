@@ -38,6 +38,41 @@ type Report struct {
 	Tag            *Detail          `json:"tag,omitempty"`
 	Comparison     *Comparison      `json:"comparison,omitempty"`
 	Map            *ProfileMap      `json:"map,omitempty"`
+	Why            *Why             `json:"why,omitempty"`
+}
+
+// Why explains the manifest provenance of exact items in one Profile's
+// portable selected surface. It never contains workstation or installed state.
+type Why struct {
+	Profile      string     `json:"profile"`
+	Query        string     `json:"query"`
+	ResolvedTags []string   `json:"resolved_tags"`
+	Matches      []WhyMatch `json:"matches"`
+}
+
+// WhyMatch is one selected catalog item that exactly matched a query. The
+// type-specific payload is populated only for the reported Type.
+type WhyMatch struct {
+	Type             string         `json:"type"`
+	Identity         string         `json:"identity"`
+	ContributingTags []string       `json:"contributing_tags"`
+	Dependency       *WhyDependency `json:"dependency,omitempty"`
+	Entry            *WhyEntry      `json:"entry,omitempty"`
+	Provisioner      *Provisioner   `json:"provisioner,omitempty"`
+}
+
+// WhyDependency preserves every selected declaration because one Dependency
+// can be contributed by multiple manifest surfaces.
+type WhyDependency struct {
+	Name         string       `json:"name"`
+	Declarations []Dependency `json:"declarations"`
+}
+
+// WhyEntry records the resolved Source of Truth and the source-override Tag
+// that won, when applicable.
+type WhyEntry struct {
+	Entry             Entry  `json:"entry"`
+	SourceOverrideTag string `json:"source_override_tag,omitempty"`
 }
 
 // Hidden records items deliberately omitted from a compact current-only list.
@@ -107,14 +142,15 @@ type DependencySet struct {
 
 // Entry describes one portable Managed Entry selected by the queried intent.
 type Entry struct {
-	Source       string       `json:"source"`
-	Target       string       `json:"target"`
-	TargetRoot   string       `json:"target_root,omitempty"`
-	Strategy     string       `json:"strategy"`
-	Ownership    string       `json:"ownership,omitempty"`
-	Tags         []string     `json:"tags"`
-	OS           []string     `json:"os"`
-	Dependencies []Dependency `json:"dependencies"`
+	Source            string       `json:"source"`
+	Target            string       `json:"target"`
+	TargetRoot        string       `json:"target_root,omitempty"`
+	Strategy          string       `json:"strategy"`
+	Ownership         string       `json:"ownership,omitempty"`
+	Tags              []string     `json:"tags"`
+	OS                []string     `json:"os"`
+	Dependencies      []Dependency `json:"dependencies"`
+	sourceOverrideTag string
 }
 
 // SourceOverride records a source change activated by a selected Tag. It is
@@ -311,6 +347,96 @@ func MapProfile(m manifest.Manifest, name string, opts Options) (Report, error) 
 	return report, nil
 }
 
+// ExplainProfileItem returns every selected item that exactly matches query.
+// Dependencies match by name, Managed Entries by target or resolved source,
+// and Provisioners by tool or identity.
+func ExplainProfileItem(m manifest.Manifest, profileName, query string, opts Options) (Report, error) {
+	report, err := Profile(m, profileName, opts)
+	if err != nil {
+		return Report{}, err
+	}
+	detail := report.Profile
+	why := Why{
+		Profile:      profileName,
+		Query:        query,
+		ResolvedTags: clone(detail.ResolvedTags),
+		Matches:      []WhyMatch{},
+	}
+
+	declarations := []Dependency{}
+	for _, dependency := range detail.Dependencies {
+		if dependency.Name == query {
+			declarations = append(declarations, dependency)
+		}
+	}
+	if len(declarations) > 0 {
+		why.Matches = append(why.Matches, WhyMatch{
+			Type:             "dependency",
+			Identity:         query,
+			ContributingTags: contributingDependencyTags(detail.ResolvedTags, declarations),
+			Dependency:       &WhyDependency{Name: query, Declarations: declarations},
+		})
+	}
+
+	for _, entry := range detail.Entries {
+		if entry.Target != query && entry.Source != query {
+			continue
+		}
+		why.Matches = append(why.Matches, WhyMatch{
+			Type:             "entry",
+			Identity:         entry.Target,
+			ContributingTags: contributingTags(detail.ResolvedTags, entry.Tags, entry.sourceOverrideTag),
+			Entry:            &WhyEntry{Entry: entry, SourceOverrideTag: entry.sourceOverrideTag},
+		})
+	}
+
+	for i := range detail.Provisioners {
+		provisioner := detail.Provisioners[i]
+		matchesIdentity := provisioner.Identity != "" && provisioner.Identity == query
+		if provisioner.Tool != query && !matchesIdentity {
+			continue
+		}
+		why.Matches = append(why.Matches, WhyMatch{
+			Type:             "provisioner",
+			Identity:         provisionerIdentity(provisioner),
+			ContributingTags: contributingTags(detail.ResolvedTags, provisioner.Tags, ""),
+			Provisioner:      &provisioner,
+		})
+	}
+
+	if len(why.Matches) == 0 {
+		return Report{}, fmt.Errorf("profile %q does not select an item matching %q for OS %s", profileName, query, report.OS)
+	}
+	report.Profile = nil
+	report.Why = &why
+	return report, nil
+}
+
+func contributingDependencyTags(profileTags []string, declarations []Dependency) []string {
+	declared := []string{}
+	for _, declaration := range declarations {
+		declared = append(declared, declaration.Origin.Tags...)
+	}
+	return contributingTags(profileTags, declared, "")
+}
+
+func contributingTags(profileTags, itemTags []string, extra string) []string {
+	result := []string{}
+	for _, profileTag := range profileTags {
+		if contains(itemTags, profileTag) || profileTag == extra {
+			result = append(result, profileTag)
+		}
+	}
+	return result
+}
+
+func provisionerIdentity(provisioner Provisioner) string {
+	if provisioner.Identity != "" {
+		return provisioner.Identity
+	}
+	return provisioner.Tool
+}
+
 func surfaceCount(detail *Detail) SurfaceCount {
 	dependencies := make(map[string]struct{}, len(detail.Dependencies))
 	for _, dependency := range detail.Dependencies {
@@ -353,7 +479,7 @@ func buildDetail(m manifest.Manifest, name, description, status, kind, replacedB
 	}
 	for _, selected := range surface.Entries {
 		entry := selected.Entry
-		item := Entry{Source: selected.Source, Target: entry.Target, TargetRoot: entry.TargetRoot, Strategy: entry.Strategy, Ownership: entry.Ownership, Tags: clone(entry.Tags), OS: declaredOS(entry.OS), Dependencies: []Dependency{}}
+		item := Entry{Source: selected.Source, Target: entry.Target, TargetRoot: entry.TargetRoot, Strategy: entry.Strategy, Ownership: entry.Ownership, Tags: clone(entry.Tags), OS: declaredOS(entry.OS), Dependencies: []Dependency{}, sourceOverrideTag: selected.OverrideTag}
 		for _, dep := range entry.Dependencies {
 			item.Dependencies = append(item.Dependencies, dependency(dep, Origin{Type: "entry", Name: entry.Target, Tags: clone(entry.Tags)}))
 		}
