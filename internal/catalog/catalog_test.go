@@ -190,6 +190,44 @@ func TestCompareProfilesRejectsUnknownProfile(t *testing.T) {
 	}
 }
 
+func TestMapProfileCountsTagSurfacesAndDeduplicatesTotalDependencies(t *testing.T) {
+	m := fixtureManifest()
+	m.Dependencies = append(m.Dependencies, manifest.DependencySet{
+		Tags:         []string{"agents"},
+		Dependencies: []manifest.Dependency{{Name: "set-tool"}, {Name: "agent-tool"}},
+	})
+
+	got, err := MapProfile(m, "desktop", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Profile != nil || got.Map == nil {
+		t.Fatalf("report = %#v", got)
+	}
+	if got.Map.Profile != "desktop" || got.Map.Status != "current" {
+		t.Fatalf("map identity = %#v", got.Map)
+	}
+	wantTags := []TagSurface{
+		{Name: "core", Description: "Core", Surface: SurfaceCount{Dependencies: 1}},
+		{Name: "agents", Description: "Agents", Surface: SurfaceCount{Dependencies: 2}},
+		{Name: "theme", Description: "Theme", Surface: SurfaceCount{Entries: 1, Dependencies: 2, Provisioners: 1}},
+	}
+	if !reflect.DeepEqual(got.Map.Tags, wantTags) {
+		t.Fatalf("tag surfaces = %#v, want %#v", got.Map.Tags, wantTags)
+	}
+	wantTotal := SurfaceCount{Entries: 1, Dependencies: 4, Provisioners: 1}
+	if got.Map.Total != wantTotal {
+		t.Fatalf("total = %#v, want %#v", got.Map.Total, wantTotal)
+	}
+}
+
+func TestMapProfileRejectsUnknownProfile(t *testing.T) {
+	_, err := MapProfile(fixtureManifest(), "missing", Options{OS: "all"})
+	if err == nil || err.Error() != `profile "missing" not found` {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func fixtureManifest() manifest.Manifest {
 	return manifest.Manifest{
 		Tags: map[string]manifest.Tag{

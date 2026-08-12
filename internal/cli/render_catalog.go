@@ -112,6 +112,48 @@ func renderCatalogComparison(cmd *cobra.Command, report catalog.Report) {
 	)
 }
 
+func renderCatalogMap(cmd *cobra.Command, report catalog.Report) {
+	profileMap := report.Map
+	if profileMap == nil {
+		return
+	}
+	w := cmd.OutOrStdout()
+	fmt.Fprintf(w, "Profile map %q (OS: %s)\n", profileMap.Profile, report.OS)
+	if profileMap.Description != "" {
+		fmt.Fprintf(w, "%s\n", profileMap.Description)
+	}
+	fmt.Fprintf(w, "%s\n", profileMap.Profile)
+	for i, tag := range profileMap.Tags {
+		branch := "├─"
+		continuation := "│  "
+		if i == len(profileMap.Tags)-1 {
+			branch = "└─"
+			continuation = "   "
+		}
+		fmt.Fprintf(w, "%s %s", branch, tag.Name)
+		if tag.Description != "" {
+			fmt.Fprintf(w, " — %s", tag.Description)
+		}
+		fmt.Fprintf(w, "\n%s└─ %d %s · %d %s · %d %s\n", continuation,
+			tag.Surface.Entries, countLabel(tag.Surface.Entries, "entry", "entries"),
+			tag.Surface.Dependencies, countLabel(tag.Surface.Dependencies, "dependency", "dependencies"),
+			tag.Surface.Provisioners, countLabel(tag.Surface.Provisioners, "provisioner", "provisioners"),
+		)
+	}
+	fmt.Fprintf(w, "Total: %d %s · %d unique %s · %d %s\n",
+		profileMap.Total.Entries, countLabel(profileMap.Total.Entries, "entry", "entries"),
+		profileMap.Total.Dependencies, countLabel(profileMap.Total.Dependencies, "dependency", "dependencies"),
+		profileMap.Total.Provisioners, countLabel(profileMap.Total.Provisioners, "provisioner", "provisioners"),
+	)
+}
+
+func countLabel(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
+}
+
 func renderCatalogComparisonSurface(w io.Writer, heading, marker string, surface catalog.ComparisonSurface) {
 	fmt.Fprintf(w, "%s:\n", heading)
 	empty := len(surface.ResolvedTags) == 0 && len(surface.Dependencies) == 0 && len(surface.Entries) == 0 && len(surface.SourceOverrides) == 0 && len(surface.Provisioners) == 0 && len(surface.Behaviors) == 0

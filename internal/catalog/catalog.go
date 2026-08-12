@@ -37,6 +37,7 @@ type Report struct {
 	Profile        *Detail          `json:"profile,omitempty"`
 	Tag            *Detail          `json:"tag,omitempty"`
 	Comparison     *Comparison      `json:"comparison,omitempty"`
+	Map            *ProfileMap      `json:"map,omitempty"`
 }
 
 // Hidden records items deliberately omitted from a compact current-only list.
@@ -187,6 +188,29 @@ type ComparisonCounts struct {
 	Behaviors       int `json:"behaviors"`
 }
 
+// ProfileMap is a compact view of how a Profile's resolved Tags contribute to
+// its portable surface. Total counts describe the composed Profile and do not
+// double-count Dependencies selected through multiple origins or Tags.
+type ProfileMap struct {
+	Profile     string       `json:"profile"`
+	Description string       `json:"description"`
+	Status      string       `json:"status"`
+	Tags        []TagSurface `json:"tags"`
+	Total       SurfaceCount `json:"total"`
+}
+
+type TagSurface struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	Surface     SurfaceCount `json:"surface"`
+}
+
+type SurfaceCount struct {
+	Entries      int `json:"entries"`
+	Dependencies int `json:"dependencies"`
+	Provisioners int `json:"provisioners"`
+}
+
 // Build returns deterministic Profile and Tag summaries. The manifest must
 // already have passed manifest validation.
 func Build(m manifest.Manifest, opts Options) (Report, error) {
@@ -253,6 +277,50 @@ func CompareProfiles(m manifest.Manifest, from, to string, opts Options) (Report
 	}
 	fromReport.Profile = nil
 	return fromReport, nil
+}
+
+// MapProfile returns a compact, Tag-oriented view of a Profile's portable
+// surface. It uses the same selection rules as the exhaustive Profile and Tag
+// reports and never reads workstation or Installation Metadata state.
+func MapProfile(m manifest.Manifest, name string, opts Options) (Report, error) {
+	report, err := Profile(m, name, opts)
+	if err != nil {
+		return Report{}, err
+	}
+	detail := report.Profile
+	profileMap := ProfileMap{
+		Profile:     detail.Name,
+		Description: detail.Description,
+		Status:      detail.Status,
+		Tags:        []TagSurface{},
+		Total:       surfaceCount(detail),
+	}
+	for _, tagName := range detail.ResolvedTags {
+		tagReport, err := Tag(m, tagName, opts)
+		if err != nil {
+			return Report{}, err
+		}
+		profileMap.Tags = append(profileMap.Tags, TagSurface{
+			Name:        tagReport.Tag.Name,
+			Description: tagReport.Tag.Description,
+			Surface:     surfaceCount(tagReport.Tag),
+		})
+	}
+	report.Profile = nil
+	report.Map = &profileMap
+	return report, nil
+}
+
+func surfaceCount(detail *Detail) SurfaceCount {
+	dependencies := make(map[string]struct{}, len(detail.Dependencies))
+	for _, dependency := range detail.Dependencies {
+		dependencies[dependency.Name] = struct{}{}
+	}
+	return SurfaceCount{
+		Entries:      len(detail.Entries),
+		Dependencies: len(dependencies),
+		Provisioners: len(detail.Provisioners),
+	}
 }
 
 // Tag returns a detailed, exact Tag view. Registryless manifests derive a

@@ -34,6 +34,12 @@ func TestCatalogCommandsRenderManifestOnlyViews(t *testing.T) {
 			avoid: []string{"Tags:"},
 		},
 		{
+			name:  "profile map renders a compact tag-oriented surface",
+			args:  []string{"catalog", "map", "desktop", "--file", manifestPath, "--os", "all"},
+			want:  []string{"Profile map \"desktop\" (OS: all)", "desktop", "├─ core — Core configuration", "└─ theme — Theme configuration", "1 entry · 1 dependency · 1 provisioner", "Total: 1 entry · 1 unique dependency · 1 provisioner"},
+			avoid: []string{"must-not-leak", "Source overrides:", "Excluded surfaces:"},
+		},
+		{
 			name:  "tag list focuses current tags",
 			args:  []string{"catalog", "tags", "--file", manifestPath, "--os", "all"},
 			want:  []string{"Tags (OS: all; metadata: declared)", "- theme (surface, current, declared)", "Hidden legacy tags: 1"},
@@ -118,6 +124,21 @@ func TestCatalogDetailCompletionUsesManifestNames(t *testing.T) {
 		t.Fatalf("profile completion directive = %v", directive)
 	}
 
+	mapCmd, _, err := root.Find([]string{"catalog", "map"})
+	if err != nil {
+		t.Fatalf("find map: %v", err)
+	}
+	if err := mapCmd.InheritedFlags().Set("file", manifestPath); err != nil {
+		t.Fatalf("set map file: %v", err)
+	}
+	profiles, directive = mapCmd.ValidArgsFunction(mapCmd, nil, "d")
+	if !reflect.DeepEqual(profiles, []string{"desktop"}) {
+		t.Fatalf("map completion = %#v", profiles)
+	}
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("map completion directive = %v", directive)
+	}
+
 	tagCmd, _, err := root.Find([]string{"catalog", "tag"})
 	if err != nil {
 		t.Fatalf("find tag: %v", err)
@@ -179,6 +200,26 @@ func TestCatalogJSONAndErrorsUseTheOutputContract(t *testing.T) {
 	}
 	if strings.Contains(stdout.String(), "must-not-leak") {
 		t.Fatalf("JSON leaked provisioner environment value: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"catalog", "map", "desktop", "--file", manifestPath, "--os", "all", "--output", "json"}, &stdout, &stderr); code != ExitOK {
+		t.Fatalf("map Run() exit code = %d, stderr = %s", code, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode map JSON: %v\n%s", err, stdout.String())
+	}
+	if result.Command != "catalog map" || result.Status != statusOK {
+		t.Fatalf("map envelope = %#v", result)
+	}
+	data, ok = result.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("map data = %#v", result.Data)
+	}
+	profileMap, ok := data["map"].(map[string]any)
+	if !ok || profileMap["profile"] != "desktop" {
+		t.Fatalf("map missing from data: %#v", data)
 	}
 
 	stdout.Reset()

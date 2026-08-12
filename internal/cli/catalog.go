@@ -55,8 +55,27 @@ func newCatalogCommand() *cobra.Command {
 	cmd.AddCommand(newCatalogProfilesCommand(load))
 	cmd.AddCommand(newCatalogProfileCommand())
 	cmd.AddCommand(newCatalogCompareCommand())
+	cmd.AddCommand(newCatalogMapCommand())
 	cmd.AddCommand(newCatalogTagsCommand(load))
 	cmd.AddCommand(newCatalogTagCommand())
+	return cmd
+}
+
+func newCatalogMapCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "map PROFILE",
+		Short:        "Show how a profile composes its portable surface",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			report, err := loadCatalogMap(cmd, args[0])
+			if err != nil {
+				return err
+			}
+			return renderOrEmitCatalog(cmd, report, renderCatalogMap)
+		},
+	}
+	cmd.ValidArgsFunction = completeCatalogProfiles
 	return cmd
 }
 
@@ -182,6 +201,18 @@ func loadCatalogComparison(cmd *cobra.Command, from, to string) (catalog.Report,
 		return catalog.Report{}, err
 	}
 	return catalog.CompareProfiles(*m, from, to, catalog.Options{OS: osName})
+}
+
+func loadCatalogMap(cmd *cobra.Command, name string) (catalog.Report, error) {
+	file, sourceRoot, osName, err := catalogCommandOptions(cmd)
+	if err != nil {
+		return catalog.Report{}, err
+	}
+	m, err := loadCatalogManifest(cmd, file, sourceRoot)
+	if err != nil {
+		return catalog.Report{}, err
+	}
+	return catalog.MapProfile(*m, name, catalog.Options{OS: osName})
 }
 
 func renderOrEmitCatalog(cmd *cobra.Command, report catalog.Report, render func(*cobra.Command, catalog.Report)) error {

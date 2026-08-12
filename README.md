@@ -85,9 +85,15 @@ state:
 
 ```bash
 dots catalog profiles
+dots catalog map workstation
 dots catalog compare core workstation
 dots catalog compare core workstation --output json
 ```
+
+`catalog map` keeps composite Profiles readable by grouping the portable
+surface under each resolved Tag and showing compact Managed Entry, unique
+Dependency, and Provisioner counts. Use `catalog profile` when you need the
+exhaustive item-by-item view.
 
 Then inspect the current machine state:
 
