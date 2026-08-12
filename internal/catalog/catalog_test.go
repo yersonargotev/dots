@@ -294,6 +294,30 @@ func TestExplainProfileItemReportsEntryOverrideAndProvisioners(t *testing.T) {
 	}
 }
 
+func TestExplainProfileItemMatchesEntryTargetOnApplicableOS(t *testing.T) {
+	m := fixtureManifest()
+
+	got, err := ExplainProfileItem(m, "desktop", "~/.example", Options{OS: "darwin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Why.Matches) != 1 {
+		t.Fatalf("matches = %#v", got.Why.Matches)
+	}
+	match := got.Why.Matches[0]
+	if match.Type != "entry" || match.Identity != "~/.example" || match.Entry == nil {
+		t.Fatalf("entry match = %#v", match)
+	}
+	if match.Entry.Entry.Source != "adaptive" || match.Entry.SourceOverrideTag != "theme" {
+		t.Fatalf("entry explanation = %#v", match.Entry)
+	}
+
+	_, err = ExplainProfileItem(m, "desktop", "~/.example", Options{OS: "linux"})
+	if err == nil || err.Error() != `profile "desktop" does not select an item matching "~/.example" for OS linux` {
+		t.Fatalf("linux error = %v", err)
+	}
+}
+
 func TestExplainProfileItemReportsAllProvisionerMatchesAcrossPlatforms(t *testing.T) {
 	m := manifest.Manifest{
 		Profiles: map[string]manifest.Profile{"agents": {Tags: []string{"agents"}}},

@@ -170,7 +170,7 @@ func renderCatalogWhy(cmd *cobra.Command, report catalog.Report) {
 		case "entry":
 			renderCatalogWhyEntry(w, continuation, match.Entry)
 		case "provisioner":
-			renderCatalogWhyProvisioner(w, continuation, match.Provisioner)
+			renderCatalogWhyProvisioner(w, continuation, match.Identity, match.Provisioner)
 		}
 	}
 }
@@ -199,13 +199,9 @@ func renderCatalogWhyEntry(w io.Writer, prefix string, entry *catalog.WhyEntry) 
 	fmt.Fprintf(w, "%s└─ %s -> %s (%s)\n", prefix, entry.Entry.Source, entry.Entry.Target, entry.Entry.Strategy)
 }
 
-func renderCatalogWhyProvisioner(w io.Writer, prefix string, provisioner *catalog.Provisioner) {
+func renderCatalogWhyProvisioner(w io.Writer, prefix, identity string, provisioner *catalog.Provisioner) {
 	if provisioner == nil {
 		return
-	}
-	identity := provisioner.Identity
-	if identity == "" {
-		identity = provisioner.Tool
 	}
 	fmt.Fprintf(w, "%s└─ %s %s: %s\n", prefix, provisioner.Tool, provisioner.Operation, identity)
 }
