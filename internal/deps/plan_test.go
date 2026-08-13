@@ -1,6 +1,7 @@
 package deps_test
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -102,6 +103,40 @@ func TestPlanUsesDarwinAppAsAlternativeToCommandProbe(t *testing.T) {
 				t.Fatalf("Actions = %#v, want len %d", report.Actions, tt.wantActions)
 			}
 		})
+	}
+}
+
+func TestRepositoryManifestPlansCodexBarCaskOnDarwinOnly(t *testing.T) {
+	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	darwin, err := deps.Plan(*m, deps.Options{
+		ExtraTags: []string{"codexbar"}, OS: "darwin", AppLookup: appLookupSet(),
+	}, lookupSet("brew"), fontLookupSet(), deps.TierHomebrew)
+	if err != nil {
+		t.Fatalf("Darwin Plan() error = %v", err)
+	}
+	if len(darwin.Actions) != 1 {
+		t.Fatalf("Darwin Actions = %#v, want one CodexBar action", darwin.Actions)
+	}
+	action := darwin.Actions[0]
+	if action.Dependency != "CodexBar" || action.Package != "codexbar" || action.Executable != "brew" {
+		t.Fatalf("Darwin CodexBar action = %#v, want brew cask action", action)
+	}
+	if want := []string{"install", "--cask", "codexbar"}; !reflect.DeepEqual(action.Args, want) {
+		t.Fatalf("Darwin CodexBar Args = %#v, want %#v", action.Args, want)
+	}
+
+	linux, err := deps.Plan(*m, deps.Options{
+		ExtraTags: []string{"codexbar"}, OS: "linux", AppLookup: appLookupSet("CodexBar.app"),
+	}, lookupSet("brew"), fontLookupSet(), deps.TierHomebrew)
+	if err != nil {
+		t.Fatalf("Linux Plan() error = %v", err)
+	}
+	if len(linux.Actions) != 0 {
+		t.Fatalf("Linux Actions = %#v, want no CodexBar action", linux.Actions)
 	}
 }
 

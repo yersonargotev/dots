@@ -8,10 +8,12 @@ with people who may only want one capability area.
 
 We now require an explicit Profile selection for the repository manifest and make
 Profile composition first-class. The repository no longer defines `default`; it
-has an explicit `core` Profile (`tags: [core]`). Capability Profiles are pure:
-`desktop`, `agents`, `web`, and `mobile` select only their own tag. The
-opinionated `workstation` Profile remains a composite of `core`, `desktop`, and
-`agents`; `web` and `mobile` stay opt-in.
+has an explicit `core` Profile (`tags: [core]`). Capability Profiles are pure
+Tag compositions: `agents`, `web`, and `mobile` select only their own Tag, while
+`desktop` selects `desktop` plus the independently selectable `codexbar` Tag for
+the macOS CodexBar integration. The opinionated `workstation` Profile remains a
+composite of `core`, `desktop`, and `agents`; `codexbar`, `web`, and `mobile`
+stay absent unless selected by another requested Profile or explicit Tag.
 
 `--profile` is repeatable anywhere profile selection is accepted. The effective
 selection is the ordered, de-duplicated union of all selected Profile tags,
