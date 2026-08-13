@@ -8,6 +8,10 @@ tags:
     description: Desktop terminal/editor configuration and integrations.
     kind: surface
     status: current
+  codexbar:
+    description: CodexBar menu-bar monitor for AI coding-provider usage limits.
+    kind: surface
+    status: current
   agents:
     description: Native Agent CLI Baseline for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
     kind: surface
@@ -39,6 +43,7 @@ profiles:
     status: current
     tags:
       - desktop
+      - codexbar
   agents:
     description: Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
     status: current
@@ -73,6 +78,14 @@ dependencies:
         font_match: "CascadiaCodeNF*"
         font_fallback_matches:
           - "CaskaydiaCoveNerdFont*"
+  - tags:
+      - codexbar
+    os:
+      - darwin
+    dependencies:
+      - name: CodexBar
+        darwin_app: CodexBar.app
+        brew_cask: codexbar
   - tags:
       - web
     os:

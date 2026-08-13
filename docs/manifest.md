@@ -63,7 +63,7 @@ from compact discovery unless `--all` is supplied.
 |---------|--------|------|-------------|
 | `agents` | current | `agents` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |
 | `core` | current | `core` | Core dotfiles and general developer tooling without agent, web, or mobile provisioners. |
-| `desktop` | current | `desktop` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
+| `desktop` | current | `desktop`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
 | `mobile` | current | `mobile` | Optional Dart and Flutter mobile development capabilities. |
 | `web` | current | `web` | Optional frontend and browser workbench. |
 | `workstation` | current | `core`, `desktop`, `agents` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
@@ -75,6 +75,7 @@ from compact discovery unless `--all` is supplied.
 | `adaptive-theme` | surface | current | Opt-in adaptive-theme marker and supported app-specific sources or fragments. |  |
 | `agents` | surface | current | Native Agent CLI Baseline for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |  |
 | `codegraph` | surface | current | Opt-in CodeGraph provisioner and Codex SessionStart hook source override. |  |
+| `codexbar` | surface | current | CodexBar menu-bar monitor for AI coding-provider usage limits. |  |
 | `core` | surface | current | Core Development Baseline: shell, terminal, Git, editor, and common developer tooling. |  |
 | `desktop` | surface | current | Desktop terminal/editor configuration and integrations. |  |
 | `mobile` | surface | current | Optional Dart, Flutter, and Android development skills and MCP integrations. |  |
@@ -124,6 +125,11 @@ bootstrap commands after manager installation:
 Bootstrap declarations do not make an action executable by themselves: the
 manager executable must already be on `PATH` or a concrete installer/provider
 must run first.
+
+The `codexbar` set is Darwin-only. It detects `CodexBar.app` in the supported
+macOS application locations and uses the Homebrew cask `codexbar` when the app
+is missing. The `desktop` Profile includes this independently selectable Tag;
+Linux selections remain valid and omit the CodexBar Dependency.
 
 On Linux, when `fnm` is absent, no executable package provider is available, and
 `curl`, `bash`, and `unzip` are present, Node may use the constrained official
@@ -328,6 +334,7 @@ Current dependency package coverage:
 | Dependency | Detection | macOS/Homebrew | Debian/Ubuntu | Fedora | Arch |
 |------------|-----------|----------------|---------------|--------|------|
 | `Desktop Nerd Font` | Font globs `CascadiaCodeNF*` or `CaskaydiaCoveNerdFont*` | `brew install --cask font-cascadia-code-nf` | Manual | Manual | Manual |
+| `CodexBar` | macOS `CodexBar.app` | `brew install --cask codexbar` | Not selected | Not selected | Not selected |
 | `zsh` | `zsh` | `zsh` | `zsh` | `zsh` | `zsh` |
 | `git` | `git` | `git` | `git` | `git` | `git` |
 | `starship` | `starship` | `starship` | User-local / Linuxbrew opt-in/manual | `starship` | `starship` |

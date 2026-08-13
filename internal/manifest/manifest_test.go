@@ -786,6 +786,46 @@ func TestRepositoryManifestWebDependencySetIncludesPlaywrightCLI(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestDesktopProfileIncludesDarwinCodexBarDependency(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	manifestPath := filepath.Join(root, "dots.yaml")
+
+	got, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
+	}
+
+	tag, ok := got.Tags["codexbar"]
+	if !ok {
+		t.Fatal("repository manifest missing codexbar tag")
+	}
+	if tag.Kind != "surface" || tag.Status != "current" {
+		t.Fatalf("codexbar tag = %#v, want current surface tag", tag)
+	}
+
+	selection, err := manifest.ResolveSelection(*got, []string{"desktop"}, nil)
+	if err != nil {
+		t.Fatalf("ResolveSelection(desktop) error = %v", err)
+	}
+	if want := []string{"desktop", "codexbar"}; !reflect.DeepEqual(selection.Tags, want) {
+		t.Fatalf("desktop selection tags = %#v, want %#v", selection.Tags, want)
+	}
+
+	darwin := selectedsurface.Evaluate(*got, []string{"codexbar"}, "darwin")
+	if len(darwin.Dependencies) != 1 {
+		t.Fatalf("Darwin codexbar dependencies = %#v, want one dependency", darwin.Dependencies)
+	}
+	codexbar := darwin.Dependencies[0]
+	if codexbar.Name != "CodexBar" || codexbar.DarwinApp != "CodexBar.app" || codexbar.BrewCask != "codexbar" {
+		t.Fatalf("CodexBar dependency = %#v, want CodexBar.app detection and codexbar cask", codexbar)
+	}
+
+	linux := selectedsurface.Evaluate(*got, []string{"codexbar"}, "linux")
+	if len(linux.Dependencies) != 0 {
+		t.Fatalf("Linux codexbar dependencies = %#v, want none", linux.Dependencies)
+	}
+}
+
 func TestRepositoryManifestDefinesNativeAgentCLIBaseline(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
