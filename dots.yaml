@@ -1,9 +1,140 @@
 version: 1
 tags:
-  core:
-    description: "Core Development Baseline: shell, terminal, Git, editor, and common developer tooling."
+  zsh:
+    description: Portable Zsh entrypoints and shell environment configuration.
     kind: surface
     status: current
+  zimfw:
+    description: Zim framework module configuration and managed runtime provisioning.
+    kind: surface
+    status: current
+  git:
+    description: Portable Git configuration and native Git entrypoint.
+    kind: surface
+    status: current
+  starship:
+    description: Starship prompt configuration.
+    kind: surface
+    status: current
+  tmux:
+    description: Tmux terminal multiplexer configuration.
+    kind: surface
+    status: current
+  herdr:
+    description: Herdr terminal theme configuration on macOS.
+    kind: surface
+    status: current
+  zellij:
+    description: Zellij terminal workspace configuration and default layout.
+    kind: surface
+    status: current
+  atuin:
+    description: Atuin shell history configuration and Catppuccin theme.
+    kind: surface
+    status: current
+  neovim:
+    description: Neovim configuration and seeded plugin lockfile.
+    kind: surface
+    status: current
+  tuicr:
+    description: tuicr terminal interface configuration.
+    kind: surface
+    status: current
+  bat:
+    description: bat syntax-highlighting pager configuration.
+    kind: surface
+    status: current
+  node:
+    description: Node.js LTS toolchain managed through fnm.
+    kind: surface
+    status: current
+  rust:
+    description: Rust stable toolchain managed through rustup.
+    kind: surface
+    status: current
+  go:
+    description: Go language toolchain.
+    kind: surface
+    status: current
+  uv:
+    description: uv Python project and package manager.
+    kind: surface
+    status: current
+  pnpm:
+    description: pnpm JavaScript package manager.
+    kind: surface
+    status: current
+  bun:
+    description: Bun JavaScript runtime and toolkit.
+    kind: surface
+    status: current
+  fzf:
+    description: fzf command-line fuzzy finder.
+    kind: surface
+    status: current
+  zoxide:
+    description: zoxide smarter directory navigator.
+    kind: surface
+    status: current
+  lazygit:
+    description: Lazygit terminal interface for Git.
+    kind: surface
+    status: current
+  eza:
+    description: eza modern directory listing utility.
+    kind: surface
+    status: current
+  ripgrep:
+    description: ripgrep recursive text search utility.
+    kind: surface
+    status: current
+  delta:
+    description: Delta syntax-highlighting pager for Git diffs.
+    kind: surface
+    status: current
+  fd:
+    description: fd filesystem search utility.
+    kind: surface
+    status: current
+  gh:
+    description: GitHub CLI for repository and workflow operations.
+    kind: surface
+    status: current
+  jq:
+    description: jq command-line JSON processor.
+    kind: surface
+    status: current
+  core:
+    description: Legacy Core Development Baseline alias; use the atomic replacement Tags.
+    kind: compatibility
+    status: legacy
+    replaced_by:
+      - zsh
+      - zimfw
+      - git
+      - starship
+      - tmux
+      - herdr
+      - zellij
+      - atuin
+      - neovim
+      - tuicr
+      - bat
+      - node
+      - rust
+      - go
+      - uv
+      - pnpm
+      - bun
+      - fzf
+      - zoxide
+      - lazygit
+      - eza
+      - ripgrep
+      - delta
+      - fd
+      - gh
+      - jq
   desktop:
     description: Desktop terminal/editor configuration and integrations.
     kind: surface
@@ -37,7 +168,32 @@ profiles:
     description: Core dotfiles and general developer tooling without agent, web, or mobile provisioners.
     status: current
     tags:
-      - core
+      - zsh
+      - zimfw
+      - git
+      - starship
+      - tmux
+      - herdr
+      - zellij
+      - atuin
+      - neovim
+      - tuicr
+      - bat
+      - node
+      - rust
+      - go
+      - uv
+      - pnpm
+      - bun
+      - fzf
+      - zoxide
+      - lazygit
+      - eza
+      - ripgrep
+      - delta
+      - fd
+      - gh
+      - jq
   desktop:
     description: Desktop-only configuration and integrations; compose with core when core dotfiles are desired too.
     status: current
@@ -63,7 +219,32 @@ profiles:
     description: Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in.
     status: current
     tags:
-      - core
+      - zsh
+      - zimfw
+      - git
+      - starship
+      - tmux
+      - herdr
+      - zellij
+      - atuin
+      - neovim
+      - tuicr
+      - bat
+      - node
+      - rust
+      - go
+      - uv
+      - pnpm
+      - bun
+      - fzf
+      - zoxide
+      - lazygit
+      - eza
+      - ripgrep
+      - delta
+      - fd
+      - gh
+      - jq
       - desktop
       - agents
 dependencies:
@@ -97,7 +278,7 @@ dependencies:
         brew: playwright-cli
         linux_homebrew: true
   - tags:
-      - core
+      - node
     os:
       - darwin
       - linux
@@ -109,6 +290,12 @@ dependencies:
         brew: fnm
         linux_homebrew: true
         toolchain: node-lts-fnm
+  - tags:
+      - rust
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: Rust stable (rustup)
         commands:
           - rustup
@@ -117,10 +304,22 @@ dependencies:
         brew: rustup
         linux_homebrew: true
         toolchain: rust-stable-rustup
+  - tags:
+      - go
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: go
         command: go
         brew: go
         linux_homebrew: true
+  - tags:
+      - uv
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: uv
         command: uv
         brew: uv
@@ -131,6 +330,12 @@ dependencies:
           checksums:
             linux_amd64: 1db18b5e76fa645a7f3865773139bdec8e2d46adbdbb35e7410b34fa8015ccd2
             linux_arm64: e0e9d73f74e06a7dcd53910d5962146ab48f0af9c92cc8df33a37baa0121014d
+  - tags:
+      - pnpm
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: pnpm
         command: pnpm
         brew: pnpm
@@ -141,6 +346,12 @@ dependencies:
           checksums:
             linux_amd64: 69af6c012a5f12b4460f8e2280368cbe10551ab328516fc5b665f292b5991017
             linux_arm64: ced48cd1bab413bdde54fee686eaa1c98bb50ee47a518c91d1decb5f2578737b
+  - tags:
+      - bun
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: bun
         command: bun
         brew: bun
@@ -151,58 +362,118 @@ dependencies:
           checksums:
             linux_amd64: 951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f
             linux_arm64: a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b
+  - tags:
+      - fzf
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: fzf
         command: fzf
         brew: fzf
         apt: fzf
         dnf: fzf
         pacman: fzf
+  - tags:
+      - zoxide
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: zoxide
         command: zoxide
         brew: zoxide
         apt: zoxide
         dnf: zoxide
         pacman: zoxide
+  - tags:
+      - lazygit
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: lazygit
         command: lazygit
         brew: lazygit
         linux_homebrew: true
         dnf: lazygit
         pacman: lazygit
+  - tags:
+      - eza
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: eza
         command: eza
         brew: eza
         apt: eza
         dnf: eza
         pacman: eza
+  - tags:
+      - ripgrep
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: ripgrep
         command: rg
         brew: ripgrep
         apt: ripgrep
         dnf: ripgrep
         pacman: ripgrep
+  - tags:
+      - delta
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: delta
         command: delta
         brew: git-delta
         linux_homebrew: true
         dnf: git-delta
         pacman: git-delta
+  - tags:
+      - node
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: unzip
         command: unzip
         brew: unzip
         apt: unzip
         dnf: unzip
         pacman: unzip
+  - tags:
+      - fd
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: fd
         command: fd
         brew: fd
         linux_homebrew: true
         dnf: fd-find
         pacman: fd
+  - tags:
+      - gh
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: GitHub CLI
         command: gh
         brew: gh
         linux_homebrew: true
+  - tags:
+      - jq
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: jq
         command: jq
         brew: jq
@@ -247,7 +518,7 @@ entries:
     strategy: copy
     ownership: marked-block
     tags:
-      - core
+      - zsh
     os:
       - darwin
       - linux
@@ -261,7 +532,7 @@ entries:
     target: ~/.config/dots/zsh/zshrc
     strategy: symlink
     tags:
-      - core
+      - zsh
     os:
       - darwin
       - linux
@@ -269,7 +540,7 @@ entries:
     target: ~/.zimrc
     strategy: symlink
     tags:
-      - core
+      - zimfw
     os:
       - darwin
       - linux
@@ -283,7 +554,7 @@ entries:
     target: ~/.zshenv
     strategy: symlink
     tags:
-      - core
+      - zsh
     os:
       - darwin
       - linux
@@ -298,7 +569,7 @@ entries:
     strategy: copy
     ownership: marked-block
     tags:
-      - core
+      - git
     os:
       - darwin
       - linux
@@ -312,7 +583,7 @@ entries:
     target: ~/.config/dots/git/gitconfig
     strategy: symlink
     tags:
-      - core
+      - git
     os:
       - darwin
       - linux
@@ -321,7 +592,7 @@ entries:
     strategy: copy
     ownership: toml-subset
     tags:
-      - core
+      - tuicr
     os:
       - darwin
       - linux
@@ -334,7 +605,8 @@ entries:
     target: ~/.config/dots/theme.sh
     strategy: symlink
     tags:
-      - core
+      - tmux
+      - neovim
     os:
       - darwin
       - linux
@@ -350,7 +622,7 @@ entries:
     target: ~/.config/starship.toml
     strategy: symlink
     tags:
-      - core
+      - starship
     os:
       - darwin
       - linux
@@ -370,7 +642,7 @@ entries:
     target: ~/.tmux.conf
     strategy: symlink
     tags:
-      - core
+      - tmux
     os:
       - darwin
       - linux
@@ -387,7 +659,7 @@ entries:
     strategy: copy
     ownership: toml-subset
     tags:
-      - core
+      - herdr
     os:
       - darwin
     dependencies:
@@ -400,7 +672,7 @@ entries:
     target: ~/.config/zellij/config.kdl
     strategy: copy
     tags:
-      - core
+      - zellij
     os:
       - darwin
       - linux
@@ -420,7 +692,7 @@ entries:
     target: ~/.config/zellij/layouts/default.kdl
     strategy: symlink
     tags:
-      - core
+      - zellij
     os:
       - darwin
       - linux
@@ -502,7 +774,7 @@ entries:
     strategy: copy
     ownership: toml-subset
     tags:
-      - core
+      - atuin
     os:
       - darwin
       - linux
@@ -521,7 +793,7 @@ entries:
     target: ~/.config/atuin/themes/catppuccin-mocha.toml
     strategy: symlink
     tags:
-      - core
+      - atuin
     os:
       - darwin
       - linux
@@ -540,7 +812,7 @@ entries:
     target: ~/.config/bat/config
     strategy: copy
     tags:
-      - core
+      - bat
     os:
       - darwin
       - linux
@@ -563,7 +835,7 @@ entries:
     strategy: copy
     ownership: seeded
     tags:
-      - core
+      - neovim
     os:
       - darwin
       - linux
@@ -571,7 +843,7 @@ entries:
     target: ~/.config/nvim/init.lua
     strategy: copy
     tags:
-      - core
+      - neovim
     os:
       - darwin
       - linux
@@ -592,7 +864,7 @@ entries:
     target: ~/.config/dots/nvim
     strategy: symlink
     tags:
-      - core
+      - neovim
     os:
       - darwin
       - linux
@@ -739,7 +1011,7 @@ entries:
 provisioners:
   - tool: zimfw
     tags:
-      - core
+      - zimfw
     spec:
       yes: true
     dependencies:

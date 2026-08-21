@@ -121,8 +121,18 @@ func TestCatalogDetailCompletionUsesManifestNames(t *testing.T) {
 		t.Fatalf("set profile os: %v", err)
 	}
 	profiles, directive := profileCmd.ValidArgsFunction(profileCmd, nil, "")
-	if !reflect.DeepEqual(profiles, []string{"core", "desktop", "old"}) {
+	if !reflect.DeepEqual(profiles, []string{"core", "desktop"}) {
 		t.Fatalf("profile completion = %#v", profiles)
+	}
+	if err := profileCmd.InheritedFlags().Set("all", "true"); err != nil {
+		t.Fatalf("set profile all: %v", err)
+	}
+	profiles, directive = profileCmd.ValidArgsFunction(profileCmd, nil, "")
+	if !reflect.DeepEqual(profiles, []string{"core", "desktop", "old"}) {
+		t.Fatalf("profile completion with --all = %#v", profiles)
+	}
+	if err := profileCmd.InheritedFlags().Set("all", "false"); err != nil {
+		t.Fatalf("reset profile all: %v", err)
 	}
 
 	compareCmd, _, err := root.Find([]string{"catalog", "compare"})
@@ -133,7 +143,7 @@ func TestCatalogDetailCompletionUsesManifestNames(t *testing.T) {
 		t.Fatalf("set compare file: %v", err)
 	}
 	profiles, directive = compareCmd.ValidArgsFunction(compareCmd, []string{"core"}, "")
-	if !reflect.DeepEqual(profiles, []string{"desktop", "old"}) {
+	if !reflect.DeepEqual(profiles, []string{"desktop"}) {
 		t.Fatalf("comparison second-profile completion = %#v", profiles)
 	}
 	if directive != cobra.ShellCompDirectiveNoFileComp {
@@ -349,6 +359,47 @@ func TestCatalogJSONAndErrorsUseTheOutputContract(t *testing.T) {
 	if result.Command != "catalog why" || result.Status != statusError || result.Error != `profile "desktop" does not select an item matching "missing" for OS linux` {
 		t.Fatalf("unknown why-query envelope = %#v", result)
 	}
+}
+
+func TestCatalogLegacyDetailRemainsAddressableWithoutDiscoveryLeak(t *testing.T) {
+	manifestPath := writeCatalogManifest(t)
+	run := func(t *testing.T, extraArgs ...string) catalog.Report {
+		t.Helper()
+		args := []string{"catalog", "tag", "old", "--file", manifestPath, "--os", "all", "--output", "json"}
+		args = append(args, extraArgs...)
+		var stdout, stderr bytes.Buffer
+		if code := Run(args, &stdout, &stderr); code != ExitOK {
+			t.Fatalf("Run() exit code = %d, stderr = %s", code, stderr.String())
+		}
+		var payload struct {
+			Data catalog.Report `json:"data"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+			t.Fatalf("decode JSON: %v\n%s", err, stdout.String())
+		}
+		return payload.Data
+	}
+
+	current := run(t)
+	if current.Tag == nil || current.Tag.Name != "old" {
+		t.Fatalf("legacy detail = %#v", current.Tag)
+	}
+	if current.Hidden != (catalog.Hidden{Profiles: 1, Tags: 1}) || !reflect.DeepEqual(tagSummaryNames(current.Tags), []string{"core", "theme"}) {
+		t.Fatalf("current-only report = %#v", current)
+	}
+
+	all := run(t, "--all")
+	if all.Hidden != (catalog.Hidden{}) || !reflect.DeepEqual(tagSummaryNames(all.Tags), []string{"core", "old", "theme"}) {
+		t.Fatalf("--all report = %#v", all)
+	}
+}
+
+func tagSummaryNames(tags []catalog.TagSummary) []string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return names
 }
 
 func TestCatalogDetailsRequireExactlyOneName(t *testing.T) {

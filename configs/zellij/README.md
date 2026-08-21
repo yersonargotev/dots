@@ -2,7 +2,7 @@
 
 `configs/zellij/config.kdl` is the default repository-managed Zellij configuration
 materialized as the regular file `~/.config/zellij/config.kdl` (`copy` strategy
-with Whole-Target Ownership, `core` tag, `darwin`+`linux`). When the manifest
+with Whole-Target Ownership, `zellij` tag, `darwin`+`linux`). When the manifest
 selection includes `--tag adaptive-theme`, that same Managed Entry uses the
 `configs/zellij/config-adaptive.kdl` source override for the same target instead
 of adding a duplicate Install Plan action.

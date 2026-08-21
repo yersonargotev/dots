@@ -25,7 +25,7 @@ if [[ -e "${ZIM_HOME}/init.zsh" ]]; then
   source "${ZIM_HOME}/init.zsh"
 else
   print -u2 "dots: Zim not found at ${ZIM_HOME}; continuing without modules."
-  print -u2 "dots: rerun dots install for the core profile, then restart your shell."
+  print -u2 "dots: include the zimfw Tag in your complete install intent, then restart your shell."
 fi
 
 # Post-init modular config: PATH, tool integrations, aliases, AI hooks.

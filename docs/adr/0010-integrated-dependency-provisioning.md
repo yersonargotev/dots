@@ -11,3 +11,9 @@ The `core` Tag now represents the Core Development Baseline: a general developme
 **Considered Options**: Keeping `dots deps install` separate was rejected because it preserves the broken fresh-machine experience where configs install but required tools are missing. Using only the distro package manager on Linux was rejected because Ubuntu/Debian package availability for tools such as Starship, Zellij, Atuin, and eza varies by suite and can make the plan lie about installability. Installing Homebrew automatically was rejected because bootstrapping a package manager mutates PATH and system state beyond the boundary `dots` should own.
 
 **Consequences**: The dependency model must learn provider fallback, provider presence checks, and required/optional semantics. Install plans should surface dependency actions before file actions and provisioners. Tests must verify that install aborts before filesystem changes when required Dependencies cannot be satisfied, and that `--skip-deps` preserves the old config-only behavior intentionally.
+
+**Superseded in part by ADR 0013's atomic capability amendment**: the Core
+Development Baseline is now the ordered `core` Profile over independently
+selectable capability Tags. The legacy `core` Tag remains only as a temporary
+compatibility alias and owns no Dependency Set directly. The Dependency
+provisioning and provider decisions in this ADR remain unchanged.

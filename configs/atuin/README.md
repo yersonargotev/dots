@@ -2,7 +2,7 @@
 
 `configs/atuin/config.toml` is the repository-managed Atuin configuration
 materialized as a regular `~/.config/atuin/config.toml` file (`copy` strategy,
-TOML Subset Ownership, `core` tag, `darwin`+`linux`). The portable Catppuccin
+TOML Subset Ownership, `atuin` tag, `darwin`+`linux`). The portable Catppuccin
 Mocha theme it references remains a dots-owned symlink at
 `~/.config/atuin/themes/catppuccin-mocha.toml`.
 
@@ -14,11 +14,12 @@ stay outside version control.
 
 ## Prerequisites
 
-- **`atuin`** — declared as an advisory dependency for the core profile.
-  `dots install` does not install packages. `dots deps plan` and the explicit
-  `dots deps install` workflow can report/use Homebrew guidance where available;
-  Linux package mappings are intentionally omitted until package names are
-  verified for each distro.
+- **`atuin`** — a required Dependency of the `atuin` Tag. `dots install`
+  checks it before Managed Configuration and may provision it through Homebrew
+  or the reviewed User-Local Provider; an unresolved failure stops the install.
+  Use `dots deps plan` to preview that intent, or pass `--skip-deps` only when
+  deliberately managing the Dependency outside dots. Linux distro package
+  mappings remain omitted until their names are verified.
 
 The shell integration is **not** part of this slice. It is a guarded hook owned
 by Zsh in `configs/zsh/rc.d/post/40-tools.zsh`:
@@ -106,7 +107,8 @@ GOPATH="$sandbox_gopath" \
 GOMODCACHE="$sandbox_modcache" \
 XDG_CACHE_HOME="$sandbox_cache" \
 go run ./cmd/dots install \
-  --profile default \
+  --tag atuin \
+  --skip-deps \
   --yes \
   --home "$sandbox_home" \
   --source-root "$PWD" \
@@ -118,7 +120,7 @@ GOPATH="$sandbox_gopath" \
 GOMODCACHE="$sandbox_modcache" \
 XDG_CACHE_HOME="$sandbox_cache" \
 go run ./cmd/dots status \
-  --profile default \
+  --tag atuin \
   --home "$sandbox_home" \
   --source-root "$PWD" \
   --state-root "$sandbox_state"

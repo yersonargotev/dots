@@ -1,16 +1,16 @@
 # Adaptive theme audit
 
-Issue #275 introduces an explicit `adaptive-theme` tag. The core profile/tag
-sets continue to prefer Catppuccin Mocha or app dark defaults. Adaptive behavior
+Issue #275 introduces an explicit `adaptive-theme` tag. The Core Profile and
+its atomic capabilities continue to prefer Catppuccin Mocha or app dark defaults. Adaptive behavior
 must either be behind the tag or intentionally documented as out of scope for the
 slice.
 
 ## Implemented behind `adaptive-theme`
 
-- **Shared marker/helper**: `configs/dots/theme.sh` is installed by `core` and
-  reads `~/.config/dots/adaptive-theme`, which is installed only by the
-  `adaptive-theme` tag. The helper returns Latte only for opt-in macOS light
-  appearance; everything else returns Mocha.
+- **Shared marker/helper**: `configs/dots/theme.sh` is selected by its `tmux`
+  and `neovim` consumers and reads `~/.config/dots/adaptive-theme`, which is
+  installed only by the `adaptive-theme` tag. The helper returns Latte only for
+  opt-in macOS light appearance; everything else returns Mocha.
 - **tmux**: `configs/tmux/tmux.conf` sources the helper before setting
   `@catppuccin_flavor`. Missing helper/marker, macOS dark, Linux, unknown values,
   or missing `defaults` fall back to Mocha.

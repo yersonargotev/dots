@@ -153,6 +153,69 @@ entries:
 	}
 }
 
+func TestRepositoryAtomicCoreTagsInstallIndependentlyInTemporaryHome(t *testing.T) {
+	repositoryRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(repositoryRoot, "dots.yaml")
+
+	for _, tag := range []string{"zsh", "node", "jq"} {
+		t.Run(tag, func(t *testing.T) {
+			home := t.TempDir()
+			stateRoot := t.TempDir()
+			fakeRealHome := t.TempDir()
+			t.Setenv("HOME", fakeRealHome)
+			stubDir := t.TempDir()
+			writeManifestDependencyStubs(t, stubDir)
+			t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+			var out, errOut bytes.Buffer
+			code := cli.Run([]string{
+				"install", "--yes", "--output", "json", "--tag", tag,
+				"--file", manifestPath, "--home", home, "--source-root", repositoryRoot, "--state-root", stateRoot,
+			}, &out, &errOut)
+			if code != cli.ExitOK {
+				t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitOK, out.String(), errOut.String())
+			}
+
+			meta, err := state.Load(state.Path(stateRoot))
+			if err != nil {
+				t.Fatalf("load Installation Metadata: %v", err)
+			}
+			if meta.InstalledSelection == nil {
+				t.Fatal("Installed Selection = nil")
+			}
+			if got := meta.InstalledSelection.Profiles; len(got) != 0 {
+				t.Fatalf("Profiles = %#v, want none", got)
+			}
+			if got := meta.InstalledSelection.ExtraTags; !reflect.DeepEqual(got, []string{tag}) {
+				t.Fatalf("explicit extra Tags = %#v, want %q", got, tag)
+			}
+			if got := meta.InstalledSelection.ResolvedTags; !reflect.DeepEqual(got, []string{tag}) {
+				t.Fatalf("resolved Tags = %#v, want %q", got, tag)
+			}
+
+			if tag == "zsh" {
+				for _, target := range []string{".zshrc", ".zshenv", filepath.Join(".config", "dots", "zsh", "zshrc")} {
+					if _, err := os.Lstat(filepath.Join(home, target)); err != nil {
+						t.Errorf("zsh Tag did not install %s: %v", target, err)
+					}
+				}
+				if _, err := os.Lstat(filepath.Join(home, ".zimrc")); !os.IsNotExist(err) {
+					t.Errorf("zsh Tag installed the independent Zim configuration: %v", err)
+				}
+			} else if len(meta.Entries) != 0 {
+				t.Errorf("Dependency-only Tag %q recorded Managed Entries: %#v", tag, meta.Entries)
+			}
+
+			if entries, err := os.ReadDir(fakeRealHome); err != nil || len(entries) != 0 {
+				t.Fatalf("install touched inherited HOME %q: entries=%v err=%v", fakeRealHome, entries, err)
+			}
+		})
+	}
+}
+
 func TestInstallLegacyTagNormalizesBeforeApplyAndReportsJSONEvidence(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()

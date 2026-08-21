@@ -1,7 +1,7 @@
 # Tmux configuration
 
 `configs/tmux/tmux.conf` is the repository-managed Tmux configuration installed
-as `~/.tmux.conf` (symlink strategy, `core` tag, `darwin`+`linux`). It carries
+as `~/.tmux.conf` (symlink strategy, `tmux` tag, `darwin`+`linux`). It carries
 the portable, auditable setup so a fresh machine gets a usable Tmux without the
 maintainer's machine state.
 
