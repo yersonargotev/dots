@@ -64,7 +64,17 @@ func resolveReadOnlySelection(m manifest.Manifest, meta state.Metadata, profiles
 	// existing resolution path. In particular, malformed explicit values must
 	// still be reported by selection.ResolveReadOnly.
 	if len(profiles) > 0 || len(extraTags) > 0 || meta.InstalledSelection != nil {
-		return selection.ResolveReadOnly(m, profiles, extraTags, meta.InstalledSelection)
+		effective, err := selection.ResolveReadOnly(m, profiles, extraTags, meta.InstalledSelection)
+		if err != nil {
+			return selection.Effective{}, err
+		}
+		if effective.Report.Source == selection.SourceRecorded && len(effective.Report.TagMigrations) > 0 {
+			return selection.Effective{}, &legacyTagMigrationRequiredError{
+				migrations:         effective.Report.TagMigrations,
+				recommendedCommand: recommendedSelectionCommand("dots install", effective),
+			}
+		}
+		return effective, nil
 	}
 	if meta.Version != 1 && meta.Version != 2 {
 		return selection.ResolveReadOnly(m, profiles, extraTags, nil)

@@ -81,6 +81,137 @@ entries:
 	}
 }
 
+func TestInstallTagOnlySelectionAppliesAndRecordsWithoutProfile(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+tags:
+  zsh:
+    description: Zsh configuration
+    kind: surface
+    status: current
+profiles:
+  workstation:
+    tags: [zsh]
+entries:
+  - source: configs/zsh/zshrc
+    target: ~/.zshrc
+    strategy: symlink
+    tags: [zsh]
+`)
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"install", "--yes", "--skip-deps", "--output", "json", "--tag", "zsh",
+		"--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != cli.ExitOK {
+		t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitOK, out.String(), errOut.String())
+	}
+	if _, err := os.Readlink(filepath.Join(home, ".zshrc")); err != nil {
+		t.Fatalf("Tag-only install did not apply Managed Entry: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil {
+		t.Fatal("InstalledSelection = nil")
+	}
+	if len(meta.InstalledSelection.Profiles) != 0 {
+		t.Fatalf("Profiles = %#v, want none", meta.InstalledSelection.Profiles)
+	}
+	if got, want := meta.InstalledSelection.ExtraTags, []string{"zsh"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExtraTags = %#v, want %#v", got, want)
+	}
+	if got, want := meta.InstalledSelection.ResolvedTags, []string{"zsh"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResolvedTags = %#v, want %#v", got, want)
+	}
+
+	dryHome := t.TempDir()
+	dryStateRoot := filepath.Join(t.TempDir(), "state")
+	cmd := cli.NewRootCommand()
+	out.Reset()
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{
+		"install", "--dry-run", "--skip-deps", "--tag", "zsh",
+		"--file", manifestPath, "--home", dryHome, "--source-root", sourceRoot, "--state-root", dryStateRoot,
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("human Tag-only dry run error = %v\noutput:\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "Plan for tags only (tags: zsh)") {
+		t.Fatalf("human Tag-only output missing selection:\n%s", out.String())
+	}
+	if _, err := os.Stat(dryStateRoot); !os.IsNotExist(err) {
+		t.Fatalf("dry run created state root: %v", err)
+	}
+}
+
+func TestInstallLegacyTagNormalizesBeforeApplyAndReportsJSONEvidence(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	writeCLISource(t, sourceRoot, "configs/zsh", "zsh\n")
+	writeCLISource(t, sourceRoot, "configs/starship", "starship\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+tags:
+  zsh: {description: Zsh, kind: surface, status: current}
+  starship: {description: Starship, kind: surface, status: current}
+  core:
+    description: Legacy core
+    kind: compatibility
+    status: legacy
+    replaced_by: [zsh, starship]
+profiles:
+  shell:
+    tags: [zsh, starship]
+entries:
+  - {source: configs/zsh, target: ~/.zshrc, strategy: symlink, tags: [zsh]}
+  - {source: configs/starship, target: ~/.config/starship.toml, strategy: symlink, tags: [starship]}
+`)
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"install", "--yes", "--skip-deps", "--output", "json",
+		"--tag", "core", "--tag", "zsh", "--tag", "core",
+		"--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != cli.ExitOK {
+		t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitOK, out.String(), errOut.String())
+	}
+	for _, target := range []string{".zshrc", filepath.Join(".config", "starship.toml")} {
+		if _, err := os.Readlink(filepath.Join(home, target)); err != nil {
+			t.Fatalf("normalized legacy install did not apply %s: %v", target, err)
+		}
+	}
+	for _, want := range []string{`"tag_migrations"`, `"legacy_tag": "core"`, `"replacement_tags": [`, `"zsh"`, `"starship"`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("JSON output missing %q:\n%s", want, out.String())
+		}
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil {
+		t.Fatal("InstalledSelection = nil")
+	}
+	if got, want := meta.InstalledSelection.ExtraTags, []string{"zsh", "starship"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExtraTags = %#v, want %#v", got, want)
+	}
+	if got, want := meta.InstalledSelection.ResolvedTags, []string{"zsh", "starship"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResolvedTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestInstallFailurePreservesPreviousInstalledSelection(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()

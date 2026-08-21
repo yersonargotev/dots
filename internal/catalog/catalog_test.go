@@ -62,6 +62,26 @@ func TestTagDetailIsPortableSafeAndDescribesExclusions(t *testing.T) {
 	}
 }
 
+func TestLegacyTagAndProfileDetailsUseNormalizedCurrentTags(t *testing.T) {
+	m := fixtureManifest()
+
+	tagReport, err := Tag(m, "old", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"core", "agents"}; !reflect.DeepEqual(tagReport.Tag.ReplacedBy, want) || !reflect.DeepEqual(tagReport.Tag.ResolvedTags, want) {
+		t.Fatalf("legacy Tag detail = %#v, want replacements and resolved Tags %#v", tagReport.Tag, want)
+	}
+
+	profileReport, err := Profile(m, "old", Options{OS: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"core", "agents"}; !reflect.DeepEqual(profileReport.Profile.ResolvedTags, want) {
+		t.Fatalf("legacy Profile resolved Tags = %#v, want %#v", profileReport.Profile.ResolvedTags, want)
+	}
+}
+
 func TestDetailUsesSelectedSurfaceForResolvedEntriesAndActiveOverrides(t *testing.T) {
 	m := manifest.Manifest{
 		Profiles: map[string]manifest.Profile{
@@ -374,7 +394,7 @@ func fixtureManifest() manifest.Manifest {
 			"agents":  {Description: "Agents", Kind: "surface", Status: "current"},
 			"theme":   {Description: "Theme", Kind: "surface", Status: "current"},
 			"cleanup": {Description: "Cleanup", Kind: "cleanup", Status: "current"},
-			"old":     {Description: "Old", Kind: "compatibility", Status: "legacy", ReplacedBy: "core"},
+			"old":     {Description: "Old", Kind: "compatibility", Status: "legacy", ReplacedBy: manifest.ReplacementTags{"core", "agents"}},
 		},
 		Profiles: map[string]manifest.Profile{
 			"core":    {Description: "Core profile", Tags: []string{"core", "agents"}},

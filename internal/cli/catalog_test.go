@@ -49,7 +49,7 @@ func TestCatalogCommandsRenderManifestOnlyViews(t *testing.T) {
 		{
 			name: "legacy tag detail remains directly addressable",
 			args: []string{"catalog", "tag", "old", "--file", manifestPath, "--os", "all"},
-			want: []string{"Tag \"old\"", "Status: legacy", "Replaced by: core"},
+			want: []string{"Tag \"old\"", "Status: legacy", "Replaced by: core, theme", "Resolved tags: core, theme"},
 		},
 		{
 			name:  "tag detail renders surfaces and exclusions",
@@ -433,7 +433,7 @@ tags:
     description: Compatibility profile
     kind: surface
     status: legacy
-    replaced_by: core
+    replaced_by: [core, theme]
 profiles:
   core:
     description: Core profile

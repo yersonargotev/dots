@@ -61,8 +61,8 @@ func renderCatalogTagsTo(w io.Writer, tags []catalog.TagSummary) {
 		if tag.Description != "" {
 			fmt.Fprintf(w, ": %s", tag.Description)
 		}
-		if tag.ReplacedBy != "" {
-			fmt.Fprintf(w, " [replaced by: %s]", tag.ReplacedBy)
+		if len(tag.ReplacedBy) > 0 {
+			fmt.Fprintf(w, " [replaced by: %s]", catalogList(tag.ReplacedBy))
 		}
 		fmt.Fprintln(w)
 	}
@@ -258,8 +258,8 @@ func renderCatalogDetail(w io.Writer, label string, report catalog.Report, detai
 	if detail.Kind != "" {
 		fmt.Fprintf(w, "Kind: %s\n", detail.Kind)
 	}
-	if detail.ReplacedBy != "" {
-		fmt.Fprintf(w, "Replaced by: %s\n", detail.ReplacedBy)
+	if len(detail.ReplacedBy) > 0 {
+		fmt.Fprintf(w, "Replaced by: %s\n", catalogList(detail.ReplacedBy))
 	}
 	fmt.Fprintf(w, "Resolved tags: %s\n", catalogList(detail.ResolvedTags))
 	renderCatalogDependencySets(w, detail.DependencySets)

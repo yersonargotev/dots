@@ -28,12 +28,13 @@ var ErrSelectionRequired = errors.New("selection required: provide --profile or 
 // Report is the stable, portable description of the selection used by a
 // command.
 type Report struct {
-	Source        Source   `json:"source"`
-	Profiles      []string `json:"profiles"`
-	ExtraTags     []string `json:"extra_tags"`
-	EffectiveTags []string `json:"effective_tags"`
-	Delta         *Delta   `json:"delta,omitempty"`
-	Change        *Change  `json:"change,omitempty"`
+	Source        Source                    `json:"source"`
+	Profiles      []string                  `json:"profiles"`
+	ExtraTags     []string                  `json:"extra_tags"`
+	EffectiveTags []string                  `json:"effective_tags"`
+	TagMigrations []manifest.TagReplacement `json:"tag_migrations,omitempty"`
+	Delta         *Delta                    `json:"delta,omitempty"`
+	Change        *Change                   `json:"change,omitempty"`
 }
 
 // Snapshot is the portable selection state on one side of an evolution.
@@ -96,6 +97,11 @@ type Effective struct {
 	ExtraTags []string
 	Selection manifest.Selection
 	Report    Report
+
+	// intentExtraTags preserves the authoritative pre-normalization input for
+	// repository evolution and binary continuation. Persisted ExtraTags remain
+	// normalized current Tags.
+	intentExtraTags []string
 }
 
 // Intent is the authoritative Profile and explicit extra Tag input together
@@ -141,33 +147,44 @@ func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
 	if err != nil {
 		return Effective{}, fmt.Errorf("%s selection: %w", intent.Source, err)
 	}
+	normalizedExtraTags, _, err := manifest.NormalizeTags(m, intent.ExtraTags)
+	if err != nil {
+		return Effective{}, fmt.Errorf("%s selection: %w", intent.Source, err)
+	}
 
 	orderedProfiles := cloneStrings(resolved.Profiles)
-	orderedExtraTags := orderedUnique(intent.ExtraTags)
+	orderedExtraTags := orderedUnique(normalizedExtraTags)
 	effectiveTags := cloneStrings(resolved.Tags)
 	return Effective{
-		Profiles:  cloneStrings(orderedProfiles),
-		ExtraTags: cloneStrings(orderedExtraTags),
+		Profiles:        cloneStrings(orderedProfiles),
+		ExtraTags:       cloneStrings(orderedExtraTags),
+		intentExtraTags: cloneStrings(intent.ExtraTags),
 		Selection: manifest.Selection{
-			Profile:  resolved.Profile,
-			Profiles: cloneStrings(orderedProfiles),
-			Tags:     cloneStrings(effectiveTags),
+			Profile:      resolved.Profile,
+			Profiles:     cloneStrings(orderedProfiles),
+			Tags:         cloneStrings(effectiveTags),
+			Replacements: cloneTagReplacements(resolved.Replacements),
 		},
 		Report: Report{
 			Source:        intent.Source,
 			Profiles:      orderedProfiles,
 			ExtraTags:     orderedExtraTags,
 			EffectiveTags: effectiveTags,
+			TagMigrations: cloneTagReplacements(resolved.Replacements),
 		},
 	}, nil
 }
 
 // Intent returns a detached copy of the authoritative inputs used to build e.
 func (e Effective) Intent() Intent {
+	extraTags := e.intentExtraTags
+	if extraTags == nil {
+		extraTags = e.ExtraTags
+	}
 	return Intent{
 		Source:    e.Report.Source,
 		Profiles:  cloneStrings(e.Profiles),
-		ExtraTags: cloneStrings(e.ExtraTags),
+		ExtraTags: cloneStrings(extraTags),
 	}
 }
 
@@ -188,6 +205,7 @@ func CompareEvolution(previousManifest, currentManifest manifest.Manifest, previ
 		if err != nil {
 			return Effective{}, err
 		}
+		current.Report.TagMigrations = mergeTagReplacements(previous.Report.TagMigrations, current.Report.TagMigrations)
 		delta.Current = snapshot(current)
 		previousSurface := selectedSurface(previousManifest, previous.Selection, osName)
 		currentSurface := selectedSurface(currentManifest, current.Selection, osName)
@@ -459,7 +477,11 @@ func Resolve(m manifest.Manifest, profiles, extraTags []string) (state.Installed
 	if err != nil {
 		return state.InstalledSelection{}, err
 	}
-	return installedSelection(resolved.Profiles, extraTags, resolved.Tags), nil
+	normalizedExtraTags, _, err := manifest.NormalizeTags(m, extraTags)
+	if err != nil {
+		return state.InstalledSelection{}, err
+	}
+	return installedSelection(resolved.Profiles, normalizedExtraTags, resolved.Tags), nil
 }
 
 // InstalledSelection converts effective command selection into the
@@ -506,4 +528,37 @@ func orderedUnique(values []string) []string {
 
 func cloneStrings(values []string) []string {
 	return append(make([]string, 0, len(values)), values...)
+}
+
+func cloneTagReplacements(values []manifest.TagReplacement) []manifest.TagReplacement {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]manifest.TagReplacement, len(values))
+	for i, replacement := range values {
+		result[i] = manifest.TagReplacement{
+			LegacyTag:       replacement.LegacyTag,
+			ReplacementTags: cloneStrings(replacement.ReplacementTags),
+		}
+	}
+	return result
+}
+
+func mergeTagReplacements(groups ...[]manifest.TagReplacement) []manifest.TagReplacement {
+	var result []manifest.TagReplacement
+	seen := make(map[string]bool)
+	for _, values := range groups {
+		for _, replacement := range values {
+			key := replacement.LegacyTag + "\x00" + strings.Join(replacement.ReplacementTags, "\x00")
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			result = append(result, manifest.TagReplacement{
+				LegacyTag:       replacement.LegacyTag,
+				ReplacementTags: cloneStrings(replacement.ReplacementTags),
+			})
+		}
+	}
+	return result
 }

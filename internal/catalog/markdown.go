@@ -27,8 +27,8 @@ func Markdown(m manifest.Manifest) (string, error) {
 	out.WriteString("|-----|------|--------|-------------|-------------|\n")
 	for _, tag := range report.Tags {
 		replacement := ""
-		if tag.ReplacedBy != "" {
-			replacement = "`" + tag.ReplacedBy + "`"
+		if len(tag.ReplacedBy) > 0 {
+			replacement = codeList(tag.ReplacedBy)
 		}
 		fmt.Fprintf(&out, "| `%s` | %s | %s | %s | %s |\n", tag.Name, tag.Kind, tag.Status, markdownCell(tag.Description), replacement)
 	}

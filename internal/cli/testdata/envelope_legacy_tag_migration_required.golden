@@ -1,0 +1,21 @@
+{
+  "schema_version": "8",
+  "command": "update",
+  "status": "error",
+  "data": {
+    "code": "legacy-tag-migration-required",
+    "tag_migrations": [
+      {
+        "legacy_tag": "core",
+        "replacement_tags": [
+          "zsh",
+          "git"
+        ]
+      }
+    ],
+    "remediation": {
+      "recommended_command": "dots update --tag zsh --tag git"
+    }
+  },
+  "error": "legacy-tag-migration-required: recorded legacy Tag intent requires confirmation; use remediation command dots update --tag zsh --tag git"
+}

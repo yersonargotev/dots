@@ -1,5 +1,5 @@
 {
-  "schema_version": "7",
+  "schema_version": "8",
   "command": "install",
   "status": "ok",
   "data": {
@@ -12,6 +12,14 @@
       "extra_tags": [],
       "effective_tags": [
         "default"
+      ],
+      "tag_migrations": [
+        {
+          "legacy_tag": "legacy-default",
+          "replacement_tags": [
+            "default"
+          ]
+        }
       ],
       "change": {
         "delta": {
@@ -148,6 +156,14 @@
         "extra_tags": [],
         "effective_tags": [
           "default"
+        ],
+        "tag_migrations": [
+          {
+            "legacy_tag": "legacy-default",
+            "replacement_tags": [
+              "default"
+            ]
+          }
         ],
         "change": {
           "delta": {

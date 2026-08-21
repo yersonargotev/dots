@@ -91,12 +91,12 @@ type ProfileSummary struct {
 
 // TagSummary is a compact Tag summary.
 type TagSummary struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Kind        string `json:"kind"`
-	Status      string `json:"status"`
-	ReplacedBy  string `json:"replaced_by,omitempty"`
-	Origin      string `json:"origin"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Kind        string   `json:"kind"`
+	Status      string   `json:"status"`
+	ReplacedBy  []string `json:"replaced_by,omitempty"`
+	Origin      string   `json:"origin"`
 }
 
 // Detail explains exactly one Profile or Tag selection without composing it
@@ -106,7 +106,7 @@ type Detail struct {
 	Description         string            `json:"description"`
 	Status              string            `json:"status"`
 	Kind                string            `json:"kind,omitempty"`
-	ReplacedBy          string            `json:"replaced_by,omitempty"`
+	ReplacedBy          []string          `json:"replaced_by,omitempty"`
 	ResolvedTags        []string          `json:"resolved_tags"`
 	Dependencies        []Dependency      `json:"dependencies"`
 	DependencySets      []DependencySet   `json:"dependency_sets"`
@@ -286,7 +286,11 @@ func Profile(m manifest.Manifest, name string, opts Options) (Report, error) {
 		return Report{}, fmt.Errorf("profile %q not found", name)
 	}
 	summary := summaryProfile(name, p)
-	base.Profile = buildDetail(m, name, summary.Description, summary.Status, "", "", unique(p.Tags), base.OS)
+	resolvedTags, _, err := manifest.NormalizeTags(m, p.Tags)
+	if err != nil {
+		return Report{}, fmt.Errorf("normalize catalog profile %q: %w", name, err)
+	}
+	base.Profile = buildDetail(m, name, summary.Description, summary.Status, "", nil, resolvedTags, base.OS)
 	return base, nil
 }
 
@@ -460,12 +464,16 @@ func Tag(m manifest.Manifest, name string, opts Options) (Report, error) {
 		return Report{}, fmt.Errorf("tag %q not found", name)
 	}
 	t := summaryTag(m, name)
-	base.Tag = buildDetail(m, name, t.Description, t.Status, t.Kind, t.ReplacedBy, []string{name}, base.OS)
+	resolvedTags, _, err := manifest.NormalizeTags(m, []string{name})
+	if err != nil {
+		return Report{}, fmt.Errorf("normalize catalog tag %q: %w", name, err)
+	}
+	base.Tag = buildDetail(m, name, t.Description, t.Status, t.Kind, t.ReplacedBy, resolvedTags, base.OS)
 	return base, nil
 }
 
-func buildDetail(m manifest.Manifest, name, description, status, kind, replacedBy string, tags []string, osName string) *Detail {
-	d := &Detail{Name: name, Description: description, Status: status, Kind: kind, ReplacedBy: replacedBy, ResolvedTags: clone(tags), Dependencies: []Dependency{}, DependencySets: []DependencySet{}, ProfileDependencies: []Dependency{}, Entries: []Entry{}, SourceOverrides: []SourceOverride{}, Provisioners: []Provisioner{}, Behaviors: behaviors(tags), Excluded: []ExcludedSurface{}}
+func buildDetail(m manifest.Manifest, name, description, status, kind string, replacedBy, tags []string, osName string) *Detail {
+	d := &Detail{Name: name, Description: description, Status: status, Kind: kind, ReplacedBy: clone(replacedBy), ResolvedTags: clone(tags), Dependencies: []Dependency{}, DependencySets: []DependencySet{}, ProfileDependencies: []Dependency{}, Entries: []Entry{}, SourceOverrides: []SourceOverride{}, Provisioners: []Provisioner{}, Behaviors: behaviors(tags), Excluded: []ExcludedSurface{}}
 	surface, excludedSurface := selectedSurfaces(m, tags, osName)
 	for _, set := range surface.DependencySets {
 		item := DependencySet{Tags: clone(set.Tags), OS: declaredOS(set.OS), Dependencies: []Dependency{}}
@@ -719,7 +727,7 @@ func summaryProfile(name string, p manifest.Profile) ProfileSummary {
 }
 func summaryTag(m manifest.Manifest, name string) TagSummary {
 	if t, ok := m.Tags[name]; ok {
-		return TagSummary{Name: name, Description: t.Description, Kind: t.Kind, Status: t.Status, ReplacedBy: t.ReplacedBy, Origin: MetadataDeclared}
+		return TagSummary{Name: name, Description: t.Description, Kind: t.Kind, Status: t.Status, ReplacedBy: clone(t.ReplacedBy), Origin: MetadataDeclared}
 	}
 	return TagSummary{Name: name, Kind: "surface", Status: "current", Origin: MetadataDerived}
 }
@@ -804,13 +812,4 @@ func contains(values []string, wanted string) bool {
 		}
 	}
 	return false
-}
-func unique(values []string) []string {
-	result := []string{}
-	for _, value := range values {
-		if !contains(result, value) {
-			result = append(result, value)
-		}
-	}
-	return result
 }

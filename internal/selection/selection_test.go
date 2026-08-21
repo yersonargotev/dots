@@ -426,7 +426,7 @@ func TestCompareEvolutionUsesTagRegistryForStaleExtraTags(t *testing.T) {
 	m := manifest.Manifest{
 		Tags: map[string]manifest.Tag{
 			"core":          {Kind: "surface", Status: "current"},
-			"legacy-option": {Kind: "compatibility", Status: "legacy", ReplacedBy: "core"},
+			"legacy-option": {Kind: "compatibility", Status: "legacy", ReplacedBy: manifest.ReplacementTags{"core"}},
 		},
 		Profiles: map[string]manifest.Profile{"core": {Tags: []string{"core"}}},
 		Entries:  []manifest.Entry{{Target: ".core", Tags: []string{"core"}}},
@@ -437,8 +437,12 @@ func TestCompareEvolutionUsesTagRegistryForStaleExtraTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveIntent() error = %v", err)
 	}
-	if _, err := selection.CompareEvolution(m, m, previous, "linux"); err != nil {
+	evolved, err := selection.CompareEvolution(m, m, previous, "linux")
+	if err != nil {
 		t.Fatalf("CompareEvolution() error = %v, want declared legacy tag to remain selectable", err)
+	}
+	if want := []manifest.TagReplacement{{LegacyTag: "legacy-option", ReplacementTags: []string{"core"}}}; !reflect.DeepEqual(evolved.Report.TagMigrations, want) {
+		t.Fatalf("TagMigrations = %#v, want preserved evidence %#v", evolved.Report.TagMigrations, want)
 	}
 
 	_, err = selection.ResolveIntent(m, selection.Intent{
@@ -494,23 +498,17 @@ func TestResolveReadOnlyExplicitSelectionWinsCompletely(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveReadOnly() error = %v", err)
 	}
-	want := selection.Effective{
-		Profiles:  []string{"web"},
-		ExtraTags: []string{"explicit"},
-		Selection: manifest.Selection{
-			Profile:  "web",
-			Profiles: []string{"web"},
-			Tags:     []string{"web", "explicit"},
-		},
-		Report: selection.Report{
-			Source:        selection.SourceExplicit,
-			Profiles:      []string{"web"},
-			ExtraTags:     []string{"explicit"},
-			EffectiveTags: []string{"web", "explicit"},
-		},
+	if want := []string{"web"}; !reflect.DeepEqual(got.Profiles, want) {
+		t.Fatalf("Profiles = %#v, want %#v", got.Profiles, want)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("ResolveReadOnly() = %#v, want %#v", got, want)
+	if want := []string{"explicit"}; !reflect.DeepEqual(got.ExtraTags, want) {
+		t.Fatalf("ExtraTags = %#v, want %#v", got.ExtraTags, want)
+	}
+	if want := []string{"web", "explicit"}; !reflect.DeepEqual(got.Selection.Tags, want) || !reflect.DeepEqual(got.Report.EffectiveTags, want) {
+		t.Fatalf("effective Tags = selection %#v report %#v, want %#v", got.Selection.Tags, got.Report.EffectiveTags, want)
+	}
+	if got.Report.Source != selection.SourceExplicit {
+		t.Fatalf("Source = %q, want %q", got.Report.Source, selection.SourceExplicit)
 	}
 }
 
@@ -557,6 +555,123 @@ func TestResolveReadOnlyRecomputesRecordedSelection(t *testing.T) {
 	if want := []string{"shared", "extra"}; !reflect.DeepEqual(got.ExtraTags, want) {
 		t.Fatalf("ExtraTags = %#v, want %#v", got.ExtraTags, want)
 	}
+}
+
+func TestResolveIntentNormalizesLegacyExtraTagsBeforeSelection(t *testing.T) {
+	m := loadSelectionManifest(t, `version: 1
+tags:
+  core:
+    kind: surface
+    status: current
+  shell:
+    kind: surface
+    status: current
+  legacy-shell:
+    kind: compatibility
+    status: legacy
+    replaced_by: [core, shell]
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: shell
+    target: .shell
+    strategy: copy
+    tags: [shell]
+`)
+
+	got, err := selection.ResolveIntent(m, selection.Intent{
+		Source:    selection.SourceExplicit,
+		Profiles:  []string{"core"},
+		ExtraTags: []string{"legacy-shell", "shell", "legacy-shell", "core"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+	if want := []string{"core", "shell"}; !reflect.DeepEqual(got.ExtraTags, want) {
+		t.Fatalf("ExtraTags = %#v, want normalized current Tags %#v", got.ExtraTags, want)
+	}
+	if want := []string{"core", "shell"}; !reflect.DeepEqual(got.Selection.Tags, want) {
+		t.Fatalf("Selection Tags = %#v, want normalized current Tags %#v", got.Selection.Tags, want)
+	}
+	if want := []string{"core", "shell"}; !reflect.DeepEqual(got.Report.EffectiveTags, want) {
+		t.Fatalf("EffectiveTags = %#v, want normalized current Tags %#v", got.Report.EffectiveTags, want)
+	}
+	if want := []string{"legacy-shell", "shell", "legacy-shell", "core"}; !reflect.DeepEqual(got.Intent().ExtraTags, want) {
+		t.Fatalf("Intent ExtraTags = %#v, want original ordered input %#v", got.Intent().ExtraTags, want)
+	}
+
+	installed := got.InstalledSelection(state.Provenance{})
+	if want := []string{"core", "shell"}; !reflect.DeepEqual(installed.ExtraTags, want) {
+		t.Fatalf("Installed ExtraTags = %#v, want normalized current Tags %#v", installed.ExtraTags, want)
+	}
+	if want := []string{"core", "shell"}; !reflect.DeepEqual(installed.ResolvedTags, want) {
+		t.Fatalf("Installed ResolvedTags = %#v, want normalized current Tags %#v", installed.ResolvedTags, want)
+	}
+
+	reportJSON, err := json.Marshal(got.Report)
+	if err != nil {
+		t.Fatalf("json.Marshal(Report) error = %v", err)
+	}
+	wantEvidence := `"tag_migrations":[{"legacy_tag":"legacy-shell","replacement_tags":["core","shell"]}]`
+	if !strings.Contains(string(reportJSON), wantEvidence) {
+		t.Fatalf("Report JSON = %s, want deterministic evidence %s", reportJSON, wantEvidence)
+	}
+}
+
+func TestResolveIntentNormalizesRecordedLegacyExtraTags(t *testing.T) {
+	m := loadSelectionManifest(t, `version: 1
+tags:
+  current:
+    kind: surface
+    status: current
+  legacy:
+    kind: compatibility
+    status: legacy
+    replaced_by: [current]
+profiles:
+  current:
+    tags: [current]
+entries:
+  - source: current
+    target: .current
+    strategy: copy
+    tags: [current]
+`)
+
+	got, err := selection.ResolveIntent(m, selection.Intent{
+		Source:    selection.SourceRecorded,
+		ExtraTags: []string{"legacy", "current", "legacy"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+	if got.Report.Source != selection.SourceRecorded {
+		t.Fatalf("Source = %q, want %q", got.Report.Source, selection.SourceRecorded)
+	}
+	if want := []string{"current"}; !reflect.DeepEqual(got.ExtraTags, want) {
+		t.Fatalf("ExtraTags = %#v, want %#v", got.ExtraTags, want)
+	}
+	reportJSON, err := json.Marshal(got.Report)
+	if err != nil {
+		t.Fatalf("json.Marshal(Report) error = %v", err)
+	}
+	if count := strings.Count(string(reportJSON), `"legacy_tag":"legacy"`); count != 1 {
+		t.Fatalf("Report JSON = %s, want one deduplicated legacy migration", reportJSON)
+	}
+}
+
+func loadSelectionManifest(t *testing.T, source string) manifest.Manifest {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "dots.yaml")
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	m, err := manifest.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+	return *m
 }
 
 func TestResolveReadOnlyRequiresInvocationOrRecordedSelection(t *testing.T) {

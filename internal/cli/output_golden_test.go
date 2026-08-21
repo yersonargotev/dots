@@ -11,6 +11,7 @@ import (
 	"github.com/yersonargotev/dots/internal/doctor"
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	inst "github.com/yersonargotev/dots/internal/installed"
+	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selection"
@@ -51,6 +52,7 @@ func TestEnvelopeGolden(t *testing.T) {
 	}
 	installSelection := selection.Report{
 		Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{}, EffectiveTags: []string{"default"},
+		TagMigrations: []manifest.TagReplacement{{LegacyTag: "legacy-default", ReplacementTags: []string{"default"}}},
 		Change: &selection.Change{
 			Delta: selection.Delta{
 				Previous: selection.Snapshot{Profiles: []string{"core", "work"}, ExtraTags: []string{"adaptive-theme"}, EffectiveTags: []string{"core", "work", "adaptive-theme"}},
@@ -160,6 +162,25 @@ func TestEnvelopeGolden(t *testing.T) {
 				Error: "selection-migration-required: Installation Metadata predates authoritative Installed Selection; run dots install --profile core --tag adaptive-theme",
 			},
 			golden: "envelope_selection_migration_required.golden",
+		},
+		{
+			name: "legacy Tag migration required",
+			env: envelope{
+				SchemaVersion: schemaVersion,
+				Command:       "update",
+				Status:        statusError,
+				Data: legacyTagMigrationErrorData{
+					Code: legacyTagMigrationRequiredCode,
+					TagMigrations: []manifest.TagReplacement{{
+						LegacyTag: "core", ReplacementTags: []string{"zsh", "git"},
+					}},
+					Remediation: legacyTagMigrationRemediation{
+						RecommendedCommand: "dots update --tag zsh --tag git",
+					},
+				},
+				Error: "legacy-tag-migration-required: recorded legacy Tag intent requires confirmation; use remediation command dots update --tag zsh --tag git",
+			},
+			golden: "envelope_legacy_tag_migration_required.golden",
 		},
 		{
 			name: "plan",

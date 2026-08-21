@@ -11,6 +11,7 @@ configuration surface and the configuration currently declared by this repositor
 
 ```yaml
 version: 1
+tags: {}
 profiles: {}
 dependencies: []
 entries: []
@@ -20,6 +21,7 @@ provisioners: []
 | Field | Required | Meaning |
 |-------|----------|---------|
 | `version` | Yes | Manifest schema version. Only `1` is supported. |
+| `tags` | No | Declared selection Tags and their lifecycle metadata. When present, every referenced Tag must be declared. |
 | `profiles` | Yes | Named installation selections. A Profile selects entries and provisioners by matching tags. |
 | `dependencies` | No | Tag-scoped Dependency Sets for shared toolchain baselines selected before Managed Entry and Provisioner Dependencies. |
 | `entries` | Yes | Managed Entries that install repository-owned files or directories into `$HOME`. |
@@ -35,8 +37,9 @@ authoritative Installed Selection when both `--profile` and `--tag` are omitted.
 Any explicit selection flag makes the current invocation's complete selection
 win without rewriting Installation Metadata. Repeat `--profile` to compose
 multiple Profiles by the ordered union of their tags. Commands that expose
-`--tag` can add optional capability tags on top of the selected Profile set
-without creating another Profile. For example, `--tag adaptive-theme` installs the opt-in marker and
+`--tag` can form a complete selection without a Profile or add optional
+capability Tags to a selected Profile set. For example, `--tag adaptive-theme`
+installs the opt-in marker and
 app-specific fragments used by managed configs to follow macOS light appearance
 where the app has a safe seam.
 
@@ -50,6 +53,34 @@ may instead offer an unambiguous candidate for confirmation.
 | Field | Required | Supported values |
 |-------|----------|------------------|
 | `tags` | Yes | Non-empty strings. Entries and Provisioners are selected when at least one tag matches. Optional CLI `--tag` values join this set at runtime. |
+
+## Tags
+
+Declared Tags have a `kind` (`surface`, `cleanup`, or `compatibility`) and a
+`status` (`current` or `legacy`). Every legacy Tag declares an ordered,
+non-empty `replaced_by` sequence of distinct current Tags. Replacement targets
+must be declared and cannot point to another legacy Tag. Current Tags cannot
+declare replacements.
+
+```yaml
+tags:
+  shell:
+    kind: surface
+    status: current
+  terminal:
+    kind: surface
+    status: current
+  old-workstation:
+    kind: compatibility
+    status: legacy
+    replaced_by: [shell, terminal]
+```
+
+The historical scalar spelling (`replaced_by: shell`) remains readable as a
+one-Tag alias. New and updated declarations should use the sequence form.
+Selection expands a legacy alias in declared order, de-duplicates the resulting
+current Tags without reordering them, and reports deterministic migration
+evidence. Persisted successful intent contains only normalized current Tags.
 
 The following compact catalog is generated from the Install Manifest. It lists
 current and legacy declarations; the `dots catalog` command hides legacy items
