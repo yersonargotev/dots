@@ -106,7 +106,7 @@ prose the text surface prints:
   agents can distinguish aligned Managed Entries from an incomplete full-profile
   setup. Read dependency readiness for those commands from `doctor`.
 - `status`, `doctor`, `plan`, `deps check`, `deps plan`, `update`, and `upgrade` include
-  `data.selection` with `source` (`explicit` or `recorded`), ordered `profiles`,
+  `data.selection` with `source` (`explicit`, `recorded`, or `migration`), ordered `profiles`,
   explicit `extra_tags`, and recomputed `effective_tags`. When no selection
   flags are supplied, these commands resolve the recorded Profile names and
   extra Tags against the current Install Manifest; the stored `resolved_tags`
@@ -119,7 +119,8 @@ prose the text surface prints:
   emitted. A blocking evolution error returns the same delta as
   `data.selection_delta`.
   Any explicit Profile or Tag selection wins completely for that invocation and
-  is never merged with recorded intent.
+  is never merged with recorded intent. `migration` means the operator confirmed
+  normalization of recorded legacy Tag intent to its current replacement Tags.
   If neither source exists, the command returns an execution error (`1`) with
   selection guidance rather than falling back to a manifest `default`. For
   Installation Metadata v1/v2, historical evidence may be reported as a
@@ -155,6 +156,16 @@ prose the text surface prints:
   empty, and `remediation.recommended_command` is included when the evidence
   supports an explicit command. `--yes` and JSON output never confirm a
   candidate.
+- When recorded intent contains a legacy Tag with declared replacement Tags,
+  non-interactive and JSON invocations return exit `1`, `status: "error"`, and
+  error code `legacy-tag-migration-required` before repository, filesystem, or
+  Installation Metadata mutation. Error `data` contains `code`, ordered
+  `tag_migrations` entries with `legacy_tag` and `replacement_tags`, and
+  `remediation.recommended_command`. If an incoming Install Manifest newly
+  declares the recorded Tag as legacy, the recommendation is the interactive
+  base command because its replacement Tags are not valid until Source of Truth
+  refresh. A confirmed interactive migration reports selection source
+  `migration` and successful persistence records only current replacement Tags.
 - Mutating `install`, `update`, and `upgrade` reports may add
   `data.selection.change` when a complete explicit request differs from the
   authoritative Installed Selection. `change.delta` contains stable

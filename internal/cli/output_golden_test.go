@@ -178,7 +178,7 @@ func TestEnvelopeGolden(t *testing.T) {
 						RecommendedCommand: "dots update --tag zsh --tag git",
 					},
 				},
-				Error: "legacy-tag-migration-required: recorded legacy Tag intent requires interactive confirmation; provide complete current intent with dots update --tag zsh --tag git",
+				Error: "legacy-tag-migration-required: recorded legacy Tag intent requires confirmation; use remediation command dots update --tag zsh --tag git",
 			},
 			golden: "envelope_legacy_tag_migration_required.golden",
 		},

@@ -193,6 +193,20 @@ entries:
 		t.Fatalf("explicit current selection = code %d error %q", code, envelopeError)
 	}
 	assertSelectionJSON(t, explicitData, "explicit", []string{"core"}, []string{"new"}, []string{"core", "new"})
+
+	var stdout, stderr bytes.Buffer
+	code = cli.Run([]string{
+		"plan", "--tag", "old", "--file", manifestPath,
+		"--home", home, "--source-root", sourceRoot, "--state-root", t.TempDir(),
+	}, &stdout, &stderr)
+	if code != cli.ExitOK {
+		t.Fatalf("explicit legacy text plan = code %d\nstdout:\n%s\nstderr:\n%s", code, stdout.String(), stderr.String())
+	}
+	for _, want := range []string{"legacy Tag normalization: old -> new", "transitional alias"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("explicit legacy text output missing %q:\n%s", want, stdout.String())
+		}
+	}
 }
 
 const legacyTagMigrationCodeForTest = "legacy-tag-migration-required"

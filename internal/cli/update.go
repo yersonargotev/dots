@@ -224,6 +224,10 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 		return updateReport{}, err
 	}
+	effective, err = guardRecordedTagMigration(cmd, effective, opts.yes || opts.dryRun)
+	if err != nil {
+		return updateReport{}, err
+	}
 	legacyMigrations, err := repositoryrefresh.CaptureLegacyTargets(*previousManifest, *incomingManifest, meta, paths.SourceRoot, paths.Home, paths.XDGStateHome, preRefresh.OldRev)
 	if err != nil {
 		return updateReport{}, err

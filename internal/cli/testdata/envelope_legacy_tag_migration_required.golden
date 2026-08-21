@@ -17,5 +17,5 @@
       "recommended_command": "dots update --tag zsh --tag git"
     }
   },
-  "error": "legacy-tag-migration-required: recorded legacy Tag intent requires interactive confirmation; provide complete current intent with dots update --tag zsh --tag git"
+  "error": "legacy-tag-migration-required: recorded legacy Tag intent requires confirmation; use remediation command dots update --tag zsh --tag git"
 }

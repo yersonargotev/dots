@@ -30,7 +30,7 @@ type legacyTagMigrationRequiredError struct {
 
 func (e *legacyTagMigrationRequiredError) Error() string {
 	return legacyTagMigrationRequiredCode +
-		": recorded legacy Tag intent requires interactive confirmation; provide complete current intent with " + e.recommendedCommand
+		": recorded legacy Tag intent requires confirmation; use remediation command " + e.recommendedCommand
 }
 
 func (e *legacyTagMigrationRequiredError) JSONErrorData() any {
@@ -50,6 +50,9 @@ func guardRecordedTagMigration(cmd *cobra.Command, effective selection.Effective
 	required := &legacyTagMigrationRequiredError{
 		migrations:         effective.Report.TagMigrations,
 		recommendedCommand: explicitSelectionCommand(cmd, effective),
+	}
+	if effective.Report.Delta != nil {
+		required.recommendedCommand = cmd.Root().Name() + " " + commandName(cmd)
 	}
 	if nonInteractive || wantsJSON(cmd) {
 		return selection.Effective{}, required

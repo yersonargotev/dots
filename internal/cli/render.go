@@ -129,15 +129,20 @@ func renderEffectiveSelection(profile string, profiles, tags []string, report *s
 	if report == nil {
 		return rendered
 	}
-	return fmt.Sprintf("%s [selection: %s]", rendered, report.Source)
+	rendered = fmt.Sprintf("%s [selection: %s]", rendered, report.Source)
+	if report.Source == selection.SourceMigration {
+		return rendered
+	}
+	for _, migration := range report.TagMigrations {
+		rendered += fmt.Sprintf(" [legacy Tag normalization: %s -> %s; transitional alias]",
+			migration.LegacyTag, strings.Join(migration.ReplacementTags, ","))
+	}
+	return rendered
 }
 
 func renderSelectionReport(w io.Writer, report selection.Report) {
 	fmt.Fprintf(w, "Selection: source=%s profiles=%s extra-tags=%s effective-tags=%s\n\n",
 		report.Source, renderSelectionValues(report.Profiles), renderSelectionValues(report.ExtraTags), renderSelectionValues(report.EffectiveTags))
-	if report.Source != selection.SourceMigration {
-		renderTagMigrations(w, report.TagMigrations)
-	}
 	if report.Delta == nil {
 		return
 	}

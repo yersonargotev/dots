@@ -112,9 +112,6 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, installHostOS)
-			if !wantsJSON(cmd) {
-				renderTagMigrations(cmd.OutOrStdout(), effective.Report.TagMigrations)
-			}
 			proceed, _, err := guardSelectionChange(cmd, &effective, selectionChangePolicy{
 				DryRun: dryRun, Confirmed: yes, Acknowledge: ackSelection,
 			})
