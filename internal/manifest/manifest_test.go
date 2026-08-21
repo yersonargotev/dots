@@ -894,18 +894,15 @@ func TestRepositoryManifestDefinesNativeAgentCLIBaseline(t *testing.T) {
 		t.Errorf("agents dependency set includes GitHub CLI: %#v", *dep)
 	}
 
-	core := sets["core"]
-	if core == nil {
-		t.Fatal("repository manifest missing core dependency set")
+	githubCLI := findDependency(selectedsurface.Evaluate(*got, []string{"gh"}, "linux").Dependencies, "GitHub CLI")
+	if githubCLI == nil {
+		t.Fatal("gh Tag missing GitHub CLI Dependency")
 	}
-	for _, name := range []string{"GitHub CLI", "jq"} {
-		if dep := findDependency(core.Dependencies, name); dep == nil {
-			t.Errorf("core dependency set missing %s", name)
-		}
-	}
-	githubCLI := findDependency(core.Dependencies, "GitHub CLI")
 	if githubCLI != nil && (githubCLI.Command != "gh" || githubCLI.Brew != "gh" || !githubCLI.LinuxHomebrew) {
 		t.Errorf("GitHub CLI dependency = %#v, want command/brew gh with linux_homebrew", *githubCLI)
+	}
+	if dep := findDependency(selectedsurface.Evaluate(*got, []string{"jq"}, "linux").Dependencies, "jq"); dep == nil {
+		t.Fatal("jq Tag missing jq Dependency")
 	}
 
 	opencodeEntry := findEntry(got.Entries, "~/.config/opencode/opencode.json")
@@ -2308,12 +2305,13 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 		target   string
 		source   string
 		strategy string
+		tag      string
 		dep      string
 	}{
-		{name: "zsh", target: "~/.zshrc", source: "configs/zsh/loader.zsh", strategy: "copy", dep: "zsh"},
-		{name: "git", target: "~/.gitconfig", source: "configs/git/loader.gitconfig", strategy: "copy", dep: "git"},
-		{name: "starship", target: "~/.config/starship.toml", source: "configs/starship/starship.toml", strategy: "symlink", dep: "starship"},
-		{name: "tmux", target: "~/.tmux.conf", source: "configs/tmux/tmux.conf", strategy: "symlink", dep: "tmux"},
+		{name: "zsh", target: "~/.zshrc", source: "configs/zsh/loader.zsh", strategy: "copy", tag: "zsh", dep: "zsh"},
+		{name: "git", target: "~/.gitconfig", source: "configs/git/loader.gitconfig", strategy: "copy", tag: "git", dep: "git"},
+		{name: "starship", target: "~/.config/starship.toml", source: "configs/starship/starship.toml", strategy: "symlink", tag: "starship", dep: "starship"},
+		{name: "tmux", target: "~/.tmux.conf", source: "configs/tmux/tmux.conf", strategy: "symlink", tag: "tmux", dep: "tmux"},
 	}
 
 	for _, tt := range tests {
@@ -2328,8 +2326,8 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 			if entry.Strategy != tt.strategy {
 				t.Errorf("Strategy = %q, want %q", entry.Strategy, tt.strategy)
 			}
-			if !hasString(entry.Tags, "core") {
-				t.Errorf("Tags = %#v, want core tag", entry.Tags)
+			if !sameStrings(entry.Tags, []string{tt.tag}) {
+				t.Errorf("Tags = %#v, want %q", entry.Tags, tt.tag)
 			}
 			if !sameStrings(entry.OS, []string{"darwin", "linux"}) {
 				t.Errorf("OS = %#v, want [darwin linux]", entry.OS)
@@ -2379,8 +2377,9 @@ func TestRepositoryManifestIncludesTuicrCoreConfiguration(t *testing.T) {
 	if _, ok := got.Profiles["tuicr"]; ok {
 		t.Fatal("repository manifest defines a dedicated tuicr Profile, want core ownership")
 	}
-	if _, ok := got.Tags["tuicr"]; ok {
-		t.Fatal("repository manifest defines a dedicated tuicr Tag, want core ownership")
+	tuicrTag, ok := got.Tags["tuicr"]
+	if !ok || tuicrTag.Kind != "surface" || tuicrTag.Status != "current" {
+		t.Fatalf("repository manifest tuicr Tag = %#v, want current surface", tuicrTag)
 	}
 
 	var entry *manifest.Entry
@@ -2396,8 +2395,8 @@ func TestRepositoryManifestIncludesTuicrCoreConfiguration(t *testing.T) {
 	if entry.Source != "configs/tuicr/config.toml" || entry.Strategy != "copy" || entry.Ownership != "toml-subset" {
 		t.Fatalf("tuicr config entry = %#v, want copy with TOML Subset Ownership", *entry)
 	}
-	if !sameStrings(entry.Tags, []string{"core"}) || !sameStrings(entry.OS, []string{"darwin", "linux"}) {
-		t.Fatalf("tuicr config scope = tags %#v, OS %#v; want core on darwin and linux", entry.Tags, entry.OS)
+	if !sameStrings(entry.Tags, []string{"tuicr"}) || !sameStrings(entry.OS, []string{"darwin", "linux"}) {
+		t.Fatalf("tuicr config scope = tags %#v, OS %#v; want tuicr on darwin and linux", entry.Tags, entry.OS)
 	}
 	if len(entry.Dependencies) != 1 {
 		t.Fatalf("tuicr dependencies = %#v, want one dependency", entry.Dependencies)
@@ -2892,8 +2891,8 @@ func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
 			if entry.Strategy != wantStrategy {
 				t.Errorf("Strategy = %q, want %s", entry.Strategy, wantStrategy)
 			}
-			if !hasString(entry.Tags, "core") {
-				t.Errorf("Tags = %#v, want core tag", entry.Tags)
+			if !sameStrings(entry.Tags, []string{"zellij"}) {
+				t.Errorf("Tags = %#v, want zellij tag", entry.Tags)
 			}
 			if !sameStrings(entry.OS, []string{"darwin", "linux"}) {
 				t.Errorf("OS = %#v, want [darwin linux]", entry.OS)
@@ -3394,8 +3393,8 @@ func TestRepositoryManifestNeovimEntry(t *testing.T) {
 	if entry.Strategy != "copy" {
 		t.Errorf("Strategy = %q, want copy", entry.Strategy)
 	}
-	if !hasString(entry.Tags, "core") {
-		t.Errorf("Tags = %#v, want core tag", entry.Tags)
+	if !sameStrings(entry.Tags, []string{"neovim"}) {
+		t.Errorf("Tags = %#v, want neovim tag", entry.Tags)
 	}
 	if !sameStrings(entry.OS, []string{"darwin", "linux"}) {
 		t.Errorf("OS = %#v, want [darwin linux]", entry.OS)
@@ -3505,22 +3504,8 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	var core *manifest.DependencySet
-	for i := range got.Dependencies {
-		candidate := &got.Dependencies[i]
-		if hasString(candidate.Tags, "core") {
-			core = candidate
-			break
-		}
-	}
-	if core == nil {
-		t.Fatal("repository manifest missing core dependency set")
-	}
-	if !sameStrings(core.OS, []string{"darwin", "linux"}) {
-		t.Fatalf("core dependency set OS = %#v, want [darwin linux]", core.OS)
-	}
-
 	want := map[string]struct {
+		tag       string
 		command   string
 		commands  []string
 		brew      string
@@ -3530,35 +3515,87 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 		toolchain string
 		linuxBrew bool
 	}{
-		"Node LTS (fnm)":       {commands: []string{"fnm", "node"}, brew: "fnm", toolchain: manifest.DependencyToolchainNodeLTSFNM, linuxBrew: true},
-		"Rust stable (rustup)": {commands: []string{"rustup", "rustc", "cargo"}, brew: "rustup", toolchain: manifest.DependencyToolchainRustStableRustup, linuxBrew: true},
-		"go":                   {command: "go", brew: "go", linuxBrew: true},
-		"uv":                   {command: "uv", brew: "uv", linuxBrew: true},
-		"pnpm":                 {command: "pnpm", brew: "pnpm", linuxBrew: true},
-		"bun":                  {command: "bun", brew: "bun", linuxBrew: true},
-		"fzf":                  {command: "fzf", brew: "fzf", apt: "fzf", dnf: "fzf", pacman: "fzf"},
-		"zoxide":               {command: "zoxide", brew: "zoxide", apt: "zoxide", dnf: "zoxide", pacman: "zoxide"},
-		"lazygit":              {command: "lazygit", brew: "lazygit", dnf: "lazygit", pacman: "lazygit", linuxBrew: true},
-		"eza":                  {command: "eza", brew: "eza", apt: "eza", dnf: "eza", pacman: "eza"},
-		"ripgrep":              {command: "rg", brew: "ripgrep", apt: "ripgrep", dnf: "ripgrep", pacman: "ripgrep"},
-		"delta":                {command: "delta", brew: "git-delta", dnf: "git-delta", pacman: "git-delta", linuxBrew: true},
-		"unzip":                {command: "unzip", brew: "unzip", apt: "unzip", dnf: "unzip", pacman: "unzip"},
-		"fd":                   {command: "fd", brew: "fd", dnf: "fd-find", pacman: "fd", linuxBrew: true},
+		"Node LTS (fnm)":       {tag: "node", commands: []string{"fnm", "node"}, brew: "fnm", toolchain: manifest.DependencyToolchainNodeLTSFNM, linuxBrew: true},
+		"Rust stable (rustup)": {tag: "rust", commands: []string{"rustup", "rustc", "cargo"}, brew: "rustup", toolchain: manifest.DependencyToolchainRustStableRustup, linuxBrew: true},
+		"go":                   {tag: "go", command: "go", brew: "go", linuxBrew: true},
+		"uv":                   {tag: "uv", command: "uv", brew: "uv", linuxBrew: true},
+		"pnpm":                 {tag: "pnpm", command: "pnpm", brew: "pnpm", linuxBrew: true},
+		"bun":                  {tag: "bun", command: "bun", brew: "bun", linuxBrew: true},
+		"fzf":                  {tag: "fzf", command: "fzf", brew: "fzf", apt: "fzf", dnf: "fzf", pacman: "fzf"},
+		"zoxide":               {tag: "zoxide", command: "zoxide", brew: "zoxide", apt: "zoxide", dnf: "zoxide", pacman: "zoxide"},
+		"lazygit":              {tag: "lazygit", command: "lazygit", brew: "lazygit", dnf: "lazygit", pacman: "lazygit", linuxBrew: true},
+		"eza":                  {tag: "eza", command: "eza", brew: "eza", apt: "eza", dnf: "eza", pacman: "eza"},
+		"ripgrep":              {tag: "ripgrep", command: "rg", brew: "ripgrep", apt: "ripgrep", dnf: "ripgrep", pacman: "ripgrep"},
+		"delta":                {tag: "delta", command: "delta", brew: "git-delta", dnf: "git-delta", pacman: "git-delta", linuxBrew: true},
+		"unzip":                {tag: "node", command: "unzip", brew: "unzip", apt: "unzip", dnf: "unzip", pacman: "unzip"},
+		"fd":                   {tag: "fd", command: "fd", brew: "fd", dnf: "fd-find", pacman: "fd", linuxBrew: true},
+		"GitHub CLI":           {tag: "gh", command: "gh", brew: "gh", linuxBrew: true},
+		"jq":                   {tag: "jq", command: "jq", brew: "jq", apt: "jq", dnf: "jq", pacman: "jq"},
 	}
 	for name, wantDep := range want {
-		var dep *manifest.Dependency
-		for i := range core.Dependencies {
-			candidate := &core.Dependencies[i]
-			if candidate.Name == name {
-				dep = candidate
-				break
+		for _, osName := range []string{"darwin", "linux"} {
+			dep := findDependency(selectedsurface.Evaluate(*got, []string{wantDep.tag}, osName).Dependencies, name)
+			if dep == nil {
+				t.Fatalf("Tag %q missing %q Dependency on %s", wantDep.tag, name, osName)
+			}
+			if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Apt != wantDep.apt || dep.Dnf != wantDep.dnf || dep.Pacman != wantDep.pacman || dep.Toolchain != wantDep.toolchain || dep.LinuxHomebrew != wantDep.linuxBrew || !sameStrings(dep.Commands, wantDep.commands) {
+				t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, apt %q, dnf %q, pacman %q, toolchain %q, linux_homebrew %v", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.apt, wantDep.dnf, wantDep.pacman, wantDep.toolchain, wantDep.linuxBrew)
 			}
 		}
-		if dep == nil {
-			t.Fatalf("core dependency set missing %q: %#v", name, core.Dependencies)
+	}
+}
+
+func TestRepositoryManifestDeclaresAtomicCoreCapabilitySelection(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	wantTags := []string{
+		"zsh", "zimfw", "git", "starship", "tmux", "herdr", "zellij", "atuin",
+		"neovim", "tuicr", "bat", "node", "rust", "go", "uv", "pnpm", "bun",
+		"fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "fd", "gh", "jq",
+	}
+	for _, name := range wantTags {
+		tag, ok := got.Tags[name]
+		if !ok {
+			t.Errorf("repository manifest missing atomic Core Tag %q", name)
+			continue
 		}
-		if dep.Command != wantDep.command || dep.Brew != wantDep.brew || dep.Apt != wantDep.apt || dep.Dnf != wantDep.dnf || dep.Pacman != wantDep.pacman || dep.Toolchain != wantDep.toolchain || dep.LinuxHomebrew != wantDep.linuxBrew || !sameStrings(dep.Commands, wantDep.commands) {
-			t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, apt %q, dnf %q, pacman %q, toolchain %q, linux_homebrew %v", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.apt, wantDep.dnf, wantDep.pacman, wantDep.toolchain, wantDep.linuxBrew)
+		if tag.Kind != "surface" || tag.Status != "current" || strings.TrimSpace(tag.Description) == "" {
+			t.Errorf("Tag %q = %#v, want described current surface", name, tag)
+		}
+	}
+
+	legacy, ok := got.Tags["core"]
+	if !ok {
+		t.Fatal("repository manifest missing legacy core alias")
+	}
+	if legacy.Kind != "compatibility" || legacy.Status != "legacy" || !reflect.DeepEqual([]string(legacy.ReplacedBy), wantTags) {
+		t.Fatalf("core Tag = %#v, want ordered compatibility alias for %#v", legacy, wantTags)
+	}
+	if profile := got.Profiles["core"]; !reflect.DeepEqual(profile.Tags, wantTags) {
+		t.Fatalf("core Profile Tags = %#v, want %#v", profile.Tags, wantTags)
+	}
+	wantWorkstation := append(append([]string(nil), wantTags...), "desktop", "agents")
+	if profile := got.Profiles["workstation"]; !reflect.DeepEqual(profile.Tags, wantWorkstation) {
+		t.Fatalf("workstation Profile Tags = %#v, want %#v", profile.Tags, wantWorkstation)
+	}
+
+	for i, set := range got.Dependencies {
+		if hasString(set.Tags, "core") {
+			t.Errorf("dependencies[%d] still selects the legacy core Tag: %#v", i, set.Tags)
+		}
+	}
+	for i, entry := range got.Entries {
+		if hasString(entry.Tags, "core") {
+			t.Errorf("entries[%d] %q still selects the legacy core Tag", i, entry.Target)
+		}
+	}
+	for i, provisioner := range got.Provisioners {
+		if hasString(provisioner.Tags, "core") {
+			t.Errorf("provisioners[%d] %q still selects the legacy core Tag", i, provisioner.Tool)
 		}
 	}
 }

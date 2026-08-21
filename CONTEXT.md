@@ -201,12 +201,12 @@ A named installation selection that represents an intended workstation role, suc
 _Avoid_: install profile, machine config, host config, preset
 
 **Tag**:
-A label assigned to a Managed Entry so Profiles can include related configuration by intent, such as `core`, `agents`, `web`, `mobile`, or `desktop`. Tags from repeated Profiles and explicit `--tag` flags are de-duplicated while preserving order.
-Tags are declarative selection only: they do not authorize built-in cleanup or historical migrations.
+A label for the smallest cohesive capability that makes sense to install or stop managing independently, such as `zsh`, `git`, `node`, or `jq`. A Tag may select Managed Entries, Dependencies, Provisioners, or a coherent combination of them. Tags from repeated Profiles and explicit `--tag` flags are de-duplicated while preserving order. Legacy compatibility Tags normalize to their ordered current replacements before Selected Surface evaluation.
+Tags are declarative selection only: they do not authorize built-in cleanup, removal, or historical migrations.
 _Avoid_: category, group, label
 
 **Core Development Baseline**:
-The `core` Tag's intended workstation role: a general development environment that should be useful on any supported machine. It includes shell and terminal foundations plus common developer runtimes and package tools, rather than only minimal dotfile plumbing. GUI applications, agent-specific tooling, web/mobile-specialized tooling, secrets, and machine-specific state remain outside core unless explicitly selected by another Profile or Tag.
+The `core` Profile's intended workstation role: an ordered preset of atomic shell, terminal, editor, runtime, package-tool, and CLI utility Tags that should be useful on any supported machine. The legacy `core` Tag is a temporary compatibility alias for that same ordered Tag expansion and owns no independent surface. GUI applications, agent-specific tooling, web/mobile-specialized tooling, secrets, and machine-specific state remain outside core unless explicitly selected by another Profile or Tag.
 _Avoid_: minimal shell, everything profile, desktop baseline
 
 **Agent CLI Baseline**:

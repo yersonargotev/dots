@@ -2,7 +2,7 @@
 
 `configs/atuin/config.toml` is the repository-managed Atuin configuration
 materialized as a regular `~/.config/atuin/config.toml` file (`copy` strategy,
-TOML Subset Ownership, `core` tag, `darwin`+`linux`). The portable Catppuccin
+TOML Subset Ownership, `atuin` tag, `darwin`+`linux`). The portable Catppuccin
 Mocha theme it references remains a dots-owned symlink at
 `~/.config/atuin/themes/catppuccin-mocha.toml`.
 
@@ -14,7 +14,7 @@ stay outside version control.
 
 ## Prerequisites
 
-- **`atuin`** — declared as an advisory dependency for the core profile.
+- **`atuin`** — declared as an advisory dependency for the `atuin` Tag.
   `dots install` does not install packages. `dots deps plan` and the explicit
   `dots deps install` workflow can report/use Homebrew guidance where available;
   Linux package mappings are intentionally omitted until package names are

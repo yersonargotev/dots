@@ -41,6 +41,24 @@ may be read only for update-evolution inventory when they contain retired
 Profile Dependencies; current manifest loading rejects that field with migration
 guidance.
 
+## Amendment: atomic capability Tags
+
+The `core` Profile is now the ordered preset `zsh`, `zimfw`, `git`, `starship`,
+`tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`,
+`go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`,
+`delta`, `fd`, `gh`, and `jq`. Each current Tag owns only the cohesive Managed
+Entries, Dependencies, and Provisioners that make sense to select
+independently. Shared helpers and prerequisites remain internal declarations
+selected by their consumers rather than artificial catalog choices.
+
+The former broad `core` Tag is a hidden legacy compatibility alias whose
+ordered replacement is the complete atomic preset. It owns no Managed Entry,
+Dependency Set, or Provisioner directly. Normalization therefore preserves the
+Core and Workstation Selected Surface while current discovery and newly
+recorded intent use only atomic Tags. Explicit Tags may form a complete
+selection without a Profile; an invocation with neither Profiles nor Tags still
+fails before mutation when no recorded intent is available.
+
 ## Amendment: evidence-gated historical retirement
 
 Tags select declarative surface only and do not trigger built-in Go cleanup.

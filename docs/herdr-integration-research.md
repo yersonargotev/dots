@@ -19,7 +19,8 @@ How should dots install and configure [Herdr](https://herdr.dev/) so it works wi
 
 The first implementation slice is Mac-first:
 
-- Herdr is part of the `core` tag because it is terminal multiplexer configuration alongside tmux and Zellij.
+- Herdr is selected by its atomic `herdr` Tag and remains part of the `core`
+  Profile alongside the independent Tmux and Zellij capabilities.
 - The managed entry is macOS-only for now: `os: [darwin]` with `brew: herdr`.
 - Linux support and User-Local Provider support for Herdr raw binaries are deferred to a later issue.
 - The dots-managed UX defaults intentionally keep Herdr sound enabled and popup notifications enabled. For macOS, the first config uses `ui.toast.delivery = "system"`.

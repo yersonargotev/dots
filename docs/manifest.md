@@ -93,11 +93,11 @@ from compact discovery unless `--all` is supplied.
 | Profile | Status | Tags | Description |
 |---------|--------|------|-------------|
 | `agents` | current | `agents` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |
-| `core` | current | `core` | Core dotfiles and general developer tooling without agent, web, or mobile provisioners. |
+| `core` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` | Core dotfiles and general developer tooling without agent, web, or mobile provisioners. |
 | `desktop` | current | `desktop`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
 | `mobile` | current | `mobile` | Optional Dart and Flutter mobile development capabilities. |
 | `web` | current | `web` | Optional frontend and browser workbench. |
-| `workstation` | current | `core`, `desktop`, `agents` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
+| `workstation` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq`, `desktop`, `agents` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
 
 ### Tags
 
@@ -105,12 +105,38 @@ from compact discovery unless `--all` is supplied.
 |-----|------|--------|-------------|-------------|
 | `adaptive-theme` | surface | current | Opt-in adaptive-theme marker and supported app-specific sources or fragments. |  |
 | `agents` | surface | current | Native Agent CLI Baseline for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |  |
+| `atuin` | surface | current | Atuin shell history configuration and Catppuccin theme. |  |
+| `bat` | surface | current | bat syntax-highlighting pager configuration. |  |
+| `bun` | surface | current | Bun JavaScript runtime and toolkit. |  |
 | `codegraph` | surface | current | Opt-in CodeGraph provisioner and Codex SessionStart hook source override. |  |
 | `codexbar` | surface | current | CodexBar menu-bar monitor for AI coding-provider usage limits. |  |
-| `core` | surface | current | Core Development Baseline: shell, terminal, Git, editor, and common developer tooling. |  |
+| `core` | compatibility | legacy | Legacy Core Development Baseline alias; use the atomic replacement Tags. | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` |
+| `delta` | surface | current | Delta syntax-highlighting pager for Git diffs. |  |
 | `desktop` | surface | current | Desktop terminal/editor configuration and integrations. |  |
+| `eza` | surface | current | eza modern directory listing utility. |  |
+| `fd` | surface | current | fd filesystem search utility. |  |
+| `fzf` | surface | current | fzf command-line fuzzy finder. |  |
+| `gh` | surface | current | GitHub CLI for repository and workflow operations. |  |
+| `git` | surface | current | Portable Git configuration and native Git entrypoint. |  |
+| `go` | surface | current | Go language toolchain. |  |
+| `herdr` | surface | current | Herdr terminal theme configuration on macOS. |  |
+| `jq` | surface | current | jq command-line JSON processor. |  |
+| `lazygit` | surface | current | Lazygit terminal interface for Git. |  |
 | `mobile` | surface | current | Optional Dart, Flutter, and Android development skills and MCP integrations. |  |
+| `neovim` | surface | current | Neovim configuration and seeded plugin lockfile. |  |
+| `node` | surface | current | Node.js LTS toolchain managed through fnm. |  |
+| `pnpm` | surface | current | pnpm JavaScript package manager. |  |
+| `ripgrep` | surface | current | ripgrep recursive text search utility. |  |
+| `rust` | surface | current | Rust stable toolchain managed through rustup. |  |
+| `starship` | surface | current | Starship prompt configuration. |  |
+| `tmux` | surface | current | Tmux terminal multiplexer configuration. |  |
+| `tuicr` | surface | current | tuicr terminal interface configuration. |  |
+| `uv` | surface | current | uv Python project and package manager. |  |
 | `web` | surface | current | Optional frontend/browser workbench with web skills and Chrome DevTools integrations. |  |
+| `zellij` | surface | current | Zellij terminal workspace configuration and default layout. |  |
+| `zimfw` | surface | current | Zim framework module configuration and managed runtime provisioning. |  |
+| `zoxide` | surface | current | zoxide smarter directory navigator. |  |
+| `zsh` | surface | current | Portable Zsh entrypoints and shell environment configuration. |  |
 
 <!-- dots:catalog:end -->
 
@@ -138,17 +164,15 @@ behavior behind those focused capabilities.
 
 ## Tag-scoped Dependency Sets
 
-Top-level `dependencies` declare shared toolchain baselines selected by tag,
-before Managed Entry and Provisioner Dependencies. The current `core` set is the
-Core Development Baseline from ADR 0010: shell/terminal foundations, shared
-terminal tools, and common development runtimes are owned by the `core`
-tag-scoped Dependency Set when they are useful across shell, editor, Git, or CLI
-workflows, even when a tool has no Managed Entry of its own. This includes
-runtime/package tools such as `fnm`, `rustup`, `go`, `uv`, `pnpm`, and `bun`,
-plus terminal/developer tools such as `fzf`, `zoxide`, `lazygit`, `eza`,
-`ripgrep`, `delta`, `unzip`, `fd`, GitHub CLI (`gh`), and `jq`. The `agents`
-set requires Codex, Claude Code, OpenCode, Antigravity, Copilot CLI, and shares
-`jq` intentionally with `core`. Linux Homebrew fallback is explicit with
+Top-level `dependencies` declare capability Dependencies selected by Tag before
+Managed Entry and Provisioner Dependencies. The Core Development Baseline from
+ADR 0010 is now composed from atomic Dependency-only Tags: `node`, `rust`,
+`go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`,
+`delta`, `fd`, `gh`, and `jq`. The internal `unzip` prerequisite follows the
+`node` Tag because the constrained fnm bootstrap consumes it; it is not an
+artificial catalog capability. The `agents` set requires Codex, Claude Code,
+OpenCode, Antigravity, Copilot CLI, and shares `jq` intentionally with the
+atomic `jq` capability. Linux Homebrew fallback is explicit with
 `linux_homebrew: true`; GUI apps and fonts stay manual unless they have
 validated Linux support. Node and Rust use constrained built-in toolchain
 bootstrap commands after manager installation:

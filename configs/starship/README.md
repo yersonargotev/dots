@@ -1,7 +1,7 @@
 # Starship prompt configuration
 
 `configs/starship/starship.toml` is the repository-managed Starship prompt
-installed as `~/.config/starship.toml` (symlink strategy, `core` tag,
+installed as `~/.config/starship.toml` (symlink strategy, `starship` tag,
 `darwin`+`linux`). It intentionally contains only portable defaults that are safe
 to share across machines.
 

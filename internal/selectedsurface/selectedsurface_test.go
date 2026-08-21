@@ -150,6 +150,122 @@ func TestRepositoryProfilesMatchEquivalentExplicitTagsAcrossSupportedOS(t *testi
 	}
 }
 
+func TestRepositoryAtomicCoreTagsSelectOnlyTheirCapabilities(t *testing.T) {
+	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		tag          string
+		osName       string
+		entries      []string
+		dependencies []string
+		provisioners []string
+	}{
+		{tag: "zsh", osName: "linux", entries: []string{"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zshenv"}, dependencies: []string{"zsh"}},
+		{tag: "zimfw", osName: "linux", entries: []string{"~/.zimrc"}, dependencies: []string{"zsh", "git", "curl"}, provisioners: []string{"zimfw"}},
+		{tag: "git", osName: "linux", entries: []string{"~/.gitconfig", "~/.config/dots/git/gitconfig"}, dependencies: []string{"git"}},
+		{tag: "starship", osName: "linux", entries: []string{"~/.config/starship.toml"}, dependencies: []string{"starship"}},
+		{tag: "tmux", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "~/.tmux.conf"}, dependencies: []string{"tmux"}},
+		{tag: "herdr", osName: "darwin", entries: []string{"~/.config/herdr/config.toml"}, dependencies: []string{"herdr"}},
+		{tag: "herdr", osName: "linux"},
+		{tag: "zellij", osName: "linux", entries: []string{"~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl"}, dependencies: []string{"zellij"}},
+		{tag: "atuin", osName: "linux", entries: []string{"~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml"}, dependencies: []string{"atuin"}},
+		{tag: "neovim", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim"}, dependencies: []string{"neovim"}},
+		{tag: "tuicr", osName: "linux", entries: []string{"~/.config/tuicr/config.toml"}, dependencies: []string{"tuicr"}},
+		{tag: "bat", osName: "linux", entries: []string{"~/.config/bat/config"}, dependencies: []string{"bat"}},
+		{tag: "node", osName: "linux", dependencies: []string{"Node LTS (fnm)", "unzip"}},
+		{tag: "rust", osName: "linux", dependencies: []string{"Rust stable (rustup)"}},
+		{tag: "go", osName: "linux", dependencies: []string{"go"}},
+		{tag: "uv", osName: "linux", dependencies: []string{"uv"}},
+		{tag: "pnpm", osName: "linux", dependencies: []string{"pnpm"}},
+		{tag: "bun", osName: "linux", dependencies: []string{"bun"}},
+		{tag: "fzf", osName: "linux", dependencies: []string{"fzf"}},
+		{tag: "zoxide", osName: "linux", dependencies: []string{"zoxide"}},
+		{tag: "lazygit", osName: "linux", dependencies: []string{"lazygit"}},
+		{tag: "eza", osName: "linux", dependencies: []string{"eza"}},
+		{tag: "ripgrep", osName: "linux", dependencies: []string{"ripgrep"}},
+		{tag: "delta", osName: "linux", dependencies: []string{"delta"}},
+		{tag: "fd", osName: "linux", dependencies: []string{"fd"}},
+		{tag: "gh", osName: "linux", dependencies: []string{"GitHub CLI"}},
+		{tag: "jq", osName: "linux", dependencies: []string{"jq"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tag+"/"+tt.osName, func(t *testing.T) {
+			surface := selectedsurface.Evaluate(*m, []string{tt.tag}, tt.osName)
+			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, nonNil(tt.entries)) {
+				t.Errorf("Managed Entries = %#v, want %#v", got, nonNil(tt.entries))
+			}
+			if got := dependencyNames(surface.Dependencies); !reflect.DeepEqual(got, nonNil(tt.dependencies)) {
+				t.Errorf("Dependencies = %#v, want %#v", got, nonNil(tt.dependencies))
+			}
+			if got := provisionerTools(surface.Provisioners); !reflect.DeepEqual(got, nonNil(tt.provisioners)) {
+				t.Errorf("Provisioners = %#v, want %#v", got, nonNil(tt.provisioners))
+			}
+		})
+	}
+}
+
+func TestRepositoryCoreProfilePreservesPreAtomizationSurface(t *testing.T) {
+	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	selection, err := manifest.ResolveReadOnlySelection(*m, []string{"core"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantEntries := map[string][]string{
+		"darwin": {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/herdr/config.toml", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim"},
+		"linux":  {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim"},
+	}
+	wantDependencies := map[string][]string{
+		"darwin": {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "GitHub CLI", "jq", "zsh", "git", "tuicr", "starship", "tmux", "herdr", "zellij", "atuin", "bat", "neovim", "curl"},
+		"linux":  {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "GitHub CLI", "jq", "zsh", "git", "tuicr", "starship", "tmux", "zellij", "atuin", "bat", "neovim", "curl"},
+	}
+
+	for _, osName := range []string{"darwin", "linux"} {
+		t.Run(osName, func(t *testing.T) {
+			surface := selectedsurface.Evaluate(*m, selection.Tags, osName)
+			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, wantEntries[osName]) {
+				t.Errorf("Managed Entries changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, wantEntries[osName])
+			}
+			if got := dependencyNames(surface.Dependencies); !reflect.DeepEqual(got, wantDependencies[osName]) {
+				t.Errorf("Dependencies changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, wantDependencies[osName])
+			}
+			if got := provisionerTools(surface.Provisioners); !reflect.DeepEqual(got, []string{"zimfw"}) {
+				t.Errorf("Provisioners = %#v, want zimfw", got)
+			}
+		})
+	}
+}
+
+func selectedTargets(entries []selectedsurface.SelectedEntry) []string {
+	result := make([]string, len(entries))
+	for i, entry := range entries {
+		result[i] = entry.Entry.Target
+	}
+	return result
+}
+
+func provisionerTools(provisioners []manifest.Provisioner) []string {
+	result := make([]string, len(provisioners))
+	for i, provisioner := range provisioners {
+		result[i] = provisioner.Tool
+	}
+	return result
+}
+
+func nonNil(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
+}
+
 func dependencyNames(dependencies []manifest.Dependency) []string {
 	names := make([]string, len(dependencies))
 	for i, dependency := range dependencies {
