@@ -22,14 +22,6 @@
           "core",
           "theme"
         ]
-      },
-      {
-        "name": "old",
-        "description": "",
-        "status": "legacy",
-        "tags": [
-          "old"
-        ]
       }
     ],
     "tags": [
@@ -41,17 +33,6 @@
         "origin": "declared"
       },
       {
-        "name": "old",
-        "description": "Compatibility profile",
-        "kind": "surface",
-        "status": "legacy",
-        "replaced_by": [
-          "core",
-          "theme"
-        ],
-        "origin": "declared"
-      },
-      {
         "name": "theme",
         "description": "Theme configuration",
         "kind": "surface",
@@ -60,8 +41,8 @@
       }
     ],
     "hidden": {
-      "profiles": 0,
-      "tags": 0
+      "profiles": 1,
+      "tags": 1
     },
     "comparison": {
       "from": "core",

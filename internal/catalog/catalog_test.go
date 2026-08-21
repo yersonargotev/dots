@@ -82,6 +82,51 @@ func TestLegacyTagAndProfileDetailsUseNormalizedCurrentTags(t *testing.T) {
 	}
 }
 
+func TestDetailReportsHideLegacyListsUnlessIncluded(t *testing.T) {
+	m := fixtureManifest()
+
+	for _, report := range []Report{
+		mustCatalogTag(t, m, "theme", Options{OS: "all"}),
+		mustCatalogProfile(t, m, "core", Options{OS: "all"}),
+	} {
+		if report.Hidden != (Hidden{Profiles: 1, Tags: 1}) {
+			t.Fatalf("Hidden = %#v", report.Hidden)
+		}
+		if names := profileNames(report.Profiles); !reflect.DeepEqual(names, []string{"core", "desktop"}) {
+			t.Fatalf("profiles = %#v", names)
+		}
+		if names := tagNames(report.Tags); !reflect.DeepEqual(names, []string{"agents", "cleanup", "core", "theme"}) {
+			t.Fatalf("tags = %#v", names)
+		}
+	}
+
+	all := mustCatalogTag(t, m, "theme", Options{OS: "all", IncludeLegacy: true})
+	if all.Hidden != (Hidden{}) {
+		t.Fatalf("Hidden with IncludeLegacy = %#v", all.Hidden)
+	}
+	if names := tagNames(all.Tags); !reflect.DeepEqual(names, []string{"agents", "cleanup", "core", "old", "theme"}) {
+		t.Fatalf("tags with IncludeLegacy = %#v", names)
+	}
+}
+
+func mustCatalogTag(t *testing.T, m manifest.Manifest, name string, opts Options) Report {
+	t.Helper()
+	report, err := Tag(m, name, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return report
+}
+
+func mustCatalogProfile(t *testing.T, m manifest.Manifest, name string, opts Options) Report {
+	t.Helper()
+	report, err := Profile(m, name, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return report
+}
+
 func TestDetailUsesSelectedSurfaceForResolvedEntriesAndActiveOverrides(t *testing.T) {
 	m := manifest.Manifest{
 		Profiles: map[string]manifest.Profile{

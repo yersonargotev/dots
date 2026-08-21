@@ -221,11 +221,15 @@ func loadCatalogReport(cmd *cobra.Command, build func(manifest.Manifest, catalog
 	if err != nil {
 		return catalog.Report{}, err
 	}
+	includeLegacy, err := cmd.Flags().GetBool("all")
+	if err != nil {
+		return catalog.Report{}, err
+	}
 	m, err := loadCatalogManifest(cmd, file, sourceRoot)
 	if err != nil {
 		return catalog.Report{}, err
 	}
-	return build(*m, catalog.Options{OS: osName})
+	return build(*m, catalog.Options{OS: osName, IncludeLegacy: includeLegacy})
 }
 
 func renderOrEmitCatalog(cmd *cobra.Command, report catalog.Report, render func(*cobra.Command, catalog.Report)) error {
@@ -331,11 +335,15 @@ func loadCatalogCompletionReport(cmd *cobra.Command) (catalog.Report, error) {
 	if err != nil {
 		return catalog.Report{}, err
 	}
+	includeLegacy, err := cmd.Flags().GetBool("all")
+	if err != nil {
+		return catalog.Report{}, err
+	}
 	m, err := loadCatalogManifest(cmd, file, sourceRoot)
 	if err != nil {
 		return catalog.Report{}, err
 	}
-	return catalog.Build(*m, catalog.Options{OS: osName, IncludeLegacy: true})
+	return catalog.Build(*m, catalog.Options{OS: osName, IncludeLegacy: includeLegacy})
 }
 
 func catalogCommandOptions(cmd *cobra.Command) (file, sourceRoot, osName string, err error) {

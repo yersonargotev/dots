@@ -274,10 +274,10 @@ func Build(m manifest.Manifest, opts Options) (Report, error) {
 	return r, nil
 }
 
-// Profile returns a detailed, exact Profile view. Legacy details are always
-// available so prior declared intent remains inspectable.
+// Profile returns a detailed, exact Profile view. The named legacy detail stays
+// directly addressable while IncludeLegacy controls the surrounding lists.
 func Profile(m manifest.Manifest, name string, opts Options) (Report, error) {
-	base, err := Build(m, Options{OS: opts.OS, IncludeLegacy: true})
+	base, err := Build(m, Options{OS: opts.OS, IncludeLegacy: opts.IncludeLegacy})
 	if err != nil {
 		return Report{}, err
 	}
@@ -456,7 +456,7 @@ func surfaceCount(detail *Detail) SurfaceCount {
 // Tag returns a detailed, exact Tag view. Registryless manifests derive a
 // current surface Tag mechanically from all manifest references.
 func Tag(m manifest.Manifest, name string, opts Options) (Report, error) {
-	base, err := Build(m, Options{OS: opts.OS, IncludeLegacy: true})
+	base, err := Build(m, Options{OS: opts.OS, IncludeLegacy: opts.IncludeLegacy})
 	if err != nil {
 		return Report{}, err
 	}
