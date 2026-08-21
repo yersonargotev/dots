@@ -320,31 +320,31 @@ Current Managed Entries:
 | `configs/herdr/config.toml` (`adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` | `core` | `darwin` | `herdr`; owns TOML subset |
 | `configs/zellij/config.kdl` (`adaptive-theme` override: `configs/zellij/config-adaptive.kdl`) | `~/.config/zellij/config.kdl` | `copy` | `core` | `darwin`, `linux` | `zellij`; whole-target ownership |
 | `configs/zellij/layouts/default.kdl` | `~/.config/zellij/layouts/default.kdl` | `symlink` | `core` | `darwin`, `linux` | `zellij` |
-| `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `desktop` | `darwin`, `linux` | `ghostty` |
+| `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `ghostty` | `darwin`, `linux` | `ghostty` |
 | `configs/ghostty/adaptive/adaptive-theme.ghostty` | `~/.config/ghostty/adaptive-theme.ghostty` | `symlink` | `adaptive-theme` | `darwin` | None |
-| `configs/warp/settings.toml` | `~/.warp/settings.toml` | `copy` | `desktop` | `darwin` | None |
-| `configs/warp/keybindings.yaml` | `~/.warp/keybindings.yaml` | `copy` | `desktop` | `darwin` | None |
-| `configs/warp/settings.toml` | `~/.config/warp-terminal/settings.toml` | `copy` | `desktop` | `linux` | `Warp` |
-| `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `desktop` | `linux` | `Warp` |
+| `configs/warp/settings.toml` | `~/.warp/settings.toml` | `copy` | `warp` | `darwin` | None |
+| `configs/warp/keybindings.yaml` | `~/.warp/keybindings.yaml` | `copy` | `warp` | `darwin` | None |
+| `configs/warp/settings.toml` | `~/.config/warp-terminal/settings.toml` | `copy` | `warp` | `linux` | `Warp` |
+| `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `warp` | `linux` | `Warp` |
 | `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `copy` | `core` | `darwin`, `linux` | `atuin`; owns TOML subset |
 | `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
 | `configs/bat/config` | `~/.config/bat/config` | `copy` | `core` | `darwin`, `linux` | `bat`; whole-target ownership |
 | `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `core` | `darwin`, `linux` | None |
 | `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `core` | `darwin`, `linux` | `neovim` |
 | `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `core` | `darwin`, `linux` | None |
-| `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `desktop` | `darwin`, `linux` | `zed` |
-| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `copy` (`seeded`) | `desktop` | `darwin`, `linux` | `zed` |
-| `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
-| `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
-| `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
-| `configs/codex/config.toml` (`codegraph` override: `configs/codex/config-codegraph.toml`) | `~/.codex/config.toml` | `copy` | `agents` | `darwin`, `linux` | None; owns TOML subset; CodeGraph tag adds a Codex SessionStart hook |
-| `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
-| `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
-| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns the broad Antigravity JSON baseline |
+| `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `zed` | `darwin`, `linux` | `zed` |
+| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `copy` (`seeded`) | `zed` | `darwin`, `linux` | `zed` |
+| `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `zed` | `darwin`, `linux` | `zed` |
+| `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `claude` | `darwin`, `linux` | None; owns JSON subset |
+| `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `claude` | `darwin`, `linux` | None |
+| `configs/codex/config.toml` (`codegraph` override: `configs/codex/config-codegraph.toml`) | `~/.codex/config.toml` | `copy` | `codex` | `darwin`, `linux` | None; owns TOML subset; CodeGraph tag adds a Codex SessionStart hook |
+| `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `copilot` | `darwin`, `linux` | None; owns JSON subset |
+| `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `copilot` | `darwin`, `linux` | None |
+| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `antigravity` | `darwin`, `linux` | None; owns the broad Antigravity JSON baseline |
 | `configs/antigravity/mobile-mcp-settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `mobile` | `darwin`, `linux` | None; owns only the Dart/Flutter MCP JSON subset |
 | `configs/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` | `copy` | `mobile` | `darwin` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
 | `configs/vscode/settings.json` | `~/.config/Code/User/settings.json` | `copy` | `mobile` | `linux` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
-| `configs/opencode/opencode.json` | `~/.config/opencode/opencode.json` | `copy` | `agents` | `darwin`, `linux` | None; owns only the native JSON baseline subset |
+| `configs/opencode/opencode.json` | `~/.config/opencode/opencode.json` | `copy` | `opencode` | `darwin`, `linux` | None; owns only the native JSON baseline subset |
 | `configs/opencode/mcp.json` | `~/.config/opencode/opencode.json` | `copy` | `web` | `darwin`, `linux` | `opencode`; contributes the Chrome DevTools JSON subset alongside the native baseline |
 
 ## Dependencies
