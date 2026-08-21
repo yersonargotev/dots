@@ -133,7 +133,7 @@ failed Managed Entry or Provisioner work preserve the previous intent.
 
 ## Profiles and provisioners
 
-Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` Profile selects desktop configuration and non-web desktop integrations. The `agents` Profile is the native Agent CLI Baseline: Codex, Claude Code, OpenCode, Antigravity, Copilot CLI, shared `jq`, and their dots-owned native Managed Configuration. It does not select gentle-ai, Engram, Context7, generated permissions, SDD/persona operations, third-party engineering skills, or dots-owned global agent rules. The `core` Profile includes the atomic `gh` and `jq` capabilities; either Tag may also be selected independently. CodeGraph, `web`, and `mobile` retain independent opt-in intent. The `web` Profile composes its Chrome DevTools overlay over OpenCode's native JSON baseline without replacing it. Use `workstation` when you explicitly want core, desktop integrations, and the Agent CLI Baseline together; web and mobile remain separate opt-ins.
+Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` Profile selects the atomic `ghostty`, `warp`, `zed`, and `codexbar` Tags. The `agents` Profile is the native Agent CLI Baseline: atomic `codex`, `claude`, `opencode`, `antigravity`, and `copilot` Tags, each pairing its CLI requirement with dots-owned native Managed Configuration; `claude` and `copilot` share the internal `jq` requirement. It does not select gentle-ai, Engram, Context7, generated permissions, SDD/persona operations, third-party engineering skills, or dots-owned global agent rules. The `core` Profile includes the atomic `gh` and `jq` capabilities; either Tag may also be selected independently. CodeGraph, `web`, and `mobile` retain independent opt-in intent. The `web` Profile composes its Chrome DevTools overlay over OpenCode's native JSON baseline without replacing it. Use `workstation` when you explicitly want core, Ghostty/Warp/Zed, and the Agent CLI Baseline together; CodexBar, web, and mobile remain separate opt-ins.
 
 The retired Codex delegation capability follows the normal Installed Selection
 safety contract. A recorded `codex-delegation` Profile or explicit extra Tag
@@ -153,7 +153,7 @@ receipts. After Managed Configuration succeeds, a successful historical
 `gentle-ai install` Provisioner receipt authorizes dots to remove only known
 marker-delimited gentle-ai trigger/persona/Engram blocks and the dots-owned
 global-rules block from supported instruction files. An Installed Selection or
-current `agents` Tag alone is never evidence. Unmarked and co-owned content,
+legacy or recorded `agents` intent alone is never evidence. Unmarked and co-owned content,
 complete files, authentication, symlinks, and Secret state are preserved;
 non-regular targets are reported for manual cleanup.
 

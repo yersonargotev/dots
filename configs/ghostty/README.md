@@ -2,7 +2,7 @@
 
 `configs/ghostty/config.ghostty` is the repository-managed Ghostty terminal
 configuration installed as `~/.config/ghostty/config.ghostty` (symlink strategy,
-`desktop` tag, `darwin`+`linux`). It uses Ghostty's current canonical filename.
+`ghostty` Tag, `darwin`+`linux`). It uses Ghostty's current canonical filename.
 
 The Source of Truth is this repository. The installed file is a link to the
 tracked source; runtime state, generated files, and machine-local overrides stay
@@ -10,14 +10,14 @@ outside version control.
 
 ## Prerequisites
 
-- **`ghostty`** — declared for the desktop profile; macOS detection accepts
+- **`ghostty`** — declared for the atomic `ghostty` Tag; macOS detection accepts
   either the `ghostty` command or `Ghostty.app`, installed through the
   `ghostty` Homebrew cask.
-- **Desktop Nerd Font** — declared on the `desktop` profile as shared desktop
-  infrastructure. Ghostty consumes this shared requirement for the managed
-  `font-family` baseline (`Cascadia Code NF`). The primary macOS package is the
-  Homebrew cask `font-cascadia-code-nf`, detected through `CascadiaCodeNF*` font
-  files. Compatible current Nerd Fonts files such as
+- **Desktop Nerd Font** — selected internally by the `ghostty`, `warp`, and
+  `zed` Tags as shared desktop infrastructure. Ghostty consumes this requirement
+  for the managed `font-family` baseline (`Cascadia Code NF`). The primary
+  macOS package is the Homebrew cask `font-cascadia-code-nf`, detected through
+  `CascadiaCodeNF*` font files. Compatible current Nerd Fonts files such as
   `CaskaydiaCoveNerdFont*` also satisfy the dependency.
 
 `dots install` does not install packages. `dots deps plan` and the explicit

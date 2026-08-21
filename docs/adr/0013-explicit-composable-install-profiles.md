@@ -59,6 +59,22 @@ recorded intent use only atomic Tags. Explicit Tags may form a complete
 selection without a Profile; an invocation with neither Profiles nor Tags still
 fails before mutation when no recorded intent is available.
 
+The `desktop` Profile is the ordered preset `ghostty`, `warp`, `zed`, and
+`codexbar`. The `agents` Profile is the ordered preset `codex`, `claude`,
+`opencode`, `antigravity`, and `copilot`; each Agent Tag pairs its CLI
+requirement with its dots-owned native Managed Configuration. The
+`workstation` Profile includes the first three desktop capabilities and all five
+Agent capabilities but continues to exclude `codexbar`. Shared font and `jq`
+requirements remain internal Dependency Sets selected by every consumer that
+needs them, so they are deduplicated without becoming artificial Tags.
+
+The former broad `desktop` and `agents` Tags are hidden legacy compatibility
+aliases. `desktop` expands only to `ghostty`, `warp`, and `zed`, deliberately
+excluding the Profile-only `codexbar` addition; `agents` expands to the five
+Agent capability Tags. Neither alias directly owns a Managed Entry, Dependency
+Set, or Provisioner. OpenCode and Antigravity keep their composed JSON targets,
+and Codex keeps its independent source-override behavior.
+
 ## Amendment: evidence-gated historical retirement
 
 Tags select declarative surface only and do not trigger built-in Go cleanup.

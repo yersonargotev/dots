@@ -90,12 +90,12 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	if ghosttyEntry == nil {
 		t.Fatal("dots manifest missing Ghostty managed entry")
 	}
-	if !slices.Contains(ghosttyEntry.Tags, "desktop") {
-		t.Fatalf("Ghostty managed entry tags = %#v, want desktop", ghosttyEntry.Tags)
+	if !slices.Contains(ghosttyEntry.Tags, "ghostty") {
+		t.Fatalf("Ghostty managed entry tags = %#v, want ghostty", ghosttyEntry.Tags)
 	}
 	foundDesktopFontDependency := false
 	for _, set := range manifestFile.Dependencies {
-		if !slices.Contains(set.Tags, "desktop") {
+		if !slices.Contains(set.Tags, "ghostty") || !slices.Contains(set.Tags, "warp") || !slices.Contains(set.Tags, "zed") {
 			continue
 		}
 		for _, dep := range set.Dependencies {
@@ -106,7 +106,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		}
 	}
 	if !foundDesktopFontDependency {
-		t.Fatalf("desktop dependency set is missing font-cascadia-code-nf with CascadiaCodeNF* and Caskaydia fallback")
+		t.Fatalf("shared atomic desktop dependency set is missing font-cascadia-code-nf with CascadiaCodeNF* and Caskaydia fallback")
 	}
 
 	localExample := filepath.Join(repoRoot, "configs", "ghostty", "config.local.ghostty.example")

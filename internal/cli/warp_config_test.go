@@ -116,8 +116,8 @@ func TestWarpDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		if entry.Strategy != "copy" {
 			t.Fatalf("Warp entry %s -> %s strategy = %q, want copy", entry.Source, entry.Target, entry.Strategy)
 		}
-		if !slices.Contains(entry.Tags, "desktop") {
-			t.Fatalf("Warp entry %s -> %s tags = %#v, want desktop", entry.Source, entry.Target, entry.Tags)
+		if !slices.Contains(entry.Tags, "warp") {
+			t.Fatalf("Warp entry %s -> %s tags = %#v, want warp", entry.Source, entry.Target, entry.Tags)
 		}
 		wantOS := "linux"
 		if strings.HasPrefix(entry.Target, "~/.warp/") {

@@ -135,18 +135,60 @@ tags:
       - fd
       - gh
       - jq
-  desktop:
-    description: Desktop terminal/editor configuration and integrations.
+  ghostty:
+    description: Ghostty terminal configuration and application requirement.
+    kind: surface
+    status: current
+  warp:
+    description: Warp terminal settings and keybindings.
+    kind: surface
+    status: current
+  zed:
+    description: Zed editor settings, keybindings, and authored theme.
     kind: surface
     status: current
   codexbar:
     description: CodexBar menu-bar monitor for AI coding-provider usage limits.
     kind: surface
     status: current
-  agents:
-    description: Native Agent CLI Baseline for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
+  desktop:
+    description: Legacy desktop alias; use the Ghostty, Warp, and Zed capability Tags.
+    kind: compatibility
+    status: legacy
+    replaced_by:
+      - ghostty
+      - warp
+      - zed
+  codex:
+    description: Codex CLI requirement and dots-owned native configuration.
     kind: surface
     status: current
+  claude:
+    description: Claude Code CLI requirement and dots-owned native configuration.
+    kind: surface
+    status: current
+  opencode:
+    description: OpenCode CLI requirement and dots-owned native configuration.
+    kind: surface
+    status: current
+  antigravity:
+    description: Antigravity CLI requirement and dots-owned native configuration.
+    kind: surface
+    status: current
+  copilot:
+    description: Copilot CLI requirement and dots-owned native configuration.
+    kind: surface
+    status: current
+  agents:
+    description: Legacy Agent CLI Baseline alias; use the five atomic Agent capability Tags.
+    kind: compatibility
+    status: legacy
+    replaced_by:
+      - codex
+      - claude
+      - opencode
+      - antigravity
+      - copilot
   web:
     description: Optional frontend/browser workbench with web skills and Chrome DevTools integrations.
     kind: surface
@@ -198,13 +240,19 @@ profiles:
     description: Desktop-only configuration and integrations; compose with core when core dotfiles are desired too.
     status: current
     tags:
-      - desktop
+      - ghostty
+      - warp
+      - zed
       - codexbar
   agents:
     description: Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
     status: current
     tags:
-      - agents
+      - codex
+      - claude
+      - opencode
+      - antigravity
+      - copilot
   web:
     description: Optional frontend and browser workbench.
     status: current
@@ -245,11 +293,19 @@ profiles:
       - fd
       - gh
       - jq
-      - desktop
-      - agents
+      - ghostty
+      - warp
+      - zed
+      - codex
+      - claude
+      - opencode
+      - antigravity
+      - copilot
 dependencies:
   - tags:
-      - desktop
+      - ghostty
+      - warp
+      - zed
     os:
       - darwin
       - linux
@@ -481,7 +537,7 @@ dependencies:
         dnf: jq
         pacman: jq
   - tags:
-      - agents
+      - codex
     os:
       - darwin
       - linux
@@ -490,22 +546,53 @@ dependencies:
         command: codex
         rolling_user_local:
           recipe: codex
+  - tags:
+      - claude
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: Claude Code
         command: claude
         rolling_user_local:
           recipe: claude
+  - tags:
+      - opencode
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: OpenCode
         command: opencode
         rolling_user_local:
           recipe: opencode
+  - tags:
+      - antigravity
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: Antigravity
         command: agy
         rolling_user_local:
           recipe: antigravity
+  - tags:
+      - copilot
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: Copilot CLI
         command: copilot
         rolling_user_local:
           recipe: copilot
+  - tags:
+      - claude
+      - copilot
+    os:
+      - darwin
+      - linux
+    dependencies:
       - name: jq
         command: jq
         brew: jq
@@ -712,7 +799,7 @@ entries:
     target: ~/.config/ghostty/config.ghostty
     strategy: symlink
     tags:
-      - desktop
+      - ghostty
     os:
       - darwin
       - linux
@@ -739,21 +826,21 @@ entries:
     target: ~/.warp/settings.toml
     strategy: copy
     tags:
-      - desktop
+      - warp
     os:
       - darwin
   - source: configs/warp/keybindings.yaml
     target: ~/.warp/keybindings.yaml
     strategy: copy
     tags:
-      - desktop
+      - warp
     os:
       - darwin
   - source: configs/warp/settings.toml
     target: ~/.config/warp-terminal/settings.toml
     strategy: copy
     tags:
-      - desktop
+      - warp
     os:
       - linux
     dependencies:
@@ -763,7 +850,7 @@ entries:
     target: ~/.config/warp-terminal/keybindings.yaml
     strategy: copy
     tags:
-      - desktop
+      - warp
     os:
       - linux
     dependencies:
@@ -873,7 +960,7 @@ entries:
     strategy: copy
     ownership: jsonc-subset
     tags:
-      - desktop
+      - zed
     os:
       - darwin
       - linux
@@ -886,7 +973,7 @@ entries:
     strategy: copy
     ownership: seeded
     tags:
-      - desktop
+      - zed
     os:
       - darwin
       - linux
@@ -898,7 +985,7 @@ entries:
     target: ~/.config/zed/themes/catppuccin-blue.json
     strategy: symlink
     tags:
-      - desktop
+      - zed
     os:
       - darwin
       - linux
@@ -911,7 +998,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - agents
+      - claude
     os:
       - darwin
       - linux
@@ -919,7 +1006,7 @@ entries:
     target: ~/.claude/statusline-command.sh
     strategy: copy
     tags:
-      - agents
+      - claude
     os:
       - darwin
       - linux
@@ -930,7 +1017,7 @@ entries:
     strategy: copy
     ownership: toml-subset
     tags:
-      - agents
+      - codex
     os:
       - darwin
       - linux
@@ -939,7 +1026,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - agents
+      - copilot
     os:
       - darwin
       - linux
@@ -947,7 +1034,7 @@ entries:
     target: ~/.copilot/statusline-command.sh
     strategy: copy
     tags:
-      - agents
+      - copilot
     os:
       - darwin
       - linux
@@ -956,7 +1043,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - agents
+      - antigravity
     os:
       - darwin
       - linux
@@ -990,7 +1077,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - agents
+      - opencode
     os:
       - darwin
       - linux

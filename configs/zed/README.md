@@ -1,7 +1,7 @@
 # Zed configuration
 
 `configs/zed/` is the repository-managed authored configuration for the
-[Zed](https://zed.dev) editor (`desktop` tag, `darwin`+`linux`). Zed settings
+[Zed](https://zed.dev) editor (`zed` Tag, `darwin`+`linux`). Zed settings
 are a regular co-owned JSONC target; keymaps and the authored theme remain
 repository-owned symlinks:
 
@@ -20,9 +20,9 @@ control.
 
 ## Prerequisites
 
-- **`zed`** — declared as an advisory dependency for the desktop profile.
-- **Desktop Nerd Font** — declared on the `desktop` profile, not on Zed itself,
-  so Ghostty-only or other desktop slices can satisfy the same shared font
+- **`zed`** — declared as an advisory dependency for the atomic `zed` Tag.
+- **Desktop Nerd Font** — selected internally by the `ghostty`, `warp`, and
+  `zed` Tags, so any one of those desktop slices can satisfy the same shared font
   requirement without selecting Zed. The primary macOS package is the Homebrew
   cask `font-cascadia-code-nf`, detected through `CascadiaCodeNF*` font files.
   Compatible installed files such as `CaskaydiaCoveNerdFont*` also satisfy the
@@ -60,7 +60,7 @@ The live `~/.config/zed/` directory was classified before adoption:
 | Category | Examples | Repository decision |
 | --- | --- | --- |
 | **Portable** | panel docks, `vim_mode`, `theme` (system/One Light/Catppuccin Mocha (blue)), `icon_theme`, `ui_font_family`, Copilot/agent preferences, declared extensions, the two intentional keybindings, the custom Catppuccin blue theme | Managed in `configs/zed/`. |
-| **Machine-specific** | `buffer_font_family` and font sizes. Zed has no user-level local include (no `settings.local.json`), so these stay in the shared `settings.json`; the Nerd Font is modeled as a shared desktop advisory dependency instead of Zed-owned state. | Kept in `settings.json`; font handled via the desktop dependency declaration. |
+| **Machine-specific** | `buffer_font_family` and font sizes. Zed has no user-level local include (no `settings.local.json`), so these stay in the shared `settings.json`; the Nerd Font is modeled as a shared desktop advisory dependency instead of Zed-owned state. | Kept in `settings.json`; font handled by the shared dependency declaration selected by each desktop application Tag. |
 | **Generated** | `conversations/`, `prompts/`, compiled `extensions/`, extension index/DB, caches, logs | Never committed (see `.gitignore`). |
 | **Private** | secrets, authenticated state (Copilot auth lives outside the authored files), private paths, machine IDs | Excluded. |
 

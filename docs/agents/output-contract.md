@@ -189,7 +189,7 @@ prose the text surface prints:
   Codex delegation capabilities, `data.retirement` records portable `removed`
   and `manual_cleanup` arrays. Gentle AI specifically requires a successful
   historical `gentle-ai install` Provisioner receipt; current or recorded
-  `agents` Tags alone never authorize it. The migration removes only proven
+  legacy or recorded `agents` intent alone never authorizes it. The migration removes only proven
   dots-owned marker blocks and byte-exact native agent files; copied skills,
   symlinks, and ambiguous files remain in `manual_cleanup`. The optional field
   is omitted when no historical evidence exists and is never emitted by a dry
