@@ -120,7 +120,9 @@ prose the text surface prints:
   `data.selection_delta`.
   Any explicit Profile or Tag selection wins completely for that invocation and
   is never merged with recorded intent. `migration` means the operator confirmed
-  normalization of recorded legacy Tag intent to its current replacement Tags.
+  a change from previously recorded intent: either normalization of legacy Tag
+  intent to current replacement Tags or adoption of an unambiguous Installation
+  Metadata v1/v2 Selection Migration Candidate.
   If neither source exists, the command returns an execution error (`1`) with
   selection guidance rather than falling back to a manifest `default`. For
   Installation Metadata v1/v2, historical evidence may be reported as a

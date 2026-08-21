@@ -195,6 +195,7 @@ func CompareEvolution(previousManifest, currentManifest manifest.Manifest, previ
 		if err != nil {
 			return Effective{}, err
 		}
+		current.Report.TagMigrations = mergeTagReplacements(previous.Report.TagMigrations, current.Report.TagMigrations)
 		delta.Current = snapshot(current)
 		previousSurface := selectedSurface(previousManifest, previous.Selection, osName)
 		currentSurface := selectedSurface(currentManifest, current.Selection, osName)
@@ -528,6 +529,25 @@ func cloneTagReplacements(values []manifest.TagReplacement) []manifest.TagReplac
 		result[i] = manifest.TagReplacement{
 			LegacyTag:       replacement.LegacyTag,
 			ReplacementTags: cloneStrings(replacement.ReplacementTags),
+		}
+	}
+	return result
+}
+
+func mergeTagReplacements(groups ...[]manifest.TagReplacement) []manifest.TagReplacement {
+	var result []manifest.TagReplacement
+	seen := make(map[string]bool)
+	for _, values := range groups {
+		for _, replacement := range values {
+			key := replacement.LegacyTag + "\x00" + strings.Join(replacement.ReplacementTags, "\x00")
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			result = append(result, manifest.TagReplacement{
+				LegacyTag:       replacement.LegacyTag,
+				ReplacementTags: cloneStrings(replacement.ReplacementTags),
+			})
 		}
 	}
 	return result

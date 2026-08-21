@@ -143,6 +143,9 @@ func renderEffectiveSelection(profile string, profiles, tags []string, report *s
 func renderSelectionReport(w io.Writer, report selection.Report) {
 	fmt.Fprintf(w, "Selection: source=%s profiles=%s extra-tags=%s effective-tags=%s\n\n",
 		report.Source, renderSelectionValues(report.Profiles), renderSelectionValues(report.ExtraTags), renderSelectionValues(report.EffectiveTags))
+	if report.Source != selection.SourceMigration {
+		renderTagMigrations(w, report.TagMigrations)
+	}
 	if report.Delta == nil {
 		return
 	}

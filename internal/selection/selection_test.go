@@ -437,8 +437,12 @@ func TestCompareEvolutionUsesTagRegistryForStaleExtraTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveIntent() error = %v", err)
 	}
-	if _, err := selection.CompareEvolution(m, m, previous, "linux"); err != nil {
+	evolved, err := selection.CompareEvolution(m, m, previous, "linux")
+	if err != nil {
 		t.Fatalf("CompareEvolution() error = %v, want declared legacy tag to remain selectable", err)
+	}
+	if want := []manifest.TagReplacement{{LegacyTag: "legacy-option", ReplacementTags: []string{"core"}}}; !reflect.DeepEqual(evolved.Report.TagMigrations, want) {
+		t.Fatalf("TagMigrations = %#v, want preserved evidence %#v", evolved.Report.TagMigrations, want)
 	}
 
 	_, err = selection.ResolveIntent(m, selection.Intent{

@@ -173,6 +173,48 @@ entries:
 	}
 }
 
+func TestUpdateExplicitLegacyTagReportsHumanMigrationEvidence(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/new": "new\n",
+		"dots.yaml": `version: 1
+tags:
+  new: {description: New capability, kind: surface, status: current}
+  old:
+    description: Legacy capability
+    kind: compatibility
+    status: legacy
+    replaced_by: [new]
+profiles:
+  core: {tags: [new]}
+entries:
+  - source: configs/new
+    target: ~/.new
+    strategy: symlink
+    tags: [new]
+`,
+	})
+	previous := state.InstalledSelection{ExtraTags: []string{"new"}, ResolvedTags: []string{"new"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+		t.Fatalf("seed Installed Selection: %v", err)
+	}
+
+	out := runBareUpdate(t, "--yes", "--tag", "old", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	for _, want := range []string{
+		"Legacy Tag normalization: old -> new",
+		`Warning: Tag "old" is a transitional alias`,
+		"Selection: source=explicit profiles=(none) extra-tags=new effective-tags=new",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestUpdateInteractiveRecordedLegacyTagConfirmsAndPersistsNormalizedIntent(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := t.TempDir()
