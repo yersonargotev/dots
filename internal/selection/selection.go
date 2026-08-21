@@ -97,6 +97,11 @@ type Effective struct {
 	ExtraTags []string
 	Selection manifest.Selection
 	Report    Report
+
+	// intentExtraTags preserves the authoritative pre-normalization input for
+	// repository evolution and binary continuation. Persisted ExtraTags remain
+	// normalized current Tags.
+	intentExtraTags []string
 }
 
 // Intent is the authoritative Profile and explicit extra Tag input together
@@ -151,8 +156,9 @@ func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
 	orderedExtraTags := orderedUnique(normalizedExtraTags)
 	effectiveTags := cloneStrings(resolved.Tags)
 	return Effective{
-		Profiles:  cloneStrings(orderedProfiles),
-		ExtraTags: cloneStrings(orderedExtraTags),
+		Profiles:        cloneStrings(orderedProfiles),
+		ExtraTags:       cloneStrings(orderedExtraTags),
+		intentExtraTags: cloneStrings(intent.ExtraTags),
 		Selection: manifest.Selection{
 			Profile:      resolved.Profile,
 			Profiles:     cloneStrings(orderedProfiles),
@@ -171,10 +177,14 @@ func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
 
 // Intent returns a detached copy of the authoritative inputs used to build e.
 func (e Effective) Intent() Intent {
+	extraTags := e.intentExtraTags
+	if extraTags == nil {
+		extraTags = e.ExtraTags
+	}
 	return Intent{
 		Source:    e.Report.Source,
 		Profiles:  cloneStrings(e.Profiles),
-		ExtraTags: cloneStrings(e.ExtraTags),
+		ExtraTags: cloneStrings(extraTags),
 	}
 }
 

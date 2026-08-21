@@ -498,23 +498,17 @@ func TestResolveReadOnlyExplicitSelectionWinsCompletely(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveReadOnly() error = %v", err)
 	}
-	want := selection.Effective{
-		Profiles:  []string{"web"},
-		ExtraTags: []string{"explicit"},
-		Selection: manifest.Selection{
-			Profile:  "web",
-			Profiles: []string{"web"},
-			Tags:     []string{"web", "explicit"},
-		},
-		Report: selection.Report{
-			Source:        selection.SourceExplicit,
-			Profiles:      []string{"web"},
-			ExtraTags:     []string{"explicit"},
-			EffectiveTags: []string{"web", "explicit"},
-		},
+	if want := []string{"web"}; !reflect.DeepEqual(got.Profiles, want) {
+		t.Fatalf("Profiles = %#v, want %#v", got.Profiles, want)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("ResolveReadOnly() = %#v, want %#v", got, want)
+	if want := []string{"explicit"}; !reflect.DeepEqual(got.ExtraTags, want) {
+		t.Fatalf("ExtraTags = %#v, want %#v", got.ExtraTags, want)
+	}
+	if want := []string{"web", "explicit"}; !reflect.DeepEqual(got.Selection.Tags, want) || !reflect.DeepEqual(got.Report.EffectiveTags, want) {
+		t.Fatalf("effective Tags = selection %#v report %#v, want %#v", got.Selection.Tags, got.Report.EffectiveTags, want)
+	}
+	if got.Report.Source != selection.SourceExplicit {
+		t.Fatalf("Source = %q, want %q", got.Report.Source, selection.SourceExplicit)
 	}
 }
 
@@ -602,6 +596,9 @@ entries:
 	}
 	if want := []string{"core", "shell"}; !reflect.DeepEqual(got.Report.EffectiveTags, want) {
 		t.Fatalf("EffectiveTags = %#v, want normalized current Tags %#v", got.Report.EffectiveTags, want)
+	}
+	if want := []string{"legacy-shell", "shell", "legacy-shell", "core"}; !reflect.DeepEqual(got.Intent().ExtraTags, want) {
+		t.Fatalf("Intent ExtraTags = %#v, want original ordered input %#v", got.Intent().ExtraTags, want)
 	}
 
 	installed := got.InstalledSelection(state.Provenance{})
