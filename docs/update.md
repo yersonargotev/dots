@@ -152,9 +152,9 @@ remove Dependency Installation Metadata, or erase historical Provisioner
 receipts. After Managed Configuration succeeds, a successful historical
 `gentle-ai install` Provisioner receipt authorizes dots to remove only known
 marker-delimited gentle-ai trigger/persona/Engram blocks and the dots-owned
-global-rules block from supported instruction files. An Installed Selection or
-legacy or recorded `agents` intent alone is never evidence. Unmarked and co-owned content,
-complete files, authentication, symlinks, and Secret state are preserved;
+global-rules block from supported instruction files. Neither explicit legacy
+`agents` input nor a recorded `agents` Tag is evidence. Unmarked and co-owned
+content, complete files, authentication, symlinks, and Secret state are preserved;
 non-regular targets are reported for manual cleanup.
 
 To remove residual gentle-ai state, first review it outside dots (for example

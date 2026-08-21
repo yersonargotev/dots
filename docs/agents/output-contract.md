@@ -188,9 +188,9 @@ prose the text surface prints:
   specific historical Installation Metadata evidence for retired Gentle AI or
   Codex delegation capabilities, `data.retirement` records portable `removed`
   and `manual_cleanup` arrays. Gentle AI specifically requires a successful
-  historical `gentle-ai install` Provisioner receipt; current or recorded
-  legacy or recorded `agents` intent alone never authorizes it. The migration removes only proven
-  dots-owned marker blocks and byte-exact native agent files; copied skills,
+  historical `gentle-ai install` Provisioner receipt; neither explicit legacy
+  `agents` input nor a recorded `agents` Tag authorizes it. The migration
+  removes only proven dots-owned marker blocks and byte-exact native agent files; copied skills,
   symlinks, and ambiguous files remain in `manual_cleanup`. The optional field
   is omitted when no historical evidence exists and is never emitted by a dry
   run.
