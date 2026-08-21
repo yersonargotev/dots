@@ -86,24 +86,35 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			requestedSelection, err := selection.Resolve(*m, profiles, extraTags)
-			if err != nil {
-				return err
+			intentProfiles := profiles
+			intentTags := extraTags
+			if len(intentProfiles) == 0 && len(intentTags) == 0 {
+				requestedSelection, err := selection.Resolve(*m, nil, nil)
+				if err != nil {
+					return err
+				}
+				intentProfiles = requestedSelection.Profiles
+				intentTags = requestedSelection.ExtraTags
 			}
 			effective, err := selection.ResolveIntent(*m, selection.Intent{
 				Source:    selection.SourceExplicit,
-				Profiles:  requestedSelection.Profiles,
-				ExtraTags: requestedSelection.ExtraTags,
+				Profiles:  intentProfiles,
+				ExtraTags: intentTags,
 			})
 			if err != nil {
 				return err
 			}
+			selectedProfiles := effective.Profiles
+			selectedTags := effective.ExtraTags
 
 			meta, err := loadInstallationMetadata(paths, stateRoot)
 			if err != nil {
 				return err
 			}
 			effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, installHostOS)
+			if !wantsJSON(cmd) {
+				renderTagMigrations(cmd.OutOrStdout(), effective.Report.TagMigrations)
+			}
 			proceed, _, err := guardSelectionChange(cmd, &effective, selectionChangePolicy{
 				DryRun: dryRun, Confirmed: yes, Acknowledge: ackSelection,
 			})
@@ -117,7 +128,7 @@ func newInstallCommand() *cobra.Command {
 
 			hostOS := installHostOS
 			hostArch := installHostArch
-			depOptions := deps.Options{Profiles: profiles, ExtraTags: extraTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot, AppLookup: appInstalled(hostOS, paths.Home), HTTPClient: depsHTTPClient, RollingReleaseURL: depsRollingReleaseURL}
+			depOptions := deps.Options{Profiles: selectedProfiles, ExtraTags: selectedTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot, AppLookup: appInstalled(hostOS, paths.Home), HTTPClient: depsHTTPClient, RollingReleaseURL: depsRollingReleaseURL}
 			depTier, err := resolveInstallTier(hostOS)
 			if err != nil {
 				return err
@@ -157,7 +168,7 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if dryRun {
-				p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
+				p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, selectedProfiles, selectedTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
 				if err != nil {
 					return err
 				}
@@ -165,7 +176,7 @@ func newInstallCommand() *cobra.Command {
 				if wantsJSON(cmd) {
 					return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: true, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
-				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profiles); err != nil {
+				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, selectedProfiles); err != nil {
 					return err
 				}
 				return nil
@@ -219,7 +230,7 @@ func newInstallCommand() *cobra.Command {
 					renderDepsInstallPreview(cmd.OutOrStdout(), depPreview)
 					depsConfirmed = true
 				}
-				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
+				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, selectedProfiles, selectedTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
 				if err != nil {
 					return err
 				}
@@ -241,7 +252,7 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if !installPlanReady {
-				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, profiles, extraTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
+				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, selectedProfiles, selectedTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
 				if err != nil {
 					return err
 				}
@@ -249,7 +260,7 @@ func newInstallCommand() *cobra.Command {
 			}
 
 			if !wantsJSON(cmd) {
-				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, profiles); err != nil {
+				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, selectedProfiles); err != nil {
 					return err
 				}
 			}
@@ -273,7 +284,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			provResult, err := runProvisionersWithEnvironment(cmd, *m, profiles, extraTags, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
+			provResult, err := runProvisionersWithEnvironment(cmd, *m, selectedProfiles, selectedTags, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
 			if err != nil {
 				if wantsJSON(cmd) {
 					return installProvisionerError{err: err, report: installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
@@ -315,10 +326,15 @@ func newInstallCommand() *cobra.Command {
 
 func renderInstallPlanAndProvisioners(cmd *cobra.Command, m manifest.Manifest, p plan.Plan, provPlan provision.Plan, profiles []string) error {
 	renderPlan(cmd.OutOrStdout(), p)
-	if err := renderSkippedEntryHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS); err != nil {
-		return err
+	if len(profiles) > 0 {
+		if err := renderSkippedEntryHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS); err != nil {
+			return err
+		}
 	}
 	renderProvisionPlan(cmd.OutOrStdout(), provPlan)
+	if len(profiles) == 0 {
+		return nil
+	}
 	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS)
 }
 

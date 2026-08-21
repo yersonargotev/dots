@@ -35,14 +35,49 @@ type Profile struct {
 	Tags        []string `yaml:"tags"`
 }
 
+// ReplacementTags is the ordered set of current Tags that supersede a legacy
+// Tag. It accepts the historical scalar YAML form as a one-item set while JSON
+// always represents it as an array.
+type ReplacementTags []string
+
+// UnmarshalYAML accepts both the historical scalar spelling and the current
+// ordered sequence spelling of replaced_by.
+func (r *ReplacementTags) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		var replacement string
+		if err := value.Decode(&replacement); err != nil {
+			return fmt.Errorf("decode replacement tag: %w", err)
+		}
+		*r = ReplacementTags{replacement}
+		return nil
+	case yaml.SequenceNode:
+		var replacements []string
+		if err := value.Decode(&replacements); err != nil {
+			return fmt.Errorf("decode replacement tags: %w", err)
+		}
+		*r = replacements
+		return nil
+	default:
+		return fmt.Errorf("replacement tags must be a tag or a sequence of tags")
+	}
+}
+
 // Tag describes a declared selection tag. The registry is optional for v1
 // compatibility; when present, every tag referenced by the manifest must be
 // declared here.
 type Tag struct {
-	Description string `yaml:"description,omitempty"`
-	Kind        string `yaml:"kind"`
-	Status      string `yaml:"status"`
-	ReplacedBy  string `yaml:"replaced_by,omitempty"`
+	Description string          `yaml:"description,omitempty"`
+	Kind        string          `yaml:"kind"`
+	Status      string          `yaml:"status"`
+	ReplacedBy  ReplacementTags `yaml:"replaced_by,omitempty"`
+}
+
+// TagReplacement records one legacy Tag expansion applied during selection
+// normalization.
+type TagReplacement struct {
+	LegacyTag       string   `json:"legacy_tag"`
+	ReplacementTags []string `json:"replacement_tags"`
 }
 
 type Entry struct {
@@ -699,18 +734,28 @@ func (m Manifest) validateTagRegistry() error {
 		if !tagpolicy.IsAllowedStatus(tag.Status) {
 			return fmt.Errorf("tags[%q].status must be one of current, legacy", name)
 		}
-		if tag.ReplacedBy == "" {
-			continue
+		if tag.Status == "legacy" && len(tag.ReplacedBy) == 0 {
+			return fmt.Errorf("tags[%q].replaced_by must contain at least one current tag", name)
 		}
-		if tag.Status != "legacy" {
+		if tag.Status != "legacy" && len(tag.ReplacedBy) > 0 {
 			return fmt.Errorf("tags[%q].replaced_by requires status legacy", name)
 		}
-		replacement, ok := m.Tags[tag.ReplacedBy]
-		if !ok {
-			return fmt.Errorf("tags[%q].replaced_by %q is not declared", name, tag.ReplacedBy)
-		}
-		if replacement.Status != "current" {
-			return fmt.Errorf("tags[%q].replaced_by %q must reference a current tag", name, tag.ReplacedBy)
+		replacementSeen := make(map[string]bool, len(tag.ReplacedBy))
+		for i, replacementName := range tag.ReplacedBy {
+			if strings.TrimSpace(replacementName) == "" {
+				return fmt.Errorf("tags[%q].replaced_by[%d] must not be empty", name, i)
+			}
+			if replacementSeen[replacementName] {
+				return fmt.Errorf("tags[%q].replaced_by[%d] duplicates %q", name, i, replacementName)
+			}
+			replacementSeen[replacementName] = true
+			replacement, ok := m.Tags[replacementName]
+			if !ok {
+				return fmt.Errorf("tags[%q].replaced_by %q is not declared", name, replacementName)
+			}
+			if replacement.Status != "current" {
+				return fmt.Errorf("tags[%q].replaced_by %q must reference a current tag", name, replacementName)
+			}
 		}
 	}
 	return nil
@@ -1027,14 +1072,59 @@ func containsControl(value string) bool {
 	return strings.ContainsFunc(value, unicode.IsControl)
 }
 
-// Selection describes the ordered Profile and Tag union selected by a command.
+// Selection describes the ordered Profile and normalized current Tag union
+// selected by a command.
 // Profiles preserves the user-supplied Profile order after de-duplication; Tags
 // preserves the ordered union of all selected Profile tags plus explicit --tag
 // values. Profile is a compatibility label for existing metadata and prose.
 type Selection struct {
-	Profile  string
-	Profiles []string
-	Tags     []string
+	Profile      string
+	Profiles     []string
+	Tags         []string
+	Replacements []TagReplacement
+}
+
+// NormalizeTags resolves legacy aliases to current Tags and returns migration
+// evidence in first-use order. Both the resulting Tags and evidence are
+// de-duplicated without changing input or declaration order.
+func NormalizeTags(m Manifest, tags []string) ([]string, []TagReplacement, error) {
+	normalized := make([]string, 0, len(tags))
+	seen := make(map[string]bool, len(tags))
+	add := func(tag string) {
+		if seen[tag] {
+			return
+		}
+		seen[tag] = true
+		normalized = append(normalized, tag)
+	}
+
+	replacements := make([]TagReplacement, 0)
+	legacySeen := make(map[string]bool)
+	for _, name := range tags {
+		if m.Tags == nil {
+			add(name)
+			continue
+		}
+		tag, ok := m.Tags[name]
+		if !ok {
+			return nil, nil, fmt.Errorf("tag %q is not declared", name)
+		}
+		if tag.Status != "legacy" {
+			add(name)
+			continue
+		}
+		if !legacySeen[name] {
+			legacySeen[name] = true
+			replacements = append(replacements, TagReplacement{
+				LegacyTag:       name,
+				ReplacementTags: append([]string(nil), tag.ReplacedBy...),
+			})
+		}
+		for _, replacement := range tag.ReplacedBy {
+			add(replacement)
+		}
+	}
+	return normalized, replacements, nil
 }
 
 // SelectedProfileNames returns the repeatable profile list when present, or the
@@ -1049,9 +1139,9 @@ func SelectedProfileNames(profile string, profiles []string) []string {
 	return []string{profile}
 }
 
-// ResolveSelection validates selected Profile names and returns their ordered,
-// de-duplicated tag union. Repository manifests without a legacy default Profile
-// require an explicit Profile so install never falls back to an implicit baseline.
+// ResolveSelection validates selected Profile and Tag names and returns their
+// ordered, de-duplicated current Tag union. A legacy default Profile is inferred
+// only when neither Profiles nor explicit Tags supply selection intent.
 func ResolveSelection(m Manifest, profileNames []string, extraTags []string) (Selection, error) {
 	return resolveSelection(m, profileNames, extraTags, true)
 }
@@ -1089,7 +1179,7 @@ func resolveSelection(m Manifest, profileNames []string, extraTags []string, all
 			addTag(tag)
 		}
 	}
-	if len(profiles) == 0 && allowDefault {
+	if len(profileNames) == 0 && len(extraTags) == 0 && allowDefault {
 		if profile, ok := m.Profiles["default"]; ok {
 			profiles = append(profiles, "default")
 			for _, tag := range profile.Tags {
@@ -1107,7 +1197,11 @@ func resolveSelection(m Manifest, profileNames []string, extraTags []string, all
 		}
 		addTag(tag)
 	}
-	return Selection{Profile: strings.Join(profiles, ","), Profiles: profiles, Tags: tags}, nil
+	normalizedTags, replacements, err := NormalizeTags(m, tags)
+	if err != nil {
+		return Selection{}, err
+	}
+	return Selection{Profile: strings.Join(profiles, ","), Profiles: profiles, Tags: normalizedTags, Replacements: replacements}, nil
 }
 
 // MatchesOS reports whether an item's OS filter admits the current OS. An empty

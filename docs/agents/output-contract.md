@@ -38,7 +38,7 @@ state.
 
 ```json
 {
-  "schema_version": "7",
+  "schema_version": "8",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -59,7 +59,7 @@ Schema version `3` introduced this partial-error report allowance:
 
 ```json
 {
-  "schema_version": "7",
+  "schema_version": "8",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
@@ -202,6 +202,9 @@ prose the text surface prints:
 - Schema version `7` adds the allowlisted `xdg-state` target root, seeded local
   evolution reason, and uninstall `retain` action. These values preserve
   application-owned runtime state while keeping aligned status at exit code 0.
+- Schema version `8` changes Install Catalog `replaced_by` values from one Tag
+  string to an ordered array of current replacement Tags and adds optional
+  `tag_migrations` evidence to selection reports.
 - Plan actions and Status Managed Entry items may add the optional reason
   `source-override-not-selected` and a deterministic `matching_tags` array when
   a conflicting target exactly matches one or more alternate sources whose

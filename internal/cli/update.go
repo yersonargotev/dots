@@ -169,6 +169,9 @@ func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resol
 	if err == nil && effective.Report.Source == selection.SourceExplicit {
 		effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, runtime.GOOS)
 	}
+	if err == nil {
+		effective, err = guardRecordedTagMigration(cmd, effective, opts.yes || opts.dryRun)
+	}
 	return m, effective, err
 }
 

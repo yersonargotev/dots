@@ -1,5 +1,5 @@
 {
-  "schema_version": "7",
+  "schema_version": "8",
   "command": "catalog why",
   "status": "ok",
   "data": {
@@ -45,7 +45,10 @@
         "description": "Compatibility profile",
         "kind": "surface",
         "status": "legacy",
-        "replaced_by": "core",
+        "replaced_by": [
+          "core",
+          "theme"
+        ],
         "origin": "declared"
       },
       {

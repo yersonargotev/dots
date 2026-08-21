@@ -63,7 +63,7 @@ tags:
     description: old baseline selector
     kind: surface
     status: legacy
-    replaced_by: core
+    replaced_by: [core, agents]
   agents:
     description: retire Gentle AI state
     kind: surface
@@ -94,8 +94,17 @@ provisioners:
 	if got.Profiles["default"].Description != "default workstation" || got.Profiles["default"].Status != "current" {
 		t.Fatalf("Profile = %#v, want description and status", got.Profiles["default"])
 	}
-	if got.Tags["legacy-core"].ReplacedBy != "core" {
+	if want := []string{"core", "agents"}; !reflect.DeepEqual([]string(got.Tags["legacy-core"].ReplacedBy), want) {
 		t.Fatalf("legacy tag = %#v, want replacement", got.Tags["legacy-core"])
+	}
+
+	scalar := strings.Replace(valid, "replaced_by: [core, agents]", "replaced_by: core", 1)
+	got, err = manifest.Parse([]byte(scalar))
+	if err != nil {
+		t.Fatalf("Parse() scalar replacement error = %v", err)
+	}
+	if want := []string{"core"}; !reflect.DeepEqual([]string(got.Tags["legacy-core"].ReplacedBy), want) {
+		t.Fatalf("scalar legacy tag = %#v, want replacement %#v", got.Tags["legacy-core"], want)
 	}
 
 	tests := []struct {
@@ -109,8 +118,12 @@ provisioners:
 		{"override key", strings.Replace(valid, "source_overrides: {legacy-core:", "source_overrides: {missing:", 1), `entries[0].source_overrides[0] tag "missing" is not declared`},
 		{"provisioner reference", strings.Replace(valid, "    tags: [agents]\n    spec:", "    tags: [missing]\n    spec:", 1), `provisioners[0].tags[0] tag "missing" is not declared`},
 		{"invalid kind", strings.Replace(valid, "kind: surface", "kind: command", 1), `tags["core"].kind must be one of surface, cleanup, compatibility`},
+		{"legacy missing replacement", strings.Replace(valid, "    replaced_by: [core, agents]\n", "", 1), `tags["legacy-core"].replaced_by must contain at least one current tag`},
+		{"empty replacement", strings.Replace(valid, "replaced_by: [core, agents]", `replaced_by: [core, ""]`, 1), `tags["legacy-core"].replaced_by[1] must not be empty`},
+		{"duplicate replacement", strings.Replace(valid, "replaced_by: [core, agents]", "replaced_by: [core, core]", 1), `tags["legacy-core"].replaced_by[1] duplicates "core"`},
 		{"replacement source current", strings.Replace(valid, "status: legacy\n    replaced_by", "status: current\n    replaced_by", 1), `tags["legacy-core"].replaced_by requires status legacy`},
-		{"replacement target legacy", strings.Replace(valid, "status: current", "status: legacy", 1), `tags["legacy-core"].replaced_by "core" must reference a current tag`},
+		{"replacement target undeclared", strings.Replace(valid, "replaced_by: [core, agents]", "replaced_by: [missing]", 1), `tags["legacy-core"].replaced_by "missing" is not declared`},
+		{"replacement target legacy chain", strings.Replace(valid, "    status: current\n  legacy-core:", "    status: legacy\n    replaced_by: agents\n  legacy-core:", 1), `tags["legacy-core"].replaced_by "core" must reference a current tag`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3817,6 +3830,60 @@ func TestResolveSelectionComposesProfilesInOrder(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Tags, []string{"core", "agents", "web", "sdd"}) {
 		t.Fatalf("Tags = %#v", got.Tags)
+	}
+}
+
+func TestNormalizeTagsExpandsLegacyAliasesInDeclaredOrder(t *testing.T) {
+	m := manifest.Manifest{Tags: map[string]manifest.Tag{
+		"core":       {Kind: "surface", Status: "current"},
+		"agents":     {Kind: "surface", Status: "current"},
+		"web":        {Kind: "surface", Status: "current"},
+		"legacy":     {Kind: "compatibility", Status: "legacy", ReplacedBy: manifest.ReplacementTags{"core", "agents"}},
+		"legacy-web": {Kind: "compatibility", Status: "legacy", ReplacedBy: manifest.ReplacementTags{"agents", "web"}},
+	}}
+
+	tags, replacements, err := manifest.NormalizeTags(m, []string{"legacy", "agents", "legacy", "legacy-web", "core"})
+	if err != nil {
+		t.Fatalf("NormalizeTags() error = %v", err)
+	}
+	if want := []string{"core", "agents", "web"}; !reflect.DeepEqual(tags, want) {
+		t.Fatalf("tags = %#v, want %#v", tags, want)
+	}
+	wantReplacements := []manifest.TagReplacement{
+		{LegacyTag: "legacy", ReplacementTags: []string{"core", "agents"}},
+		{LegacyTag: "legacy-web", ReplacementTags: []string{"agents", "web"}},
+	}
+	if !reflect.DeepEqual(replacements, wantReplacements) {
+		t.Fatalf("replacements = %#v, want %#v", replacements, wantReplacements)
+	}
+
+	if _, _, err := manifest.NormalizeTags(m, []string{"missing"}); err == nil || err.Error() != `tag "missing" is not declared` {
+		t.Fatalf("NormalizeTags(missing) error = %v", err)
+	}
+}
+
+func TestResolveSelectionAllowsTagsWithoutInferringDefaultAndNormalizesAliases(t *testing.T) {
+	m := manifest.Manifest{
+		Tags: map[string]manifest.Tag{
+			"core":   {Kind: "surface", Status: "current"},
+			"agents": {Kind: "surface", Status: "current"},
+			"legacy": {Kind: "compatibility", Status: "legacy", ReplacedBy: manifest.ReplacementTags{"core", "agents"}},
+		},
+		Profiles: map[string]manifest.Profile{"default": {Tags: []string{"core"}}},
+	}
+
+	got, err := manifest.ResolveSelection(m, nil, []string{"legacy", "core"})
+	if err != nil {
+		t.Fatalf("ResolveSelection() error = %v", err)
+	}
+	if len(got.Profiles) != 0 || got.Profile != "" {
+		t.Fatalf("Profiles = %#v, want no inferred default", got.Profiles)
+	}
+	if want := []string{"core", "agents"}; !reflect.DeepEqual(got.Tags, want) {
+		t.Fatalf("Tags = %#v, want %#v", got.Tags, want)
+	}
+	if want := []manifest.TagReplacement{{LegacyTag: "legacy", ReplacementTags: []string{"core", "agents"}}}; !reflect.DeepEqual(got.Replacements, want) {
+		t.Fatalf("Replacements = %#v, want %#v", got.Replacements, want)
 	}
 }
 

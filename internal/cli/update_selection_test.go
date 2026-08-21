@@ -86,6 +86,165 @@ entries:
 	}
 }
 
+func TestUpdateNonInteractiveRecordedLegacyTagRequiresStructuredMigration(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/new": "new\n",
+		"dots.yaml": `version: 1
+tags:
+  core:
+    description: Core
+    kind: surface
+    status: current
+  new:
+    description: New capability
+    kind: surface
+    status: current
+  old:
+    description: Legacy capability
+    kind: compatibility
+    status: legacy
+    replaced_by: [new]
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/new
+    target: ~/.new
+    strategy: symlink
+    tags: [new]
+`,
+	})
+	previous := state.InstalledSelection{
+		Profiles: []string{"core"}, ExtraTags: []string{"old"}, ResolvedTags: []string{"core", "old"},
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+		t.Fatalf("seed Installed Selection: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"update", "--yes", "--output", "json", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != cli.ExitError {
+		t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitError, out.String(), errOut.String())
+	}
+	for _, want := range []string{
+		`"code": "legacy-tag-migration-required"`,
+		`"legacy_tag": "old"`,
+		`"replacement_tags": [`,
+		`"recommended_command": "dots update --profile core --tag new"`,
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("JSON output missing %q:\n%s", want, out.String())
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".new")); !os.IsNotExist(err) {
+		t.Fatalf("migration gate applied Managed Configuration: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
+		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+
+	out.Reset()
+	errOut.Reset()
+	code = cli.Run([]string{
+		"update", "--yes", "--acknowledge-selection-change", "--output", "json", "--profile", "core", "--tag", "new",
+		"--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != cli.ExitOK {
+		t.Fatalf("explicit current selection exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitOK, out.String(), errOut.String())
+	}
+	meta, err = state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load normalized metadata: %v", err)
+	}
+	if got, want := meta.InstalledSelection.ExtraTags, []string{"new"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalized ExtraTags = %#v, want %#v", got, want)
+	}
+}
+
+func TestUpdateInteractiveRecordedLegacyTagConfirmsAndPersistsNormalizedIntent(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	_, sourceRoot := newInstalledRepo(t, map[string]string{
+		"configs/new": "new\n",
+		"dots.yaml": `version: 1
+tags:
+  core: {description: Core, kind: surface, status: current}
+  new: {description: New capability, kind: surface, status: current}
+  old:
+    description: Legacy capability
+    kind: compatibility
+    status: legacy
+    replaced_by: [new]
+profiles:
+  core:
+    tags: [core]
+entries:
+  - source: configs/new
+    target: ~/.new
+    strategy: symlink
+    tags: [new]
+`,
+	})
+	previous := state.InstalledSelection{
+		Profiles: []string{"core"}, ExtraTags: []string{"old"}, ResolvedTags: []string{"core", "old"},
+	}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+		t.Fatalf("seed Installed Selection: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetIn(strings.NewReader("y\ny\n"))
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{
+		"update", "--no-tui", "--file", filepath.Join(sourceRoot, "dots.yaml"),
+		"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot,
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("update Execute() error = %v\noutput:\n%s", err, out.String())
+	}
+	for _, want := range []string{
+		"Legacy Tag normalization: old -> new",
+		`Warning: Tag "old" is a transitional alias`,
+		"Selection: source=migration profiles=core extra-tags=new effective-tags=core,new",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output missing %q:\n%s", want, out.String())
+		}
+	}
+	if _, err := os.Readlink(filepath.Join(home, ".new")); err != nil {
+		t.Fatalf("confirmed migration did not apply Managed Entry: %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if meta.InstalledSelection == nil {
+		t.Fatal("InstalledSelection = nil")
+	}
+	if got, want := meta.InstalledSelection.ExtraTags, []string{"new"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExtraTags = %#v, want %#v", got, want)
+	}
+	if got, want := meta.InstalledSelection.ResolvedTags, []string{"core", "new"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ResolvedTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestUpdatePreflightUsesSelectedManifestFile(t *testing.T) {
 	requireGitCLI(t)
 	home := t.TempDir()

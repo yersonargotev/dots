@@ -146,6 +146,57 @@ entries:
 	}
 }
 
+func TestReadOnlyRecordedLegacyTagRequiresCurrentExplicitIntent(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/new", "new\n")
+	manifestPath := writeCLIManifest(t, sourceRoot, `version: 1
+tags:
+  core: {description: Core, kind: surface, status: current}
+  new: {description: New, kind: surface, status: current}
+  old:
+    description: Old
+    kind: compatibility
+    status: legacy
+    replaced_by: [new]
+profiles:
+  core:
+    tags: [core]
+entries:
+  - {source: configs/new, target: ~/.new, strategy: symlink, tags: [new]}
+`)
+	if err := state.Save(state.Path(stateRoot), state.Metadata{
+		Version: state.CurrentVersion,
+		InstalledSelection: &state.InstalledSelection{
+			Profiles: []string{"core"}, ExtraTags: []string{"old"}, ResolvedTags: []string{"core", "old"},
+		},
+	}); err != nil {
+		t.Fatalf("save Installed Selection: %v", err)
+	}
+
+	args := selectionCommandArgs([]string{"plan"}, manifestPath, home, sourceRoot, stateRoot, false)
+	code, data, envelopeError := runSelectionJSON(t, args)
+	if code != cli.ExitError || !strings.Contains(envelopeError, legacyTagMigrationCodeForTest) {
+		t.Fatalf("recorded legacy selection = code %d error %q", code, envelopeError)
+	}
+	if got := data["code"]; got != legacyTagMigrationCodeForTest {
+		t.Fatalf("data.code = %v, want %q", got, legacyTagMigrationCodeForTest)
+	}
+	if got := data["remediation"].(map[string]any)["recommended_command"]; got != "dots install --profile core --tag new" {
+		t.Fatalf("recommended command = %v", got)
+	}
+
+	explicitArgs := append([]string{"plan", "--profile", "core", "--tag", "new"}, args[1:]...)
+	code, explicitData, envelopeError := runSelectionJSON(t, explicitArgs)
+	if code != cli.ExitOK || envelopeError != "" {
+		t.Fatalf("explicit current selection = code %d error %q", code, envelopeError)
+	}
+	assertSelectionJSON(t, explicitData, "explicit", []string{"core"}, []string{"new"}, []string{"core", "new"})
+}
+
+const legacyTagMigrationCodeForTest = "legacy-tag-migration-required"
+
 func TestReadOnlySelectionTextReportsSource(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
