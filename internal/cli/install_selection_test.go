@@ -216,6 +216,69 @@ func TestRepositoryAtomicCoreTagsInstallIndependentlyInTemporaryHome(t *testing.
 	}
 }
 
+func TestRepositoryAtomicDesktopAndAgentTagsInstallIndependentlyInTemporaryHome(t *testing.T) {
+	repositoryRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(repositoryRoot, "dots.yaml")
+	tests := []struct {
+		tag      string
+		present  []string
+		excluded []string
+	}{
+		{
+			tag:      "ghostty",
+			present:  []string{filepath.Join(".config", "ghostty", "config.ghostty")},
+			excluded: []string{filepath.Join(".warp", "settings.toml"), filepath.Join(".config", "zed", "settings.json")},
+		},
+		{
+			tag:      "codex",
+			present:  []string{filepath.Join(".codex", "config.toml")},
+			excluded: []string{filepath.Join(".claude", "settings.json"), filepath.Join(".config", "opencode", "opencode.json")},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tag, func(t *testing.T) {
+			home := t.TempDir()
+			stateRoot := t.TempDir()
+			fakeRealHome := t.TempDir()
+			t.Setenv("HOME", fakeRealHome)
+
+			var out, errOut bytes.Buffer
+			code := cli.Run([]string{
+				"install", "--yes", "--skip-deps", "--output", "json", "--tag", tt.tag,
+				"--file", manifestPath, "--home", home, "--source-root", repositoryRoot, "--state-root", stateRoot,
+			}, &out, &errOut)
+			if code != cli.ExitOK {
+				t.Fatalf("exit code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, cli.ExitOK, out.String(), errOut.String())
+			}
+
+			meta, err := state.Load(state.Path(stateRoot))
+			if err != nil {
+				t.Fatalf("load Installation Metadata: %v", err)
+			}
+			if meta.InstalledSelection == nil || !reflect.DeepEqual(meta.InstalledSelection.ExtraTags, []string{tt.tag}) || !reflect.DeepEqual(meta.InstalledSelection.ResolvedTags, []string{tt.tag}) {
+				t.Fatalf("Installed Selection = %#v, want only Tag %q", meta.InstalledSelection, tt.tag)
+			}
+			for _, target := range tt.present {
+				if _, err := os.Lstat(filepath.Join(home, target)); err != nil {
+					t.Errorf("Tag %q did not install %s: %v", tt.tag, target, err)
+				}
+			}
+			for _, target := range tt.excluded {
+				if _, err := os.Lstat(filepath.Join(home, target)); !os.IsNotExist(err) {
+					t.Errorf("Tag %q installed unrelated target %s: %v", tt.tag, target, err)
+				}
+			}
+			if entries, err := os.ReadDir(fakeRealHome); err != nil || len(entries) != 0 {
+				t.Fatalf("install touched inherited HOME %q: entries=%v err=%v", fakeRealHome, entries, err)
+			}
+		})
+	}
+}
+
 func TestInstallLegacyTagNormalizesBeforeApplyAndReportsJSONEvidence(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()

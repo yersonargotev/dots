@@ -2,7 +2,8 @@
 
 `configs/warp/settings.toml` and `configs/warp/keybindings.yaml` are the
 repository-managed Warp terminal preference slice. They are copied into stable
-channel config paths for macOS and Linux through the `desktop` profile.
+channel config paths for macOS and Linux through the atomic `warp` Tag, which
+the `desktop` Profile selects.
 
 The Source of Truth is intentionally small: theme, terminal font family,
 terminal font size, and authored keybindings. Warp writes changes from its UI

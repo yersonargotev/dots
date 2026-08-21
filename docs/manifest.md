@@ -92,31 +92,36 @@ from compact discovery unless `--all` is supplied.
 
 | Profile | Status | Tags | Description |
 |---------|--------|------|-------------|
-| `agents` | current | `agents` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |
+| `agents` | current | `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |
 | `core` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` | Core dotfiles and general developer tooling without agent, web, or mobile provisioners. |
-| `desktop` | current | `desktop`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
+| `desktop` | current | `ghostty`, `warp`, `zed`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
 | `mobile` | current | `mobile` | Optional Dart and Flutter mobile development capabilities. |
 | `web` | current | `web` | Optional frontend and browser workbench. |
-| `workstation` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq`, `desktop`, `agents` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
+| `workstation` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq`, `ghostty`, `warp`, `zed`, `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
 
 ### Tags
 
 | Tag | Kind | Status | Description | Replacement |
 |-----|------|--------|-------------|-------------|
 | `adaptive-theme` | surface | current | Opt-in adaptive-theme marker and supported app-specific sources or fragments. |  |
-| `agents` | surface | current | Native Agent CLI Baseline for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |  |
+| `agents` | compatibility | legacy | Legacy Agent CLI Baseline alias; use the five atomic Agent capability Tags. | `codex`, `claude`, `opencode`, `antigravity`, `copilot` |
+| `antigravity` | surface | current | Antigravity CLI requirement and dots-owned native configuration. |  |
 | `atuin` | surface | current | Atuin shell history configuration and Catppuccin theme. |  |
 | `bat` | surface | current | bat syntax-highlighting pager configuration. |  |
 | `bun` | surface | current | Bun JavaScript runtime and toolkit. |  |
+| `claude` | surface | current | Claude Code CLI requirement and dots-owned native configuration. |  |
 | `codegraph` | surface | current | Opt-in CodeGraph provisioner and Codex SessionStart hook source override. |  |
+| `codex` | surface | current | Codex CLI requirement and dots-owned native configuration. |  |
 | `codexbar` | surface | current | CodexBar menu-bar monitor for AI coding-provider usage limits. |  |
+| `copilot` | surface | current | Copilot CLI requirement and dots-owned native configuration. |  |
 | `core` | compatibility | legacy | Legacy Core Development Baseline alias; use the atomic replacement Tags. | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` |
 | `delta` | surface | current | Delta syntax-highlighting pager for Git diffs. |  |
-| `desktop` | surface | current | Desktop terminal/editor configuration and integrations. |  |
+| `desktop` | compatibility | legacy | Legacy desktop alias; use the Ghostty, Warp, and Zed capability Tags. | `ghostty`, `warp`, `zed` |
 | `eza` | surface | current | eza modern directory listing utility. |  |
 | `fd` | surface | current | fd filesystem search utility. |  |
 | `fzf` | surface | current | fzf command-line fuzzy finder. |  |
 | `gh` | surface | current | GitHub CLI for repository and workflow operations. |  |
+| `ghostty` | surface | current | Ghostty terminal configuration and application requirement. |  |
 | `git` | surface | current | Portable Git configuration and native Git entrypoint. |  |
 | `go` | surface | current | Go language toolchain. |  |
 | `herdr` | surface | current | Herdr terminal theme configuration on macOS. |  |
@@ -125,6 +130,7 @@ from compact discovery unless `--all` is supplied.
 | `mobile` | surface | current | Optional Dart, Flutter, and Android development skills and MCP integrations. |  |
 | `neovim` | surface | current | Neovim configuration and seeded plugin lockfile. |  |
 | `node` | surface | current | Node.js LTS toolchain managed through fnm. |  |
+| `opencode` | surface | current | OpenCode CLI requirement and dots-owned native configuration. |  |
 | `pnpm` | surface | current | pnpm JavaScript package manager. |  |
 | `ripgrep` | surface | current | ripgrep recursive text search utility. |  |
 | `rust` | surface | current | Rust stable toolchain managed through rustup. |  |
@@ -132,7 +138,9 @@ from compact discovery unless `--all` is supplied.
 | `tmux` | surface | current | Tmux terminal multiplexer configuration. |  |
 | `tuicr` | surface | current | tuicr terminal interface configuration. |  |
 | `uv` | surface | current | uv Python project and package manager. |  |
+| `warp` | surface | current | Warp terminal settings and keybindings. |  |
 | `web` | surface | current | Optional frontend/browser workbench with web skills and Chrome DevTools integrations. |  |
+| `zed` | surface | current | Zed editor settings, keybindings, and authored theme. |  |
 | `zellij` | surface | current | Zellij terminal workspace configuration and default layout. |  |
 | `zimfw` | surface | current | Zim framework module configuration and managed runtime provisioning. |  |
 | `zoxide` | surface | current | zoxide smarter directory navigator. |  |
@@ -170,12 +178,14 @@ ADR 0010 is now composed from atomic Dependency-only Tags: `node`, `rust`,
 `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`,
 `delta`, `fd`, `gh`, and `jq`. The internal `unzip` prerequisite follows the
 `node` Tag because the constrained fnm bootstrap consumes it; it is not an
-artificial catalog capability. The `agents` set requires Codex, Claude Code,
-OpenCode, Antigravity, Copilot CLI, and shares `jq` intentionally with the
-atomic `jq` capability. Linux Homebrew fallback is explicit with
-`linux_homebrew: true`; GUI apps and fonts stay manual unless they have
-validated Linux support. Node and Rust use constrained built-in toolchain
-bootstrap commands after manager installation:
+artificial catalog capability. The atomic `codex`, `claude`, `opencode`,
+`antigravity`, and `copilot` sets each pair one Agent CLI requirement with its
+Managed Configuration. An internal set selected by `claude` and `copilot`
+shares `jq` without making it a compulsory standalone selection. The Desktop
+Nerd Font is similarly selected by `ghostty`, `warp`, and `zed`. Linux Homebrew
+fallback is explicit with `linux_homebrew: true`; GUI apps and fonts stay manual
+unless they have validated Linux support. Node and Rust use constrained
+built-in toolchain bootstrap commands after manager installation:
 `fnm install --lts` for Node LTS and `rustup default stable` for Rust stable.
 Bootstrap declarations do not make an action executable by themselves: the
 manager executable must already be on `PATH` or a concrete installer/provider
@@ -184,6 +194,7 @@ must run first.
 The `codexbar` set is Darwin-only. It detects `CodexBar.app` in the supported
 macOS application locations and uses the Homebrew cask `codexbar` when the app
 is missing. The `desktop` Profile includes this independently selectable Tag;
+the legacy `desktop` alias expands only to `ghostty`, `warp`, and `zed`.
 Linux selections remain valid and omit the CodexBar Dependency.
 
 On Linux, when `fnm` is absent, no executable package provider is available, and
@@ -309,31 +320,31 @@ Current Managed Entries:
 | `configs/herdr/config.toml` (`adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` | `core` | `darwin` | `herdr`; owns TOML subset |
 | `configs/zellij/config.kdl` (`adaptive-theme` override: `configs/zellij/config-adaptive.kdl`) | `~/.config/zellij/config.kdl` | `copy` | `core` | `darwin`, `linux` | `zellij`; whole-target ownership |
 | `configs/zellij/layouts/default.kdl` | `~/.config/zellij/layouts/default.kdl` | `symlink` | `core` | `darwin`, `linux` | `zellij` |
-| `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `desktop` | `darwin`, `linux` | `ghostty` |
+| `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `ghostty` | `darwin`, `linux` | `ghostty` |
 | `configs/ghostty/adaptive/adaptive-theme.ghostty` | `~/.config/ghostty/adaptive-theme.ghostty` | `symlink` | `adaptive-theme` | `darwin` | None |
-| `configs/warp/settings.toml` | `~/.warp/settings.toml` | `copy` | `desktop` | `darwin` | None |
-| `configs/warp/keybindings.yaml` | `~/.warp/keybindings.yaml` | `copy` | `desktop` | `darwin` | None |
-| `configs/warp/settings.toml` | `~/.config/warp-terminal/settings.toml` | `copy` | `desktop` | `linux` | `Warp` |
-| `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `desktop` | `linux` | `Warp` |
+| `configs/warp/settings.toml` | `~/.warp/settings.toml` | `copy` | `warp` | `darwin` | None |
+| `configs/warp/keybindings.yaml` | `~/.warp/keybindings.yaml` | `copy` | `warp` | `darwin` | None |
+| `configs/warp/settings.toml` | `~/.config/warp-terminal/settings.toml` | `copy` | `warp` | `linux` | `Warp` |
+| `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `warp` | `linux` | `Warp` |
 | `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `copy` | `core` | `darwin`, `linux` | `atuin`; owns TOML subset |
 | `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
 | `configs/bat/config` | `~/.config/bat/config` | `copy` | `core` | `darwin`, `linux` | `bat`; whole-target ownership |
 | `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `core` | `darwin`, `linux` | None |
 | `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `core` | `darwin`, `linux` | `neovim` |
 | `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `core` | `darwin`, `linux` | None |
-| `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `desktop` | `darwin`, `linux` | `zed` |
-| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `copy` (`seeded`) | `desktop` | `darwin`, `linux` | `zed` |
-| `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `desktop` | `darwin`, `linux` | `zed` |
-| `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
-| `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
-| `configs/codex/config.toml` (`codegraph` override: `configs/codex/config-codegraph.toml`) | `~/.codex/config.toml` | `copy` | `agents` | `darwin`, `linux` | None; owns TOML subset; CodeGraph tag adds a Codex SessionStart hook |
-| `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns JSON subset |
-| `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `agents` | `darwin`, `linux` | None |
-| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `agents` | `darwin`, `linux` | None; owns the broad Antigravity JSON baseline |
+| `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `zed` | `darwin`, `linux` | `zed` |
+| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `copy` (`seeded`) | `zed` | `darwin`, `linux` | `zed` |
+| `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `zed` | `darwin`, `linux` | `zed` |
+| `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `claude` | `darwin`, `linux` | None; owns JSON subset |
+| `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `claude` | `darwin`, `linux` | None |
+| `configs/codex/config.toml` (`codegraph` override: `configs/codex/config-codegraph.toml`) | `~/.codex/config.toml` | `copy` | `codex` | `darwin`, `linux` | None; owns TOML subset; CodeGraph tag adds a Codex SessionStart hook |
+| `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `copilot` | `darwin`, `linux` | None; owns JSON subset |
+| `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `copilot` | `darwin`, `linux` | None |
+| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `antigravity` | `darwin`, `linux` | None; owns the broad Antigravity JSON baseline |
 | `configs/antigravity/mobile-mcp-settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `mobile` | `darwin`, `linux` | None; owns only the Dart/Flutter MCP JSON subset |
 | `configs/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` | `copy` | `mobile` | `darwin` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
 | `configs/vscode/settings.json` | `~/.config/Code/User/settings.json` | `copy` | `mobile` | `linux` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
-| `configs/opencode/opencode.json` | `~/.config/opencode/opencode.json` | `copy` | `agents` | `darwin`, `linux` | None; owns only the native JSON baseline subset |
+| `configs/opencode/opencode.json` | `~/.config/opencode/opencode.json` | `copy` | `opencode` | `darwin`, `linux` | None; owns only the native JSON baseline subset |
 | `configs/opencode/mcp.json` | `~/.config/opencode/opencode.json` | `copy` | `web` | `darwin`, `linux` | `opencode`; contributes the Chrome DevTools JSON subset alongside the native baseline |
 
 ## Dependencies

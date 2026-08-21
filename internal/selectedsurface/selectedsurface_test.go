@@ -150,7 +150,7 @@ func TestRepositoryProfilesMatchEquivalentExplicitTagsAcrossSupportedOS(t *testi
 	}
 }
 
-func TestRepositoryAtomicCoreTagsSelectOnlyTheirCapabilities(t *testing.T) {
+func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T) {
 	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -190,6 +190,14 @@ func TestRepositoryAtomicCoreTagsSelectOnlyTheirCapabilities(t *testing.T) {
 		{tag: "fd", osName: "linux", dependencies: []string{"fd"}},
 		{tag: "gh", osName: "linux", dependencies: []string{"GitHub CLI"}},
 		{tag: "jq", osName: "linux", dependencies: []string{"jq"}},
+		{tag: "ghostty", osName: "linux", entries: []string{"~/.config/ghostty/config.ghostty"}, dependencies: []string{"Desktop Nerd Font", "ghostty"}},
+		{tag: "warp", osName: "linux", entries: []string{"~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml"}, dependencies: []string{"Desktop Nerd Font", "Warp"}},
+		{tag: "zed", osName: "linux", entries: []string{"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json"}, dependencies: []string{"Desktop Nerd Font", "zed"}},
+		{tag: "codex", osName: "linux", entries: []string{"~/.codex/config.toml"}, dependencies: []string{"Codex"}},
+		{tag: "claude", osName: "linux", entries: []string{"~/.claude/settings.json", "~/.claude/statusline-command.sh"}, dependencies: []string{"Claude Code", "jq"}},
+		{tag: "opencode", osName: "linux", entries: []string{"~/.config/opencode/opencode.json"}, dependencies: []string{"OpenCode"}},
+		{tag: "antigravity", osName: "linux", entries: []string{"~/.gemini/antigravity-cli/settings.json"}, dependencies: []string{"Antigravity"}},
+		{tag: "copilot", osName: "linux", entries: []string{"~/.copilot/settings.json", "~/.copilot/statusline-command.sh"}, dependencies: []string{"Copilot CLI", "jq"}},
 	}
 
 	for _, tt := range tests {
@@ -203,6 +211,78 @@ func TestRepositoryAtomicCoreTagsSelectOnlyTheirCapabilities(t *testing.T) {
 			}
 			if got := provisionerTools(surface.Provisioners); !reflect.DeepEqual(got, nonNil(tt.provisioners)) {
 				t.Errorf("Provisioners = %#v, want %#v", got, nonNil(tt.provisioners))
+			}
+		})
+	}
+}
+
+func TestRepositoryDesktopAndAgentProfilesPreservePreAtomizationSurfaces(t *testing.T) {
+	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		profile      string
+		osName       string
+		entries      []string
+		dependencies []string
+	}{
+		{
+			profile: "desktop",
+			osName:  "darwin",
+			entries: []string{
+				"~/.config/ghostty/config.ghostty", "~/.warp/settings.toml", "~/.warp/keybindings.yaml",
+				"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json",
+			},
+			dependencies: []string{"Desktop Nerd Font", "CodexBar", "ghostty", "zed"},
+		},
+		{
+			profile: "desktop",
+			osName:  "linux",
+			entries: []string{
+				"~/.config/ghostty/config.ghostty", "~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml",
+				"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json",
+			},
+			dependencies: []string{"Desktop Nerd Font", "ghostty", "Warp", "zed"},
+		},
+		{
+			profile: "agents",
+			osName:  "darwin",
+			entries: []string{
+				"~/.claude/settings.json", "~/.claude/statusline-command.sh", "~/.codex/config.toml",
+				"~/.copilot/settings.json", "~/.copilot/statusline-command.sh", "~/.gemini/antigravity-cli/settings.json",
+				"~/.config/opencode/opencode.json",
+			},
+			dependencies: []string{"Codex", "Claude Code", "OpenCode", "Antigravity", "Copilot CLI", "jq"},
+		},
+		{
+			profile: "agents",
+			osName:  "linux",
+			entries: []string{
+				"~/.claude/settings.json", "~/.claude/statusline-command.sh", "~/.codex/config.toml",
+				"~/.copilot/settings.json", "~/.copilot/statusline-command.sh", "~/.gemini/antigravity-cli/settings.json",
+				"~/.config/opencode/opencode.json",
+			},
+			dependencies: []string{"Codex", "Claude Code", "OpenCode", "Antigravity", "Copilot CLI", "jq"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.profile+"/"+tt.osName, func(t *testing.T) {
+			selection, err := manifest.ResolveReadOnlySelection(*m, []string{tt.profile}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			surface := selectedsurface.Evaluate(*m, selection.Tags, tt.osName)
+			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, tt.entries) {
+				t.Errorf("Managed Entries changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.entries)
+			}
+			if got := dependencyNames(surface.Dependencies); !reflect.DeepEqual(got, tt.dependencies) {
+				t.Errorf("Dependencies changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.dependencies)
+			}
+			if got := provisionerTools(surface.Provisioners); len(got) != 0 {
+				t.Errorf("Provisioners changed from the pre-atomization surface: %#v", got)
 			}
 		})
 	}

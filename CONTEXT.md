@@ -210,7 +210,7 @@ The `core` Profile's intended workstation role: an ordered preset of atomic shel
 _Avoid_: minimal shell, everything profile, desktop baseline
 
 **Agent CLI Baseline**:
-The `agents` Tag's intended workstation role: the supported agent command-line tools plus their dots-owned native Managed Configuration and required support Dependencies. Generated memory, context, skills, global rules, and specialized web or mobile capabilities remain outside the baseline.
+The `agents` Profile's intended workstation role: the atomic `codex`, `claude`, `opencode`, `antigravity`, and `copilot` Tags, each pairing one supported Agent CLI requirement with its dots-owned native Managed Configuration. Shared prerequisites remain internal declarations selected by their consumers. Generated memory, context, skills, global rules, and specialized web or mobile capabilities remain outside the baseline.
 _Avoid_: agent setup, AI tools profile, generated agent environment
 
 **Delivery Contract**:

@@ -799,7 +799,7 @@ func TestRepositoryManifestWebDependencySetIncludesPlaywrightCLI(t *testing.T) {
 	}
 }
 
-func TestRepositoryManifestDesktopProfileIncludesDarwinCodexBarDependency(t *testing.T) {
+func TestRepositoryManifestDeclaresAtomicDesktopCapabilities(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -808,22 +808,48 @@ func TestRepositoryManifestDesktopProfileIncludesDarwinCodexBarDependency(t *tes
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	tag, ok := got.Tags["codexbar"]
-	if !ok {
-		t.Fatal("repository manifest missing codexbar tag")
+	capabilityTags := []string{"ghostty", "warp", "zed"}
+	for _, name := range capabilityTags {
+		tag, ok := got.Tags[name]
+		if !ok {
+			t.Errorf("repository manifest missing atomic Desktop Tag %q", name)
+			continue
+		}
+		if tag.Kind != "surface" || tag.Status != "current" || strings.TrimSpace(tag.Description) == "" {
+			t.Errorf("Tag %q = %#v, want described current surface", name, tag)
+		}
 	}
-	if tag.Kind != "surface" || tag.Status != "current" {
-		t.Fatalf("codexbar tag = %#v, want current surface tag", tag)
+
+	legacy := got.Tags["desktop"]
+	if legacy.Kind != "compatibility" || legacy.Status != "legacy" || !reflect.DeepEqual([]string(legacy.ReplacedBy), capabilityTags) {
+		t.Fatalf("desktop Tag = %#v, want ordered compatibility alias for %#v", legacy, capabilityTags)
 	}
 
 	selection, err := manifest.ResolveSelection(*got, []string{"desktop"}, nil)
 	if err != nil {
 		t.Fatalf("ResolveSelection(desktop) error = %v", err)
 	}
-	if want := []string{"desktop", "codexbar"}; !reflect.DeepEqual(selection.Tags, want) {
+	if want := []string{"ghostty", "warp", "zed", "codexbar"}; !reflect.DeepEqual(selection.Tags, want) {
 		t.Fatalf("desktop selection tags = %#v, want %#v", selection.Tags, want)
 	}
+	legacySelection, err := manifest.ResolveSelection(*got, nil, []string{"desktop"})
+	if err != nil {
+		t.Fatalf("ResolveSelection(--tag desktop) error = %v", err)
+	}
+	if !reflect.DeepEqual(legacySelection.Tags, capabilityTags) {
+		t.Fatalf("legacy desktop selection tags = %#v, want %#v", legacySelection.Tags, capabilityTags)
+	}
 
+	for _, name := range capabilityTags {
+		if dep := findDependency(selectedsurface.Evaluate(*got, []string{name}, "linux").Dependencies, "Desktop Nerd Font"); dep == nil {
+			t.Errorf("Tag %q missing shared Desktop Nerd Font Dependency", name)
+		}
+	}
+
+	tag, ok := got.Tags["codexbar"]
+	if !ok || tag.Kind != "surface" || tag.Status != "current" {
+		t.Fatalf("codexbar tag = %#v, present=%v, want current surface tag", tag, ok)
+	}
 	darwin := selectedsurface.Evaluate(*got, []string{"codexbar"}, "darwin")
 	if len(darwin.Dependencies) != 1 {
 		t.Fatalf("Darwin codexbar dependencies = %#v, want one dependency", darwin.Dependencies)
@@ -839,7 +865,7 @@ func TestRepositoryManifestDesktopProfileIncludesDarwinCodexBarDependency(t *tes
 	}
 }
 
-func TestRepositoryManifestDefinesNativeAgentCLIBaseline(t *testing.T) {
+func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
 
@@ -848,50 +874,54 @@ func TestRepositoryManifestDefinesNativeAgentCLIBaseline(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	sets := make(map[string]*manifest.DependencySet)
-	for i := range got.Dependencies {
-		candidate := &got.Dependencies[i]
-		for _, tag := range candidate.Tags {
-			sets[tag] = candidate
+	capabilityTags := []string{"codex", "claude", "opencode", "antigravity", "copilot"}
+	for _, name := range capabilityTags {
+		tag, ok := got.Tags[name]
+		if !ok {
+			t.Errorf("repository manifest missing atomic Agent Tag %q", name)
+			continue
+		}
+		if tag.Kind != "surface" || tag.Status != "current" || strings.TrimSpace(tag.Description) == "" {
+			t.Errorf("Tag %q = %#v, want described current surface", name, tag)
 		}
 	}
-	agents := sets["agents"]
-	if agents == nil {
-		t.Fatal("repository manifest missing agents dependency set")
+	legacy := got.Tags["agents"]
+	if legacy.Kind != "compatibility" || legacy.Status != "legacy" || !reflect.DeepEqual([]string(legacy.ReplacedBy), capabilityTags) {
+		t.Fatalf("agents Tag = %#v, want ordered compatibility alias for %#v", legacy, capabilityTags)
 	}
-	if !sameStrings(agents.OS, []string{"darwin", "linux"}) {
-		t.Fatalf("agents dependency set OS = %#v, want [darwin linux]", agents.OS)
+	if profile := got.Profiles["agents"]; !reflect.DeepEqual(profile.Tags, capabilityTags) {
+		t.Fatalf("agents Profile Tags = %#v, want %#v", profile.Tags, capabilityTags)
 	}
 
 	wantAgents := map[string]struct {
+		tag     string
 		command string
 		recipe  string
 	}{
-		"Codex":       {command: "codex", recipe: "codex"},
-		"Claude Code": {command: "claude", recipe: "claude"},
-		"OpenCode":    {command: "opencode", recipe: "opencode"},
-		"Antigravity": {command: "agy", recipe: "antigravity"},
-		"Copilot CLI": {command: "copilot", recipe: "copilot"},
-		"jq":          {command: "jq"},
+		"Codex":       {tag: "codex", command: "codex", recipe: "codex"},
+		"Claude Code": {tag: "claude", command: "claude", recipe: "claude"},
+		"OpenCode":    {tag: "opencode", command: "opencode", recipe: "opencode"},
+		"Antigravity": {tag: "antigravity", command: "agy", recipe: "antigravity"},
+		"Copilot CLI": {tag: "copilot", command: "copilot", recipe: "copilot"},
 	}
 	for name, want := range wantAgents {
-		dep := findDependency(agents.Dependencies, name)
+		surface := selectedsurface.Evaluate(*got, []string{want.tag}, "linux")
+		dep := findDependency(surface.Dependencies, name)
 		if dep == nil {
-			t.Errorf("agents dependency set missing %s: %#v", name, agents.Dependencies)
+			t.Errorf("Tag %q missing %s Dependency: %#v", want.tag, name, surface.Dependencies)
 			continue
 		}
 		if dep.Command != want.command {
-			t.Errorf("agents dependency %s command = %q, want %q", name, dep.Command, want.command)
-		}
-		if want.recipe == "" {
-			continue
+			t.Errorf("Tag %q dependency %s command = %q, want %q", want.tag, name, dep.Command, want.command)
 		}
 		if dep.RollingUserLocal == nil || dep.RollingUserLocal.Recipe != want.recipe {
-			t.Errorf("agents dependency %s rolling provider = %#v, want recipe %q", name, dep.RollingUserLocal, want.recipe)
+			t.Errorf("Tag %q dependency %s rolling provider = %#v, want recipe %q", want.tag, name, dep.RollingUserLocal, want.recipe)
 		}
 	}
-	if dep := findDependency(agents.Dependencies, "GitHub CLI"); dep != nil {
-		t.Errorf("agents dependency set includes GitHub CLI: %#v", *dep)
+	for _, name := range []string{"claude", "copilot"} {
+		if dep := findDependency(selectedsurface.Evaluate(*got, []string{name}, "linux").Dependencies, "jq"); dep == nil {
+			t.Errorf("Tag %q missing shared jq Dependency", name)
+		}
 	}
 
 	githubCLI := findDependency(selectedsurface.Evaluate(*got, []string{"gh"}, "linux").Dependencies, "GitHub CLI")
@@ -909,16 +939,16 @@ func TestRepositoryManifestDefinesNativeAgentCLIBaseline(t *testing.T) {
 	if opencodeEntry == nil {
 		t.Fatal("agents profile missing native OpenCode Managed Entry")
 	}
-	if opencodeEntry.Source != "configs/opencode/opencode.json" || opencodeEntry.Ownership != "json-subset" || !sameStrings(opencodeEntry.Tags, []string{"agents"}) {
-		t.Errorf("OpenCode Managed Entry = %#v, want agents-tagged configs/opencode/opencode.json with JSON Subset Ownership", *opencodeEntry)
+	if opencodeEntry.Source != "configs/opencode/opencode.json" || opencodeEntry.Ownership != "json-subset" || !sameStrings(opencodeEntry.Tags, []string{"opencode"}) {
+		t.Errorf("OpenCode Managed Entry = %#v, want opencode-tagged configs/opencode/opencode.json with JSON Subset Ownership", *opencodeEntry)
 	}
 
 	zedSettings := findEntry(got.Entries, "~/.config/zed/settings.json")
 	if zedSettings == nil {
 		t.Fatal("desktop profile missing Zed settings Managed Entry")
 	}
-	if zedSettings.Source != "configs/zed/settings.json" || zedSettings.Strategy != "copy" || zedSettings.Ownership != "jsonc-subset" {
-		t.Errorf("Zed settings Managed Entry = %#v, want copy with JSONC Subset Ownership", *zedSettings)
+	if zedSettings.Source != "configs/zed/settings.json" || zedSettings.Strategy != "copy" || zedSettings.Ownership != "jsonc-subset" || !sameStrings(zedSettings.Tags, []string{"zed"}) {
+		t.Errorf("Zed settings Managed Entry = %#v, want zed-tagged copy with JSONC Subset Ownership", *zedSettings)
 	}
 
 	selected, err := provision.Select(*got, provision.Options{Profile: "agents", OS: "darwin"})
@@ -928,6 +958,67 @@ func TestRepositoryManifestDefinesNativeAgentCLIBaseline(t *testing.T) {
 	if len(selected) != 0 {
 		t.Errorf("agents selected legacy Provisioners = %#v, want none", selected)
 	}
+
+	wantWorkstation := append(append(append([]string(nil), got.Profiles["core"].Tags...), got.Profiles["desktop"].Tags[:3]...), capabilityTags...)
+	if profile := got.Profiles["workstation"]; !reflect.DeepEqual(profile.Tags, wantWorkstation) {
+		t.Fatalf("workstation Profile Tags = %#v, want core + Ghostty/Warp/Zed + Agent capability Tags %#v", profile.Tags, wantWorkstation)
+	}
+
+	for i, set := range got.Dependencies {
+		if hasString(set.Tags, "desktop") || hasString(set.Tags, "agents") {
+			t.Errorf("dependencies[%d] still selects a legacy broad Tag: %#v", i, set.Tags)
+		}
+	}
+	for i, entry := range got.Entries {
+		if hasString(entry.Tags, "desktop") || hasString(entry.Tags, "agents") {
+			t.Errorf("entries[%d] %q still selects a legacy broad Tag: %#v", i, entry.Target, entry.Tags)
+		}
+	}
+	for i, provisioner := range got.Provisioners {
+		if hasString(provisioner.Tags, "desktop") || hasString(provisioner.Tags, "agents") {
+			t.Errorf("provisioners[%d] %q still selects a legacy broad Tag: %#v", i, provisioner.Tool, provisioner.Tags)
+		}
+	}
+}
+
+func TestRepositoryAtomicAgentCompositionAndCodexSourceOverride(t *testing.T) {
+	got, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		tags    []string
+		target  string
+		sources []string
+	}{
+		{name: "OpenCode baseline plus web subset", tags: []string{"opencode", "web"}, target: "~/.config/opencode/opencode.json", sources: []string{"configs/opencode/opencode.json", "configs/opencode/mcp.json"}},
+		{name: "Antigravity baseline plus mobile subset", tags: []string{"antigravity", "mobile"}, target: "~/.gemini/antigravity-cli/settings.json", sources: []string{"configs/antigravity/settings.json", "configs/antigravity/mobile-mcp-settings.json"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sources []string
+			for _, entry := range selectedsurface.Evaluate(*got, tt.tags, "linux").Entries {
+				if entry.Entry.Target == tt.target {
+					sources = append(sources, entry.Source)
+				}
+			}
+			if !reflect.DeepEqual(sources, tt.sources) {
+				t.Fatalf("selected sources for %q = %#v, want %#v", tt.target, sources, tt.sources)
+			}
+		})
+	}
+
+	for _, entry := range selectedsurface.Evaluate(*got, []string{"codex", "codegraph"}, "linux").Entries {
+		if entry.Entry.Target == "~/.codex/config.toml" {
+			if entry.Source != "configs/codex/config-codegraph.toml" || entry.OverrideTag != "codegraph" {
+				t.Fatalf("Codex selected entry = %#v, want codegraph source override", entry)
+			}
+			return
+		}
+	}
+	t.Fatal("Codex and codegraph Tags did not select the Codex Managed Entry")
 }
 
 func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
@@ -3578,7 +3669,8 @@ func TestRepositoryManifestDeclaresAtomicCoreCapabilitySelection(t *testing.T) {
 	if profile := got.Profiles["core"]; !reflect.DeepEqual(profile.Tags, wantTags) {
 		t.Fatalf("core Profile Tags = %#v, want %#v", profile.Tags, wantTags)
 	}
-	wantWorkstation := append(append([]string(nil), wantTags...), "desktop", "agents")
+	wantWorkstation := append(append([]string(nil), wantTags...),
+		"ghostty", "warp", "zed", "codex", "claude", "opencode", "antigravity", "copilot")
 	if profile := got.Profiles["workstation"]; !reflect.DeepEqual(profile.Tags, wantWorkstation) {
 		t.Fatalf("workstation Profile Tags = %#v, want %#v", profile.Tags, wantWorkstation)
 	}
