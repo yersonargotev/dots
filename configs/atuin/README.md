@@ -107,7 +107,8 @@ GOPATH="$sandbox_gopath" \
 GOMODCACHE="$sandbox_modcache" \
 XDG_CACHE_HOME="$sandbox_cache" \
 go run ./cmd/dots install \
-  --profile default \
+  --tag atuin \
+  --skip-deps \
   --yes \
   --home "$sandbox_home" \
   --source-root "$PWD" \
@@ -119,7 +120,7 @@ GOPATH="$sandbox_gopath" \
 GOMODCACHE="$sandbox_modcache" \
 XDG_CACHE_HOME="$sandbox_cache" \
 go run ./cmd/dots status \
-  --profile default \
+  --tag atuin \
   --home "$sandbox_home" \
   --source-root "$PWD" \
   --state-root "$sandbox_state"
