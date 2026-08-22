@@ -198,7 +198,7 @@ _Avoid_: binary name, CLI name, app name
 
 **Profile**:
 An ordered preset of Tags that represents an intended workstation role, such as `core`, `desktop`, `agents`, or `workstation`. A Profile contains descriptive lifecycle metadata and Tags only; it does not own Dependencies, Managed Entries, Provisioners, or other Profiles. Repeated Profiles compose by ordered Tag union.
-_Avoid_: install profile, machine config, host config, preset
+_Avoid_: install profile, machine config, host config
 
 **Tag**:
 The smallest independently meaningful capability that makes sense to install or stop managing, such as `zsh`, `git`, `node`, or `jq`. A Tag may select Managed Entries, Dependencies, Provisioners, or a cohesive combination of them. Tags from repeated Profiles and explicit `--tag` flags are de-duplicated while preserving order. Legacy compatibility Tags normalize to their ordered current replacements before Selected Surface evaluation.
