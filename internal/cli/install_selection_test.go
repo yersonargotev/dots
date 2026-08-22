@@ -751,8 +751,8 @@ provisioners:
 		"--state-root", stateRoot,
 	})
 	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "at least one --profile is required") {
-		t.Fatalf("Execute() error = %v, want explicit Profile guidance\noutput:\n%s", err, out.String())
+	if err == nil || !strings.Contains(err.Error(), "selection required") {
+		t.Fatalf("Execute() error = %v, want explicit selection guidance\noutput:\n%s", err, out.String())
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".zshrc")); !os.IsNotExist(err) {
 		t.Fatalf("target mutated without Profile; lstat err = %v", err)

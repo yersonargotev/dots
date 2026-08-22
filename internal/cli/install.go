@@ -70,10 +70,19 @@ func newInstallCommand() *cobra.Command {
 			if backupAndReplace && !dryRun && !yes {
 				return fmt.Errorf("--backup-and-replace requires --yes for non-interactive conflict replacement")
 			}
+			hasExplicitSelection := len(profiles) > 0 || len(extraTags) > 0 || clearSelection
+			selectorPreview := false
+			if !hasExplicitSelection {
+				if installTagSelectorRequested(cmd, yes, noTUI) {
+					selectorPreview = true
+				} else {
+					return selection.ErrSelectionRequired
+				}
+			}
 
 			prep := installRepositoryPreparation{SourceReadRoot: paths.SourceRoot, LegacyMigrations: map[string]plan.LegacyMigration{}, cleanup: func() {}}
 			defaultRepository := !cmd.Flags().Changed("file") && !cmd.Flags().Changed("source-root")
-			if defaultRepository {
+			if defaultRepository && !selectorPreview {
 				prep, err = prepareInstallRepository(cmd, paths, dryRun)
 				if err != nil {
 					return err
@@ -90,8 +99,14 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			intentProfiles := profiles
-			intentTags := extraTags
+			if selectorPreview {
+				meta, err := loadInstallationMetadata(paths, stateRoot)
+				if err != nil {
+					return err
+				}
+				return runInstallTagSelectorPreview(cmd, *m, meta, paths, prep.SourceReadRoot, prep.LegacyMigrations)
+			}
+
 			var effective selection.Effective
 			if clearSelection {
 				effective, err = selection.ResolveIntent(*m, selection.Intent{
@@ -99,18 +114,10 @@ func newInstallCommand() *cobra.Command {
 					AllowEmpty: true,
 				})
 			} else {
-				if len(intentProfiles) == 0 && len(intentTags) == 0 {
-					requestedSelection, resolveErr := selection.Resolve(*m, nil, nil)
-					if resolveErr != nil {
-						return resolveErr
-					}
-					intentProfiles = requestedSelection.Profiles
-					intentTags = requestedSelection.ExtraTags
-				}
 				effective, err = selection.ResolveIntent(*m, selection.Intent{
 					Source:    selection.SourceExplicit,
-					Profiles:  intentProfiles,
-					ExtraTags: intentTags,
+					Profiles:  profiles,
+					ExtraTags: extraTags,
 				})
 			}
 			if err != nil {
@@ -193,7 +200,6 @@ func newInstallCommand() *cobra.Command {
 				}
 				return nil
 			}
-
 			retirementOptions := selectionretirement.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ForwardPlan: &p}
 			var selectionRetirementPlan selectionretirement.Plan
 			if p.SelectionReconciliation != nil {

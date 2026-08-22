@@ -51,6 +51,7 @@ entries:
 
 	installOut, err := runRootCommand(t, "r\n",
 		"install",
+		"--profile", "default",
 		"--file", manifestPath,
 		"--home", home,
 		"--source-root", sourceRoot,
