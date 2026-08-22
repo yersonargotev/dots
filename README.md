@@ -88,6 +88,8 @@ state:
 
 ```bash
 dots catalog profiles
+dots catalog tags
+dots catalog tag zsh
 dots catalog map workstation
 dots catalog why workstation atuin
 dots catalog compare core workstation

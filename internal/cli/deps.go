@@ -35,10 +35,11 @@ func newDepsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deps",
 		Short: "Inspect external tool Dependencies declared by managed entries",
-		Long:  "deps reports which external Dependencies a profile needs, offers OS-aware installation guidance, and can execute missing install actions with explicit confirmation.",
+		Long:  "deps reports which external Dependencies a complete Profile/Tag selection needs, offers OS-aware installation guidance, and can execute missing install actions with explicit confirmation.",
 	}
-	cmd.PersistentFlags().StringArrayVarP(&profiles, "profile", "p", nil, "profile to inspect")
-	cmd.PersistentFlags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
+	cmd.PersistentFlags().StringArrayVarP(&profiles, "profile", "p", nil, selectionProfileHelp)
+	cmd.PersistentFlags().StringArrayVar(&extraTags, "tag", nil, selectionTagHelp)
+	registerSelectionFlagCompletion(cmd)
 	cmd.AddCommand(newDepsCheckCommand(&profiles, &extraTags))
 	cmd.AddCommand(newDepsPlanCommand(&profiles, &extraTags))
 	cmd.AddCommand(newDepsInstallCommand(&profiles, &extraTags))
@@ -103,7 +104,7 @@ func newDepsPlanCommand(profiles *[]string, extraTags *[]string) *cobra.Command 
 	cmd := &cobra.Command{
 		Use:   "plan",
 		Short: "Show OS-aware installation guidance for missing Dependencies",
-		Long:  "plan produces advisory installation guidance for the Dependencies a profile needs but the workstation is missing. It never installs packages.",
+		Long:  "plan produces advisory installation guidance for the Dependencies a complete Profile/Tag selection needs but the workstation is missing. It never installs packages.",
 		// Domain errors (e.g. unknown profile or tier) are user-facing messages,
 		// not misuse of the command, so do not dump the usage block on failure.
 		SilenceUsage: true,

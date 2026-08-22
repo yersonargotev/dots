@@ -21,7 +21,7 @@ func newPlanCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan",
 		Short: "Preview the changes dots would apply (dry run)",
-		Long:  "plan computes the Install Plan for a profile against the current workstation state without modifying any files.",
+		Long:  "plan computes the Install Plan for the complete Profile/Tag selection against the current workstation state without modifying any files.",
 		// Domain errors (e.g. unknown profile) are user-facing messages, not
 		// misuse of the command, so do not dump the usage block on failure.
 		SilenceUsage: true,
@@ -75,10 +75,11 @@ func newPlanCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to plan")
-	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, "profile to plan")
-	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
+	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, selectionProfileHelp)
+	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, selectionTagHelp)
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to plan against (default: the current user's home); use a sandbox path to preview without touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")
+	registerSelectionFlagCompletion(cmd)
 	return cmd
 }
