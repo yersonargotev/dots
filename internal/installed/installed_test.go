@@ -48,6 +48,84 @@ func TestBuildExposesEverySharedTargetContributor(t *testing.T) {
 	}
 }
 
+func TestBuildExplainsAttributedAndLegacyUnattributedOwnership(t *testing.T) {
+	home := t.TempDir()
+	sharedTarget := filepath.Join(home, ".config", "shared.json")
+	legacyTarget := filepath.Join(home, ".legacy")
+	m := manifest.Manifest{
+		Version: 1,
+		Entries: []manifest.Entry{
+			{Source: "configs/opencode.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"opencode"}},
+			{Source: "configs/antigravity.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"antigravity"}},
+			{Source: "configs/legacy", Target: "~/.legacy", Strategy: "copy", Tags: []string{"legacy"}},
+		},
+	}
+	meta := state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{
+		{
+			Target: sharedTarget, Source: "configs/opencode.json", Sources: []string{"configs/opencode.json", "configs/antigravity.json"}, Strategy: "copy", Ownership: "json-subset",
+			Contributions: []state.Contribution{
+				{Source: "configs/opencode.json", SelectorTags: []string{"opencode"}, Ownership: "json-subset", EvidenceRecorded: true, Hash: "one", OwnedContent: []byte(`{"opencode":true}`)},
+				{Source: "configs/antigravity.json", SelectorTags: []string{"antigravity"}, Ownership: "json-subset", EvidenceRecorded: true, Hash: "two", OwnedContent: []byte(`{"antigravity":true}`)},
+			},
+		},
+		{Target: legacyTarget, Source: "configs/legacy", Strategy: "copy", Ownership: "whole", Hash: "legacy-hash", Tags: []string{"legacy"}},
+	}}
+
+	report, err := inst.Build(m, meta, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if report.InstalledSelection != nil {
+		t.Fatalf("InstalledSelection = %+v, want historical inventory to remain non-authoritative", report.InstalledSelection)
+	}
+	if len(report.ManagedEntries) != 3 {
+		t.Fatalf("ManagedEntries = %+v, want two attributed contributors and one legacy record", report.ManagedEntries)
+	}
+	for i, wantTag := range []string{"opencode", "antigravity"} {
+		entry := report.ManagedEntries[i]
+		if entry.Attribution != "recorded-contribution" || entry.Ownership != "json-subset" || entry.OwnershipEvidence != "owned-json" ||
+			!reflect.DeepEqual(entry.Tags, []string{wantTag}) || entry.TagsSource != "recorded-contribution" {
+			t.Fatalf("ManagedEntries[%d] = %+v, want attributed %s JSON contribution", i, entry, wantTag)
+		}
+	}
+	legacy := report.ManagedEntries[2]
+	if legacy.Attribution != "legacy-unattributed" || legacy.Ownership != "whole" || legacy.OwnershipEvidence != "legacy-target-wide" {
+		t.Fatalf("legacy Managed Entry = %+v, want explicit legacy-unattributed explanation", legacy)
+	}
+}
+
+func TestBuildReportsRecordedEmptyOwnershipEvidence(t *testing.T) {
+	home := t.TempDir()
+	tests := []struct {
+		ownership string
+		evidence  string
+	}{
+		{ownership: "toml-subset", evidence: "owned-toml"},
+		{ownership: "seeded", evidence: "seeded-baseline"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.ownership, func(t *testing.T) {
+			target := filepath.Join(home, tt.ownership)
+			m := manifest.Manifest{Version: 1, Entries: []manifest.Entry{{
+				Source: "configs/empty", Target: "~/" + tt.ownership, Strategy: "copy", Ownership: tt.ownership, Tags: []string{"empty"},
+			}}}
+			meta := state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{{
+				Target: target, Source: "configs/empty", Strategy: "copy", Ownership: tt.ownership,
+				Contributions: []state.Contribution{{
+					Source: "configs/empty", SelectorTags: []string{"empty"}, Ownership: tt.ownership, EvidenceRecorded: true,
+				}},
+			}}}
+			report, err := inst.Build(m, meta, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
+			if err != nil {
+				t.Fatalf("Build() error = %v", err)
+			}
+			if len(report.ManagedEntries) != 1 || report.ManagedEntries[0].OwnershipEvidence != tt.evidence {
+				t.Fatalf("ManagedEntries = %+v, want empty %s evidence reported as %s", report.ManagedEntries, tt.ownership, tt.evidence)
+			}
+		})
+	}
+}
+
 func TestBuildMatchesXDGStateTargetRoot(t *testing.T) {
 	home := t.TempDir()
 	xdgStateHome := filepath.Join(home, ".local", "state")

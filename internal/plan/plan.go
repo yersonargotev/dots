@@ -47,6 +47,10 @@ type Action struct {
 	// the portable, manifest-relative Source instead.
 	ResolvedSource  string   `json:"-"`
 	ResolvedSources []string `json:"-"`
+	// Contributions retains ordered Source of Truth attribution for metadata
+	// recording. It stays outside the Install Plan output because the stable
+	// public projection is exposed by dots installed after convergence.
+	Contributions []Contribution `json:"-"`
 	// Content is the conservatively composed baseline for a shared json-subset
 	// target. Apply writes or merges it once instead of mutating per contributor.
 	Content []byte `json:"-"`
@@ -68,6 +72,13 @@ type Action struct {
 	// action in the same plan. It lets apply validate a later child create
 	// without treating the pre-removal view as an unrelated conflict.
 	LegacyParent string `json:"-"`
+}
+
+// Contribution identifies one selected Source of Truth contribution and the
+// effective declarative Tags that selected its Managed Entry and source.
+type Contribution struct {
+	Source       string
+	SelectorTags []string
 }
 
 // LegacyMigration is provenance-backed content captured before the Installed
@@ -204,14 +215,18 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		action := Action{
 			Source:         source,
 			ResolvedSource: sourceAbs,
-			Target:         target,
-			TargetRoot:     entry.TargetRoot,
-			Strategy:       entry.Strategy,
-			Status:         actionStatus,
-			Reason:         reason,
-			MatchingTags:   matchingTags,
-			Ownership:      entry.Ownership,
-			LegacyParent:   legacyParent,
+			Contributions: []Contribution{{
+				Source:       source,
+				SelectorTags: contributionSelectorTags(entry.Tags, tags, selected.OverrideTag),
+			}},
+			Target:       target,
+			TargetRoot:   entry.TargetRoot,
+			Strategy:     entry.Strategy,
+			Status:       actionStatus,
+			Reason:       reason,
+			MatchingTags: matchingTags,
+			Ownership:    entry.Ownership,
+			LegacyParent: legacyParent,
 		}
 		if actionStatus == StatusConflict || actionStatus == StatusCreate {
 			if migration, ok := opts.LegacyMigrations[target]; ok && ((migration.LegacyTarget == "" && actionStatus == StatusConflict) || (migration.LegacyTarget != "" && actionStatus == StatusCreate)) {
@@ -253,6 +268,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			}
 			existing.Sources = append(existing.Sources, action.Source)
 			existing.ResolvedSources = append(existing.ResolvedSources, action.ResolvedSource)
+			existing.Contributions = append(existing.Contributions, action.Contributions...)
 			readSourcesByTarget[targetKey] = append(readSourcesByTarget[targetKey], readSourceAbs)
 			composed, err := configsubset.ComposeJSONFiles(readSourcesByTarget[targetKey])
 			if err != nil {
@@ -279,6 +295,25 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	}
 
 	return plan, nil
+}
+
+func contributionSelectorTags(entryTags, selectedTags []string, overrideTag string) []string {
+	selectors := make([]string, 0, len(entryTags)+1)
+	for _, selectedTag := range selectedTags {
+		matches := selectedTag == overrideTag
+		if !matches {
+			for _, entryTag := range entryTags {
+				if selectedTag == entryTag {
+					matches = true
+					break
+				}
+			}
+		}
+		if matches {
+			selectors = append(selectors, selectedTag)
+		}
+	}
+	return selectors
 }
 
 type selectedManifestEntry struct {

@@ -99,6 +99,12 @@ func TestBuildComposesCompatibleJSONSubsetEntriesForSharedTarget(t *testing.T) {
 	if !reflect.DeepEqual(action.Sources, []string{"configs/base.json", "configs/mobile.json"}) {
 		t.Fatalf("Sources = %#v, want manifest-order contributors", action.Sources)
 	}
+	if got, want := action.Contributions, []plan.Contribution{
+		{Source: "configs/base.json", SelectorTags: []string{"base"}},
+		{Source: "configs/mobile.json", SelectorTags: []string{"mobile"}},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Contributions = %#v, want ordered attribution %#v", got, want)
+	}
 	if action.Status != plan.StatusCreate {
 		t.Fatalf("Status = %q, want %q", action.Status, plan.StatusCreate)
 	}
@@ -1151,6 +1157,9 @@ func TestBuildUsesSourceOverrideForSelectedExtraTag(t *testing.T) {
 	if got := withoutTag.Actions[0].Source; got != "default.conf" {
 		t.Fatalf("source without extra tag = %q, want default.conf", got)
 	}
+	if got, want := withoutTag.Actions[0].Contributions, []plan.Contribution{{Source: "default.conf", SelectorTags: []string{"core"}}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("contributions without extra tag = %#v, want %#v", got, want)
+	}
 
 	withTag, err := plan.Build(m, plan.Options{Profile: "default", ExtraTags: []string{"adaptive-theme"}, OS: "darwin", SourceRoot: sourceRoot, Home: home})
 	if err != nil {
@@ -1161,6 +1170,9 @@ func TestBuildUsesSourceOverrideForSelectedExtraTag(t *testing.T) {
 	}
 	if len(withTag.Actions) != 1 {
 		t.Fatalf("len(Actions) with source override = %d, want 1", len(withTag.Actions))
+	}
+	if got, want := withTag.Actions[0].Contributions, []plan.Contribution{{Source: "adaptive.conf", SelectorTags: []string{"core", "adaptive-theme"}}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("contributions with source override = %#v, want %#v", got, want)
 	}
 }
 

@@ -51,6 +51,78 @@ func TestInstalledJSONEnvelope(t *testing.T) {
 	}
 }
 
+func TestInstalledTextAndJSONExplainContributionAttributionWithoutRawEvidence(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	sourceRoot := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/shared.json", "{\"portable-secret-value\":true}\n")
+	writeCLISource(t, sourceRoot, "configs/legacy", "legacy\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [shared, legacy]
+entries:
+  - source: configs/shared.json
+    target: ~/.config/shared.json
+    strategy: copy
+    ownership: json-subset
+    tags: [shared]
+  - source: configs/legacy
+    target: ~/.legacy
+    strategy: copy
+    tags: [legacy]
+`)
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{
+		{
+			Target: filepath.Join(home, ".config", "shared.json"), Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset",
+			Contributions: []state.Contribution{{
+				Source: "configs/shared.json", SelectorTags: []string{"shared"}, Ownership: "json-subset", EvidenceRecorded: true, Hash: "source-hash", OwnedContent: []byte(`{"portable-secret-value":true}`),
+			}},
+		},
+		{Target: filepath.Join(home, ".legacy"), Source: "configs/legacy", Strategy: "copy", Ownership: "whole", Hash: "legacy-hash", Tags: []string{"legacy"}},
+	}}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+
+	run := func(args ...string) string {
+		t.Helper()
+		var out, errOut bytes.Buffer
+		code := cli.Run(args, &out, &errOut)
+		if code != 0 {
+			t.Fatalf("exit code = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+		}
+		return out.String()
+	}
+	common := []string{"--file", manifestPath, "--source-root", sourceRoot, "--home", home, "--state-root", stateRoot}
+	textOutput := run(append([]string{"installed"}, common...)...)
+	for _, want := range []string{
+		"attribution: recorded-contribution",
+		"ownership: json-subset (owned-json)",
+		"attribution: legacy-unattributed",
+		"ownership: whole (legacy-target-wide)",
+	} {
+		if !strings.Contains(textOutput, want) {
+			t.Fatalf("installed text missing %q:\n%s", want, textOutput)
+		}
+	}
+
+	jsonOutput := run(append([]string{"installed", "--output", "json"}, common...)...)
+	for _, want := range []string{
+		`"attribution": "recorded-contribution"`,
+		`"ownership_evidence": "owned-json"`,
+		`"tags_source": "recorded-contribution"`,
+		`"attribution": "legacy-unattributed"`,
+		`"ownership_evidence": "legacy-target-wide"`,
+	} {
+		if !strings.Contains(jsonOutput, want) {
+			t.Fatalf("installed JSON missing %s:\n%s", want, jsonOutput)
+		}
+	}
+	if strings.Contains(jsonOutput, "owned_content") || strings.Contains(jsonOutput, "portable-secret-value") {
+		t.Fatalf("installed JSON exposed raw ownership evidence:\n%s", jsonOutput)
+	}
+}
+
 func TestInstalledJSONMatchesXDGStateEntryWithCompleteCoverage(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := t.TempDir()

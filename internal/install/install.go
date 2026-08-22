@@ -120,54 +120,23 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 		if recordedOwnership == "" {
 			recordedOwnership = "whole"
 		}
-		if action.Strategy != "symlink" {
-			if len(action.Sources) > 0 {
-				hash = state.HashBytes(action.Content)
-				if action.Ownership == "json-subset" {
-					ownedContent = append([]byte(nil), action.Content...)
-				}
-			} else {
-				var err error
-				hash, err = state.HashFile(resolvedSources[i][0])
-				if err != nil {
-					return err
-				}
-				if action.Ownership == "json-subset" {
-					ownedContent, err = os.ReadFile(resolvedSources[i][0])
-					if err != nil {
-						return fmt.Errorf("read owned JSON contribution %s: %w", resolvedSources[i][0], err)
-					}
-				} else if action.Ownership == "jsonc-subset" {
-					rawContent, readErr := os.ReadFile(resolvedSources[i][0])
-					if readErr != nil {
-						return fmt.Errorf("read owned JSONC contribution %s: %w", resolvedSources[i][0], readErr)
-					}
-					ownedContent, err = configsubset.CanonicalJSONC(rawContent)
-					if err != nil {
-						return fmt.Errorf("canonicalize owned JSONC contribution %s: %w", resolvedSources[i][0], err)
-					}
-				} else if action.Ownership == "toml-subset" {
-					ownedBytes, err = os.ReadFile(resolvedSources[i][0])
-					if err != nil {
-						return fmt.Errorf("read owned TOML contribution %s: %w", resolvedSources[i][0], err)
-					}
-				} else if action.Ownership == "seeded" {
-					if action.Migration != nil && action.Migration.RecordedBaseline != nil {
-						seededBaseline = append([]byte(nil), action.Migration.RecordedBaseline...)
-					} else {
-						seededBaseline, err = os.ReadFile(resolvedSources[i][0])
-						if err != nil {
-							return fmt.Errorf("read seeded baseline %s: %w", resolvedSources[i][0], err)
-						}
-					}
-				} else if action.Ownership == "marked-block" {
-					ownedBytes, err = os.ReadFile(resolvedSources[i][0])
-					if err != nil {
-						return fmt.Errorf("read owned marked block %s: %w", resolvedSources[i][0], err)
-					}
-				}
+		contributions, err := recordContributions(action, resolvedSources[i], recordedOwnership)
+		if err != nil {
+			return err
+		}
+		targetWide, err := targetWideEvidence(action, resolvedSources[i], contributions, recordedOwnership)
+		if err != nil {
+			return err
+		}
+		if len(contributions) > 0 {
+			if err := validateRecordedConvergence(action, resolvedSources[i], targetWide, contributions); err != nil {
+				return err
 			}
 		}
+		hash = targetWide.Hash
+		ownedContent = targetWide.OwnedContent
+		ownedBytes = targetWide.OwnedBytes
+		seededBaseline = targetWide.SeededBaseline
 		upsertRecord(&meta, state.Record{
 			Target:         action.Target,
 			Source:         action.Source,
@@ -177,6 +146,7 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 			OwnedContent:   ownedContent,
 			OwnedBytes:     ownedBytes,
 			SeededBaseline: seededBaseline,
+			Contributions:  contributions,
 			Hash:           hash,
 			InstalledAt:    now,
 			Profiles:       append([]string(nil), p.Profiles...),
@@ -191,6 +161,153 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 	}
 
 	return state.Save(path, meta)
+}
+
+func recordContributions(action plan.Action, resolvedSources []string, ownership string) ([]state.Contribution, error) {
+	planned := action.Contributions
+	if len(planned) == 0 {
+		return nil, nil
+	}
+	if len(planned) != len(resolvedSources) {
+		return nil, fmt.Errorf("record contribution evidence for %s: %d contributions for %d resolved sources", action.Target, len(planned), len(resolvedSources))
+	}
+
+	contributions := make([]state.Contribution, 0, len(planned))
+	for i, contribution := range planned {
+		recorded, err := captureContributionEvidence(action, contribution, resolvedSources[i], ownership)
+		if err != nil {
+			return nil, err
+		}
+		contributions = append(contributions, recorded)
+	}
+	return contributions, nil
+}
+
+func captureContributionEvidence(action plan.Action, contribution plan.Contribution, resolvedSource, ownership string) (state.Contribution, error) {
+	recorded := state.Contribution{
+		Source:           contribution.Source,
+		SelectorTags:     append([]string(nil), contribution.SelectorTags...),
+		Ownership:        ownership,
+		EvidenceRecorded: true,
+	}
+	if action.Strategy == "symlink" {
+		return recorded, nil
+	}
+
+	raw, err := os.ReadFile(resolvedSource)
+	if err != nil {
+		return state.Contribution{}, fmt.Errorf("read %s contribution %s: %w", ownership, resolvedSource, err)
+	}
+	recorded.Hash = state.HashBytes(raw)
+	switch ownership {
+	case "json-subset":
+		recorded.OwnedContent = append([]byte{}, raw...)
+	case "jsonc-subset":
+		recorded.OwnedContent, err = configsubset.CanonicalJSONC(raw)
+		if err != nil {
+			return state.Contribution{}, fmt.Errorf("canonicalize owned jsonc contribution %s: %w", resolvedSource, err)
+		}
+	case "toml-subset", "marked-block":
+		recorded.OwnedBytes = append([]byte{}, raw...)
+	case "seeded":
+		if action.Migration != nil && action.Migration.RecordedBaseline != nil {
+			recorded.SeededBaseline = append([]byte{}, action.Migration.RecordedBaseline...)
+		} else {
+			recorded.SeededBaseline = append([]byte{}, raw...)
+		}
+	}
+	return recorded, nil
+}
+
+func targetWideEvidence(action plan.Action, resolvedSources []string, contributions []state.Contribution, ownership string) (state.Contribution, error) {
+	if len(contributions) == 0 {
+		return captureContributionEvidence(action, plan.Contribution{Source: action.Source}, resolvedSources[0], ownership)
+	}
+	if len(contributions) == 1 {
+		return contributions[0], nil
+	}
+	if ownership != "json-subset" {
+		return state.Contribution{}, fmt.Errorf("compose target-wide evidence for %s: unsupported ownership %s", action.Target, ownership)
+	}
+
+	composed := append([]byte(nil), contributions[0].OwnedContent...)
+	var err error
+	for _, contribution := range contributions[1:] {
+		composed, err = configsubset.MergeJSON(composed, contribution.OwnedContent)
+		if err != nil {
+			return state.Contribution{}, fmt.Errorf("compose target-wide evidence for %s: %w", action.Target, err)
+		}
+	}
+	return state.Contribution{
+		Ownership:        ownership,
+		EvidenceRecorded: true,
+		Hash:             state.HashBytes(composed),
+		OwnedContent:     composed,
+	}, nil
+}
+
+func validateRecordedConvergence(action plan.Action, resolvedSources []string, targetWide state.Contribution, contributions []state.Contribution) error {
+	if action.Strategy == "symlink" {
+		if len(contributions) != 1 {
+			return fmt.Errorf("managed target %s no longer converged: symlink has %d contributions", action.Target, len(contributions))
+		}
+		info, err := os.Lstat(action.Target)
+		if err != nil {
+			return fmt.Errorf("inspect converged symlink %s: %w", action.Target, err)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return fmt.Errorf("managed target %s no longer converged: expected symlink", action.Target)
+		}
+		destination, err := os.Readlink(action.Target)
+		if err != nil {
+			return fmt.Errorf("read converged symlink %s: %w", action.Target, err)
+		}
+		if filepath.Clean(destination) != filepath.Clean(resolvedSources[0]) {
+			return fmt.Errorf("managed target %s no longer converged: symlink destination changed", action.Target)
+		}
+		return nil
+	}
+
+	live, err := os.ReadFile(action.Target)
+	if err != nil {
+		return fmt.Errorf("read converged target %s: %w", action.Target, err)
+	}
+	converged := false
+	switch targetWide.Ownership {
+	case "whole":
+		converged = state.HashBytes(live) == targetWide.Hash
+	case "json-subset":
+		relation, analyzeErr := configsubset.AnalyzeJSON(live, targetWide.OwnedContent)
+		if analyzeErr != nil {
+			return fmt.Errorf("validate converged json target %s: %w", action.Target, analyzeErr)
+		}
+		converged = relation.Contains
+	case "jsonc-subset":
+		relation, analyzeErr := configsubset.AnalyzeJSONC(live, targetWide.OwnedContent)
+		if analyzeErr != nil {
+			return fmt.Errorf("validate converged jsonc target %s: %w", action.Target, analyzeErr)
+		}
+		converged = relation.Contains
+	case "toml-subset":
+		relation, analyzeErr := configsubset.AnalyzeTOML(live, targetWide.OwnedBytes)
+		if analyzeErr != nil {
+			return fmt.Errorf("validate converged toml target %s: %w", action.Target, analyzeErr)
+		}
+		converged = relation.Contains
+	case "marked-block":
+		reconciliation := textblock.ReconcileOwned(live, targetWide.OwnedBytes, targetWide.OwnedBytes, textblock.DotsManagedMarkers())
+		converged = reconciliation.Compatible && !reconciliation.Changed
+	case "seeded":
+		if action.Migration != nil {
+			converged = bytes.Equal(live, action.Migration.FinalContent)
+		} else {
+			converged = bytes.Equal(live, targetWide.SeededBaseline)
+		}
+	}
+	if !converged {
+		return fmt.Errorf("managed target %s no longer converged; contribution evidence was not recorded", action.Target)
+	}
+	return nil
 }
 
 func upsertRecord(meta *state.Metadata, rec state.Record) {
@@ -244,6 +361,16 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			declaredResolved = action.ResolvedSources
 			if action.Strategy != "copy" || action.Ownership != "json-subset" || len(sources) < 2 {
 				return nil, fmt.Errorf("composed target %s requires at least two copy/json-subset sources", action.Target)
+			}
+		}
+		if len(action.Contributions) > 0 {
+			if len(action.Contributions) != len(sources) {
+				return nil, fmt.Errorf("install plan has %d contributions for %d sources on %s", len(action.Contributions), len(sources), action.Target)
+			}
+			for j, contribution := range action.Contributions {
+				if contribution.Source != sources[j] {
+					return nil, fmt.Errorf("install plan contribution source %q does not match source %q on %s", contribution.Source, sources[j], action.Target)
+				}
 			}
 		}
 		for j, sourceName := range sources {

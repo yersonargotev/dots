@@ -71,6 +71,35 @@ func TestApplyComposedJSONSubsetCreatesAndUpdatesOneSharedTarget(t *testing.T) {
 	if rec.Hash != targetHash {
 		t.Fatalf("metadata hash = %q, want composed target hash %q", rec.Hash, targetHash)
 	}
+	if len(rec.Contributions) != 2 {
+		t.Fatalf("metadata contributions = %+v, want two attributed sources", rec.Contributions)
+	}
+	for i, want := range []struct {
+		source string
+		tag    string
+		owned  string
+	}{
+		{source: "configs/base.json", tag: "base", owned: `{"editor":{"theme":"dark"},"servers":["one"]}`},
+		{source: "configs/mobile.json", tag: "mobile", owned: `{"mobile":true,"servers":["two"]}`},
+	} {
+		contribution := rec.Contributions[i]
+		if contribution.Source != want.source ||
+			!reflect.DeepEqual(contribution.SelectorTags, []string{want.tag}) ||
+			contribution.Ownership != "json-subset" ||
+			contribution.Hash != state.HashBytes([]byte(want.owned)) {
+			t.Fatalf("metadata contribution[%d] = %+v, want source %q selected by %q with exact JSON evidence", i, contribution, want.source, want.tag)
+		}
+		var gotOwned, wantOwned any
+		if err := json.Unmarshal(contribution.OwnedContent, &gotOwned); err != nil {
+			t.Fatalf("decode contribution[%d] owned content: %v", i, err)
+		}
+		if err := json.Unmarshal([]byte(want.owned), &wantOwned); err != nil {
+			t.Fatalf("decode wanted contribution[%d] owned content: %v", i, err)
+		}
+		if !reflect.DeepEqual(gotOwned, wantOwned) {
+			t.Fatalf("metadata contribution[%d] owned content = %v, want %v", i, gotOwned, wantOwned)
+		}
+	}
 
 	if err := os.WriteFile(target, []byte(`{"editor":{"theme":"dark"},"servers":["one"],"userOnly":"keep"}`), 0o640); err != nil {
 		t.Fatalf("write trusted target: %v", err)
@@ -119,6 +148,306 @@ func TestApplyComposedJSONSubsetCreatesAndUpdatesOneSharedTarget(t *testing.T) {
 	}
 	if shared == nil || shared.Status != plan.UninstallRemove || shared.Ownership != "json-subset" {
 		t.Fatalf("shared uninstall action = %+v, want partial removal that preserves target-only state", shared)
+	}
+}
+
+func TestApplyRecordsModeSpecificContributionEvidence(t *testing.T) {
+	tests := []struct {
+		name      string
+		strategy  string
+		ownership string
+		content   string
+		assert    func(*testing.T, state.Contribution, []byte)
+	}{
+		{
+			name: "whole copy", strategy: "copy", content: "whole\n",
+			assert: func(t *testing.T, got state.Contribution, content []byte) {
+				t.Helper()
+				if got.Hash != state.HashBytes(content) || len(got.OwnedContent) != 0 || len(got.OwnedBytes) != 0 || len(got.SeededBaseline) != 0 {
+					t.Fatalf("whole-copy evidence = %+v, want source hash only", got)
+				}
+			},
+		},
+		{
+			name: "whole symlink", strategy: "symlink", content: "linked\n",
+			assert: func(t *testing.T, got state.Contribution, _ []byte) {
+				t.Helper()
+				if got.Hash != "" || len(got.OwnedContent) != 0 || len(got.OwnedBytes) != 0 || len(got.SeededBaseline) != 0 {
+					t.Fatalf("whole-symlink evidence = %+v, want Source of Truth identity only", got)
+				}
+			},
+		},
+		{
+			name: "json subset", strategy: "copy", ownership: "json-subset", content: `{"owned":true}`,
+			assert: func(t *testing.T, got state.Contribution, _ []byte) {
+				t.Helper()
+				if !json.Valid(got.OwnedContent) {
+					t.Fatalf("json-subset evidence = %+v, want owned JSON", got)
+				}
+			},
+		},
+		{
+			name: "jsonc subset", strategy: "copy", ownership: "jsonc-subset", content: "{\n  // portable\n  \"owned\": true,\n}\n",
+			assert: func(t *testing.T, got state.Contribution, _ []byte) {
+				t.Helper()
+				if !json.Valid(got.OwnedContent) || strings.Contains(string(got.OwnedContent), "portable") {
+					t.Fatalf("jsonc-subset evidence = %+v, want canonical semantic JSON", got)
+				}
+			},
+		},
+		{
+			name: "toml subset", strategy: "copy", ownership: "toml-subset", content: "owned = true\n",
+			assert: func(t *testing.T, got state.Contribution, content []byte) {
+				t.Helper()
+				if !reflect.DeepEqual(got.OwnedBytes, content) {
+					t.Fatalf("toml-subset evidence = %q, want %q", got.OwnedBytes, content)
+				}
+			},
+		},
+		{
+			name: "empty toml subset", strategy: "copy", ownership: "toml-subset", content: "",
+			assert: func(t *testing.T, got state.Contribution, _ []byte) {
+				t.Helper()
+				if !got.EvidenceRecorded || len(got.OwnedBytes) != 0 {
+					t.Fatalf("empty toml-subset evidence = %+v, want recorded empty bytes", got)
+				}
+			},
+		},
+		{
+			name: "marked block", strategy: "copy", ownership: "marked-block", content: "# >>> dots managed block >>>\nsource portable\n# <<< dots managed block <<<\n",
+			assert: func(t *testing.T, got state.Contribution, content []byte) {
+				t.Helper()
+				if !reflect.DeepEqual(got.OwnedBytes, content) {
+					t.Fatalf("marked-block evidence = %q, want %q", got.OwnedBytes, content)
+				}
+			},
+		},
+		{
+			name: "seeded runtime state", strategy: "copy", ownership: "seeded", content: "seeded baseline\n",
+			assert: func(t *testing.T, got state.Contribution, content []byte) {
+				t.Helper()
+				if !reflect.DeepEqual(got.SeededBaseline, content) {
+					t.Fatalf("seeded evidence = %q, want %q", got.SeededBaseline, content)
+				}
+			},
+		},
+		{
+			name: "empty seeded runtime state", strategy: "copy", ownership: "seeded", content: "",
+			assert: func(t *testing.T, got state.Contribution, _ []byte) {
+				t.Helper()
+				if !got.EvidenceRecorded || len(got.SeededBaseline) != 0 {
+					t.Fatalf("empty seeded evidence = %+v, want recorded empty baseline", got)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sourceRoot := t.TempDir()
+			home := t.TempDir()
+			stateRoot := filepath.Join(home, ".local", "state", "dots")
+			rel := filepath.Join("configs", strings.ReplaceAll(tt.name, " ", "-"))
+			source := filepath.Join(sourceRoot, rel)
+			if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+				t.Fatalf("mkdir source: %v", err)
+			}
+			content := []byte(tt.content)
+			if err := os.WriteFile(source, content, 0o600); err != nil {
+				t.Fatalf("write source: %v", err)
+			}
+			m := manifest.Manifest{
+				Version:  1,
+				Profiles: map[string]manifest.Profile{"default": {Tags: []string{"capability"}}},
+				Entries: []manifest.Entry{{
+					Source: rel, Target: "~/.config/" + strings.ReplaceAll(tt.name, " ", "-"),
+					Strategy: tt.strategy, Ownership: tt.ownership, Tags: []string{"capability"},
+				}},
+			}
+			p, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home})
+			if err != nil {
+				t.Fatalf("Build() error = %v", err)
+			}
+			if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err != nil {
+				t.Fatalf("Apply() error = %v", err)
+			}
+			meta, err := state.Load(state.Path(stateRoot))
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if len(meta.Entries) != 1 || len(meta.Entries[0].Contributions) != 1 {
+				t.Fatalf("metadata = %+v, want one target with one contribution", meta)
+			}
+			contribution := meta.Entries[0].Contributions[0]
+			wantOwnership := tt.ownership
+			if wantOwnership == "" {
+				wantOwnership = "whole"
+			}
+			if contribution.Source != rel || !reflect.DeepEqual(contribution.SelectorTags, []string{"capability"}) || contribution.Ownership != wantOwnership || !contribution.EvidenceRecorded {
+				t.Fatalf("contribution identity = %+v, want %q selected by capability with %q ownership", contribution, rel, wantOwnership)
+			}
+			tt.assert(t, contribution, content)
+		})
+	}
+}
+
+func TestApplyContributionEvidencePreservesUnrelatedInventoryAndInstalledSelection(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "new")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte("new\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	selection := &state.InstalledSelection{
+		Profiles: []string{"existing"}, ExtraTags: []string{"extra"}, ResolvedTags: []string{"existing", "extra"},
+		Provenance: state.Provenance{SourceRoot: "/previous", SourceRevision: "abc123", RecordedAt: "2026-08-21T00:00:00Z"},
+	}
+	unrelated := state.Record{Target: filepath.Join(home, ".unrelated"), Source: "configs/unrelated", Strategy: "copy", Ownership: "whole", Hash: "unchanged"}
+	provisioners := []state.ProvisionerRecord{{Profile: "existing", Tool: "codex", Executable: "codex", Args: []string{"mcp", "add"}, Status: "provisioned"}}
+	previous := state.Metadata{Version: 6, Entries: []state.Record{unrelated}, Provisioners: provisioners, InstalledSelection: selection}
+	if err := state.Save(state.Path(stateRoot), previous); err != nil {
+		t.Fatalf("save previous metadata: %v", err)
+	}
+	m := manifest.Manifest{
+		Version: 1, Profiles: map[string]manifest.Profile{"default": {Tags: []string{"new"}}},
+		Entries: []manifest.Entry{{Source: "configs/new", Target: "~/.new", Strategy: "copy", Tags: []string{"new"}}},
+	}
+	p, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home, Metadata: previous})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	got, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.Version != state.CurrentVersion || !reflect.DeepEqual(got.InstalledSelection, selection) || !reflect.DeepEqual(got.Provisioners, provisioners) {
+		t.Fatalf("metadata terminal state = %+v, want v%d with prior selection and Provisioners", got, state.CurrentVersion)
+	}
+	if kept, ok := got.FindByTarget(unrelated.Target); !ok || !reflect.DeepEqual(kept, unrelated) {
+		t.Fatalf("unrelated inventory = %+v, want preserved %+v", kept, unrelated)
+	}
+	newRecord, ok := got.FindByTarget(filepath.Join(home, ".new"))
+	if !ok || len(newRecord.Contributions) != 1 || !reflect.DeepEqual(newRecord.Contributions[0].SelectorTags, []string{"new"}) {
+		t.Fatalf("new record = %+v, want terminal contribution evidence", newRecord)
+	}
+}
+
+func TestApplyMetadataWriteFailurePreservesPreviousContributionEvidence(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "new")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte("new\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	previous := state.Metadata{Version: 6, Entries: []state.Record{{Target: filepath.Join(home, ".old"), Source: "configs/old", Strategy: "copy", Hash: "old"}}}
+	metadataPath := state.Path(stateRoot)
+	if err := state.Save(metadataPath, previous); err != nil {
+		t.Fatalf("save previous metadata: %v", err)
+	}
+	previousBytes, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("read previous metadata: %v", err)
+	}
+	m := manifest.Manifest{
+		Version: 1, Profiles: map[string]manifest.Profile{"default": {Tags: []string{"new"}}},
+		Entries: []manifest.Entry{{Source: "configs/new", Target: "~/.new", Strategy: "copy", Tags: []string{"new"}}},
+	}
+	p, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home, Metadata: previous})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if err := os.Chmod(stateRoot, 0o500); err != nil {
+		t.Fatalf("make state root read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(stateRoot, 0o700) })
+
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err == nil {
+		t.Skip("filesystem permits metadata writes to a read-only state root")
+	}
+	unchanged, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("read metadata after failed write: %v", err)
+	}
+	if !reflect.DeepEqual(unchanged, previousBytes) {
+		t.Fatalf("metadata after failed write = %q, want previous bytes %q", unchanged, previousBytes)
+	}
+	got, err := state.Load(metadataPath)
+	if err != nil {
+		t.Fatalf("load metadata after failed write: %v", err)
+	}
+	if got.Version != 6 || len(got.Entries) != 1 || len(got.Entries[0].Contributions) != 0 {
+		t.Fatalf("metadata after failed write = %+v, want untouched previous evidence", got)
+	}
+}
+
+func TestApplyRejectsStaleUnchangedPlanWithoutRecordingContributionEvidence(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte(`{"owned":"portable"}`), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":"portable","local":true}`), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	previous := state.Metadata{Version: 6, Entries: []state.Record{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset",
+		OwnedContent: []byte(`{"owned":"portable"}`),
+	}}}
+	metadataPath := state.Path(stateRoot)
+	if err := state.Save(metadataPath, previous); err != nil {
+		t.Fatalf("save previous metadata: %v", err)
+	}
+	previousBytes, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("read previous metadata: %v", err)
+	}
+	m := manifest.Manifest{
+		Version: 1, Profiles: map[string]manifest.Profile{"default": {Tags: []string{"shared"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"shared"},
+		}},
+	}
+	p, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home, Metadata: previous})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(p.Actions) != 1 || p.Actions[0].Status != plan.StatusUnchanged {
+		t.Fatalf("plan = %+v, want one unchanged action", p)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":"drifted","local":true}`), 0o600); err != nil {
+		t.Fatalf("drift target after planning: %v", err)
+	}
+
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err == nil || !strings.Contains(err.Error(), "no longer converged") {
+		t.Fatalf("Apply() error = %v, want stale convergence rejection", err)
+	}
+	unchanged, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("read metadata after rejected apply: %v", err)
+	}
+	if !reflect.DeepEqual(unchanged, previousBytes) {
+		t.Fatalf("metadata after rejected apply = %q, want previous bytes %q", unchanged, previousBytes)
 	}
 }
 
@@ -918,6 +1247,37 @@ func TestApplyRejectsMissingSourceWithoutMutatingAnyAction(t *testing.T) {
 	}
 	if _, err := os.Lstat(wouldCreate); !os.IsNotExist(err) {
 		t.Fatalf("would-create target exists after rejected install; lstat err = %v", err)
+	}
+}
+
+func TestApplyRejectsMismatchedContributionAttributionBeforeMutation(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "safe")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte("safe\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	target := filepath.Join(home, ".config", "safe")
+	p := plan.Plan{Actions: []plan.Action{{
+		Source:        "configs/safe",
+		Contributions: []plan.Contribution{{Source: "configs/other", SelectorTags: []string{"safe"}}},
+		Target:        target,
+		Strategy:      "copy",
+		Status:        plan.StatusCreate,
+	}}}
+
+	if err := install.Apply(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}); err == nil || !strings.Contains(err.Error(), "contribution source") {
+		t.Fatalf("Apply() error = %v, want contribution source mismatch", err)
+	}
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Fatalf("mismatched attribution mutated target: %v", err)
+	}
+	if _, err := os.Lstat(state.Path(stateRoot)); !os.IsNotExist(err) {
+		t.Fatalf("mismatched attribution wrote metadata: %v", err)
 	}
 }
 

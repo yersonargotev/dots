@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/state"
 )
 
 func TestAgentsProfileInstallsNativeBaselineWithoutAuthorizingHistoricalCleanup(t *testing.T) {
@@ -137,6 +138,26 @@ Keep this unmarked user-owned content.
 	}
 	if _, err := os.Stat(filepath.Join(home, ".config", "opencode-dots.json")); !os.IsNotExist(err) {
 		t.Errorf("agents + web left obsolete standalone OpenCode overlay; stat error = %v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load OpenCode contribution metadata: %v", err)
+	}
+	opencodeRecord, ok := meta.FindByTarget(opencodeTarget)
+	if !ok || len(opencodeRecord.Contributions) != 2 {
+		t.Fatalf("OpenCode metadata = %+v, want two attributed contributions", opencodeRecord)
+	}
+	for i, want := range []struct {
+		source string
+		tag    string
+	}{
+		{source: "configs/opencode/opencode.json", tag: "opencode"},
+		{source: "configs/opencode/mcp.json", tag: "opencode-chrome-devtools"},
+	} {
+		contribution := opencodeRecord.Contributions[i]
+		if contribution.Source != want.source || len(contribution.SelectorTags) != 1 || contribution.SelectorTags[0] != want.tag || contribution.Ownership != "json-subset" {
+			t.Fatalf("OpenCode contribution[%d] = %+v, want %s selected by %s", i, contribution, want.source, want.tag)
+		}
 	}
 
 	gotAuth, err := os.ReadFile(auth)
