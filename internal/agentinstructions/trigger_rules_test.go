@@ -638,8 +638,6 @@ func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T)
 func TestDeliveryContractAdmissionScenarioMatrix(t *testing.T) {
 	root := filepath.Join("..", "..")
 	path := filepath.Join(root, "docs", "agents", "delivery-contract.md")
-	scenarios := readMarkdownScenarioMatrix(t, path)
-
 	wants := map[string][2]string{
 		"historical-agent-brief": {"complete Agent Brief", "using the Agent Brief as the Contract Source"},
 		"standalone-body":        {"complete issue body", "using the standalone body as the Contract Source"},
@@ -650,22 +648,75 @@ func TestDeliveryContractAdmissionScenarioMatrix(t *testing.T) {
 		"contradictory-source":   {"Duplicate or conflicting", "Return `needs-triage`"},
 		"stale-snapshot":         {"relationship identity, state, or `updatedAt` snapshot differs", "Restart admission before code mutation, PR creation, or merge"},
 	}
-	if len(scenarios) != len(wants) {
-		t.Fatalf("admission scenario count = %d, want %d: %#v", len(scenarios), len(wants), scenarios)
+	assertScenarioMatrix(t, path, wants)
+}
+
+func TestDeliveryWorkflowInvokesMutationSafetyGate(t *testing.T) {
+	root := filepath.Join("..", "..")
+	workflowPath := filepath.Join(root, "workflows", "delivery-issue.md")
+	workflow := readContractDocument(t, workflowPath)
+
+	resume := strings.Index(workflow, "## Resume and isolation")
+	gate := strings.Index(workflow, "## Mutation safety gate")
+	implementation := strings.Index(workflow, "## Implementation and local gates")
+	if resume < 0 || gate < 0 || implementation < 0 || !(resume < gate && gate < implementation) {
+		t.Fatalf("mutation safety gate order is resume=%d gate=%d implementation=%d", resume, gate, implementation)
 	}
-	for name, want := range wants {
-		got, ok := scenarios[name]
-		if !ok {
-			t.Errorf("admission scenario %q is missing", name)
-			continue
-		}
-		if !strings.Contains(got[0], want[0]) {
-			t.Errorf("admission scenario %q evidence = %q, want %q", name, got[0], want[0])
-		}
-		if !strings.Contains(got[1], want[1]) {
-			t.Errorf("admission scenario %q result = %q, want %q", name, got[1], want[1])
+
+	normalized := strings.Join(strings.Fields(workflow), " ")
+	for _, want := range []string{
+		"[mutation-safety-gate.md](mutation-safety-gate.md)",
+		"managed filesystem mutation",
+		"persisted metadata or receipts",
+		"recovery or rollback",
+		"authority or identity that may change concurrently",
+		"use the `Gate results and invalidation` matrix",
+		"For `not-applicable`, read its matrix row and `Delivery evidence` section",
+		"For every other result, follow only the matching matrix row",
+		"read the reference completely",
+		"Before implementation begins",
+		"every required part of the safety case is complete",
+		"independent design challenge has zero actionable findings",
+		"Do not enter Implementation and local gates until that criterion passes",
+		"sole authority for detailed safety-case rules, outcome routing, invalidation, and gate evidence",
+		"does not replace the final independent review",
+		"mutation-safety result or its `not applicable` evidence",
+	} {
+		if !strings.Contains(strings.ToLower(normalized), strings.ToLower(want)) {
+			t.Errorf("delivery workflow missing %q", want)
 		}
 	}
+}
+
+func TestMutationSafetyGateContract(t *testing.T) {
+	root := filepath.Join("..", "..")
+	path := filepath.Join(root, "workflows", "mutation-safety-gate.md")
+
+	assertDocumentContainsAllNormalized(t, path, []string{
+		"Compatibility map",
+		"Transaction boundary",
+		"Threat and failure matrix",
+		"Fault seams",
+		"Acceptance evidence",
+		"Independent design challenge",
+		"validated authority",
+		"captured inputs",
+		"durable evidence",
+		"Every affected public or persisted behavior",
+		"preserved or explicitly authorized to change",
+		"Every applicable threat or failure",
+		"mitigation, planned test, or specific `not applicable` reason",
+		"Resolve every actionable finding",
+	})
+
+	wants := map[string][2]string{
+		"required-mutation":      {"managed filesystem mutation, persisted metadata or receipts, recovery or rollback, or authority or identity that may change concurrently", "Complete the safety case before implementation"},
+		"not-applicable":         {"Documentation, skill, CI, or metadata-only change with no mutation boundary", "Record `not applicable` with direct evidence"},
+		"unauthorized-decision":  {"Material product or architecture decision", "Return `needs-triage`"},
+		"missing-capability":     {"A required gate capability is unavailable", "Return `blocked`"},
+		"mutation-model-changed": {"Implementation changes the approved mutation model", "Invalidate the result and repeat the gate before further implementation"},
+	}
+	assertScenarioMatrix(t, path, wants)
 }
 
 func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t *testing.T) {
@@ -742,6 +793,16 @@ func assertDocumentContainsAll(t *testing.T, path string, wants []string) {
 	}
 }
 
+func assertDocumentContainsAllNormalized(t *testing.T, path string, wants []string) {
+	t.Helper()
+	content := strings.Join(strings.Fields(readContractDocument(t, path)), " ")
+	for _, want := range wants {
+		if !strings.Contains(strings.ToLower(content), strings.ToLower(want)) {
+			t.Errorf("document %s missing %q", path, want)
+		}
+	}
+}
+
 func assertDocumentOmitsAll(t *testing.T, path string, forbidden []string) {
 	t.Helper()
 	content := readContractDocument(t, path)
@@ -764,7 +825,31 @@ func readMarkdownScenarioMatrix(t *testing.T, path string) map[string][2]string 
 			t.Fatalf("malformed scenario row in %s: %q", path, line)
 		}
 		name := strings.Trim(strings.TrimSpace(cells[1]), "`")
+		if _, exists := scenarios[name]; exists {
+			t.Fatalf("duplicate scenario %q in %s", name, path)
+		}
 		scenarios[name] = [2]string{strings.TrimSpace(cells[2]), strings.TrimSpace(cells[3])}
 	}
 	return scenarios
+}
+
+func assertScenarioMatrix(t *testing.T, path string, wants map[string][2]string) {
+	t.Helper()
+	scenarios := readMarkdownScenarioMatrix(t, path)
+	if len(scenarios) != len(wants) {
+		t.Fatalf("scenario count in %s = %d, want %d: %#v", path, len(scenarios), len(wants), scenarios)
+	}
+	for name, want := range wants {
+		got, ok := scenarios[name]
+		if !ok {
+			t.Errorf("scenario %q is missing from %s", name, path)
+			continue
+		}
+		if !strings.Contains(got[0], want[0]) {
+			t.Errorf("scenario %q evidence in %s = %q, want %q", name, path, got[0], want[0])
+		}
+		if !strings.Contains(got[1], want[1]) {
+			t.Errorf("scenario %q result in %s = %q, want %q", name, path, got[1], want[1])
+		}
+	}
 }

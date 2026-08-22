@@ -184,6 +184,23 @@ restart. With a PR, trust a check or review only when it is tied to the exact
 current head, base, and Delivery Contract snapshot; repeat any gate whose
 evidence cannot be proved for that state.
 
+## Mutation safety gate
+
+Before implementation begins, use the `Gate results and invalidation` matrix in
+[mutation-safety-gate.md](mutation-safety-gate.md) to classify whether the
+change spans managed filesystem mutation, persisted metadata or receipts,
+recovery or rollback, or authority or identity that may change concurrently.
+For `required-mutation`, read the reference completely. For `not-applicable`,
+read its matrix row and `Delivery evidence` section. For every other result,
+follow only the matching matrix row.
+
+The gate passes only when every required part of the safety case is complete and
+its independent design challenge has zero actionable findings. Do not enter
+Implementation and local gates until that criterion passes or the reference
+returns a result that permits continuation. The reference is the sole authority
+for detailed safety-case rules, outcome routing, invalidation, and gate evidence.
+Its early design challenge does not replace the final independent review below.
+
 ## Implementation and local gates
 
 Repeat this loop until it produces a reviewable candidate:
@@ -281,6 +298,7 @@ Update that block in place after every fix or push. It records:
   `updatedAt`, and SHA-256 digest;
 - snapshotted category, readiness, and native relationships;
 - current head commit reviewed;
+- mutation-safety result or its `not applicable` evidence;
 - acceptance-criterion coverage;
 - automated validation commands/results;
 - manual verification commands/results or not-applicable reason;
@@ -436,6 +454,7 @@ as intentionally pending synchronization.
 - A Tracking Issue returns `tracking` without creating a branch or PR.
 - The complete source, category, readiness, and relationship snapshot is
   revalidated before code mutation, PR creation, and merge.
+- Applicable mutation work follows the referenced mutation-safety gate.
 - Pull requests retain exactly one `type:*` label and durable Delivery Evidence.
 - The adapter remains explicit-only and delegates all runtime rules to this
   normative workflow.
