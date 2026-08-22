@@ -23,6 +23,9 @@ type Options struct {
 	SourceRoot string
 	Home       string
 	StateRoot  string
+	// ForwardPlan owns every target that remains selected. Build requires a
+	// matching safe action before delegating contribution reconciliation to it.
+	ForwardPlan *plan.Plan
 }
 
 // Action is one validated retirement effect.
@@ -74,7 +77,22 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 			continue
 		}
 		if len(action.CurrentSources) != 0 {
-			return Plan{}, fmt.Errorf("build selection retirement for %s: partial retirement from a still-selected target is not supported", action.ResolvedTarget)
+			switch action.Outcome {
+			case selectionreconciliation.OutcomeCreate,
+				selectionreconciliation.OutcomeUpdate,
+				selectionreconciliation.OutcomePreserve,
+				selectionreconciliation.OutcomeReconcile:
+				if err := validateForwardReconciliation(action, opts.ForwardPlan); err != nil {
+					return Plan{}, fmt.Errorf("build selection retirement for %s: %w", action.ResolvedTarget, err)
+				}
+				// The forward Managed Entry plan owns still-selected targets. Its
+				// ownership-specific update also replaces contribution evidence at
+				// the terminal metadata commit, so retirement must only validate the
+				// reconciliation report and avoid applying the target twice.
+				continue
+			default:
+				return Plan{}, fmt.Errorf("build selection retirement for %s: partial retirement outcome %q is unsafe: %s", action.ResolvedTarget, action.Outcome, action.Reason)
+			}
 		}
 		if action.ResolvedTarget == "" {
 			return Plan{}, fmt.Errorf("build selection retirement: managed entry target is required")
@@ -112,6 +130,31 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 		result.records[action.ResolvedTarget] = rec.Clone()
 	}
 	return result, nil
+}
+
+func validateForwardReconciliation(action selectionreconciliation.Action, forward *plan.Plan) error {
+	if forward == nil {
+		return fmt.Errorf("forward plan is required for partial retirement")
+	}
+	want := plan.StatusUnchanged
+	switch action.Outcome {
+	case selectionreconciliation.OutcomeCreate:
+		want = plan.StatusCreate
+	case selectionreconciliation.OutcomeUpdate, selectionreconciliation.OutcomeReconcile:
+		want = plan.StatusUpdate
+	case selectionreconciliation.OutcomePreserve:
+		want = plan.StatusUnchanged
+	}
+	for _, candidate := range forward.Actions {
+		if candidate.Target != action.ResolvedTarget {
+			continue
+		}
+		if candidate.Status != want {
+			return fmt.Errorf("forward action status %q does not implement safe outcome %q", candidate.Status, action.Outcome)
+		}
+		return nil
+	}
+	return fmt.Errorf("forward action is required for partial retirement")
 }
 
 func hasSelectionReduction(actions []selectionreconciliation.Action) bool {

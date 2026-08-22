@@ -194,7 +194,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			retirementOptions := selectionretirement.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot}
+			retirementOptions := selectionretirement.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ForwardPlan: &p}
 			var selectionRetirementPlan selectionretirement.Plan
 			if p.SelectionReconciliation != nil {
 				selectionRetirementPlan, err = selectionretirement.Build(*p.SelectionReconciliation, meta, retirementOptions)

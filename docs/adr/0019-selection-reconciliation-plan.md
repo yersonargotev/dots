@@ -92,11 +92,10 @@ selection residue stays `retained-external-state` in the shared report.
 
 An entirely deselected structured target can be removed when exact subset
 evidence proves that subtraction leaves it empty; if external content remains,
-the target is retained and its ownership record is released. Partial retirement
-from a still-selected target, including structured subset ownership and
-source-override reconciliation, remains blocked before mutation and belongs to
-the subsequent contribution-reconciliation slice. Install Manifest evolution
-remains report-only and never authorizes retirement.
+the target is retained and its ownership record is released. The contribution
+reconciliation amendment below governs partial retirement from a still-selected
+target and source-override fallback. Install Manifest evolution remains
+report-only and never authorizes retirement.
 
 `--clear-selection` supplies explicit empty-selection authority. Interactive
 execution requires the literal `clear` acknowledgement. Non-interactive
@@ -106,3 +105,34 @@ selection. A successful terminal run records empty ordered intent, while any
 decline, block, cancellation, or failure preserves the prior authoritative
 Installed Selection. Rerunning after a partial removal converges from current
 filesystem and metadata evidence without manual repair.
+
+## Contribution reconciliation amendment
+
+Issue #467 authorizes an acknowledged explicit Installed Selection reduction to
+reconcile a target that remains selected when exact ordered per-contribution
+Installation Metadata proves both the retired and retained Source of Truth
+inputs. The read-only Selection Reconciliation Plan remains the authority for
+the semantic outcome. Before any dependency or filesystem mutation, the
+retirement gate requires every safe `create`, `update`, `preserve`, or
+`reconcile` outcome to have a matching forward Managed Entry action; `blocked`,
+ambiguous, incompatible, or mismatched forward behavior stops the entire run.
+
+The forward Managed Entry plan owns each still-selected target and applies it
+exactly once. Shared JSON targets compose only the selected contributions before
+three-way reconciliation. JSON, JSONC, TOML, and marked-block updates subtract
+retired values only from exact compatible evidence and preserve target-only
+content according to their existing ownership contracts. A whole-target source
+override may return to its selected base source only when the live target still
+matches the exact previously recorded contribution hash. Missing or legacy
+target-wide attribution, changed retired values, unsafe target types, and stale
+forward classifications fail closed before mutation.
+
+Source override retirement replaces the prior override contribution with the
+selected base contribution. Successful shared reconciliation records only the
+retained ordered contributions and commits the requested Installed Selection at
+terminal success. A failure after the filesystem update preserves the previous
+Installed Selection and contribution evidence; rerunning recognizes already
+removed retired values while still rejecting changed owned values, then
+converges without applying the target twice. Seeded Runtime State keeps its
+existing whole-retirement rule: its physical bytes remain while dots releases
+only the ownership record.

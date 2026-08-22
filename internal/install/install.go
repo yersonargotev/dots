@@ -542,7 +542,8 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			if opts.StateRoot == "" {
 				return nil, fmt.Errorf("update for %s requires state root for Backup Set metadata", action.Target)
 			}
-			if action.Strategy != "copy" || (action.Ownership != "json-subset" && action.Ownership != "jsonc-subset" && action.Ownership != "toml-subset" && action.Ownership != "marked-block" && action.Ownership != "seeded") {
+			wholeOverride := (action.Ownership == "" || action.Ownership == "whole") && action.PreviousHash != ""
+			if action.Strategy != "copy" || (!wholeOverride && action.Ownership != "json-subset" && action.Ownership != "jsonc-subset" && action.Ownership != "toml-subset" && action.Ownership != "marked-block" && action.Ownership != "seeded") {
 				return nil, fmt.Errorf("update for %s requires copy strategy with reconcilable ownership", action.Target)
 			}
 			if err := validateBackupStateRoot(opts.StateRoot, home); err != nil {
@@ -963,6 +964,28 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 		}
 		if err := os.WriteFile(action.Target, reconciliation.Content, info.Mode().Perm()); err != nil {
 			return fmt.Errorf("update marked block %s: %w", action.Target, err)
+		}
+	case "", "whole":
+		if action.PreviousHash == "" {
+			return fmt.Errorf("previous whole-target evidence is required for %s", action.Target)
+		}
+		liveHash, err := state.HashFile(action.Target)
+		if err != nil {
+			return fmt.Errorf("hash whole target %s: %w", action.Target, err)
+		}
+		if liveHash != action.PreviousHash {
+			return fmt.Errorf("install plan is stale: whole target %s changed before update", action.Target)
+		}
+		current, err := os.ReadFile(source)
+		if err != nil {
+			return fmt.Errorf("read current whole target source %s: %w", source, err)
+		}
+		info, err := os.Stat(action.Target)
+		if err != nil {
+			return fmt.Errorf("stat whole target %s: %w", action.Target, err)
+		}
+		if err := os.WriteFile(action.Target, current, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("update whole target %s: %w", action.Target, err)
 		}
 	default:
 		return fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)

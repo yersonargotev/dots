@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/selectionreconciliation"
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -90,7 +92,8 @@ func TestBuildLeavesAdditionOnlySourceChangesToForwardInstall(t *testing.T) {
 		},
 	)
 
-	got, err := Build(report, state.Metadata{}, Options{Home: home, SourceRoot: t.TempDir()})
+	forward := plan.Plan{Actions: []plan.Action{{Target: target, Status: plan.StatusUpdate}}}
+	got, err := Build(report, state.Metadata{}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -197,7 +200,7 @@ func TestBuildAllowsEntirePartialOwnershipTargetToRetire(t *testing.T) {
 	}
 }
 
-func TestBuildRejectsPartialRetirementFromStillSelectedTarget(t *testing.T) {
+func TestBuildDelegatesSafePartialRetirementToForwardPlan(t *testing.T) {
 	home := t.TempDir()
 	target := writeTarget(t, home, ".shared.json", `{}`)
 	report := explicitReport(selectionreconciliation.Action{
@@ -208,9 +211,34 @@ func TestBuildRejectsPartialRetirementFromStillSelectedTarget(t *testing.T) {
 		CurrentSources:  []string{"kept.json"},
 	})
 
+	forward := plan.Plan{Actions: []plan.Action{{Target: target, Status: plan.StatusUpdate}}}
+	got, err := Build(report, state.Metadata{}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(got.Actions) != 0 {
+		t.Fatalf("Build() actions = %#v, want forward plan to own still-selected target", got.Actions)
+	}
+	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != `{}` {
+		t.Fatalf("target changed during Build: content=%q err=%v", got, readErr)
+	}
+}
+
+func TestBuildRejectsUnsafePartialRetirementBeforeMutation(t *testing.T) {
+	home := t.TempDir()
+	target := writeTarget(t, home, ".shared.json", `{}`)
+	report := explicitReport(selectionreconciliation.Action{
+		Scope:           selectionreconciliation.ScopeManagedEntry,
+		Outcome:         selectionreconciliation.OutcomeBlocked,
+		Reason:          selectionreconciliation.ReasonAmbiguousPartialOwnership,
+		ResolvedTarget:  target,
+		PreviousSources: []string{"removed.json", "kept.json"},
+		CurrentSources:  []string{"kept.json"},
+	})
+
 	_, err := Build(report, state.Metadata{}, Options{Home: home, SourceRoot: t.TempDir()})
-	if err == nil {
-		t.Fatal("Build() error = nil, want partial-retirement rejection")
+	if err == nil || !strings.Contains(err.Error(), "partial retirement outcome \"blocked\" is unsafe") {
+		t.Fatalf("Build() error = %v, want unsafe partial-retirement rejection", err)
 	}
 	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != `{}` {
 		t.Fatalf("target changed during Build: content=%q err=%v", got, readErr)

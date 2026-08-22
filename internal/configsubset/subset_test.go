@@ -168,7 +168,7 @@ func TestReconcileJSONRejectsChangedRetiredValue(t *testing.T) {
 	}
 }
 
-func TestReconcileJSONRejectsMissingRetiredObjectKey(t *testing.T) {
+func TestReconcileJSONAcceptsAlreadyRemovedRetiredObjectKey(t *testing.T) {
 	target := []byte(`{"settings":{"external":true}}`)
 	previous := []byte(`{"settings":{"retired":"old"}}`)
 	current := []byte(`{"settings":{}}`)
@@ -177,12 +177,12 @@ func TestReconcileJSONRejectsMissingRetiredObjectKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReconcileJSON() error = %v", err)
 	}
-	if got.Compatible || got.Changed || got.Content != nil {
-		t.Fatalf("ReconcileJSON() = %#v, want missing retired key to be incompatible", got)
+	if !got.Compatible || got.Changed || !bytes.Contains(got.Content, []byte(`"external": true`)) {
+		t.Fatalf("ReconcileJSON() = %#v, want already-removed key to be converged", got)
 	}
 }
 
-func TestReconcileJSONRejectsMissingRetiredArrayItem(t *testing.T) {
+func TestReconcileJSONAcceptsAlreadyRemovedRetiredArrayItem(t *testing.T) {
 	target := []byte(`{"items":["locally-changed"]}`)
 	previous := []byte(`{"items":["old"]}`)
 	current := []byte(`{"items":[]}`)
@@ -191,8 +191,8 @@ func TestReconcileJSONRejectsMissingRetiredArrayItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReconcileJSON() error = %v", err)
 	}
-	if got.Compatible {
-		t.Fatalf("ReconcileJSON() = %#v, want conservative array conflict", got)
+	if !got.Compatible || got.Changed || !bytes.Contains(got.Content, []byte(`"locally-changed"`)) {
+		t.Fatalf("ReconcileJSON() = %#v, want target-only array item preserved", got)
 	}
 }
 
@@ -572,6 +572,20 @@ runtime = false # Atuin wrote this
 	}
 	if strings.Contains(got, `retired = "old"`) {
 		t.Fatalf("reconciled TOML retained retired value:\n%s", got)
+	}
+}
+
+func TestReconcileTOMLAcceptsAlreadyRemovedRetiredValue(t *testing.T) {
+	previous := []byte("keep = true\nretired = \"old\"\n")
+	current := []byte("keep = true\n")
+	target := []byte("# external sentinel\nexternal = \"keep\"\nkeep = true\n")
+
+	got, err := ReconcileTOML(target, previous, current)
+	if err != nil {
+		t.Fatalf("ReconcileTOML() error = %v", err)
+	}
+	if !got.Compatible || got.Changed || !bytes.Equal(got.Content, target) {
+		t.Fatalf("ReconcileTOML() = %#v, want already-removed value to be converged", got)
 	}
 }
 

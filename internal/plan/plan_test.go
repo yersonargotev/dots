@@ -551,8 +551,8 @@ func TestBuildJSONSubsetUsesRecordedContributionForReversibleRemoval(t *testing.
 	action = buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
 		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
 	}, meta)
-	if action.Status != plan.StatusConflict {
-		t.Fatalf("Status = %q, want conflict for missing retired key", action.Status)
+	if action.Status != plan.StatusUpdate {
+		t.Fatalf("Status = %q, want convergent update for already removed retired key", action.Status)
 	}
 }
 

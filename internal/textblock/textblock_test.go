@@ -18,6 +18,11 @@ func TestOwnedBlockReconciliationFailsClosedAndPreservesExternalBytes(t *testing
 	if !got.Compatible || !got.Changed || !bytes.Equal(got.Content, want) {
 		t.Fatalf("ReconcileOwned() = %#v, want %q", got, want)
 	}
+	alreadyCurrent := append(append(append([]byte(nil), prefix...), current...), suffix...)
+	got = ReconcileOwned(alreadyCurrent, previous, current, markers)
+	if !got.Compatible || got.Changed || !bytes.Equal(got.Content, alreadyCurrent) {
+		t.Fatalf("ReconcileOwned() after partial run = %#v, want unchanged current block", got)
+	}
 	invalid := map[string][]byte{
 		"duplicate":     append(append([]byte(nil), previous...), previous...),
 		"missing close": []byte(markers.Start + "\nsource old\n"),

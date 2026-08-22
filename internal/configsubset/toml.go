@@ -233,6 +233,11 @@ func reconcileParsedTOML(targetData []byte, previous, current *tomlDocument) (TO
 		targetValue, targetExists := tomlValueAt(target.values, previousEntry.path)
 		targetEntry, targetHasExpression := target.entries[pathKey]
 		if !targetExists || !targetHasExpression {
+			if _, remainsOwned := current.entries[pathKey]; !remainsOwned {
+				// A prior interrupted reconciliation may already have
+				// removed this retired value.
+				continue
+			}
 			return TOMLReconciliation{}, nil
 		}
 		currentEntry, remainsOwned := current.entries[pathKey]

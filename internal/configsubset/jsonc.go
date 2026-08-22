@@ -161,6 +161,11 @@ func reconcileJSONCValue(target, previous, current any) (any, bool, bool) {
 			currentChild, remainsOwned := currentObject[key]
 			targetChild, exists := targetObject[key]
 			if !exists {
+				if !remainsOwned {
+					// A prior interrupted reconciliation may already have
+					// removed this retired value.
+					continue
+				}
 				return target, false, false
 			}
 			if !remainsOwned {

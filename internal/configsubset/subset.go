@@ -312,7 +312,9 @@ func reconcileJSONValue(target, previous, current any) jsonMergeResult {
 			currentChild, currentExists := currentObject[key]
 			if !currentExists {
 				if !targetExists {
-					return jsonMergeResult{value: target}
+					// A prior interrupted reconciliation may already have
+					// removed this retired value. No subtraction is needed.
+					continue
 				}
 				removed := subtractJSONValue(targetChild, previousChild)
 				if !removed.compatible {
@@ -375,7 +377,9 @@ func reconcileJSONValue(target, previous, current any) jsonMergeResult {
 		for _, previousItem := range multisetDifference(previousArray, currentArray) {
 			index := equalJSONIndex(result, previousItem)
 			if index < 0 {
-				return jsonMergeResult{value: target}
+				// Treat an already-removed retired item as converged while
+				// preserving every target-only array item.
+				continue
 			}
 			result = append(result[:index], result[index+1:]...)
 			changed = true
