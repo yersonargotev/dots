@@ -146,10 +146,12 @@ terminal replacement additionally requires the exact receipt produced by that
 action. A concurrent record or receipt change therefore aborts without
 overwriting either metadata or the prior Installed Selection. The initial
 receipt transaction holds that metadata lock while it snapshots the selected
-sources, applies those exact bytes through the confined target descriptor, and
-persists hashes of those source and resulting target bytes. If receipt storage
-fails, dots restores the target bytes captured by the same descriptor before
-returning the metadata error.
+sources through confined, identity-checked descriptors, applies those exact
+bytes through the confined target descriptor, and persists hashes of those
+source and resulting target bytes. If receipt storage fails, dots restores the
+target bytes captured by the same descriptor only while the live target still
+equals the result dots just wrote; a concurrent application edit is preserved
+and reported instead of being overwritten.
 
 Every in-place copy update is confined beneath the selected home through an
 opened filesystem root. Whole, JSON, JSONC, TOML, marked-block, and seeded

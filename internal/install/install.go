@@ -166,7 +166,7 @@ func applyActionWithReconciliationReceipt(action plan.Action, source string, res
 		return prepared, nil, err
 	}
 
-	prepared, sourceContents, err := snapshotReconciliationSources(action, resolvedSources)
+	prepared, sourceContents, err := snapshotReconciliationSources(action, resolvedSources, opts.SourceRoot)
 	if err != nil {
 		return action, nil, err
 	}
@@ -191,7 +191,7 @@ func applyActionWithReconciliationReceipt(action plan.Action, source string, res
 	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
 	setPendingReconciliation(&meta, action.Target, receipt)
 	if err := locked.Save(meta); err != nil {
-		rollbackErr := restoreConfinedRegularFile(action.Target, opts.Home, result.PreviousTargetContent)
+		rollbackErr := restoreConfinedRegularFile(action.Target, opts.Home, result.TargetContent, result.PreviousTargetContent)
 		return prepared, nil, errors.Join(fmt.Errorf("persist reconciliation receipt for %s: %w", action.Target, err), rollbackErr)
 	}
 	return prepared, receipt, nil
@@ -202,10 +202,10 @@ func requiresReconciliationReceipt(action plan.Action, opts Options) bool {
 		action.PreviousRecordFingerprint != "" && (len(action.PreviousContent) > 0 || action.PreviousHash != "")
 }
 
-func snapshotReconciliationSources(action plan.Action, resolvedSources []string) (plan.Action, [][]byte, error) {
+func snapshotReconciliationSources(action plan.Action, resolvedSources []string, sourceRoot string) (plan.Action, [][]byte, error) {
 	contents := make([][]byte, len(resolvedSources))
 	for i, source := range resolvedSources {
-		data, err := os.ReadFile(source)
+		data, err := readConfinedRegularFile(source, sourceRoot)
 		if err != nil {
 			return action, nil, fmt.Errorf("snapshot reconciliation source %s: %w", source, err)
 		}
@@ -213,10 +213,10 @@ func snapshotReconciliationSources(action plan.Action, resolvedSources []string)
 	}
 	prepared := action
 	if len(action.Sources) == 0 {
-		prepared.Content = append([]byte(nil), contents[0]...)
+		prepared.Content = append([]byte{}, contents[0]...)
 		return prepared, contents, nil
 	}
-	composed := append([]byte(nil), contents[0]...)
+	composed := append([]byte{}, contents[0]...)
 	for i := 1; i < len(contents); i++ {
 		merged, err := configsubset.MergeJSON(composed, contents[i])
 		if err != nil {
@@ -229,6 +229,50 @@ func snapshotReconciliationSources(action plan.Action, resolvedSources []string)
 	}
 	prepared.Content = composed
 	return prepared, contents, nil
+}
+
+func readConfinedRegularFile(path, rootPath string) ([]byte, error) {
+	rootAbs, err := cleanAbs(rootPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve source root %s: %w", rootPath, err)
+	}
+	pathAbs, err := cleanAbs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve source %s: %w", path, err)
+	}
+	relative, err := filepath.Rel(rootAbs, pathAbs)
+	if err != nil || !filepath.IsLocal(relative) || relative == "." {
+		return nil, fmt.Errorf("confine source %s beneath source root %s", path, rootAbs)
+	}
+	root, err := os.OpenRoot(rootAbs)
+	if err != nil {
+		return nil, fmt.Errorf("open source root %s: %w", rootAbs, err)
+	}
+	defer root.Close()
+	observed, err := root.Lstat(relative)
+	if err != nil {
+		return nil, fmt.Errorf("inspect confined source %s: %w", path, err)
+	}
+	if observed.Mode()&os.ModeSymlink != 0 || !observed.Mode().IsRegular() {
+		return nil, fmt.Errorf("confined source %s is not a non-symlink regular file", path)
+	}
+	file, err := root.OpenFile(relative, os.O_RDONLY, 0)
+	if err != nil {
+		return nil, fmt.Errorf("open confined source %s: %w", path, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat confined source %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() || !os.SameFile(observed, info) {
+		return nil, fmt.Errorf("install plan is stale: source %s changed identity before snapshot", path)
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("read confined source %s: %w", path, err)
+	}
+	return data, nil
 }
 
 func actionSourceList(action plan.Action) []string {
@@ -1269,9 +1313,12 @@ func updateConfinedRegularFile(target, home string, transform confinedTransform)
 	return result, nil
 }
 
-func restoreConfinedRegularFile(target, home string, content []byte) error {
+func restoreConfinedRegularFile(target, home string, applied, previous []byte) error {
 	_, err := updateConfinedRegularFile(target, home, func(live []byte) ([]byte, bool, error) {
-		return content, !bytes.Equal(live, content), nil
+		if !bytes.Equal(live, applied) {
+			return nil, false, fmt.Errorf("target changed after reconciliation; refusing rollback")
+		}
+		return previous, !bytes.Equal(live, previous), nil
 	})
 	if err != nil {
 		return fmt.Errorf("restore target %s after metadata failure: %w", target, err)

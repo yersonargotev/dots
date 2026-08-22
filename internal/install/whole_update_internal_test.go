@@ -136,3 +136,49 @@ func TestApplyPartialUpdateRejectsSymlinkTargets(t *testing.T) {
 		}
 	}
 }
+
+func TestReadConfinedRegularFileRejectsSymlinkSources(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside")
+	inside := filepath.Join(root, "inside")
+	if err := os.WriteFile(outside, []byte("outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(inside, []byte("inside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, destination := range map[string]string{
+		"outside": outside,
+		"inside":  filepath.Base(inside),
+	} {
+		t.Run(name, func(t *testing.T) {
+			source := filepath.Join(root, name+"-link")
+			if err := os.Symlink(destination, source); err != nil {
+				t.Fatal(err)
+			}
+			_, err := readConfinedRegularFile(source, root)
+			if err == nil || !strings.Contains(err.Error(), "non-symlink regular file") {
+				t.Fatalf("readConfinedRegularFile() error = %v, want symlink rejection", err)
+			}
+		})
+	}
+}
+
+func TestRestoreConfinedRegularFileRequiresExactAppliedBytes(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, ".target")
+	applied := []byte("applied\n")
+	previous := []byte("previous\n")
+	external := []byte("external\n")
+	if err := os.WriteFile(target, external, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := restoreConfinedRegularFile(target, home, applied, previous)
+	if err == nil || !strings.Contains(err.Error(), "refusing rollback") {
+		t.Fatalf("restoreConfinedRegularFile() error = %v, want concurrent edit rejection", err)
+	}
+	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != string(external) {
+		t.Fatalf("target = %q, %v; want external bytes preserved", got, readErr)
+	}
+}
