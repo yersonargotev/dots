@@ -27,7 +27,7 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 
 	previousSurface := selectedsurface.Evaluate(m, installed.ResolvedTags, hostOS)
 	currentSurface := selectedsurface.Evaluate(m, effective.Selection.Tags, hostOS)
-	previousSurface, manifestEvolutionTargets := supplementRecordedManagedEntries(previousSurface, currentSurface, meta, *installed, paths)
+	previousSurface, manifestEvolutionTargets := supplementRecordedSurface(previousSurface, currentSurface, meta, *installed, paths)
 	evidence, err := inspectSelectionReconciliation(previousSurface, currentSurface, installPlan, paths, sourceReadRoot)
 	if err != nil {
 		return nil, fmt.Errorf("inspect selection reconciliation: %w", err)
@@ -71,7 +71,7 @@ func installedIntentDiffers(installed state.InstalledSelection, effective select
 	return !slices.Equal(installed.Profiles, effective.Profiles) || !slices.Equal(installed.ExtraTags, effective.ExtraTags)
 }
 
-func supplementRecordedManagedEntries(previous, current selectedsurface.Surface, meta state.Metadata, installed state.InstalledSelection, paths resolvedPaths) (selectedsurface.Surface, map[string]bool) {
+func supplementRecordedSurface(previous, current selectedsurface.Surface, meta state.Metadata, installed state.InstalledSelection, paths resolvedPaths) (selectedsurface.Surface, map[string]bool) {
 	type targetIdentity struct {
 		declarative string
 		entry       manifest.Entry
@@ -138,7 +138,38 @@ func supplementRecordedManagedEntries(previous, current selectedsurface.Surface,
 			appendContribution(source, record.Ownership, record.Tags)
 		}
 	}
+
+	seenProvisioners := make(map[string]bool)
+	for _, provisioner := range append(append([]manifest.Provisioner(nil), previous.Provisioners...), current.Provisioners...) {
+		seenProvisioners[provisioner.Tool] = true
+	}
+	for _, record := range meta.Provisioners {
+		if record.Tool == "" || seenProvisioners[record.Tool] || !recordedProvisionerSelected(record, installed) {
+			continue
+		}
+		previous.Provisioners = append(previous.Provisioners, manifest.Provisioner{
+			Tool: record.Tool,
+			Tags: append([]string(nil), record.Tags...),
+		})
+		seenProvisioners[record.Tool] = true
+	}
 	return previous, manifestEvolutionTargets
+}
+
+func recordedProvisionerSelected(record state.ProvisionerRecord, installed state.InstalledSelection) bool {
+	if sharesSelectionTag(record.Tags, installed.ResolvedTags) {
+		return true
+	}
+	profiles := record.Profiles
+	if len(profiles) == 0 && record.Profile != "" {
+		profiles = []string{record.Profile}
+	}
+	for _, profile := range profiles {
+		if slices.Contains(installed.Profiles, profile) {
+			return true
+		}
+	}
+	return false
 }
 
 func homeRelativeTarget(target, home string) (string, bool) {

@@ -734,6 +734,9 @@ func recordHasExactContributions(record state.Record, sources []string, strategy
 	if len(sources) == 0 || record.Strategy != strategy || record.Ownership != ownership || len(record.Contributions) != len(sources) {
 		return false
 	}
+	if len(sources) > 1 && ownership != "json-subset" {
+		return false
+	}
 	for index, source := range sources {
 		contribution := record.Contributions[index]
 		if contribution.Source != source || !contribution.EvidenceRecorded || contribution.Ownership != ownership {

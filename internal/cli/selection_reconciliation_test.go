@@ -78,6 +78,42 @@ func TestSelectionReconciliationRetainsDependencyAndProvisionerExternalState(t *
 	}
 }
 
+func TestSelectionReconciliationRetainsProvisionerRemovedFromManifest(t *testing.T) {
+	fixture := newSelectionReconciliationFixture(t, true)
+	manifestPath := fixture.args[3]
+	manifest, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisioners := bytes.Index(manifest, []byte("provisioners:\n"))
+	if provisioners < 0 {
+		t.Fatal("fixture manifest has no provisioners block")
+	}
+	if err := os.WriteFile(manifestPath, manifest[:provisioners], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	metadataPath := state.Path(fixture.stateRoot)
+	metadata, err := state.Load(metadataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata.Provisioners = []state.ProvisionerRecord{{
+		Profiles: []string{"full"}, Tags: []string{"retired"}, Tool: "claude", Status: "provisioned",
+	}}
+	if err := state.Save(metadataPath, metadata); err != nil {
+		t.Fatal(err)
+	}
+
+	plan := runSelectionReconciliationJSON(t, cli.ExitOK, append([]string{"plan"}, fixture.args...)...)
+	install := runSelectionReconciliationJSON(t, cli.ExitOK, append([]string{"install", "--dry-run", "--skip-deps"}, fixture.args...)...)
+	planActions := jsonPathSelection(t, plan, "data", "selection_reconciliation", "actions")
+	installActions := jsonPathSelection(t, install, "data", "plan", "selection_reconciliation", "actions")
+	assertSelectionAction(t, planActions, "provisioner", "retained-external-state", "claude")
+	if !reflect.DeepEqual(planActions, installActions) {
+		t.Fatalf("manifest evolution actions differ\nplan: %#v\ninstall --dry-run: %#v", planActions, installActions)
+	}
+}
+
 func TestSelectionReconciliationManifestEvolutionNeverAuthorizesRetirement(t *testing.T) {
 	fixture := newSelectionReconciliationFixture(t, false)
 	manifestPath := fixture.args[3]

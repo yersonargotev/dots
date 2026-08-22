@@ -136,6 +136,31 @@ func TestBuildRequiresExactWholeTargetContributionEvidence(t *testing.T) {
 	}
 }
 
+func TestBuildBlocksMultipleWholeTargetContributions(t *testing.T) {
+	previous := []selectedsurface.SelectedEntry{
+		selectedEntry("first", "~/.target", "copy", "whole"),
+		selectedEntry("second", "~/.target", "copy", "whole"),
+	}
+	input := baseInput(previous, nil, TargetEvidence{
+		DeclarativeTarget: "~/.target", ResolvedTarget: "/home/test/.target",
+		Exists: true, Kind: TargetKindRegular, Content: []byte("first\n"),
+	})
+	input.Metadata.Entries = []state.Record{{
+		Target: "/home/test/.target", Strategy: "copy", Ownership: "whole",
+		Contributions: []state.Contribution{
+			{Source: "first", Ownership: "whole", EvidenceRecorded: true, Hash: state.HashBytes([]byte("first\n"))},
+			{Source: "second", Ownership: "whole", EvidenceRecorded: true, Hash: state.HashBytes([]byte("second\n"))},
+		},
+	}}
+	report, err := Build(input)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonLostOwnership {
+		t.Fatalf("Action = %#v, want lost ownership block", got)
+	}
+}
+
 func TestBuildRequiresExactSymlinkContributionSet(t *testing.T) {
 	previous := selectedEntry("source", "~/.target", "symlink", "whole")
 	input := baseInput([]selectedsurface.SelectedEntry{previous}, nil, TargetEvidence{
