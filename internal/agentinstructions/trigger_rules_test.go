@@ -668,6 +668,86 @@ func TestDeliveryContractAdmissionScenarioMatrix(t *testing.T) {
 	}
 }
 
+func TestDeliveryWorkflowInvokesMutationSafetyGate(t *testing.T) {
+	root := filepath.Join("..", "..")
+	workflowPath := filepath.Join(root, "workflows", "delivery-issue.md")
+	workflow := readContractDocument(t, workflowPath)
+
+	resume := strings.Index(workflow, "## Resume and isolation")
+	gate := strings.Index(workflow, "## Mutation safety gate")
+	implementation := strings.Index(workflow, "## Implementation and local gates")
+	if resume < 0 || gate < 0 || implementation < 0 || !(resume < gate && gate < implementation) {
+		t.Fatalf("mutation safety gate order is resume=%d gate=%d implementation=%d", resume, gate, implementation)
+	}
+
+	normalized := strings.Join(strings.Fields(workflow), " ")
+	for _, want := range []string{
+		"[mutation-safety-gate.md](mutation-safety-gate.md)",
+		"managed filesystem mutation",
+		"persisted metadata or receipts",
+		"recovery or rollback",
+		"authority or identity that may change concurrently",
+		"read the reference completely",
+		"Before implementation begins",
+		"changes the approved mutation model",
+		"repeat the gate before further implementation",
+		"final independent review remains required",
+		"mutation-safety result or its `not applicable` evidence",
+	} {
+		if !strings.Contains(strings.ToLower(normalized), strings.ToLower(want)) {
+			t.Errorf("delivery workflow missing %q", want)
+		}
+	}
+}
+
+func TestMutationSafetyGateContract(t *testing.T) {
+	root := filepath.Join("..", "..")
+	path := filepath.Join(root, "workflows", "mutation-safety-gate.md")
+
+	assertDocumentContainsAllNormalized(t, path, []string{
+		"Compatibility map",
+		"Transaction boundary",
+		"Threat and failure matrix",
+		"Fault seams",
+		"Acceptance evidence",
+		"Independent design challenge",
+		"validated authority",
+		"captured inputs",
+		"durable evidence",
+		"Every affected public or persisted behavior",
+		"preserved or explicitly authorized to change",
+		"Every applicable threat or failure",
+		"mitigation, planned test, or specific `not applicable` reason",
+		"zero actionable findings",
+		"does not replace final Spec and Standards review",
+	})
+
+	scenarios := readMarkdownScenarioMatrix(t, path)
+	wants := map[string][2]string{
+		"required-mutation":      {"filesystem, persisted evidence, recovery, rollback, or concurrent authority", "Complete the safety case before implementation"},
+		"not-applicable":         {"Documentation, skill, CI, or metadata-only change with no mutation boundary", "Record `not applicable` with direct evidence"},
+		"unauthorized-decision":  {"Material product or architecture decision", "Return `needs-triage`"},
+		"missing-capability":     {"Required independent design capability is unavailable", "Return `blocked`"},
+		"mutation-model-changed": {"Implementation changes the approved mutation model", "Invalidate the result and repeat the gate before further implementation"},
+	}
+	if len(scenarios) != len(wants) {
+		t.Fatalf("mutation safety scenario count = %d, want %d: %#v", len(scenarios), len(wants), scenarios)
+	}
+	for name, want := range wants {
+		got, ok := scenarios[name]
+		if !ok {
+			t.Errorf("mutation safety scenario %q is missing", name)
+			continue
+		}
+		if !strings.Contains(got[0], want[0]) {
+			t.Errorf("mutation safety scenario %q evidence = %q, want %q", name, got[0], want[0])
+		}
+		if !strings.Contains(got[1], want[1]) {
+			t.Errorf("mutation safety scenario %q result = %q, want %q", name, got[1], want[1])
+		}
+	}
+}
+
 func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t *testing.T) {
 	root := filepath.Join("..", "..")
 	issueCreationPath := filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md")
@@ -742,6 +822,16 @@ func assertDocumentContainsAll(t *testing.T, path string, wants []string) {
 	}
 }
 
+func assertDocumentContainsAllNormalized(t *testing.T, path string, wants []string) {
+	t.Helper()
+	content := strings.Join(strings.Fields(readContractDocument(t, path)), " ")
+	for _, want := range wants {
+		if !strings.Contains(strings.ToLower(content), strings.ToLower(want)) {
+			t.Errorf("document %s missing %q", path, want)
+		}
+	}
+}
+
 func assertDocumentOmitsAll(t *testing.T, path string, forbidden []string) {
 	t.Helper()
 	content := readContractDocument(t, path)
@@ -764,6 +854,9 @@ func readMarkdownScenarioMatrix(t *testing.T, path string) map[string][2]string 
 			t.Fatalf("malformed scenario row in %s: %q", path, line)
 		}
 		name := strings.Trim(strings.TrimSpace(cells[1]), "`")
+		if _, exists := scenarios[name]; exists {
+			t.Fatalf("duplicate scenario %q in %s", name, path)
+		}
 		scenarios[name] = [2]string{strings.TrimSpace(cells[2]), strings.TrimSpace(cells[3])}
 	}
 	return scenarios

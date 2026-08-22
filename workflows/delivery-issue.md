@@ -184,6 +184,27 @@ restart. With a PR, trust a check or review only when it is tied to the exact
 current head, base, and Delivery Contract snapshot; repeat any gate whose
 evidence cannot be proved for that state.
 
+## Mutation safety gate
+
+Before implementation begins, classify whether the change spans
+managed filesystem mutation, persisted metadata or receipts, recovery or
+rollback, or authority or identity that may change concurrently. For an
+applicable change, read the reference completely:
+[mutation-safety-gate.md](mutation-safety-gate.md). Complete its safety case.
+Documentation-, skill-, CI-, or metadata-only changes with no mutation boundary
+may record `not applicable` with direct evidence.
+
+The gate passes only when every required part of the safety case is complete and
+its independent design challenge has zero actionable findings. Repair local,
+reversible gaps inside the gate. A material product or architecture decision not
+authorized by the Delivery Contract returns `needs-triage`; an unavailable
+required capability returns `blocked` under the existing outcome rules.
+
+A later change that changes the approved mutation model invalidates the prior
+gate evidence; repeat the gate before further implementation. The design
+challenge is an early adversarial review. Final independent review remains
+required.
+
 ## Implementation and local gates
 
 Repeat this loop until it produces a reviewable candidate:
@@ -281,6 +302,7 @@ Update that block in place after every fix or push. It records:
   `updatedAt`, and SHA-256 digest;
 - snapshotted category, readiness, and native relationships;
 - current head commit reviewed;
+- mutation-safety result or its `not applicable` evidence;
 - acceptance-criterion coverage;
 - automated validation commands/results;
 - manual verification commands/results or not-applicable reason;
@@ -436,6 +458,8 @@ as intentionally pending synchronization.
 - A Tracking Issue returns `tracking` without creating a branch or PR.
 - The complete source, category, readiness, and relationship snapshot is
   revalidated before code mutation, PR creation, and merge.
+- Applicable mutation work completes its safety gate before implementation and
+  repeats it whenever the approved mutation model changes.
 - Pull requests retain exactly one `type:*` label and durable Delivery Evidence.
 - The adapter remains explicit-only and delegates all runtime rules to this
   normative workflow.
