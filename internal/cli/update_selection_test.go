@@ -894,13 +894,19 @@ func TestUpdateProvisionerFailurePreservesPreviousInstalledSelection(t *testing.
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	previous := state.InstalledSelection{Profiles: []string{"core"}, ResolvedTags: []string{"core"}}
-	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
-		t.Fatalf("save metadata: %v", err)
-	}
 	_, sourceRoot := newInstalledRepo(t, map[string]string{
 		"configs/git/gitconfig": "managed\n",
 		"dots.yaml":             updateProvisionerManifest,
 	})
+	previousEntries := []state.Record{{
+		Target: filepath.Join(home, ".gitconfig"), Source: "configs/git/gitconfig", Strategy: "copy", Ownership: "whole",
+		Contributions: []state.Contribution{{
+			Source: "configs/git/gitconfig", SelectorTags: []string{"core"}, Ownership: "whole", EvidenceRecorded: true, Hash: "previous-evidence",
+		}},
+	}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Entries: previousEntries, InstalledSelection: &previous}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
@@ -919,6 +925,9 @@ func TestUpdateProvisionerFailurePreservesPreviousInstalledSelection(t *testing.
 	}
 	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
 		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+	if !reflect.DeepEqual(meta.Entries, previousEntries) {
+		t.Fatalf("Entries = %#v, want previous exact evidence %#v", meta.Entries, previousEntries)
 	}
 }
 

@@ -2,6 +2,7 @@ package install_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/ownershipevidence"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -337,6 +339,167 @@ func TestApplyContributionEvidencePreservesUnrelatedInventoryAndInstalledSelecti
 	newRecord, ok := got.FindByTarget(filepath.Join(home, ".new"))
 	if !ok || len(newRecord.Contributions) != 1 || !reflect.DeepEqual(newRecord.Contributions[0].SelectorTags, []string{"new"}) {
 		t.Fatalf("new record = %+v, want terminal contribution evidence", newRecord)
+	}
+}
+
+func TestApplyManagedEntriesCommitsContributionEvidenceAndSelectionAtomically(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "new")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte("new\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	previousSelection := state.InstalledSelection{Profiles: []string{"previous"}, ResolvedTags: []string{"previous"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previousSelection}); err != nil {
+		t.Fatalf("save previous metadata: %v", err)
+	}
+	m := manifest.Manifest{
+		Version: 1, Profiles: map[string]manifest.Profile{"default": {Tags: []string{"new"}}},
+		Entries: []manifest.Entry{{Source: "configs/new", Target: "~/.new", Strategy: "copy", Tags: []string{"new"}}},
+	}
+	p, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	commit, err := install.ApplyManagedEntries(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot})
+	if err != nil {
+		t.Fatalf("ApplyManagedEntries() error = %v", err)
+	}
+
+	staged, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load staged metadata: %v", err)
+	}
+	if len(staged.Entries) != 1 || len(staged.Entries[0].Contributions) != 0 {
+		t.Fatalf("staged Entries = %+v, want compatibility inventory without exact evidence", staged.Entries)
+	}
+	if staged.InstalledSelection == nil || !reflect.DeepEqual(*staged.InstalledSelection, previousSelection) {
+		t.Fatalf("staged InstalledSelection = %+v, want previous %+v", staged.InstalledSelection, previousSelection)
+	}
+	provisioners := []state.ProvisionerRecord{{Tool: "codex", Executable: "codex", Status: "provisioned"}}
+	staged.Provisioners = provisioners
+	if err := state.Save(state.Path(stateRoot), staged); err != nil {
+		t.Fatalf("save terminal Provisioner inventory: %v", err)
+	}
+
+	installed := state.InstalledSelection{Profiles: []string{"default"}, ResolvedTags: []string{"new"}}
+	if err := commit.Commit(&installed); err != nil {
+		t.Fatalf("Commit() error = %v", err)
+	}
+	final, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load final metadata: %v", err)
+	}
+	if len(final.Entries) != 1 || len(final.Entries[0].Contributions) != 1 || !reflect.DeepEqual(final.Entries[0].Contributions[0].SelectorTags, []string{"new"}) {
+		t.Fatalf("final Entries = %+v, want exact selected contribution evidence", final.Entries)
+	}
+	if final.InstalledSelection == nil || !reflect.DeepEqual(*final.InstalledSelection, installed) {
+		t.Fatalf("final InstalledSelection = %+v, want %+v", final.InstalledSelection, installed)
+	}
+	if !reflect.DeepEqual(final.Provisioners, provisioners) {
+		t.Fatalf("final Provisioners = %+v, want preserved %+v", final.Provisioners, provisioners)
+	}
+}
+
+func TestMetadataCommitRejectsConcurrentDriftWithoutStrengtheningEvidence(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "new")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte("new\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	previousSelection := state.InstalledSelection{Profiles: []string{"previous"}, ResolvedTags: []string{"previous"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previousSelection}); err != nil {
+		t.Fatalf("save previous metadata: %v", err)
+	}
+	m := manifest.Manifest{
+		Version: 1, Profiles: map[string]manifest.Profile{"default": {Tags: []string{"new"}}},
+		Entries: []manifest.Entry{{Source: "configs/new", Target: "~/.new", Strategy: "copy", Tags: []string{"new"}}},
+	}
+	p, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	commit, err := install.ApplyManagedEntries(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot})
+	if err != nil {
+		t.Fatalf("ApplyManagedEntries() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".new"), []byte("concurrent drift\n"), 0o600); err != nil {
+		t.Fatalf("write concurrent Drift: %v", err)
+	}
+	installed := state.InstalledSelection{Profiles: []string{"default"}, ResolvedTags: []string{"new"}}
+	if err := commit.Commit(&installed); !errors.Is(err, ownershipevidence.ErrDrift) {
+		t.Fatalf("Commit() error = %v, want ErrDrift", err)
+	}
+
+	final, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata after Drift: %v", err)
+	}
+	if len(final.Entries) != 1 || len(final.Entries[0].Contributions) != 0 {
+		t.Fatalf("Entries after Drift = %+v, want compatibility inventory without exact evidence", final.Entries)
+	}
+	if final.InstalledSelection == nil || !reflect.DeepEqual(*final.InstalledSelection, previousSelection) {
+		t.Fatalf("InstalledSelection after Drift = %+v, want previous %+v", final.InstalledSelection, previousSelection)
+	}
+}
+
+func TestMetadataCommitRejectsChangedSourceEvidenceEvenWhenTargetContainsIt(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	source := filepath.Join(sourceRoot, "configs", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+	if err := os.WriteFile(source, []byte(`{"owned":true,"retired":true}`), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	previousSelection := state.InstalledSelection{Profiles: []string{"previous"}, ResolvedTags: []string{"previous"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previousSelection}); err != nil {
+		t.Fatalf("save previous metadata: %v", err)
+	}
+	m := manifest.Manifest{
+		Version: 1, Profiles: map[string]manifest.Profile{"default": {Tags: []string{"shared"}}},
+		Entries: []manifest.Entry{{
+			Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"shared"},
+		}},
+	}
+	p, err := plan.Build(m, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	commit, err := install.ApplyManagedEntries(p, install.Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot})
+	if err != nil {
+		t.Fatalf("ApplyManagedEntries() error = %v", err)
+	}
+	// The live target still contains this reduced subset, but it is not the
+	// exact Source of Truth contribution that produced convergence.
+	if err := os.WriteFile(source, []byte(`{"owned":true}`), 0o600); err != nil {
+		t.Fatalf("change Source of Truth after staging: %v", err)
+	}
+	installed := state.InstalledSelection{Profiles: []string{"default"}, ResolvedTags: []string{"shared"}}
+	if err := commit.Commit(&installed); !errors.Is(err, ownershipevidence.ErrDrift) {
+		t.Fatalf("Commit() error = %v, want changed source ErrDrift", err)
+	}
+
+	final, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata after source change: %v", err)
+	}
+	if len(final.Entries) != 1 || len(final.Entries[0].Contributions) != 0 {
+		t.Fatalf("Entries after source change = %+v, want compatibility inventory without exact evidence", final.Entries)
+	}
+	if final.InstalledSelection == nil || !reflect.DeepEqual(*final.InstalledSelection, previousSelection) {
+		t.Fatalf("InstalledSelection after source change = %+v, want previous %+v", final.InstalledSelection, previousSelection)
 	}
 }
 

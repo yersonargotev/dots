@@ -29,11 +29,13 @@ import (
 )
 
 var (
-	installHostOS                           = runtime.GOOS
-	installHostArch                         = runtime.GOARCH
-	packageManagerDetector                  = pkgmgr.Detector{}
-	packageManagerSetupRunner pkgmgr.Runner = pkgmgr.ExecRunner{}
-	recordInstalledSelection                = selection.Record
+	installHostOS                            = runtime.GOOS
+	installHostArch                          = runtime.GOARCH
+	packageManagerDetector                   = pkgmgr.Detector{}
+	packageManagerSetupRunner  pkgmgr.Runner = pkgmgr.ExecRunner{}
+	commitInstallationMetadata               = func(commit install.MetadataCommit, installed state.InstalledSelection) error {
+		return commit.Commit(&installed)
+	}
 )
 
 func newInstallCommand() *cobra.Command {
@@ -266,7 +268,7 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			applied, err := resolveAndApply(cmd, p, paths, yes, noTUI, backupAndReplace)
+			applied, metadataCommit, err := resolveAndApply(cmd, p, paths, yes, noTUI, backupAndReplace)
 			if err != nil {
 				return err
 			}
@@ -293,7 +295,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			installedSelection.Provenance = state.CaptureProvenance(paths.SourceRoot, version.Value)
-			if err := recordInstalledSelection(state.Path(paths.StateRoot), installedSelection); err != nil {
+			if err := commitInstallationMetadata(metadataCommit, installedSelection); err != nil {
 				return err
 			}
 			if !wantsJSON(cmd) {
@@ -562,7 +564,7 @@ func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
 // the conservative --yes default) and applies it with Backup Set protection. It
 // is shared by install and update so post-update installation reuses identical
 // Conflict Resolution and filesystem machinery instead of reimplementing it.
-func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI, backupAndReplace bool) (bool, error) {
+func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI, backupAndReplace bool) (bool, install.MetadataCommit, error) {
 	var (
 		decisions map[string]install.ConflictDecision
 		err       error
@@ -576,20 +578,21 @@ func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, 
 	case noTUI:
 		decisions, err = promptConflictDecisions(cmd, p, paths.Home, paths.SourceRoot)
 		if err != nil {
-			return false, err
+			return false, install.MetadataCommit{}, err
 		}
 	default:
 		decisions, err = resolveConflictsTUI(cmd, p, paths.Home, paths.SourceRoot)
 		if errors.Is(err, tui.ErrCanceled) {
 			fmt.Fprintln(cmd.OutOrStdout(), "Conflict resolution canceled; no changes applied.")
-			return false, nil
+			return false, install.MetadataCommit{}, nil
 		}
 		if err != nil {
-			return false, err
+			return false, install.MetadataCommit{}, err
 		}
 	}
 
-	return true, install.Apply(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
+	commit, err := install.ApplyManagedEntries(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
+	return true, commit, err
 }
 
 func replaceAllConflictDecisions(p plan.Plan) map[string]install.ConflictDecision {

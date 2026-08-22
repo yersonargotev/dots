@@ -409,6 +409,9 @@ provisioners:
 	if len(meta.Entries) != 1 {
 		t.Fatalf("Entries = %#v, want partial Managed Entry inventory retained", meta.Entries)
 	}
+	if len(meta.Entries[0].Contributions) != 0 {
+		t.Fatalf("Contributions = %#v, want no exact evidence from failed install", meta.Entries[0].Contributions)
+	}
 	if len(meta.Provisioners) != 1 || meta.Provisioners[0].Status != "failed" {
 		t.Fatalf("Provisioners = %#v, want failed inventory retained", meta.Provisioners)
 	}
@@ -641,6 +644,9 @@ provisioners:
 	if len(meta.Provisioners) != 1 || meta.Provisioners[0].Status != "provisioned" {
 		t.Fatalf("Provisioners = %#v, want successful inventory before convergence failure", meta.Provisioners)
 	}
+	if len(meta.Entries) != 1 || len(meta.Entries[0].Contributions) != 0 {
+		t.Fatalf("Entries = %#v, want partial inventory without exact evidence", meta.Entries)
+	}
 }
 
 func TestInstallHistoricalRetirementFailurePreservesPreviousSelection(t *testing.T) {
@@ -697,6 +703,9 @@ entries:
 	}
 	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
 		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+	if len(meta.Entries) != 1 || len(meta.Entries[0].Contributions) != 0 {
+		t.Fatalf("Entries = %#v, want partial inventory without exact evidence", meta.Entries)
 	}
 	got, err := os.ReadFile(instructions)
 	if err != nil || string(got) != malformed {

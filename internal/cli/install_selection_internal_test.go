@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/state"
 )
 
@@ -51,11 +52,11 @@ entries:
 		t.Fatalf("seed metadata: %v", err)
 	}
 
-	originalRecord := recordInstalledSelection
-	recordInstalledSelection = func(string, state.InstalledSelection) error {
+	originalCommit := commitInstallationMetadata
+	commitInstallationMetadata = func(install.MetadataCommit, state.InstalledSelection) error {
 		return errors.New("injected Installed Selection commit failure")
 	}
-	t.Cleanup(func() { recordInstalledSelection = originalRecord })
+	t.Cleanup(func() { commitInstallationMetadata = originalCommit })
 
 	cmd := newInstallCommand()
 	var output bytes.Buffer
@@ -81,5 +82,8 @@ entries:
 	}
 	if meta.InstalledSelection == nil || !reflect.DeepEqual(*meta.InstalledSelection, previous) {
 		t.Fatalf("InstalledSelection = %#v, want previous %#v", meta.InstalledSelection, previous)
+	}
+	if len(meta.Entries) != 1 || len(meta.Entries[0].Contributions) != 0 {
+		t.Fatalf("Entries = %#v, want partial inventory without exact evidence", meta.Entries)
 	}
 }
