@@ -187,6 +187,18 @@ func (r Record) PendingReconciliationMatches(targetData []byte, strategy, owners
 	return true
 }
 
+// RecordEvidenceFingerprint binds an operation to the exact record that
+// authorized it while excluding the recovery receipt that operation may add.
+func RecordEvidenceFingerprint(record Record) (string, error) {
+	cloned := record.Clone()
+	cloned.PendingReconciliation = nil
+	data, err := json.Marshal(cloned)
+	if err != nil {
+		return "", fmt.Errorf("fingerprint record evidence for %s: %w", record.Target, err)
+	}
+	return HashBytes(data), nil
+}
+
 // ProvisionerRecord describes the last known result for one selected
 // Provisioner command in a profile.
 type ProvisionerRecord struct {

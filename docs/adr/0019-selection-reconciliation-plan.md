@@ -140,6 +140,18 @@ recognize already removed retired values only when that receipt matches every
 byte and source; absent or mismatched receipts remain ambiguous and fail closed.
 The receipt is persisted immediately after each applied reconciliation, before
 the next Managed Entry action; terminal metadata commit replaces the old
-contribution evidence and clears the receipt. Seeded Runtime State keeps its
-existing whole-retirement rule: its
-physical bytes remain while dots releases only the ownership record.
+contribution evidence and clears the receipt. Both writes compare the locked
+record with the exact evidence fingerprint that authorized the plan; the
+terminal replacement additionally requires the exact receipt produced by that
+action. A concurrent record or receipt change therefore aborts without
+overwriting either metadata or the prior Installed Selection.
+
+Every in-place copy update is confined beneath the selected home through an
+opened filesystem root. Whole, JSON, JSONC, TOML, marked-block, and seeded
+updates reject a final symlink, verify that the opened descriptor is the same
+regular file that was inspected, and read and write through that descriptor.
+The shared read-only report also treats a conflicting or missing forward action
+for a partial retirement as blocked, so reporting and mutation gates cannot
+disagree about authority. Seeded Runtime State keeps its existing
+whole-retirement rule: its physical bytes remain while dots releases only the
+ownership record.

@@ -61,14 +61,17 @@ type Action struct {
 	PreviousContent []byte `json:"-"`
 	// PreviousHash proves that a whole-target source override still matches the
 	// exact contribution recorded before switching back to a selected source.
-	PreviousHash string   `json:"-"`
-	Target       string   `json:"target"`
-	TargetRoot   string   `json:"target_root,omitempty"`
-	Strategy     string   `json:"strategy"`
-	Status       Status   `json:"status"`
-	Reason       string   `json:"reason,omitempty"`
-	MatchingTags []string `json:"matching_tags,omitempty"`
-	Ownership    string   `json:"-"`
+	PreviousHash string `json:"-"`
+	// PreviousRecordFingerprint binds an applied reconciliation and its recovery
+	// receipt to the exact Installation Metadata record that authorized it.
+	PreviousRecordFingerprint string   `json:"-"`
+	Target                    string   `json:"target"`
+	TargetRoot                string   `json:"target_root,omitempty"`
+	Strategy                  string   `json:"strategy"`
+	Status                    Status   `json:"status"`
+	Reason                    string   `json:"reason,omitempty"`
+	MatchingTags              []string `json:"matching_tags,omitempty"`
+	Ownership                 string   `json:"-"`
 	// Migration carries pre-refresh evidence for an ownership-changing legacy
 	// symlink. It is intentionally excluded from machine output; status is the
 	// portable contract and captured workstation content may be sensitive.
@@ -259,8 +262,9 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 				}
 			}
 		}
-		if rec, ok := opts.Metadata.FindByTarget(target); ok && rec.Ownership == action.Ownership {
+		if rec, ok := opts.Metadata.FindByTarget(target); ok && normalizedEntryOwnership(rec.Ownership) == normalizedEntryOwnership(action.Ownership) {
 			action.PreviousContent = recordedPreviousContent(rec)
+			action.PreviousRecordFingerprint = exactRecordEvidenceFingerprint(rec)
 		}
 		if rec, ok := opts.Metadata.FindByTarget(target); ok {
 			if contribution, exact := exactCompatibleRecordedContribution(entry, defaultSource, rec); exact &&
@@ -1120,6 +1124,20 @@ func recordedPreviousContent(rec state.Record) []byte {
 		return append([]byte(nil), rec.SeededBaseline...)
 	}
 	return nil
+}
+
+func exactRecordEvidenceFingerprint(rec state.Record) string {
+	if len(rec.Contributions) == 0 {
+		return ""
+	}
+	if _, err := ownershipevidence.ProjectRecord(rec); err != nil {
+		return ""
+	}
+	fingerprint, err := state.RecordEvidenceFingerprint(rec)
+	if err != nil {
+		return ""
+	}
+	return fingerprint
 }
 
 func normalizedEntryOwnership(ownership string) string {

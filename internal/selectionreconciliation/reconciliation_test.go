@@ -50,6 +50,45 @@ func TestBuildReusesForwardClassification(t *testing.T) {
 	}
 }
 
+func TestBuildBlocksPartialRetirementWhenForwardPlanConflicts(t *testing.T) {
+	previous := []selectedsurface.SelectedEntry{
+		selectedEntry("a.json", "~/.shared.json", "copy", "json-subset"),
+		selectedEntry("b.json", "~/.shared.json", "copy", "json-subset"),
+	}
+	current := []selectedsurface.SelectedEntry{
+		selectedEntry("b.json", "~/.shared.json", "copy", "json-subset"),
+	}
+	input := baseInput(previous, current, TargetEvidence{
+		DeclarativeTarget: "~/.shared.json",
+		ResolvedTarget:    "/home/test/.shared.json",
+		Exists:            true,
+		Kind:              TargetKindRegular,
+		Content:           []byte(`{"a":1,"b":2}`),
+		ForwardStatus:     ForwardConflict,
+	})
+	input.Metadata.Entries = []state.Record{{
+		Target:    "/home/test/.shared.json",
+		Strategy:  "copy",
+		Ownership: "json-subset",
+		Contributions: []state.Contribution{
+			{Source: "a.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: json.RawMessage(`{"a":1}`)},
+			{Source: "b.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: json.RawMessage(`{"b":2}`)},
+		},
+		OwnedContent: json.RawMessage(`{"contradictory":true}`),
+	}}
+
+	report, err := Build(input)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonAmbiguousPartialOwnership {
+		t.Fatalf("Action = %#v, want ambiguous partial ownership block", got)
+	}
+	if !report.HasFindings() {
+		t.Fatal("forward conflict must remain a read-only finding")
+	}
+}
+
 func TestBuildClassifiesWholeTargetReplacementFromRecordedEvidence(t *testing.T) {
 	tests := []struct {
 		name       string

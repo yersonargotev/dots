@@ -213,9 +213,13 @@ func TestBuildDelegatesSafePartialRetirementToForwardPlan(t *testing.T) {
 	})
 
 	record, previous := exactSharedJSONRecord(t, target)
+	fingerprint, err := state.RecordEvidenceFingerprint(record)
+	if err != nil {
+		t.Fatal(err)
+	}
 	forward := plan.Plan{Actions: []plan.Action{{
 		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
-		PreviousContent: previous, Contributions: []plan.Contribution{{Source: "kept.json"}},
+		PreviousContent: previous, PreviousRecordFingerprint: fingerprint, Contributions: []plan.Contribution{{Source: "kept.json"}},
 	}}}
 	got, err := Build(report, state.Metadata{Entries: []state.Record{record}}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
 	if err != nil {
@@ -233,13 +237,17 @@ func TestBuildRejectsPartialRetirementWithUnrelatedForwardAction(t *testing.T) {
 	home := t.TempDir()
 	target := writeTarget(t, home, ".shared.json", `{}`)
 	record, previous := exactSharedJSONRecord(t, target)
+	fingerprint, err := state.RecordEvidenceFingerprint(record)
+	if err != nil {
+		t.Fatal(err)
+	}
 	report := explicitReport(selectionreconciliation.Action{
 		Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeReconcile, ResolvedTarget: target,
 		PreviousSources: []string{"removed.json", "kept.json"}, CurrentSources: []string{"kept.json"},
 	})
 	base := plan.Action{
 		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
-		PreviousContent: previous, Contributions: []plan.Contribution{{Source: "kept.json"}},
+		PreviousContent: previous, PreviousRecordFingerprint: fingerprint, Contributions: []plan.Contribution{{Source: "kept.json"}},
 	}
 	tests := []struct {
 		name string
@@ -303,6 +311,11 @@ func TestBuildRejectsForwardEvidenceFromContradictoryTargetWideRecord(t *testing
 		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
 		PreviousContent: contradictory, Contributions: []plan.Contribution{{Source: "kept.json"}},
 	}}}
+	fingerprint, fingerprintErr := state.RecordEvidenceFingerprint(record)
+	if fingerprintErr != nil {
+		t.Fatal(fingerprintErr)
+	}
+	forward.Actions[0].PreviousRecordFingerprint = fingerprint
 
 	_, err := Build(report, state.Metadata{Entries: []state.Record{record}}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
 	if err == nil || !strings.Contains(err.Error(), "exact recorded previous contribution evidence") {

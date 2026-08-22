@@ -395,6 +395,14 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 		action.Reason = ReasonManifestEvolution
 		return action, nil
 	}
+	if current.target != "" && hasRetiredSources(previous, current) && partialOwnership(ownership) {
+		switch target.ForwardStatus {
+		case ForwardConflict:
+			return blocked(action, ReasonAmbiguousPartialOwnership), nil
+		case ForwardMissingSource:
+			return blocked(action, ReasonMissingSource), nil
+		}
+	}
 	if current.target != "" && !hasRetiredSources(previous, current) && target.ForwardStatus != "" {
 		return classifyForward(action, ownership, target.ForwardStatus, target.ForwardReason), nil
 	}
@@ -437,6 +445,15 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 		return classifySeeded(action, previous, current, target.Content, currentContent, record, recorded), nil
 	}
 	return classifyPartial(action, previous, current, ownership, target.Content, currentContent, currentSources, record, recorded)
+}
+
+func partialOwnership(ownership string) bool {
+	switch normalizedOwnership(ownership) {
+	case "json-subset", "jsonc-subset", "toml-subset", "marked-block":
+		return true
+	default:
+		return false
+	}
 }
 
 func classifySymlink(action Action, previous, current targetGroup, target TargetEvidence, currentSources []SourceEvidence, record state.Record, recorded bool, evidence []SourceEvidence) Action {

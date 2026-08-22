@@ -187,6 +187,10 @@ func validateForwardReconciliation(action selectionreconciliation.Action, record
 			return fmt.Errorf("forward contribution source %q does not match reconciliation source %q", contribution.Source, action.CurrentSources[i])
 		}
 	}
+	recordFingerprint, err := state.RecordEvidenceFingerprint(record)
+	if err != nil || matched.PreviousRecordFingerprint == "" || matched.PreviousRecordFingerprint != recordFingerprint {
+		return fmt.Errorf("forward action is not bound to the exact recorded contribution authority")
+	}
 	if want == plan.StatusUpdate && !matchesPreviousEvidence(*matched, record, action.PreviousSources) {
 		return fmt.Errorf("forward update does not carry the exact recorded previous contribution evidence")
 	}

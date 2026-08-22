@@ -80,3 +80,59 @@ func TestUpdateWholeTargetRejectsSymlinkReplacementInsideHome(t *testing.T) {
 		t.Fatalf("in-home destination = %q, %v; want unchanged", got, readErr)
 	}
 }
+
+func TestApplyPartialUpdateRejectsSymlinkTargets(t *testing.T) {
+	markers := "# >>> dots managed >>>\nold\n# <<< dots managed <<<\n"
+	tests := []struct {
+		name      string
+		ownership string
+		previous  []byte
+		current   []byte
+	}{
+		{name: "JSON", ownership: "json-subset", previous: []byte(`{"old":true}`), current: []byte(`{"new":true}`)},
+		{name: "JSONC", ownership: "jsonc-subset", previous: []byte("{\n  // old\n  \"old\": true\n}\n"), current: []byte("{\n  \"new\": true\n}\n")},
+		{name: "TOML", ownership: "toml-subset", previous: []byte("old = true\n"), current: []byte("new = true\n")},
+		{name: "marked block", ownership: "marked-block", previous: []byte(markers), current: []byte("new\n")},
+		{name: "seeded", ownership: "seeded", previous: []byte("old\n"), current: []byte("new\n")},
+	}
+	for _, test := range tests {
+		for _, destinationScope := range []string{"outside", "inside"} {
+			t.Run(test.name+"/"+destinationScope, func(t *testing.T) {
+				home := t.TempDir()
+				destinationRoot := t.TempDir()
+				if destinationScope == "inside" {
+					destinationRoot = home
+				}
+				destination := filepath.Join(destinationRoot, ".destination")
+				target := filepath.Join(home, ".target")
+				source := filepath.Join(t.TempDir(), "source")
+				if err := os.WriteFile(destination, test.previous, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(source, test.current, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				linkDestination := destination
+				if destinationScope == "inside" {
+					linkDestination = filepath.Base(destination)
+				}
+				if err := os.Symlink(linkDestination, target); err != nil {
+					t.Fatal(err)
+				}
+				action := plan.Action{
+					Target: target, Strategy: "copy", Ownership: test.ownership,
+					PreviousContent: test.previous,
+				}
+
+				err := applyUpdate(action, source, Options{Home: home, StateRoot: t.TempDir()})
+				if err == nil || !strings.Contains(err.Error(), "non-symlink regular file") {
+					t.Fatalf("applyUpdate() error = %v, want confined symlink rejection", err)
+				}
+				got, readErr := os.ReadFile(destination)
+				if readErr != nil || string(got) != string(test.previous) {
+					t.Fatalf("destination = %q, %v; want unchanged", got, readErr)
+				}
+			})
+		}
+	}
+}
