@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -61,10 +62,10 @@ func TestApplyManagedEntriesPersistsReconciliationReceiptBeforeLaterActionFails(
 		{Source: "later", Target: filepath.Join(home, ".later"), Strategy: "copy", Status: plan.StatusCreate, Contributions: []plan.Contribution{{Source: "later", SelectorTags: []string{"later"}}}},
 	}}
 	calls := 0
-	_, err = applyManagedEntriesWithApply(p, Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}, func(action plan.Action, source string, opts Options) error {
+	_, err = applyManagedEntriesWithApply(p, Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot}, func(action plan.Action, source string, opts Options) (managedActionResult, error) {
 		calls++
 		if calls == 2 {
-			return errors.New("injected later Managed Entry failure")
+			return managedActionResult{}, errors.New("injected later Managed Entry failure")
 		}
 		return applyManagedAction(action, source, opts)
 	})
@@ -92,7 +93,7 @@ func TestApplyManagedEntriesPersistsReconciliationReceiptBeforeLaterActionFails(
 	}
 }
 
-func TestRecordAppliedReconciliationRejectsConcurrentAuthorityChange(t *testing.T) {
+func TestReconciliationRejectsConcurrentAuthorityChangeBeforeMutation(t *testing.T) {
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := t.TempDir()
@@ -100,7 +101,7 @@ func TestRecordAppliedReconciliationRejectsConcurrentAuthorityChange(t *testing.
 	source := filepath.Join(sourceRoot, "shared.json")
 	previous := []byte(`{"old":true}`)
 	current := []byte(`{"new":true}`)
-	if err := os.WriteFile(target, current, 0o600); err != nil {
+	if err := os.WriteFile(target, previous, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(source, current, 0o600); err != nil {
@@ -115,24 +116,103 @@ func TestRecordAppliedReconciliationRejectsConcurrentAuthorityChange(t *testing.
 		t.Fatal(err)
 	}
 	action := recoveryAuthorityAction(target, "shared.json", previous, fingerprint)
+	concurrentReceipt := &state.ReconciliationReceipt{
+		TargetHash: "concurrent", Sources: []string{"shared.json"}, SourceHashes: []string{"concurrent"},
+		Strategy: "copy", Ownership: "json-subset",
+	}
 	if err := state.Update(state.Path(stateRoot), func(meta *state.Metadata) error {
-		meta.Entries[0].Tags = []string{"concurrent"}
+		meta.Entries[0].PendingReconciliation = concurrentReceipt.Clone()
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	err = recordAppliedReconciliation(nil, nil, action, []string{source}, Options{SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot})
-	if err == nil || !strings.Contains(err.Error(), "changed concurrently") {
-		t.Fatalf("recordAppliedReconciliation() error = %v, want authority CAS rejection", err)
+	mutated := false
+	_, err = applyManagedEntriesWithApply(plan.Plan{Actions: []plan.Action{action}}, Options{
+		SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot,
+	}, func(action plan.Action, source string, opts Options) (managedActionResult, error) {
+		mutated = true
+		return applyManagedAction(action, source, opts)
+	})
+	if err == nil || !strings.Contains(err.Error(), "receipt changed concurrently") {
+		t.Fatalf("applyManagedEntriesWithApply() error = %v, want authority CAS rejection", err)
+	}
+	if mutated {
+		t.Fatal("reconciliation mutated the target before validating concurrent authority")
+	}
+	if got, readErr := os.ReadFile(target); readErr != nil || !bytes.Equal(got, previous) {
+		t.Fatalf("target = %q, %v; want unchanged previous bytes", got, readErr)
 	}
 	meta, err := state.Load(state.Path(stateRoot))
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, ok := meta.FindByTarget(target)
-	if !ok || !reflect.DeepEqual(got.Tags, []string{"concurrent"}) || got.PendingReconciliation != nil {
-		t.Fatalf("concurrent record = %#v, want preserved without receipt", got)
+	if !ok || !reflect.DeepEqual(got.PendingReconciliation, concurrentReceipt) {
+		t.Fatalf("concurrent record = %#v, want concurrent receipt preserved", got)
+	}
+}
+
+func TestReconciliationReceiptUsesExactAppliedSourceSnapshot(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	target := filepath.Join(home, ".shared.json")
+	sourceName := "shared.json"
+	source := filepath.Join(sourceRoot, sourceName)
+	previous := []byte(`{"old":true}`)
+	applied := []byte(`{"kept":true,"removed":true}`)
+	concurrent := []byte(`{"kept":true}`)
+	if err := os.WriteFile(target, previous, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, applied, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	record := recoveryAuthorityRecord(target, sourceName, previous)
+	oldSelection := &state.InstalledSelection{Profiles: []string{"old"}, ResolvedTags: []string{"old"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{
+		Version: state.CurrentVersion, Entries: []state.Record{record}, InstalledSelection: oldSelection,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint, err := state.RecordEvidenceFingerprint(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := recoveryAuthorityAction(target, sourceName, previous, fingerprint)
+
+	_, err = applyManagedEntriesWithApply(plan.Plan{Actions: []plan.Action{action}}, Options{
+		SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot,
+	}, func(action plan.Action, source string, opts Options) (managedActionResult, error) {
+		if !bytes.Equal(action.Content, applied) {
+			t.Fatalf("prepared source snapshot = %q, want %q", action.Content, applied)
+		}
+		if err := os.WriteFile(source, concurrent, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return applyManagedAction(action, source, opts)
+	})
+	if err == nil || !strings.Contains(err.Error(), "changed after reconciliation") {
+		t.Fatalf("applyManagedEntriesWithApply() error = %v, want changed source rejection", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(got, []byte(`"removed":true`)) {
+		t.Fatalf("target = %q, want exact applied source snapshot", got)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed, ok := meta.FindByTarget(target)
+	if !ok || failed.PendingReconciliation == nil || failed.PendingReconciliation.SourceHashes[0] != state.HashBytes(applied) {
+		t.Fatalf("receipt = %#v, want exact applied source hash", failed.PendingReconciliation)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(meta.InstalledSelection.Profiles, []string{"old"}) {
+		t.Fatalf("Installed Selection = %#v, want old", meta.InstalledSelection)
 	}
 }
 
@@ -187,6 +267,67 @@ func TestMetadataCommitRejectsConcurrentAuthorityChange(t *testing.T) {
 	got, ok := meta.FindByTarget(target)
 	if !ok || !reflect.DeepEqual(got.Tags, []string{"concurrent"}) || got.PendingReconciliation == nil {
 		t.Fatalf("concurrent record = %#v, want preserved with original receipt", got)
+	}
+	if meta.InstalledSelection == nil || !reflect.DeepEqual(meta.InstalledSelection.Profiles, []string{"old"}) {
+		t.Fatalf("Installed Selection = %#v, want old", meta.InstalledSelection)
+	}
+}
+
+func TestReceiptBackedUnchangedCommitRejectsConcurrentReceiptChange(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	target := filepath.Join(home, ".shared.json")
+	sourceName := "shared.json"
+	source := filepath.Join(sourceRoot, sourceName)
+	content := []byte(`{"current":true}`)
+	if err := os.WriteFile(target, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	record := recoveryAuthorityRecord(target, sourceName, []byte(`{"retired":true}`))
+	receipt := &state.ReconciliationReceipt{
+		TargetHash: state.HashBytes(content), Sources: []string{sourceName},
+		SourceHashes: []string{state.HashBytes(content)}, Strategy: "copy", Ownership: "json-subset",
+	}
+	record.PendingReconciliation = receipt.Clone()
+	oldSelection := &state.InstalledSelection{Profiles: []string{"old"}, ResolvedTags: []string{"old"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{
+		Version: state.CurrentVersion, Entries: []state.Record{record}, InstalledSelection: oldSelection,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint, err := state.RecordEvidenceFingerprint(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := plan.Action{
+		Source: sourceName, Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUnchanged,
+		PreviousContent: record.OwnedContent, PreviousRecordFingerprint: fingerprint,
+		PreviousReconciliationReceipt: receipt.Clone(), Contributions: []plan.Contribution{{Source: sourceName}},
+	}
+	commit, err := ApplyManagedEntries(plan.Plan{Actions: []plan.Action{action}}, Options{
+		SourceRoot: sourceRoot, Home: home, StateRoot: stateRoot,
+	})
+	if err != nil {
+		t.Fatalf("ApplyManagedEntries() error = %v", err)
+	}
+	if err := state.Update(state.Path(stateRoot), func(meta *state.Metadata) error {
+		meta.Entries[0].PendingReconciliation.TargetHash = state.HashBytes([]byte("concurrent"))
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	err = commit.Commit(&state.InstalledSelection{Profiles: []string{"new"}, ResolvedTags: []string{"new"}})
+	if err == nil || !strings.Contains(err.Error(), "receipt changed concurrently") {
+		t.Fatalf("Commit() error = %v, want receipt CAS rejection", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatal(err)
 	}
 	if meta.InstalledSelection == nil || !reflect.DeepEqual(meta.InstalledSelection.Profiles, []string{"old"}) {
 		t.Fatalf("Installed Selection = %#v, want old", meta.InstalledSelection)

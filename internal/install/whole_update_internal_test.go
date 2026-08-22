@@ -124,7 +124,7 @@ func TestApplyPartialUpdateRejectsSymlinkTargets(t *testing.T) {
 					PreviousContent: test.previous,
 				}
 
-				err := applyUpdate(action, source, Options{Home: home, StateRoot: t.TempDir()})
+				_, err := applyUpdate(action, source, Options{Home: home, StateRoot: t.TempDir()})
 				if err == nil || !strings.Contains(err.Error(), "non-symlink regular file") {
 					t.Fatalf("applyUpdate() error = %v, want confined symlink rejection", err)
 				}

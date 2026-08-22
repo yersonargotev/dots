@@ -99,6 +99,17 @@ type ReconciliationReceipt struct {
 	Ownership    string   `json:"ownership"`
 }
 
+// Clone returns an independent receipt snapshot for compare-and-set checks.
+func (r *ReconciliationReceipt) Clone() *ReconciliationReceipt {
+	if r == nil {
+		return nil
+	}
+	cloned := *r
+	cloned.Sources = append([]string(nil), r.Sources...)
+	cloned.SourceHashes = append([]string(nil), r.SourceHashes...)
+	return &cloned
+}
+
 // Contribution records the exact ownership evidence attributable to one
 // selected Source of Truth contribution. SelectorTags identifies the selected
 // declarative Tags that caused this source to contribute. EvidenceRecorded
@@ -189,6 +200,8 @@ func (r Record) PendingReconciliationMatches(targetData []byte, strategy, owners
 
 // RecordEvidenceFingerprint binds an operation to the exact record that
 // authorized it while excluding the recovery receipt that operation may add.
+// Callers compare the expected receipt separately in the same locked
+// transaction.
 func RecordEvidenceFingerprint(record Record) (string, error) {
 	cloned := record.Clone()
 	cloned.PendingReconciliation = nil

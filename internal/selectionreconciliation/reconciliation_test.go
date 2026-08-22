@@ -89,6 +89,41 @@ func TestBuildBlocksPartialRetirementWhenForwardPlanConflicts(t *testing.T) {
 	}
 }
 
+func TestBuildBlocksWholeSourceOverrideRetirementWhenForwardPlanConflicts(t *testing.T) {
+	previous := []selectedsurface.SelectedEntry{
+		selectedEntry("override.kdl", "~/.config.kdl", "copy", "whole"),
+	}
+	current := []selectedsurface.SelectedEntry{
+		selectedEntry("base.kdl", "~/.config.kdl", "copy", "whole"),
+	}
+	input := baseInput(previous, current, TargetEvidence{
+		DeclarativeTarget: "~/.config.kdl",
+		ResolvedTarget:    "/home/test/.config.kdl",
+		Exists:            true,
+		Kind:              TargetKindRegular,
+		Content:           []byte("override\n"),
+		ForwardStatus:     ForwardConflict,
+	})
+	input.Metadata.Entries = []state.Record{{
+		Target: "/home/test/.config.kdl", Source: "override.kdl", Strategy: "copy", Ownership: "whole",
+		Hash: state.HashBytes([]byte("contradictory\n")),
+		Contributions: []state.Contribution{{
+			Source: "override.kdl", Ownership: "whole", EvidenceRecorded: true, Hash: state.HashBytes([]byte("override\n")),
+		}},
+	}}
+
+	report, err := Build(input)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonLostOwnership {
+		t.Fatalf("Action = %#v, want lost-ownership block", got)
+	}
+	if !report.HasFindings() {
+		t.Fatal("forward conflict must remain a read-only finding")
+	}
+}
+
 func TestBuildClassifiesWholeTargetReplacementFromRecordedEvidence(t *testing.T) {
 	tests := []struct {
 		name       string

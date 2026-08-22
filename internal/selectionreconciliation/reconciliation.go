@@ -395,10 +395,13 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 		action.Reason = ReasonManifestEvolution
 		return action, nil
 	}
-	if current.target != "" && hasRetiredSources(previous, current) && partialOwnership(ownership) {
+	if current.target != "" && hasRetiredSources(previous, current) {
 		switch target.ForwardStatus {
 		case ForwardConflict:
-			return blocked(action, ReasonAmbiguousPartialOwnership), nil
+			if partialOwnership(ownership) {
+				return blocked(action, ReasonAmbiguousPartialOwnership), nil
+			}
+			return classifyForward(action, ownership, target.ForwardStatus, target.ForwardReason), nil
 		case ForwardMissingSource:
 			return blocked(action, ReasonMissingSource), nil
 		}

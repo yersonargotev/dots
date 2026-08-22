@@ -63,15 +63,18 @@ type Action struct {
 	// exact contribution recorded before switching back to a selected source.
 	PreviousHash string `json:"-"`
 	// PreviousRecordFingerprint binds an applied reconciliation and its recovery
-	// receipt to the exact Installation Metadata record that authorized it.
-	PreviousRecordFingerprint string   `json:"-"`
-	Target                    string   `json:"target"`
-	TargetRoot                string   `json:"target_root,omitempty"`
-	Strategy                  string   `json:"strategy"`
-	Status                    Status   `json:"status"`
-	Reason                    string   `json:"reason,omitempty"`
-	MatchingTags              []string `json:"matching_tags,omitempty"`
-	Ownership                 string   `json:"-"`
+	// receipt to the exact Installation Metadata record that authorized it. The
+	// receipt snapshot is compared separately because the operation may replace
+	// it while retaining the underlying contribution authority.
+	PreviousRecordFingerprint     string                       `json:"-"`
+	PreviousReconciliationReceipt *state.ReconciliationReceipt `json:"-"`
+	Target                        string                       `json:"target"`
+	TargetRoot                    string                       `json:"target_root,omitempty"`
+	Strategy                      string                       `json:"strategy"`
+	Status                        Status                       `json:"status"`
+	Reason                        string                       `json:"reason,omitempty"`
+	MatchingTags                  []string                     `json:"matching_tags,omitempty"`
+	Ownership                     string                       `json:"-"`
 	// Migration carries pre-refresh evidence for an ownership-changing legacy
 	// symlink. It is intentionally excluded from machine output; status is the
 	// portable contract and captured workstation content may be sensitive.
@@ -265,6 +268,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 		if rec, ok := opts.Metadata.FindByTarget(target); ok && normalizedEntryOwnership(rec.Ownership) == normalizedEntryOwnership(action.Ownership) {
 			action.PreviousContent = recordedPreviousContent(rec)
 			action.PreviousRecordFingerprint = exactRecordEvidenceFingerprint(rec)
+			action.PreviousReconciliationReceipt = rec.PendingReconciliation.Clone()
 		}
 		if rec, ok := opts.Metadata.FindByTarget(target); ok {
 			if contribution, exact := exactCompatibleRecordedContribution(entry, defaultSource, rec); exact &&

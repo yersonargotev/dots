@@ -144,7 +144,12 @@ contribution evidence and clears the receipt. Both writes compare the locked
 record with the exact evidence fingerprint that authorized the plan; the
 terminal replacement additionally requires the exact receipt produced by that
 action. A concurrent record or receipt change therefore aborts without
-overwriting either metadata or the prior Installed Selection.
+overwriting either metadata or the prior Installed Selection. The initial
+receipt transaction holds that metadata lock while it snapshots the selected
+sources, applies those exact bytes through the confined target descriptor, and
+persists hashes of those source and resulting target bytes. If receipt storage
+fails, dots restores the target bytes captured by the same descriptor before
+returning the metadata error.
 
 Every in-place copy update is confined beneath the selected home through an
 opened filesystem root. Whole, JSON, JSONC, TOML, marked-block, and seeded

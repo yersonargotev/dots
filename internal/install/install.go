@@ -2,6 +2,7 @@ package install
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -71,13 +72,20 @@ func Apply(p plan.Plan, opts Options) error {
 }
 
 // ApplyManagedEntries applies and validates Managed Entries while persisting
-// only compatibility inventory. Exact per-contribution evidence is kept out of
-// Installation Metadata until the returned commit reaches terminal success.
+// only compatibility inventory and recovery receipts. Exact current
+// per-contribution evidence is kept out of Installation Metadata until the
+// returned commit reaches terminal success.
 func ApplyManagedEntries(p plan.Plan, opts Options) (MetadataCommit, error) {
 	return applyManagedEntriesWithApply(p, opts, applyManagedAction)
 }
 
-type managedActionApply func(plan.Action, string, Options) error
+type managedActionResult struct {
+	PreviousTargetContent []byte
+	TargetContent         []byte
+	ExactTargetContent    bool
+}
+
+type managedActionApply func(plan.Action, string, Options) (managedActionResult, error)
 
 func applyManagedEntriesWithApply(p plan.Plan, opts Options, applyAction managedActionApply) (MetadataCommit, error) {
 	resolvedSources, err := validatePlan(p, opts)
@@ -85,17 +93,23 @@ func applyManagedEntriesWithApply(p plan.Plan, opts Options, applyAction managed
 		return MetadataCommit{}, err
 	}
 
+	appliedActions := append([]plan.Action(nil), p.Actions...)
+	appliedReceipts := make([]*state.ReconciliationReceipt, len(p.Actions))
 	for i, action := range p.Actions {
 		source := resolvedSources[i][0]
-		if err := applyAction(action, source, opts); err != nil {
+		prepared, receipt, err := applyActionWithReconciliationReceipt(action, source, resolvedSources[i], opts, applyAction)
+		if err != nil {
 			return MetadataCommit{}, err
 		}
-		if err := recordAppliedReconciliation(p.Profiles, p.Tags, action, resolvedSources[i], opts); err != nil {
-			return MetadataCommit{}, err
-		}
+		appliedActions[i] = prepared
+		appliedReceipts[i] = receipt
 	}
 
+	p.Actions = appliedActions
 	commit := newMetadataCommit(p, resolvedSources, opts)
+	for i := range commit.actions {
+		commit.actions[i].pending = appliedReceipts[i]
+	}
 	if opts.StateRoot != "" {
 		if err := commit.captureStagedEvidence(); err != nil {
 			return MetadataCommit{}, err
@@ -107,64 +121,121 @@ func applyManagedEntriesWithApply(p plan.Plan, opts Options, applyAction managed
 	return commit, nil
 }
 
-func applyManagedAction(action plan.Action, source string, opts Options) error {
+func applyManagedAction(action plan.Action, source string, opts Options) (managedActionResult, error) {
 	switch action.Status {
 	case plan.StatusUnchanged:
-		return nil
+		return managedActionResult{}, nil
 	case plan.StatusCreate:
-		return applyCreate(action, source)
+		return managedActionResult{}, applyCreate(action, source)
 	case plan.StatusUpdate:
 		return applyUpdate(action, source, opts)
 	case plan.StatusMigrate:
-		return applyMigration(action, source, opts)
+		return managedActionResult{}, applyMigration(action, source, opts)
 	case plan.StatusConflict:
 		switch conflictDecision(action, opts) {
 		case DecisionSkip:
 			// Safe default for unresolved conflicts is skip: do not mutate the
 			// existing workstation target, but continue applying safe actions.
-			return nil
+			return managedActionResult{}, nil
 		case DecisionReplace:
-			return applyReplace(action, source, opts)
+			return managedActionResult{}, applyReplace(action, source, opts)
 		case DecisionAdopt:
-			return applyAdopt(action, source, opts)
+			return managedActionResult{}, applyAdopt(action, source, opts)
 		}
 	}
-	return nil
+	return managedActionResult{}, nil
 }
 
-func recordAppliedReconciliation(profiles, tags []string, action plan.Action, resolvedSources []string, opts Options) error {
-	if opts.StateRoot == "" || action.Status != plan.StatusUpdate ||
-		action.PreviousRecordFingerprint == "" || (len(action.PreviousContent) == 0 && action.PreviousHash == "") {
-		return nil
+func applyActionWithReconciliationReceipt(action plan.Action, source string, resolvedSources []string, opts Options, applyAction managedActionApply) (prepared plan.Action, receipt *state.ReconciliationReceipt, resultErr error) {
+	prepared = action
+	if !requiresReconciliationReceipt(action, opts) {
+		_, err := applyAction(action, source, opts)
+		return prepared, nil, err
 	}
-	record, err := buildMetadataRecord(profiles, tags, action, resolvedSources, time.Now().UTC().Format(time.RFC3339))
+
+	locked, err := state.LockMetadata(state.Path(opts.StateRoot))
 	if err != nil {
-		return err
+		return prepared, nil, err
 	}
-	receipt, err := buildReconciliationReceipt(action, record)
+	defer func() { resultErr = errors.Join(resultErr, locked.Close()) }()
+	meta, err := locked.Load()
 	if err != nil {
-		return err
+		return prepared, nil, err
 	}
-	if receipt == nil {
-		return nil
+	if err := validateAuthorizingRecord(meta, action, action.PreviousReconciliationReceipt); err != nil {
+		return prepared, nil, err
 	}
-	return state.Update(state.Path(opts.StateRoot), func(meta *state.Metadata) error {
-		record, ok := meta.FindByTarget(action.Target)
-		if !ok || len(record.Contributions) == 0 {
-			return fmt.Errorf("record reconciliation receipt for %s: authorizing contribution record disappeared", action.Target)
-		}
-		fingerprint, err := state.RecordEvidenceFingerprint(record)
+
+	prepared, sourceContents, err := snapshotReconciliationSources(action, resolvedSources)
+	if err != nil {
+		return action, nil, err
+	}
+	result, err := applyAction(prepared, source, opts)
+	if err != nil {
+		return prepared, nil, err
+	}
+	if !result.ExactTargetContent {
+		return prepared, nil, fmt.Errorf("record reconciliation receipt for %s: apply did not return exact target bytes", action.Target)
+	}
+	receipt = &state.ReconciliationReceipt{
+		TargetHash:   state.HashBytes(result.TargetContent),
+		Sources:      actionSourceList(action),
+		SourceHashes: make([]string, len(sourceContents)),
+		Strategy:     action.Strategy,
+		Ownership:    ownershipevidence.For(action.Strategy, action.Ownership).Ownership(),
+	}
+	for i := range sourceContents {
+		receipt.SourceHashes[i] = state.HashBytes(sourceContents[i])
+	}
+	meta.Version = state.CurrentVersion
+	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
+	setPendingReconciliation(&meta, action.Target, receipt)
+	if err := locked.Save(meta); err != nil {
+		rollbackErr := restoreConfinedRegularFile(action.Target, opts.Home, result.PreviousTargetContent)
+		return prepared, nil, errors.Join(fmt.Errorf("persist reconciliation receipt for %s: %w", action.Target, err), rollbackErr)
+	}
+	return prepared, receipt, nil
+}
+
+func requiresReconciliationReceipt(action plan.Action, opts Options) bool {
+	return opts.StateRoot != "" && action.Status == plan.StatusUpdate && action.Strategy == "copy" &&
+		action.PreviousRecordFingerprint != "" && (len(action.PreviousContent) > 0 || action.PreviousHash != "")
+}
+
+func snapshotReconciliationSources(action plan.Action, resolvedSources []string) (plan.Action, [][]byte, error) {
+	contents := make([][]byte, len(resolvedSources))
+	for i, source := range resolvedSources {
+		data, err := os.ReadFile(source)
 		if err != nil {
-			return err
+			return action, nil, fmt.Errorf("snapshot reconciliation source %s: %w", source, err)
 		}
-		if fingerprint != action.PreviousRecordFingerprint {
-			return fmt.Errorf("record reconciliation receipt for %s: authorizing contribution record changed concurrently", action.Target)
+		contents[i] = data
+	}
+	prepared := action
+	if len(action.Sources) == 0 {
+		prepared.Content = append([]byte(nil), contents[0]...)
+		return prepared, contents, nil
+	}
+	composed := append([]byte(nil), contents[0]...)
+	for i := 1; i < len(contents); i++ {
+		merged, err := configsubset.MergeJSON(composed, contents[i])
+		if err != nil {
+			return action, nil, fmt.Errorf("compose snapshotted reconciliation source %s: %w", action.Sources[i], err)
 		}
-		meta.Version = state.CurrentVersion
-		meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
-		setPendingReconciliation(meta, action.Target, receipt)
-		return nil
-	})
+		composed = merged
+	}
+	if !bytes.Equal(composed, action.Content) {
+		return action, nil, fmt.Errorf("install plan source content changed before reconciliation for %s", action.Target)
+	}
+	prepared.Content = composed
+	return prepared, contents, nil
+}
+
+func actionSourceList(action plan.Action) []string {
+	if len(action.Sources) > 0 {
+		return append([]string(nil), action.Sources...)
+	}
+	return []string{action.Source}
 }
 
 // ValidateManagedEntries validates the complete forward Install Plan without
@@ -197,8 +268,12 @@ func (c MetadataCommit) Commit(installed *state.InstalledSelection) error {
 				continue
 			}
 			action := stagedAction.action
-			if stagedAction.pending != nil {
-				if err := validatePendingReconciliation(*meta, action, stagedAction.pending); err != nil {
+			if action.PreviousRecordFingerprint != "" {
+				expectedReceipt := action.PreviousReconciliationReceipt
+				if stagedAction.pending != nil {
+					expectedReceipt = stagedAction.pending
+				}
+				if err := validateAuthorizingRecord(*meta, action, expectedReceipt); err != nil {
 					return err
 				}
 			}
@@ -245,42 +320,26 @@ func (c *MetadataCommit) captureStagedEvidence() error {
 			return err
 		}
 		stagedAction.stagedRecord = record
-		pending, err := buildReconciliationReceipt(stagedAction.action, record)
-		if err != nil {
-			return err
+		if stagedAction.pending != nil {
+			if err := validateRecordAgainstReceipt(record, stagedAction.pending); err != nil {
+				return fmt.Errorf("validate snapshotted reconciliation evidence for %s: %w", stagedAction.action.Target, err)
+			}
 		}
-		stagedAction.pending = pending
 	}
 	return nil
 }
 
-func buildReconciliationReceipt(action plan.Action, record state.Record) (*state.ReconciliationReceipt, error) {
-	if action.Strategy != "copy" || action.Status != plan.StatusUpdate ||
-		action.PreviousRecordFingerprint == "" || (len(action.PreviousContent) == 0 && action.PreviousHash == "") {
-		return nil, nil
+func validateRecordAgainstReceipt(record state.Record, receipt *state.ReconciliationReceipt) error {
+	if receipt == nil || record.Strategy != receipt.Strategy || record.Ownership != receipt.Ownership ||
+		!reflect.DeepEqual(record.SourceList(), receipt.Sources) || len(record.Contributions) != len(receipt.SourceHashes) {
+		return fmt.Errorf("record does not match reconciliation receipt identity")
 	}
-	sources := record.SourceList()
-	if len(sources) == 0 || len(record.Contributions) != len(sources) {
-		return nil, fmt.Errorf("record reconciliation receipt for %s: exact current contributions are required", action.Target)
-	}
-	sourceHashes := make([]string, len(record.Contributions))
-	for i, contribution := range record.Contributions {
-		if contribution.Source != sources[i] || contribution.Hash == "" {
-			return nil, fmt.Errorf("record reconciliation receipt for %s: exact hash for source %q is required", action.Target, sources[i])
+	for i := range record.Contributions {
+		if record.Contributions[i].Source != receipt.Sources[i] || record.Contributions[i].Hash != receipt.SourceHashes[i] {
+			return fmt.Errorf("source %q changed after reconciliation", receipt.Sources[i])
 		}
-		sourceHashes[i] = contribution.Hash
 	}
-	targetHash, err := state.HashFile(action.Target)
-	if err != nil {
-		return nil, fmt.Errorf("record reconciliation receipt for %s: %w", action.Target, err)
-	}
-	return &state.ReconciliationReceipt{
-		TargetHash:   targetHash,
-		Sources:      append([]string(nil), sources...),
-		SourceHashes: sourceHashes,
-		Strategy:     action.Strategy,
-		Ownership:    record.Ownership,
-	}, nil
+	return nil
 }
 
 // recordPartialInventory retains the existing rerunnable failed-install
@@ -299,8 +358,12 @@ func (c MetadataCommit) recordPartialInventory() error {
 			}
 			action := stagedAction.action
 			if hasCommittedContributions(*meta, action.Target) {
-				if stagedAction.pending != nil {
-					if err := validatePendingReconciliation(*meta, action, stagedAction.pending); err != nil {
+				if action.PreviousRecordFingerprint != "" {
+					expectedReceipt := action.PreviousReconciliationReceipt
+					if stagedAction.pending != nil {
+						expectedReceipt = stagedAction.pending
+					}
+					if err := validateAuthorizingRecord(*meta, action, expectedReceipt); err != nil {
 						return err
 					}
 				}
@@ -317,7 +380,7 @@ func (c MetadataCommit) recordPartialInventory() error {
 	})
 }
 
-func validatePendingReconciliation(meta state.Metadata, action plan.Action, receipt *state.ReconciliationReceipt) error {
+func validateAuthorizingRecord(meta state.Metadata, action plan.Action, expectedReceipt *state.ReconciliationReceipt) error {
 	record, ok := meta.FindByTarget(action.Target)
 	if !ok {
 		return fmt.Errorf("validate reconciliation receipt for %s: authorizing record disappeared", action.Target)
@@ -329,7 +392,7 @@ func validatePendingReconciliation(meta state.Metadata, action plan.Action, rece
 	if action.PreviousRecordFingerprint == "" || fingerprint != action.PreviousRecordFingerprint {
 		return fmt.Errorf("validate reconciliation receipt for %s: authorizing record changed concurrently", action.Target)
 	}
-	if record.PendingReconciliation == nil || !reflect.DeepEqual(*record.PendingReconciliation, *receipt) {
+	if !reflect.DeepEqual(record.PendingReconciliation, expectedReceipt) {
 		return fmt.Errorf("validate reconciliation receipt for %s: receipt changed concurrently", action.Target)
 	}
 	return nil
@@ -988,115 +1051,140 @@ func applyReplace(action plan.Action, source string, opts Options) error {
 	return nil
 }
 
-func applyUpdate(action plan.Action, source string, opts Options) error {
+func applyUpdate(action plan.Action, source string, opts Options) (managedActionResult, error) {
 	if err := createBackupSet(opts, action.Target); err != nil {
-		return err
+		return managedActionResult{}, err
 	}
 	switch action.Ownership {
 	case "json-subset":
-		if len(action.PreviousContent) > 0 {
-			current := action.Content
-			if len(current) == 0 {
-				var err error
-				current, err = os.ReadFile(source)
-				if err != nil {
-					return fmt.Errorf("read current owned JSON %s: %w", source, err)
-				}
-			}
-			if err := reconcileJSONContentFile(action.Target, action.PreviousContent, current, opts.Home); err != nil {
-				return fmt.Errorf("reconcile JSON update for %s: %w", action.Target, err)
-			}
-			return nil
-		}
-		if len(action.Content) > 0 {
-			if err := mergeJSONContentFile(action.Target, action.Content, opts.Home); err != nil {
-				return fmt.Errorf("merge composed JSON update for %s: %w", action.Target, err)
-			}
-			return nil
-		}
-		current, err := os.ReadFile(source)
-		if err != nil {
-			return fmt.Errorf("read current owned JSON %s: %w", source, err)
-		}
-		if err := mergeJSONContentFile(action.Target, current, opts.Home); err != nil {
-			return fmt.Errorf("merge JSON update for %s: %w", action.Target, err)
-		}
-	case "jsonc-subset":
-		current, err := os.ReadFile(source)
-		if err != nil {
-			return fmt.Errorf("read current owned JSONC %s: %w", source, err)
-		}
-		if len(action.PreviousContent) > 0 {
-			if err := reconcileJSONCContentFile(action.Target, action.PreviousContent, current, opts.Home); err != nil {
-				return fmt.Errorf("reconcile JSONC update for %s: %w", action.Target, err)
-			}
-			return nil
-		}
-		if err := mergeJSONCContentFile(action.Target, current, opts.Home); err != nil {
-			return fmt.Errorf("merge JSONC update for %s: %w", action.Target, err)
-		}
-	case "toml-subset":
-		if len(action.PreviousContent) > 0 {
-			current, err := os.ReadFile(source)
+		current := action.Content
+		if current == nil {
+			var err error
+			current, err = os.ReadFile(source)
 			if err != nil {
-				return fmt.Errorf("read current owned TOML %s: %w", source, err)
+				return managedActionResult{}, fmt.Errorf("read current owned JSON %s: %w", source, err)
 			}
-			if err := reconcileTOMLContentFile(action.Target, action.PreviousContent, current, opts.Home); err != nil {
-				return fmt.Errorf("reconcile TOML update for %s: %w", action.Target, err)
-			}
-			return nil
 		}
-		current, err := os.ReadFile(source)
+		if len(action.PreviousContent) > 0 {
+			result, err := reconcileJSONContentFile(action.Target, action.PreviousContent, current, opts.Home)
+			if err != nil {
+				return managedActionResult{}, fmt.Errorf("reconcile JSON update for %s: %w", action.Target, err)
+			}
+			return result, nil
+		}
+		result, err := mergeJSONContentFile(action.Target, current, opts.Home)
 		if err != nil {
-			return fmt.Errorf("read current owned TOML %s: %w", source, err)
+			return managedActionResult{}, fmt.Errorf("merge JSON update for %s: %w", action.Target, err)
 		}
-		if err := mergeTOMLContentFile(action.Target, current, opts.Home); err != nil {
-			return fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
+		return result, nil
+	case "jsonc-subset":
+		current := action.Content
+		if current == nil {
+			var err error
+			current, err = os.ReadFile(source)
+			if err != nil {
+				return managedActionResult{}, fmt.Errorf("read current owned JSONC %s: %w", source, err)
+			}
 		}
+		if len(action.PreviousContent) > 0 {
+			result, err := reconcileJSONCContentFile(action.Target, action.PreviousContent, current, opts.Home)
+			if err != nil {
+				return managedActionResult{}, fmt.Errorf("reconcile JSONC update for %s: %w", action.Target, err)
+			}
+			return result, nil
+		}
+		result, err := mergeJSONCContentFile(action.Target, current, opts.Home)
+		if err != nil {
+			return managedActionResult{}, fmt.Errorf("merge JSONC update for %s: %w", action.Target, err)
+		}
+		return result, nil
+	case "toml-subset":
+		current := action.Content
+		if current == nil {
+			var err error
+			current, err = os.ReadFile(source)
+			if err != nil {
+				return managedActionResult{}, fmt.Errorf("read current owned TOML %s: %w", source, err)
+			}
+		}
+		if len(action.PreviousContent) > 0 {
+			result, err := reconcileTOMLContentFile(action.Target, action.PreviousContent, current, opts.Home)
+			if err != nil {
+				return managedActionResult{}, fmt.Errorf("reconcile TOML update for %s: %w", action.Target, err)
+			}
+			return result, nil
+		}
+		result, err := mergeTOMLContentFile(action.Target, current, opts.Home)
+		if err != nil {
+			return managedActionResult{}, fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
+		}
+		return result, nil
 	case "seeded":
-		current, err := os.ReadFile(source)
-		if err != nil {
-			return fmt.Errorf("read seeded baseline %s: %w", source, err)
+		current := action.Content
+		if current == nil {
+			var err error
+			current, err = os.ReadFile(source)
+			if err != nil {
+				return managedActionResult{}, fmt.Errorf("read seeded baseline %s: %w", source, err)
+			}
 		}
-		if err := updateConfinedRegularFile(action.Target, opts.Home, func(live []byte) ([]byte, bool, error) {
+		result, err := updateConfinedRegularFile(action.Target, opts.Home, func(live []byte) ([]byte, bool, error) {
 			if !bytes.Equal(live, action.PreviousContent) {
 				return nil, false, fmt.Errorf("install plan is stale: seeded target %s evolved before baseline advancement", action.Target)
 			}
 			return current, !bytes.Equal(live, current), nil
-		}); err != nil {
-			return fmt.Errorf("advance seeded target %s: %w", action.Target, err)
-		}
-	case "marked-block":
-		current, err := os.ReadFile(source)
+		})
 		if err != nil {
-			return fmt.Errorf("read marked-block source %s: %w", source, err)
+			return managedActionResult{}, fmt.Errorf("advance seeded target %s: %w", action.Target, err)
 		}
-		if err := updateConfinedRegularFile(action.Target, opts.Home, func(live []byte) ([]byte, bool, error) {
+		return result, nil
+	case "marked-block":
+		current := action.Content
+		if current == nil {
+			var err error
+			current, err = os.ReadFile(source)
+			if err != nil {
+				return managedActionResult{}, fmt.Errorf("read marked-block source %s: %w", source, err)
+			}
+		}
+		result, err := updateConfinedRegularFile(action.Target, opts.Home, func(live []byte) ([]byte, bool, error) {
 			reconciliation := textblock.ReconcileOwned(live, action.PreviousContent, current, textblock.DotsManagedMarkers())
 			if !reconciliation.Compatible {
 				return nil, false, fmt.Errorf("install plan is stale: marked block %s changed before update", action.Target)
 			}
 			return reconciliation.Content, !bytes.Equal(reconciliation.Content, live), nil
-		}); err != nil {
-			return fmt.Errorf("update marked block %s: %w", action.Target, err)
+		})
+		if err != nil {
+			return managedActionResult{}, fmt.Errorf("update marked block %s: %w", action.Target, err)
 		}
+		return result, nil
 	case "", "whole":
-		if err := updateWholeTarget(action, source, opts.Home); err != nil {
-			return err
+		result, err := updateWholeTargetWithResult(action, source, opts.Home)
+		if err != nil {
+			return managedActionResult{}, err
 		}
+		return result, nil
 	default:
-		return fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)
+		return managedActionResult{}, fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)
 	}
-	return nil
 }
 
 func updateWholeTarget(action plan.Action, source, home string) error {
+	_, err := updateWholeTargetWithResult(action, source, home)
+	return err
+}
+
+func updateWholeTargetWithResult(action plan.Action, source, home string) (managedActionResult, error) {
 	if action.PreviousHash == "" {
-		return fmt.Errorf("previous whole-target evidence is required for %s", action.Target)
+		return managedActionResult{}, fmt.Errorf("previous whole-target evidence is required for %s", action.Target)
 	}
-	current, err := os.ReadFile(source)
-	if err != nil {
-		return fmt.Errorf("read current whole target source %s: %w", source, err)
+	current := action.Content
+	if current == nil {
+		var err error
+		current, err = os.ReadFile(source)
+		if err != nil {
+			return managedActionResult{}, fmt.Errorf("read current whole target source %s: %w", source, err)
+		}
 	}
 	return updateConfinedRegularFile(action.Target, home, func(live []byte) ([]byte, bool, error) {
 		if state.HashBytes(live) != action.PreviousHash {
@@ -1108,69 +1196,85 @@ func updateWholeTarget(action plan.Action, source, home string) error {
 
 type confinedTransform func([]byte) ([]byte, bool, error)
 
-func updateConfinedRegularFile(target, home string, transform confinedTransform) error {
+func updateConfinedRegularFile(target, home string, transform confinedTransform) (managedActionResult, error) {
 	homeAbs, err := cleanAbs(home)
 	if err != nil {
-		return fmt.Errorf("resolve home for target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("resolve home for target %s: %w", target, err)
 	}
 	targetAbs, err := cleanAbs(target)
 	if err != nil {
-		return fmt.Errorf("resolve target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("resolve target %s: %w", target, err)
 	}
 	relative, err := filepath.Rel(homeAbs, targetAbs)
 	if err != nil || !filepath.IsLocal(relative) || relative == "." {
-		return fmt.Errorf("confine target %s beneath home %s", target, homeAbs)
+		return managedActionResult{}, fmt.Errorf("confine target %s beneath home %s", target, homeAbs)
 	}
 	root, err := os.OpenRoot(homeAbs)
 	if err != nil {
-		return fmt.Errorf("open home root %s: %w", homeAbs, err)
+		return managedActionResult{}, fmt.Errorf("open home root %s: %w", homeAbs, err)
 	}
 	defer root.Close()
 	observed, err := root.Lstat(relative)
 	if err != nil {
-		return fmt.Errorf("inspect confined target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("inspect confined target %s: %w", target, err)
 	}
 	if observed.Mode()&os.ModeSymlink != 0 || !observed.Mode().IsRegular() {
-		return fmt.Errorf("confined target %s is not a non-symlink regular file", target)
+		return managedActionResult{}, fmt.Errorf("confined target %s is not a non-symlink regular file", target)
 	}
 	file, err := root.OpenFile(relative, os.O_RDWR, 0)
 	if err != nil {
-		return fmt.Errorf("open confined target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("open confined target %s: %w", target, err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return fmt.Errorf("stat confined target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("stat confined target %s: %w", target, err)
 	}
 	if !info.Mode().IsRegular() || !os.SameFile(observed, info) {
-		return fmt.Errorf("install plan is stale: target %s changed identity before update", target)
+		return managedActionResult{}, fmt.Errorf("install plan is stale: target %s changed identity before update", target)
 	}
 	live, err := io.ReadAll(file)
 	if err != nil {
-		return fmt.Errorf("read confined target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("read confined target %s: %w", target, err)
 	}
 	updated, changed, err := transform(live)
 	if err != nil {
-		return err
+		return managedActionResult{}, err
+	}
+	result := managedActionResult{
+		PreviousTargetContent: append([]byte(nil), live...),
+		TargetContent:         append([]byte(nil), updated...),
+		ExactTargetContent:    true,
 	}
 	if !changed {
-		return nil
+		result.TargetContent = append([]byte(nil), live...)
+		return result, nil
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("rewind confined target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("rewind confined target %s: %w", target, err)
 	}
 	if err := file.Truncate(0); err != nil {
-		return fmt.Errorf("truncate confined target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("truncate confined target %s: %w", target, err)
 	}
 	written, err := file.Write(updated)
 	if err != nil {
-		return fmt.Errorf("write confined target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("write confined target %s: %w", target, err)
 	}
 	if written != len(updated) {
-		return fmt.Errorf("write confined target %s: wrote %d of %d bytes", target, written, len(updated))
+		return managedActionResult{}, fmt.Errorf("write confined target %s: wrote %d of %d bytes", target, written, len(updated))
 	}
 	if err := file.Sync(); err != nil {
-		return fmt.Errorf("sync confined target %s: %w", target, err)
+		return managedActionResult{}, fmt.Errorf("sync confined target %s: %w", target, err)
+	}
+	return result, nil
+}
+
+func restoreConfinedRegularFile(target, home string, content []byte) error {
+	_, err := updateConfinedRegularFile(target, home, func(live []byte) ([]byte, bool, error) {
+		return content, !bytes.Equal(live, content), nil
+	})
+	if err != nil {
+		return fmt.Errorf("restore target %s after metadata failure: %w", target, err)
 	}
 	return nil
 }
@@ -1377,14 +1481,14 @@ func writeNewFileFromSourceMode(source, target string, data []byte) error {
 	return nil
 }
 
-func mergeJSONContentFile(target string, sourceData []byte, home string) error {
+func mergeJSONContentFile(target string, sourceData []byte, home string) (managedActionResult, error) {
 	return updateConfinedRegularFile(target, home, func(targetData []byte) ([]byte, bool, error) {
 		merged, err := configsubset.MergeJSON(targetData, sourceData)
 		return merged, err == nil && !bytes.Equal(merged, targetData), err
 	})
 }
 
-func reconcileJSONContentFile(target string, previousData, currentData []byte, home string) error {
+func reconcileJSONContentFile(target string, previousData, currentData []byte, home string) (managedActionResult, error) {
 	return updateConfinedRegularFile(target, home, func(targetData []byte) ([]byte, bool, error) {
 		reconciliation, err := configsubset.ReconcileJSON(targetData, previousData, currentData)
 		if err != nil {
@@ -1397,14 +1501,14 @@ func reconcileJSONContentFile(target string, previousData, currentData []byte, h
 	})
 }
 
-func mergeJSONCContentFile(target string, sourceData []byte, home string) error {
+func mergeJSONCContentFile(target string, sourceData []byte, home string) (managedActionResult, error) {
 	return updateConfinedRegularFile(target, home, func(targetData []byte) ([]byte, bool, error) {
 		merged, err := configsubset.MergeJSONC(targetData, sourceData)
 		return merged, err == nil && !bytes.Equal(merged, targetData), err
 	})
 }
 
-func reconcileJSONCContentFile(target string, previousData, currentData []byte, home string) error {
+func reconcileJSONCContentFile(target string, previousData, currentData []byte, home string) (managedActionResult, error) {
 	return updateConfinedRegularFile(target, home, func(targetData []byte) ([]byte, bool, error) {
 		reconciliation, err := configsubset.ReconcileJSONC(targetData, previousData, currentData)
 		if err != nil {
@@ -1417,14 +1521,14 @@ func reconcileJSONCContentFile(target string, previousData, currentData []byte, 
 	})
 }
 
-func mergeTOMLContentFile(target string, sourceData []byte, home string) error {
+func mergeTOMLContentFile(target string, sourceData []byte, home string) (managedActionResult, error) {
 	return updateConfinedRegularFile(target, home, func(targetData []byte) ([]byte, bool, error) {
 		merged, err := configsubset.MergeTOML(targetData, sourceData)
 		return merged, err == nil && !bytes.Equal(merged, targetData), err
 	})
 }
 
-func reconcileTOMLContentFile(target string, previousData, currentData []byte, home string) error {
+func reconcileTOMLContentFile(target string, previousData, currentData []byte, home string) (managedActionResult, error) {
 	return updateConfinedRegularFile(target, home, func(targetData []byte) ([]byte, bool, error) {
 		reconciliation, err := configsubset.ReconcileTOML(targetData, previousData, currentData)
 		if err != nil {
