@@ -592,6 +592,37 @@ func TestBuildJSONSubsetLegacyMetadataDoesNotAuthorizeRemoval(t *testing.T) {
 	}
 }
 
+func TestBuildRejectsTargetWideEvidenceThatContradictsExactContributions(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	source := []byte(`{"owned":{"keep":true}}`)
+	writeSource(t, sourceRoot, "configs/shared.json", string(source))
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":{"keep":true,"retired":"old"},"external":"preserve"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	exact := []byte(`{"owned":{"keep":true,"retired":"old"}}`)
+	contradictory := []byte(`{"owned":{"keep":true,"retired":"old"},"external":"preserve"}`)
+	meta := state.Metadata{Entries: []state.Record{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset",
+		OwnedContent: contradictory, Hash: state.HashBytes(contradictory),
+		Contributions: []state.Contribution{{
+			Source: "configs/shared.json", Ownership: "json-subset", EvidenceRecorded: true,
+			Hash: state.HashBytes(exact), OwnedContent: exact,
+		}},
+	}}}
+
+	action := buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	}, meta)
+	if action.Status != plan.StatusConflict || action.PreviousContent != nil {
+		t.Fatalf("Action = %#v, want contradictory target-wide evidence to fail closed", action)
+	}
+}
+
 func TestBuildCopyTOMLSubsetOwnership(t *testing.T) {
 	tests := []struct {
 		name          string

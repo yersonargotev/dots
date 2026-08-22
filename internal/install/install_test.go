@@ -76,6 +76,9 @@ func TestApplyComposedJSONSubsetCreatesAndUpdatesOneSharedTarget(t *testing.T) {
 	if len(rec.Contributions) != 2 {
 		t.Fatalf("metadata contributions = %+v, want two attributed sources", rec.Contributions)
 	}
+	if _, err := ownershipevidence.ProjectRecord(rec); err != nil {
+		t.Fatalf("project exact metadata contributions: %v; record=%+v", err, rec)
+	}
 	for i, want := range []struct {
 		source string
 		tag    string

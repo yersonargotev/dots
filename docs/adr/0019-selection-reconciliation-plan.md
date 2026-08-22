@@ -121,7 +121,9 @@ The forward Managed Entry plan owns each still-selected target and applies it
 exactly once. Shared JSON targets compose only the selected contributions before
 three-way reconciliation. JSON, JSONC, TOML, and marked-block updates subtract
 retired values only from exact compatible evidence and preserve target-only
-content according to their existing ownership contracts. A whole-target source
+content according to their existing ownership contracts. Target-wide
+compatibility fields must equal the projection of exact ordered contribution
+evidence; contradictory metadata fails closed. A whole-target source
 override may return to its selected base source only when the live target still
 matches the exact previously recorded contribution hash. Missing or legacy
 target-wide attribution, changed retired values, unsafe target types, and stale
@@ -136,6 +138,8 @@ adds a recovery-only reconciliation receipt containing the exact resulting
 target hash plus the ordered current source identities and hashes. A rerun may
 recognize already removed retired values only when that receipt matches every
 byte and source; absent or mismatched receipts remain ambiguous and fail closed.
-Terminal metadata commit replaces the old contribution evidence and clears the
-receipt. Seeded Runtime State keeps its existing whole-retirement rule: its
+The receipt is persisted immediately after each applied reconciliation, before
+the next Managed Entry action; terminal metadata commit replaces the old
+contribution evidence and clears the receipt. Seeded Runtime State keeps its
+existing whole-retirement rule: its
 physical bytes remain while dots releases only the ownership record.

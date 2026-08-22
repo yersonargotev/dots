@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/selectionreconciliation"
 	"github.com/yersonargotev/dots/internal/state"
@@ -211,15 +212,7 @@ func TestBuildDelegatesSafePartialRetirementToForwardPlan(t *testing.T) {
 		CurrentSources:  []string{"kept.json"},
 	})
 
-	previous := []byte(`{"removed":true,"kept":true}`)
-	record := state.Record{
-		Target: target, Source: "removed.json", Sources: []string{"removed.json", "kept.json"}, Strategy: "copy", Ownership: "json-subset",
-		OwnedContent: previous,
-		Contributions: []state.Contribution{
-			{Source: "removed.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: []byte(`{"removed":true}`)},
-			{Source: "kept.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: []byte(`{"kept":true}`)},
-		},
-	}
+	record, previous := exactSharedJSONRecord(t, target)
 	forward := plan.Plan{Actions: []plan.Action{{
 		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
 		PreviousContent: previous, Contributions: []plan.Contribution{{Source: "kept.json"}},
@@ -239,15 +232,11 @@ func TestBuildDelegatesSafePartialRetirementToForwardPlan(t *testing.T) {
 func TestBuildRejectsPartialRetirementWithUnrelatedForwardAction(t *testing.T) {
 	home := t.TempDir()
 	target := writeTarget(t, home, ".shared.json", `{}`)
-	previous := []byte(`{"removed":true,"kept":true}`)
+	record, previous := exactSharedJSONRecord(t, target)
 	report := explicitReport(selectionreconciliation.Action{
 		Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeReconcile, ResolvedTarget: target,
 		PreviousSources: []string{"removed.json", "kept.json"}, CurrentSources: []string{"kept.json"},
 	})
-	record := state.Record{
-		Target: target, Source: "removed.json", Sources: []string{"removed.json", "kept.json"}, Strategy: "copy", Ownership: "json-subset",
-		OwnedContent: previous,
-	}
 	base := plan.Action{
 		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
 		PreviousContent: previous, Contributions: []plan.Contribution{{Source: "kept.json"}},
@@ -272,6 +261,52 @@ func TestBuildRejectsPartialRetirementWithUnrelatedForwardAction(t *testing.T) {
 				t.Fatalf("Build() error = %v, want %q mismatch", err, tt.want)
 			}
 		})
+	}
+}
+
+func exactSharedJSONRecord(t *testing.T, target string) (state.Record, []byte) {
+	t.Helper()
+	removed := []byte(`{"removed":true}`)
+	kept := []byte(`{"kept":true}`)
+	previous, err := configsubset.MergeJSON(removed, kept)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return state.Record{
+		Target: target, Source: "removed.json", Sources: []string{"removed.json", "kept.json"}, Strategy: "copy", Ownership: "json-subset",
+		OwnedContent: previous, Hash: state.HashBytes(previous),
+		Contributions: []state.Contribution{
+			{Source: "removed.json", Ownership: "json-subset", EvidenceRecorded: true, Hash: state.HashBytes(removed), OwnedContent: removed},
+			{Source: "kept.json", Ownership: "json-subset", EvidenceRecorded: true, Hash: state.HashBytes(kept), OwnedContent: kept},
+		},
+	}, previous
+}
+
+func TestBuildRejectsForwardEvidenceFromContradictoryTargetWideRecord(t *testing.T) {
+	home := t.TempDir()
+	target := writeTarget(t, home, ".shared.json", `{}`)
+	exact := []byte(`{"removed":true,"kept":true}`)
+	contradictory := []byte(`{"removed":true,"kept":true,"external":"not-owned"}`)
+	report := explicitReport(selectionreconciliation.Action{
+		Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeReconcile, ResolvedTarget: target,
+		PreviousSources: []string{"recorded.json"}, CurrentSources: []string{"kept.json"},
+	})
+	record := state.Record{
+		Target: target, Source: "recorded.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: contradictory,
+		Hash: state.HashBytes(contradictory),
+		Contributions: []state.Contribution{{
+			Source: "recorded.json", Ownership: "json-subset", EvidenceRecorded: true,
+			Hash: state.HashBytes(exact), OwnedContent: exact,
+		}},
+	}
+	forward := plan.Plan{Actions: []plan.Action{{
+		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
+		PreviousContent: contradictory, Contributions: []plan.Contribution{{Source: "kept.json"}},
+	}}}
+
+	_, err := Build(report, state.Metadata{Entries: []state.Record{record}}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
+	if err == nil || !strings.Contains(err.Error(), "exact recorded previous contribution evidence") {
+		t.Fatalf("Build() error = %v, want contradictory target-wide evidence rejected", err)
 	}
 }
 

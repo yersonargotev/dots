@@ -73,6 +73,12 @@ func Apply(p plan.Plan, opts Options) error {
 // only compatibility inventory. Exact per-contribution evidence is kept out of
 // Installation Metadata until the returned commit reaches terminal success.
 func ApplyManagedEntries(p plan.Plan, opts Options) (MetadataCommit, error) {
+	return applyManagedEntriesWithApply(p, opts, applyManagedAction)
+}
+
+type managedActionApply func(plan.Action, string, Options) error
+
+func applyManagedEntriesWithApply(p plan.Plan, opts Options, applyAction managedActionApply) (MetadataCommit, error) {
 	resolvedSources, err := validatePlan(p, opts)
 	if err != nil {
 		return MetadataCommit{}, err
@@ -80,36 +86,11 @@ func ApplyManagedEntries(p plan.Plan, opts Options) (MetadataCommit, error) {
 
 	for i, action := range p.Actions {
 		source := resolvedSources[i][0]
-		switch action.Status {
-		case plan.StatusUnchanged:
-			continue
-		case plan.StatusCreate:
-			if err := applyCreate(action, source); err != nil {
-				return MetadataCommit{}, err
-			}
-		case plan.StatusUpdate:
-			if err := applyUpdate(action, source, opts); err != nil {
-				return MetadataCommit{}, err
-			}
-		case plan.StatusMigrate:
-			if err := applyMigration(action, source, opts); err != nil {
-				return MetadataCommit{}, err
-			}
-		case plan.StatusConflict:
-			switch conflictDecision(action, opts) {
-			case DecisionSkip:
-				// Safe default for unresolved conflicts is skip: do not mutate the
-				// existing workstation target, but continue applying safe actions.
-				continue
-			case DecisionReplace:
-				if err := applyReplace(action, source, opts); err != nil {
-					return MetadataCommit{}, err
-				}
-			case DecisionAdopt:
-				if err := applyAdopt(action, source, opts); err != nil {
-					return MetadataCommit{}, err
-				}
-			}
+		if err := applyAction(action, source, opts); err != nil {
+			return MetadataCommit{}, err
+		}
+		if err := recordAppliedReconciliation(p.Profiles, p.Tags, action, resolvedSources[i], opts); err != nil {
+			return MetadataCommit{}, err
 		}
 	}
 
@@ -123,6 +104,58 @@ func ApplyManagedEntries(p plan.Plan, opts Options) (MetadataCommit, error) {
 		return MetadataCommit{}, err
 	}
 	return commit, nil
+}
+
+func applyManagedAction(action plan.Action, source string, opts Options) error {
+	switch action.Status {
+	case plan.StatusUnchanged:
+		return nil
+	case plan.StatusCreate:
+		return applyCreate(action, source)
+	case plan.StatusUpdate:
+		return applyUpdate(action, source, opts)
+	case plan.StatusMigrate:
+		return applyMigration(action, source, opts)
+	case plan.StatusConflict:
+		switch conflictDecision(action, opts) {
+		case DecisionSkip:
+			// Safe default for unresolved conflicts is skip: do not mutate the
+			// existing workstation target, but continue applying safe actions.
+			return nil
+		case DecisionReplace:
+			return applyReplace(action, source, opts)
+		case DecisionAdopt:
+			return applyAdopt(action, source, opts)
+		}
+	}
+	return nil
+}
+
+func recordAppliedReconciliation(profiles, tags []string, action plan.Action, resolvedSources []string, opts Options) error {
+	if opts.StateRoot == "" || action.Status != plan.StatusUpdate ||
+		(len(action.PreviousContent) == 0 && action.PreviousHash == "") {
+		return nil
+	}
+	record, err := buildMetadataRecord(profiles, tags, action, resolvedSources, time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return err
+	}
+	receipt, err := buildReconciliationReceipt(action, record)
+	if err != nil {
+		return err
+	}
+	if receipt == nil {
+		return nil
+	}
+	return state.Update(state.Path(opts.StateRoot), func(meta *state.Metadata) error {
+		if !hasCommittedContributions(*meta, action.Target) {
+			return nil
+		}
+		meta.Version = state.CurrentVersion
+		meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
+		setPendingReconciliation(meta, action.Target, receipt)
+		return nil
+	})
 }
 
 // ValidateManagedEntries validates the complete forward Install Plan without
@@ -1052,6 +1085,13 @@ func updateWholeTarget(action plan.Action, source, home string) error {
 		return fmt.Errorf("open home root %s: %w", homeAbs, err)
 	}
 	defer root.Close()
+	observed, err := root.Lstat(relative)
+	if err != nil {
+		return fmt.Errorf("inspect confined whole target %s: %w", action.Target, err)
+	}
+	if observed.Mode()&os.ModeSymlink != 0 || !observed.Mode().IsRegular() {
+		return fmt.Errorf("confined whole target %s is not a non-symlink regular file", action.Target)
+	}
 	file, err := root.OpenFile(relative, os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("open confined whole target %s: %w", action.Target, err)
@@ -1063,6 +1103,9 @@ func updateWholeTarget(action plan.Action, source, home string) error {
 	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("confined whole target %s is not a regular file", action.Target)
+	}
+	if !os.SameFile(observed, info) {
+		return fmt.Errorf("install plan is stale: whole target %s changed identity before update", action.Target)
 	}
 	live, err := io.ReadAll(file)
 	if err != nil {

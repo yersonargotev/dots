@@ -12,6 +12,7 @@ import (
 	"reflect"
 
 	"github.com/yersonargotev/dots/internal/configsubset"
+	"github.com/yersonargotev/dots/internal/ownershipevidence"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/selectionreconciliation"
 	"github.com/yersonargotev/dots/internal/state"
@@ -200,13 +201,17 @@ func normalizedOwnership(ownership string) string {
 }
 
 func matchesPreviousEvidence(action plan.Action, record state.Record, previousSources []string) bool {
+	projected, err := ownershipevidence.ProjectRecord(record)
+	if err != nil {
+		return false
+	}
 	switch normalizedOwnership(record.Ownership) {
 	case "json-subset", "jsonc-subset":
-		return len(action.PreviousContent) > 0 && reflect.DeepEqual(action.PreviousContent, []byte(record.OwnedContent))
+		return len(action.PreviousContent) > 0 && reflect.DeepEqual(action.PreviousContent, []byte(projected.OwnedContent))
 	case "toml-subset", "marked-block":
-		return len(action.PreviousContent) > 0 && reflect.DeepEqual(action.PreviousContent, record.OwnedBytes)
+		return len(action.PreviousContent) > 0 && reflect.DeepEqual(action.PreviousContent, projected.OwnedBytes)
 	case "seeded":
-		return action.PreviousContent != nil && reflect.DeepEqual(action.PreviousContent, record.SeededBaseline)
+		return action.PreviousContent != nil && reflect.DeepEqual(action.PreviousContent, projected.SeededBaseline)
 	case "whole":
 		if len(previousSources) != 1 || action.PreviousHash == "" {
 			return false
