@@ -79,7 +79,8 @@ There is no implicit Profile. Repeat `--profile` to compose selections:
 explicit opt-ins. For a full workstation plus optional web and mobile setup, run
 `dots install --profile workstation --profile web --profile mobile`.
 Profiles are ordered convenience presets over atomic Tags, so the catalog also
-lets you select one independently meaningful capability directly with `--tag`.
+shows each independently meaningful capability. Select one directly with
+`dots install --tag <tag>`.
 
 Explore the portable catalog before choosing, or compare two Profiles to see
 the exact declarative surface added and removed without inspecting machine
