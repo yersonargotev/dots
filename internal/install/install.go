@@ -249,12 +249,12 @@ func readConfinedRegularFile(path, rootPath string) ([]byte, error) {
 		return nil, fmt.Errorf("open source root %s: %w", rootAbs, err)
 	}
 	defer root.Close()
-	observed, err := root.Lstat(relative)
+	observed, err := root.Stat(relative)
 	if err != nil {
 		return nil, fmt.Errorf("inspect confined source %s: %w", path, err)
 	}
-	if observed.Mode()&os.ModeSymlink != 0 || !observed.Mode().IsRegular() {
-		return nil, fmt.Errorf("confined source %s is not a non-symlink regular file", path)
+	if !observed.Mode().IsRegular() {
+		return nil, fmt.Errorf("confined source %s does not resolve to a regular file", path)
 	}
 	file, err := root.OpenFile(relative, os.O_RDONLY, 0)
 	if err != nil {
@@ -1294,23 +1294,72 @@ func updateConfinedRegularFile(target, home string, transform confinedTransform)
 		result.TargetContent = append([]byte(nil), live...)
 		return result, nil
 	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return managedActionResult{}, fmt.Errorf("rewind confined target %s: %w", target, err)
-	}
-	if err := file.Truncate(0); err != nil {
-		return managedActionResult{}, fmt.Errorf("truncate confined target %s: %w", target, err)
-	}
-	written, err := file.Write(updated)
-	if err != nil {
-		return managedActionResult{}, fmt.Errorf("write confined target %s: %w", target, err)
-	}
-	if written != len(updated) {
-		return managedActionResult{}, fmt.Errorf("write confined target %s: wrote %d of %d bytes", target, written, len(updated))
-	}
-	if err := file.Sync(); err != nil {
-		return managedActionResult{}, fmt.Errorf("sync confined target %s: %w", target, err)
+	if err := rewriteOpenedRegularFile(file, target, updated, live); err != nil {
+		return managedActionResult{}, err
 	}
 	return result, nil
+}
+
+type openedRegularFile interface {
+	io.Writer
+	io.Seeker
+	Truncate(int64) error
+	Sync() error
+}
+
+func rewriteOpenedRegularFile(file openedRegularFile, target string, updated, previous []byte) error {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("rewind confined target %s: %w", target, err)
+	}
+	if err := file.Truncate(0); err != nil {
+		return errors.Join(
+			fmt.Errorf("truncate confined target %s: %w", target, err),
+			restoreOpenedRegularFile(file, target, previous),
+		)
+	}
+	if err := writeAll(file, updated); err != nil {
+		return errors.Join(
+			fmt.Errorf("write confined target %s: %w", target, err),
+			restoreOpenedRegularFile(file, target, previous),
+		)
+	}
+	if err := file.Sync(); err != nil {
+		return errors.Join(
+			fmt.Errorf("sync confined target %s: %w", target, err),
+			restoreOpenedRegularFile(file, target, previous),
+		)
+	}
+	return nil
+}
+
+func restoreOpenedRegularFile(file openedRegularFile, target string, previous []byte) error {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("restore confined target %s: rewind: %w", target, err)
+	}
+	if err := file.Truncate(0); err != nil {
+		return fmt.Errorf("restore confined target %s: truncate: %w", target, err)
+	}
+	if err := writeAll(file, previous); err != nil {
+		return fmt.Errorf("restore confined target %s: write: %w", target, err)
+	}
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("restore confined target %s: sync: %w", target, err)
+	}
+	return nil
+}
+
+func writeAll(writer io.Writer, data []byte) error {
+	for len(data) > 0 {
+		written, err := writer.Write(data)
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+		data = data[written:]
+	}
+	return nil
 }
 
 func restoreConfinedRegularFile(target, home string, applied, previous []byte) error {

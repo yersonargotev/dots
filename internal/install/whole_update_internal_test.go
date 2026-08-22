@@ -1,6 +1,7 @@
 package install
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,7 +138,7 @@ func TestApplyPartialUpdateRejectsSymlinkTargets(t *testing.T) {
 	}
 }
 
-func TestReadConfinedRegularFileRejectsSymlinkSources(t *testing.T) {
+func TestReadConfinedRegularFileConfinesSymlinkSources(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside")
 	inside := filepath.Join(root, "inside")
@@ -147,20 +148,21 @@ func TestReadConfinedRegularFileRejectsSymlinkSources(t *testing.T) {
 	if err := os.WriteFile(inside, []byte("inside\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for name, destination := range map[string]string{
-		"outside": outside,
-		"inside":  filepath.Base(inside),
-	} {
-		t.Run(name, func(t *testing.T) {
-			source := filepath.Join(root, name+"-link")
-			if err := os.Symlink(destination, source); err != nil {
-				t.Fatal(err)
-			}
-			_, err := readConfinedRegularFile(source, root)
-			if err == nil || !strings.Contains(err.Error(), "non-symlink regular file") {
-				t.Fatalf("readConfinedRegularFile() error = %v, want symlink rejection", err)
-			}
-		})
+	outsideLink := filepath.Join(root, "outside-link")
+	if err := os.Symlink(outside, outsideLink); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readConfinedRegularFile(outsideLink, root); err == nil {
+		t.Fatal("readConfinedRegularFile() accepted a symlink escaping the source root")
+	}
+
+	insideLink := filepath.Join(root, "inside-link")
+	if err := os.Symlink(filepath.Base(inside), insideLink); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readConfinedRegularFile(insideLink, root)
+	if err != nil || string(got) != "inside\n" {
+		t.Fatalf("readConfinedRegularFile() = %q, %v; want confined in-root symlink content", got, err)
 	}
 }
 
@@ -181,4 +183,42 @@ func TestRestoreConfinedRegularFileRequiresExactAppliedBytes(t *testing.T) {
 	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != string(external) {
 		t.Fatalf("target = %q, %v; want external bytes preserved", got, readErr)
 	}
+}
+
+func TestRewriteOpenedRegularFileRestoresAfterPartialWriteFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "target")
+	previous := []byte("previous content\n")
+	updated := []byte("updated content\n")
+	if err := os.WriteFile(path, previous, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failing := &partialWriteFile{File: file, failNextWrite: true}
+	err = rewriteOpenedRegularFile(failing, path, updated, previous)
+	if closeErr := file.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if err == nil || !strings.Contains(err.Error(), "injected partial write") {
+		t.Fatalf("rewriteOpenedRegularFile() error = %v, want injected write failure", err)
+	}
+	if got, readErr := os.ReadFile(path); readErr != nil || string(got) != string(previous) {
+		t.Fatalf("target = %q, %v; want restored previous bytes", got, readErr)
+	}
+}
+
+type partialWriteFile struct {
+	*os.File
+	failNextWrite bool
+}
+
+func (f *partialWriteFile) Write(data []byte) (int, error) {
+	if !f.failNextWrite {
+		return f.File.Write(data)
+	}
+	f.failNextWrite = false
+	written, err := f.File.Write(data[:len(data)/2])
+	return written, errors.Join(err, errors.New("injected partial write"))
 }
