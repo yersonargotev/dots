@@ -8,6 +8,7 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/selectionreconciliation"
 )
 
 // renderPlan writes a human-readable, deterministic preview of an Install Plan.
@@ -18,6 +19,7 @@ func renderPlan(w io.Writer, p plan.Plan) {
 
 	if len(p.Actions) == 0 {
 		fmt.Fprintln(w, "Nothing to do.")
+		renderSelectionReconciliation(w, p.SelectionReconciliation)
 		return
 	}
 
@@ -56,6 +58,28 @@ func renderPlan(w io.Writer, p plan.Plan) {
 	}
 	if counts.conflict > 0 {
 		renderConflictResolutionGuidance(w)
+	}
+	renderSelectionReconciliation(w, p.SelectionReconciliation)
+}
+
+func renderSelectionReconciliation(w io.Writer, report *selectionreconciliation.Report) {
+	if report == nil {
+		return
+	}
+	fmt.Fprintln(w, "\nSelection reconciliation:")
+	for _, action := range report.Actions {
+		subject := strings.Join(action.Names, ", ")
+		if action.Scope == selectionreconciliation.ScopeManagedEntry {
+			subject = action.ResolvedTarget
+		}
+		if action.Identity != "" {
+			subject += " [" + action.Identity + "]"
+		}
+		fmt.Fprintf(w, "  %-24s %-14s %s", action.Outcome, action.Scope, subject)
+		if action.Reason != "" {
+			fmt.Fprintf(w, " [reason=%s]", action.Reason)
+		}
+		fmt.Fprintln(w)
 	}
 }
 

@@ -160,6 +160,14 @@ _Avoid_: inferred selection, installed profile, tag inventory
 A complete explicit Profile/Tag request on a mutating command that differs from the authoritative Installed Selection. Its delta reports added and removed Profiles, explicit extra Tags, effective Tags, Managed Entries, Dependencies, and Provisioners before mutation. Removing a recorded Profile or explicit extra Tag is a reduction that requires distinct interactive confirmation or, in Confirmed Install mode, `--acknowledge-selection-change` in addition to `--yes`.
 _Avoid_: implicit selection update, selection merge, automatic retirement
 
+**Selection Reconciliation Plan**:
+A deterministic, read-only comparison between an authoritative previous selection and a complete explicitly requested selection that classifies how their Selected Surfaces and proven installed contributions would coexist, change, or stop being managed. It previews additions, preservation, safe reconciliation, potential retirement, blocks, and Retained External State without changing the filesystem or Installation Metadata.
+_Avoid_: selection delta, retirement plan, implicit cleanup
+
+**Retained External State**:
+The installed effect of a removed Dependency or Provisioner selection that dots reports but deliberately leaves unchanged because reversing external tools or provisioned behavior is outside Managed Entry retirement. It is selection residue, not a dots-owned Managed Entry eligible for removal.
+_Avoid_: orphaned dependency, automatic uninstall, leftover file
+
 **Selection Migration Candidate**:
 A non-authoritative selection proposed for Installation Metadata v1 or v2 from historical Managed Entry and Provisioner records plus current Install Manifest, target, and Source of Truth evidence. It reports ordered Profiles, explicit extra Tags, effective Tags, confidence, and ambiguity reasons. Only an unambiguous candidate can become an Installed Selection, and only after interactive operator confirmation and terminal success; ambiguous or absent evidence requires an explicit selection.
 _Avoid_: inferred selection, migrated selection, implicit default

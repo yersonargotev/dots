@@ -1,5 +1,5 @@
 {
-  "schema_version": "9",
+  "schema_version": "10",
   "command": "plan",
   "status": "findings",
   "data": {
@@ -15,6 +15,75 @@
       "effective_tags": [
         "core",
         "work"
+      ]
+    },
+    "selection_reconciliation": {
+      "previous_intent": {
+        "authority": "recorded",
+        "profiles": [
+          "core"
+        ],
+        "extra_tags": [
+          "adaptive-theme"
+        ],
+        "resolved_tags": [
+          "core",
+          "adaptive-theme"
+        ]
+      },
+      "requested_intent": {
+        "authority": "explicit-request",
+        "profiles": [
+          "core"
+        ],
+        "extra_tags": [],
+        "resolved_tags": [
+          "core"
+        ]
+      },
+      "actions": [
+        {
+          "scope": "selection",
+          "outcome": "remove",
+          "previous_sources": [],
+          "current_sources": [],
+          "names": [
+            "adaptive-theme"
+          ]
+        },
+        {
+          "scope": "managed-entry",
+          "outcome": "blocked",
+          "reason": "ambiguous-partial-ownership",
+          "declarative_target": "~/.config/app/settings.json",
+          "resolved_target": "/home/user/.config/app/settings.json",
+          "previous_sources": [
+            "configs/app/adaptive.json"
+          ],
+          "current_sources": [
+            "configs/app/base.json"
+          ],
+          "names": []
+        },
+        {
+          "scope": "dependency",
+          "outcome": "retained-external-state",
+          "previous_sources": [],
+          "current_sources": [],
+          "names": [
+            "theme-helper"
+          ]
+        },
+        {
+          "scope": "provisioner",
+          "outcome": "retained-external-state",
+          "previous_sources": [],
+          "current_sources": [],
+          "names": [
+            "claude"
+          ],
+          "identity": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
       ]
     },
     "actions": [

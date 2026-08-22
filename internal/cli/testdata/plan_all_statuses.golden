@@ -18,3 +18,7 @@ Conflict guidance:
   - adopt is only for supported regular-file conflicts; it copies local file content into the Source of Truth after you choose it.
   - diff previews target versus source before you decide.
   Non-interactive install/update keeps conflicts skipped by default.
+
+Selection reconciliation:
+  remove                   selection      adaptive-theme
+  blocked                  managed-entry  /home/user/.config/app/settings.json [reason=whole-target-drift]

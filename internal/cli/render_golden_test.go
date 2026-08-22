@@ -9,6 +9,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/selectionreconciliation"
 )
 
 var update = flag.Bool("update", false, "update golden files")
@@ -23,6 +24,10 @@ func TestRenderPlanGolden(t *testing.T) {
 			name: "all statuses",
 			plan: plan.Plan{
 				Profile: "work",
+				SelectionReconciliation: &selectionreconciliation.Report{Actions: []selectionreconciliation.Action{
+					{Scope: selectionreconciliation.ScopeSelection, Outcome: selectionreconciliation.OutcomeRemove, PreviousSources: []string{}, CurrentSources: []string{}, Names: []string{"adaptive-theme"}},
+					{Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeBlocked, Reason: selectionreconciliation.ReasonWholeTargetDrift, ResolvedTarget: "/home/user/.config/app/settings.json", PreviousSources: []string{"configs/app/settings.json"}, CurrentSources: []string{}, Names: []string{}},
+				}},
 				Actions: []plan.Action{
 					{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
 					{Source: "configs/nvim/lazy-lock.json", Target: "/home/user/.local/state/nvim/lazy-lock.json", TargetRoot: "xdg-state", Strategy: "copy", Status: plan.StatusUnchanged, Reason: plan.ReasonSeededLocalEvolution},
