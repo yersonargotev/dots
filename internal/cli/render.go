@@ -72,6 +72,9 @@ func renderSelectionReconciliation(w io.Writer, report *selectionreconciliation.
 		if action.Scope == selectionreconciliation.ScopeManagedEntry {
 			subject = action.ResolvedTarget
 		}
+		if action.Identity != "" {
+			subject += " [" + action.Identity + "]"
+		}
 		fmt.Fprintf(w, "  %-24s %-14s %s", action.Outcome, action.Scope, subject)
 		if action.Reason != "" {
 			fmt.Fprintf(w, " [reason=%s]", action.Reason)

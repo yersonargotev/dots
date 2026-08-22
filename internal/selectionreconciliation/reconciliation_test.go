@@ -348,6 +348,26 @@ func TestBuildDependencyAndProvisionerOnlyReductionRetainsExternalState(t *testi
 	}
 }
 
+func TestBuildDistinguishesProvisionerEffectsWithTheSameTool(t *testing.T) {
+	removed := NewProvisionerEvidence("claude", "claude", []string{"plugin", "install", "removed"})
+	retained := NewProvisionerEvidence("claude", "claude", []string{"mcp", "add", "retained"})
+	input := baseInput(nil, nil)
+	input.Evidence.PreviousProvisioners = []ProvisionerEvidence{removed, retained}
+	input.Evidence.CurrentProvisioners = []ProvisionerEvidence{retained}
+
+	report, err := Build(input)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(report.Actions) != 1 {
+		t.Fatalf("Actions = %#v, want one removed Provisioner effect", report.Actions)
+	}
+	got := report.Actions[0]
+	if got.Scope != ScopeProvisioner || got.Outcome != OutcomeRetainedExternalState || !reflect.DeepEqual(got.Names, []string{"claude"}) || got.Identity == "" {
+		t.Fatalf("Action = %#v, want one identified retained external Provisioner effect", got)
+	}
+}
+
 func TestBuildReturnsDetachedStableArrays(t *testing.T) {
 	input := baseInput(nil, nil)
 	input.PreviousIntent.Profiles = []string{"old"}

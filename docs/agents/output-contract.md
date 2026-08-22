@@ -254,6 +254,9 @@ prose the text surface prints:
   this report never removes or reverses their installed effects. Install
   Manifest evolution is report-only and does not authorize retirement or
   Installation Metadata mutation.
+  Provisioner actions include a non-sensitive `identity` digest of the exact
+  rendered command so separate effects from the same tool remain distinguishable
+  without exposing command arguments.
 - Plan actions and Status Managed Entry items may add the optional reason
   `source-override-not-selected` and a deterministic `matching_tags` array when
   a conflicting target exactly matches one or more alternate sources whose

@@ -37,6 +37,8 @@ selecting Tags are removed, the plan reports the selection reduction and a
 executables, receipts, and provisioned effects. A Dependency-only or
 Provisioner-only reduction therefore has no Managed Entry removal. Reversing a
 Dependency or Provisioner remains a separate, explicitly authorized concern.
+Distinct Provisioner effects are compared by exact rendered command identity,
+not only by tool name; reports expose a digest rather than raw command arguments.
 
 Install Manifest evolution is also report-only: a changed manifest may explain
 how the current surface differs, but it never supplies the operator intent

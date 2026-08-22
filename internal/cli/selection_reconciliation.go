@@ -10,6 +10,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/selectionreconciliation"
@@ -38,6 +39,8 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 			evidence.Targets[index].RetirementAuthority = selectionreconciliation.AuthorityManifestEvolution
 		}
 	}
+	evidence.PreviousProvisioners = reconciliationProvisionerEvidence(previousSurface.Provisioners, meta.Provisioners, installed)
+	evidence.CurrentProvisioners = reconciliationProvisionerEvidence(currentSurface.Provisioners, nil, nil)
 
 	authority := selectionreconciliation.AuthorityManifestEvolution
 	if explicitIntent && effective.Report.Source == selection.SourceExplicit && installedIntentDiffers(*installed, effective) {
@@ -139,21 +142,33 @@ func supplementRecordedSurface(previous, current selectedsurface.Surface, meta s
 		}
 	}
 
-	seenProvisioners := make(map[string]bool)
-	for _, provisioner := range append(append([]manifest.Provisioner(nil), previous.Provisioners...), current.Provisioners...) {
-		seenProvisioners[provisioner.Tool] = true
+	return previous, manifestEvolutionTargets
+}
+
+func reconciliationProvisionerEvidence(declarations []manifest.Provisioner, records []state.ProvisionerRecord, installed *state.InstalledSelection) []selectionreconciliation.ProvisionerEvidence {
+	result := make([]selectionreconciliation.ProvisionerEvidence, 0, len(declarations)+len(records))
+	seen := make(map[string]bool)
+	appendEvidence := func(item selectionreconciliation.ProvisionerEvidence) {
+		if item.Identity == "" || seen[item.Identity] {
+			return
+		}
+		seen[item.Identity] = true
+		result = append(result, item)
 	}
-	for _, record := range meta.Provisioners {
-		if record.Tool == "" || seenProvisioners[record.Tool] || !recordedProvisionerSelected(record, installed) {
+	for _, declaration := range declarations {
+		executable, args := provision.RenderCommand(declaration)
+		appendEvidence(selectionreconciliation.NewProvisionerEvidence(declaration.Tool, executable, args))
+	}
+	if installed == nil {
+		return result
+	}
+	for _, record := range records {
+		if !recordedProvisionerSelected(record, *installed) {
 			continue
 		}
-		previous.Provisioners = append(previous.Provisioners, manifest.Provisioner{
-			Tool: record.Tool,
-			Tags: append([]string(nil), record.Tags...),
-		})
-		seenProvisioners[record.Tool] = true
+		appendEvidence(selectionreconciliation.NewProvisionerEvidence(record.Tool, record.Executable, record.Args))
 	}
-	return previous, manifestEvolutionTargets
+	return result
 }
 
 func recordedProvisionerSelected(record state.ProvisionerRecord, installed state.InstalledSelection) bool {

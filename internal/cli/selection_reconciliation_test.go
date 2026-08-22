@@ -89,7 +89,13 @@ func TestSelectionReconciliationRetainsProvisionerRemovedFromManifest(t *testing
 	if provisioners < 0 {
 		t.Fatal("fixture manifest has no provisioners block")
 	}
-	if err := os.WriteFile(manifestPath, manifest[:provisioners], 0o600); err != nil {
+	manifest = append(manifest[:provisioners], []byte(`provisioners:
+  - tool: claude
+    tags: [kept]
+    spec:
+      marketplace: retained/tools
+`)...)
+	if err := os.WriteFile(manifestPath, manifest, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	metadataPath := state.Path(fixture.stateRoot)
@@ -97,9 +103,16 @@ func TestSelectionReconciliationRetainsProvisionerRemovedFromManifest(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadata.Provisioners = []state.ProvisionerRecord{{
-		Profiles: []string{"full"}, Tags: []string{"retired"}, Tool: "claude", Status: "provisioned",
-	}}
+	metadata.Provisioners = []state.ProvisionerRecord{
+		{
+			Profiles: []string{"full"}, Tags: []string{"retired"}, Tool: "claude", Executable: "claude",
+			Args: []string{"plugin", "marketplace", "add", "removed/tools"}, Status: "provisioned",
+		},
+		{
+			Profiles: []string{"full"}, Tags: []string{"kept"}, Tool: "claude", Executable: "claude",
+			Args: []string{"plugin", "marketplace", "add", "retained/tools"}, Status: "provisioned",
+		},
+	}
 	if err := state.Save(metadataPath, metadata); err != nil {
 		t.Fatal(err)
 	}
@@ -109,8 +122,33 @@ func TestSelectionReconciliationRetainsProvisionerRemovedFromManifest(t *testing
 	planActions := jsonPathSelection(t, plan, "data", "selection_reconciliation", "actions")
 	installActions := jsonPathSelection(t, install, "data", "plan", "selection_reconciliation", "actions")
 	assertSelectionAction(t, planActions, "provisioner", "retained-external-state", "claude")
+	provisionerRetirements := 0
+	provisionerIdentity := ""
+	for _, raw := range planActions.([]any) {
+		action := raw.(map[string]any)
+		if action["scope"] == "provisioner" && action["outcome"] == "retained-external-state" {
+			provisionerRetirements++
+			provisionerIdentity = action["identity"].(string)
+			if !strings.HasPrefix(provisionerIdentity, "sha256:") {
+				t.Fatalf("Provisioner identity = %#v, want non-sensitive digest", action["identity"])
+			}
+		}
+	}
+	if provisionerRetirements != 1 {
+		t.Fatalf("Provisioner retirements = %d, want 1 in %#v", provisionerRetirements, planActions)
+	}
 	if !reflect.DeepEqual(planActions, installActions) {
 		t.Fatalf("manifest evolution actions differ\nplan: %#v\ninstall --dry-run: %#v", planActions, installActions)
+	}
+	planText := runSelectionReconciliationText(t, cli.ExitOK, append([]string{"plan"}, fixture.args...)...)
+	installText := runSelectionReconciliationText(t, cli.ExitOK, append([]string{"install", "--dry-run", "--skip-deps"}, fixture.args...)...)
+	planLines := reconciliationActionLines(planText)
+	installLines := reconciliationActionLines(installText)
+	if !reflect.DeepEqual(planLines, installLines) {
+		t.Fatalf("manifest evolution text actions differ\nplan: %#v\ninstall --dry-run: %#v", planLines, installLines)
+	}
+	if !strings.Contains(strings.Join(planLines, "\n"), "claude ["+provisionerIdentity+"]") {
+		t.Fatalf("text output omits Provisioner identity %q:\n%s", provisionerIdentity, planText)
 	}
 }
 

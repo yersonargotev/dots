@@ -5,11 +5,14 @@ package selectionreconciliation
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/seededstate"
 	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/state"
@@ -121,8 +124,24 @@ type SourceEvidence struct {
 // Evidence contains complete, ordered inspection snapshots. Slices are treated
 // as immutable and result values never alias their byte storage.
 type Evidence struct {
-	Targets []TargetEvidence
-	Sources []SourceEvidence
+	Targets              []TargetEvidence
+	Sources              []SourceEvidence
+	PreviousProvisioners []ProvisionerEvidence
+	CurrentProvisioners  []ProvisionerEvidence
+}
+
+// ProvisionerEvidence identifies one external Provisioner effect by its exact
+// rendered command while keeping command details out of the public report.
+type ProvisionerEvidence struct {
+	Identity string
+	Name     string
+}
+
+// NewProvisionerEvidence builds a stable identity from the exact command that
+// a manifest declaration or Installation Metadata receipt represents.
+func NewProvisionerEvidence(tool, executable string, args []string) ProvisionerEvidence {
+	parts := append([]string{tool, executable}, args...)
+	return ProvisionerEvidence{Identity: strings.Join(parts, "\x00"), Name: tool}
 }
 
 // Input is the complete pure seam for building a reconciliation report.
@@ -147,6 +166,7 @@ type Action struct {
 	PreviousSources   []string `json:"previous_sources"`
 	CurrentSources    []string `json:"current_sources"`
 	Names             []string `json:"names"`
+	Identity          string   `json:"identity,omitempty"`
 }
 
 // Report is a deterministic Selection Reconciliation Plan.
@@ -223,7 +243,7 @@ func Build(input Input) (Report, error) {
 		report.Actions = append(report.Actions, action)
 	}
 
-	report.Actions = append(report.Actions, externalActions(input.PreviousSurface, input.CurrentSurface)...)
+	report.Actions = append(report.Actions, externalActions(input.PreviousSurface, input.CurrentSurface, input.Evidence)...)
 	return report, nil
 }
 
@@ -242,7 +262,7 @@ func selectionActions(previous, current Intent) []Action {
 	return actions
 }
 
-func externalActions(previous, current selectedsurface.Surface) []Action {
+func externalActions(previous, current selectedsurface.Surface, evidence Evidence) []Action {
 	actions := make([]Action, 0)
 	previousDependencies := dependencyNames(previous.Dependencies)
 	currentDependencies := dependencyNames(current.Dependencies)
@@ -252,15 +272,70 @@ func externalActions(previous, current selectedsurface.Surface) []Action {
 	for _, name := range difference(previousDependencies, currentDependencies) {
 		actions = append(actions, newNamedAction(ScopeDependency, OutcomeRetainedExternalState, []string{name}))
 	}
-	previousProvisioners := provisionerNames(previous.Provisioners)
-	currentProvisioners := provisionerNames(current.Provisioners)
-	for _, name := range difference(currentProvisioners, previousProvisioners) {
-		actions = append(actions, newNamedAction(ScopeProvisioner, OutcomeCreate, []string{name}))
+	previousProvisioners := evidence.PreviousProvisioners
+	if previousProvisioners == nil {
+		previousProvisioners = surfaceProvisionerEvidence(previous.Provisioners)
 	}
-	for _, name := range difference(previousProvisioners, currentProvisioners) {
-		actions = append(actions, newNamedAction(ScopeProvisioner, OutcomeRetainedExternalState, []string{name}))
+	currentProvisioners := evidence.CurrentProvisioners
+	if currentProvisioners == nil {
+		currentProvisioners = surfaceProvisionerEvidence(current.Provisioners)
+	}
+	actions = append(actions, provisionerActions(previousProvisioners, currentProvisioners)...)
+	return actions
+}
+
+func provisionerActions(previous, current []ProvisionerEvidence) []Action {
+	previous = orderedUniqueProvisioners(previous)
+	current = orderedUniqueProvisioners(current)
+	previousIDs := make(map[string]bool, len(previous))
+	currentIDs := make(map[string]bool, len(current))
+	for _, item := range previous {
+		previousIDs[item.Identity] = true
+	}
+	for _, item := range current {
+		currentIDs[item.Identity] = true
+	}
+	actions := make([]Action, 0)
+	for _, item := range current {
+		if !previousIDs[item.Identity] {
+			actions = append(actions, newProvisionerAction(OutcomeCreate, item))
+		}
+	}
+	for _, item := range previous {
+		if !currentIDs[item.Identity] {
+			actions = append(actions, newProvisionerAction(OutcomeRetainedExternalState, item))
+		}
 	}
 	return actions
+}
+
+func surfaceProvisionerEvidence(provisioners []manifest.Provisioner) []ProvisionerEvidence {
+	result := make([]ProvisionerEvidence, 0, len(provisioners))
+	for _, item := range provisioners {
+		executable, args := provision.RenderCommand(item)
+		result = append(result, NewProvisionerEvidence(item.Tool, executable, args))
+	}
+	return result
+}
+
+func orderedUniqueProvisioners(items []ProvisionerEvidence) []ProvisionerEvidence {
+	result := make([]ProvisionerEvidence, 0, len(items))
+	seen := make(map[string]bool, len(items))
+	for _, item := range items {
+		if item.Identity == "" || seen[item.Identity] {
+			continue
+		}
+		seen[item.Identity] = true
+		result = append(result, item)
+	}
+	return result
+}
+
+func newProvisionerAction(outcome Outcome, item ProvisionerEvidence) Action {
+	action := newNamedAction(ScopeProvisioner, outcome, []string{item.Name})
+	digest := sha256.Sum256([]byte(item.Identity))
+	action.Identity = fmt.Sprintf("sha256:%x", digest)
+	return action
 }
 
 func buildTargetAction(previous, current targetGroup, input Input) (Action, error) {
@@ -786,14 +861,6 @@ func dependencyNames(dependencies []manifest.Dependency) []string {
 	result := make([]string, 0, len(dependencies))
 	for _, dependency := range dependencies {
 		result = append(result, dependency.Name)
-	}
-	return orderedUnique(result)
-}
-
-func provisionerNames(provisioners []manifest.Provisioner) []string {
-	result := make([]string, 0, len(provisioners))
-	for _, provisioner := range provisioners {
-		result = append(result, provisioner.Tool)
 	}
 	return orderedUnique(result)
 }
