@@ -43,7 +43,7 @@ entries:
 	cmd.SetErr(&out)
 	// 'r' = replace the highlighted conflict, '\r' (Enter) = apply.
 	cmd.SetIn(strings.NewReader("r\r"))
-	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	cmd.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -95,7 +95,7 @@ entries:
 	cmd.SetErr(&out)
 	// 'r' selects replace, then ctrl+c (0x03) cancels before applying.
 	cmd.SetIn(strings.NewReader("r\x03"))
-	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	cmd.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())

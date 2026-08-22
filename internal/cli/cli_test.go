@@ -498,7 +498,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -550,7 +550,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--dry-run", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--dry-run", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -598,7 +598,7 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetIn(strings.NewReader("r\n"))
-	cmd.SetArgs([]string{"install", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	cmd.SetArgs([]string{"install", "--no-tui", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -650,7 +650,7 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetIn(strings.NewReader("d\ns\n"))
-	cmd.SetArgs([]string{"install", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--no-tui", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -704,7 +704,7 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetIn(strings.NewReader("d\ns\n"))
-	cmd.SetArgs([]string{"install", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--no-tui", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -742,7 +742,7 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetIn(strings.NewReader("a\n"))
-	cmd.SetArgs([]string{"install", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	cmd.SetArgs([]string{"install", "--no-tui", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -783,7 +783,7 @@ entries:
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetIn(strings.NewReader("r\n"))
-	cmd.SetArgs([]string{"install", "--yes", "--no-tui", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--yes", "--no-tui", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -822,7 +822,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("Execute() error = nil, want unsafe target error")
@@ -854,7 +854,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("Execute() error = nil, want unsafe target error")
@@ -890,7 +890,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("Execute() error = nil, want unsafe source error")
@@ -926,7 +926,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("Execute() error = nil, want unsafe target error")
@@ -959,7 +959,7 @@ entries:
 	var installOut bytes.Buffer
 	install.SetOut(&installOut)
 	install.SetErr(&installOut)
-	install.SetArgs([]string{"install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	install.SetArgs([]string{"install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 	if err := install.Execute(); err != nil {
 		t.Fatalf("install Execute() error = %v\noutput:\n%s", err, installOut.String())
 	}
@@ -1804,7 +1804,7 @@ entries:
 		},
 		{
 			name: "install dry run",
-			args: []string{"install", "--dry-run", "--home", home},
+			args: []string{"install", "--dry-run", "--profile", "default", "--home", home},
 			want: "Summary: 1 create, 0 conflict, 0 unchanged, 0 missing-source",
 		},
 		{
@@ -1905,7 +1905,7 @@ func writeCLIInstalledRepository(t *testing.T, sourceRoot, manifestContent strin
 	}
 }
 
-func TestInstallRequiresExplicitProfileWithRepositoryManifest(t *testing.T) {
+func TestInstallRequiresExplicitSelectionWithRepositoryManifest(t *testing.T) {
 	sourceRoot, err := filepath.Abs(filepath.Clean(filepath.Join("..", "..")))
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
@@ -1925,8 +1925,8 @@ func TestInstallRequiresExplicitProfileWithRepositoryManifest(t *testing.T) {
 		"--source-root", sourceRoot,
 		"--state-root", stateRoot,
 	})
-	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "at least one --profile is required") {
-		t.Fatalf("Execute() error = %v, want explicit profile guidance\noutput:\n%s", err, out.String())
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "selection required") {
+		t.Fatalf("Execute() error = %v, want explicit selection guidance\noutput:\n%s", err, out.String())
 	}
 	if entries, err := os.ReadDir(home); err != nil {
 		t.Fatalf("ReadDir(home) error = %v", err)

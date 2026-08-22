@@ -108,7 +108,7 @@ func TestInstallDryRunHintsSkippedDesktopEntries(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--dry-run", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--dry-run", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())
@@ -227,7 +227,7 @@ func TestInstallDryRunHintsSkippedDesktopProvisioners(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"install", "--dry-run", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
+	cmd.SetArgs([]string{"install", "--dry-run", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out.String())

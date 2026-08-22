@@ -98,7 +98,7 @@ func TestInstallDryRunJSONReportsHomebrewPackageManagerSetupSeparately(t *testin
 		Exists:   func(path string) bool { return false },
 	}, &recordingPkgMgrRunner{})
 
-	out, err := runInstallCommand(t, "", "install", "--dry-run", "--output", "json", "--file", manifestPath, "--home", home, "--source-root", sourceRoot)
+	out, err := runInstallCommand(t, "", "install", "--dry-run", "--output", "json", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot)
 	if err != nil {
 		t.Fatalf("install --dry-run error = %v\n%s", err, out)
 	}
@@ -142,7 +142,7 @@ func TestInstallYesDoesNotRunHomebrewPackageManagerSetup(t *testing.T) {
 		Exists:   func(path string) bool { return false },
 	}, runner)
 
-	out, err := runInstallCommand(t, "", "install", "--yes", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	out, err := runInstallCommand(t, "", "install", "--yes", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
 	if err == nil {
 		t.Fatalf("install --yes error = nil, want interactive setup error\n%s", out)
 	}
@@ -164,7 +164,7 @@ func TestInstallYesJSONReportsHomebrewPackageManagerSetupGate(t *testing.T) {
 	}, runner)
 
 	var out, errOut bytes.Buffer
-	code := Run([]string{"install", "--yes", "--output", "json", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot}, &out, &errOut)
+	code := Run([]string{"install", "--yes", "--output", "json", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot}, &out, &errOut)
 	if code != ExitError {
 		t.Fatalf("exit code = %d, want %d\nstderr:\n%s\nstdout:\n%s", code, ExitError, errOut.String(), out.String())
 	}
@@ -221,7 +221,7 @@ func TestInstallDecliningHomebrewSetupAbortsBeforeManagedConfiguration(t *testin
 		Exists:   func(path string) bool { return false },
 	}, &recordingPkgMgrRunner{})
 
-	out, err := runInstallCommand(t, "n\n", "install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	out, err := runInstallCommand(t, "n\n", "install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
 	if err != nil {
 		t.Fatalf("install decline error = %v\n%s", err, out)
 	}
@@ -257,7 +257,7 @@ func TestInstallAcceptingHomebrewSetupUsesPrefixBrewForCurrentRun(t *testing.T) 
 		Prefixes: []string{brewPath},
 	}, runner)
 
-	out, err := runInstallCommand(t, "y\ny\n", "install", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
+	out, err := runInstallCommand(t, "y\ny\n", "install", "--profile", "default", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot)
 	if err != nil {
 		t.Fatalf("install accept error = %v\n%s", err, out)
 	}

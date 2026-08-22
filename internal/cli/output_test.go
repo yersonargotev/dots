@@ -139,7 +139,7 @@ func TestNonDiagnosticCommandsHonorJSONOutput(t *testing.T) {
 			name:    "install dry run",
 			command: "install",
 			args: []string{
-				"install", "--dry-run", "--output", "json", "--file", manifestPath,
+				"install", "--dry-run", "--output", "json", "--profile", "default", "--file", manifestPath,
 				"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
 			},
 		},
@@ -181,7 +181,7 @@ func TestJSONModeRejectsInteractiveActionCommands(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	code := cli.Run([]string{
-		"install", "--output", "json", "--file", manifestPath,
+		"install", "--output", "json", "--profile", "default", "--file", manifestPath,
 		"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
 	}, &out, &errOut)
 
