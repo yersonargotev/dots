@@ -102,15 +102,17 @@ type Effective struct {
 	// repository evolution and binary continuation. Persisted ExtraTags remain
 	// normalized current Tags.
 	intentExtraTags []string
+	allowEmpty      bool
 }
 
 // Intent is the authoritative Profile and explicit extra Tag input together
 // with its provenance. It is safe to carry across process boundaries because it
 // excludes the resolved Tag snapshot, which is audit data rather than intent.
 type Intent struct {
-	Source    Source
-	Profiles  []string
-	ExtraTags []string
+	Source     Source
+	Profiles   []string
+	ExtraTags  []string
+	AllowEmpty bool
 }
 
 // ResolveEffective chooses and validates the selection for a command. Any
@@ -121,7 +123,12 @@ func ResolveEffective(m manifest.Manifest, explicitProfiles, explicitTags []stri
 		if recorded == nil {
 			return Effective{}, ErrSelectionRequired
 		}
-		intent = Intent{Source: SourceRecorded, Profiles: recorded.Profiles, ExtraTags: recorded.ExtraTags}
+		intent = Intent{
+			Source:     SourceRecorded,
+			Profiles:   recorded.Profiles,
+			ExtraTags:  recorded.ExtraTags,
+			AllowEmpty: len(recorded.Profiles) == 0 && len(recorded.ExtraTags) == 0,
+		}
 	}
 	return ResolveIntent(m, intent)
 }
@@ -139,7 +146,7 @@ func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
 	if intent.Source != SourceExplicit && intent.Source != SourceRecorded && intent.Source != SourceMigration {
 		return Effective{}, fmt.Errorf("selection source %q is invalid", intent.Source)
 	}
-	if err := validateIntent(intent.Source, intent.Profiles, intent.ExtraTags); err != nil {
+	if err := validateIntent(intent.Source, intent.Profiles, intent.ExtraTags, intent.AllowEmpty); err != nil {
 		return Effective{}, err
 	}
 
@@ -159,6 +166,7 @@ func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
 		Profiles:        cloneStrings(orderedProfiles),
 		ExtraTags:       cloneStrings(orderedExtraTags),
 		intentExtraTags: cloneStrings(intent.ExtraTags),
+		allowEmpty:      intent.AllowEmpty,
 		Selection: manifest.Selection{
 			Profile:      resolved.Profile,
 			Profiles:     cloneStrings(orderedProfiles),
@@ -182,9 +190,10 @@ func (e Effective) Intent() Intent {
 		extraTags = e.ExtraTags
 	}
 	return Intent{
-		Source:    e.Report.Source,
-		Profiles:  cloneStrings(e.Profiles),
-		ExtraTags: cloneStrings(extraTags),
+		Source:     e.Report.Source,
+		Profiles:   cloneStrings(e.Profiles),
+		ExtraTags:  cloneStrings(extraTags),
+		AllowEmpty: e.allowEmpty,
 	}
 }
 
@@ -453,7 +462,7 @@ func equalStrings(left, right []string) bool {
 	return true
 }
 
-func validateIntent(source Source, profiles, extraTags []string) error {
+func validateIntent(source Source, profiles, extraTags []string, allowEmpty bool) error {
 	for _, profile := range profiles {
 		if strings.TrimSpace(profile) == "" {
 			return fmt.Errorf("%s selection: profile names must not be empty", source)
@@ -464,7 +473,7 @@ func validateIntent(source Source, profiles, extraTags []string) error {
 			return fmt.Errorf("%s selection: tags must not be empty", source)
 		}
 	}
-	if len(profiles) == 0 && len(extraTags) == 0 {
+	if len(profiles) == 0 && len(extraTags) == 0 && !allowEmpty {
 		return fmt.Errorf("%s selection: at least one Profile or extra Tag is required", source)
 	}
 	return nil

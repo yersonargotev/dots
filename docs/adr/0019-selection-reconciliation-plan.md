@@ -62,3 +62,47 @@ findings as divergence. Install dry-run remains a successful action preview
 while carrying the identical findings. No action in this report promises that a
 future mutating command can apply it without revalidating ownership and target
 state.
+
+## Whole-target retirement amendment
+
+Issue #466 authorizes `dots install` to consume the Selection Reconciliation
+Plan only for an acknowledged, explicit Installed Selection reduction. The
+plan remains pure and read-only; a separate retirement adapter validates the
+complete report before any dependency or filesystem mutation, then revalidates
+Installation Metadata, target ownership, and home confinement immediately
+before applying each action. Retirement and the later terminal commit use the
+same state-layer lock for serialized Installation Metadata transactions, so
+unrelated concurrent records and receipts cannot be overwritten by a stale
+read-modify-write cycle.
+
+Known non-interactive Conflict decisions and interactive Conflict Resolution
+are resolved before dependency mutation. The complete forward plan, including
+the selected replace/adopt policy, and the complete retirement plan must both
+validate before a package manager, Managed Entry, or Provisioner can mutate.
+
+When a whole target leaves the requested Selected Surface, exact ownership
+evidence produces `remove`. Drift, a missing target, changed target type, or
+lost ownership produces `retain`: dots preserves the live target and releases
+its Installation Metadata record without claiming deletion. Seeded Runtime
+State likewise remains physically present while its ownership record is
+released. Backup Sets are preserved and never restored by selection
+retirement. Dependencies, Dependency Installation Metadata, Provisioner
+receipts and effects, and user-owned state remain untouched; their known
+selection residue stays `retained-external-state` in the shared report.
+
+An entirely deselected structured target can be removed when exact subset
+evidence proves that subtraction leaves it empty; if external content remains,
+the target is retained and its ownership record is released. Partial retirement
+from a still-selected target, including structured subset ownership and
+source-override reconciliation, remains blocked before mutation and belongs to
+the subsequent contribution-reconciliation slice. Install Manifest evolution
+remains report-only and never authorizes retirement.
+
+`--clear-selection` supplies explicit empty-selection authority. Interactive
+execution requires the literal `clear` acknowledgement. Non-interactive
+execution, including a dry run, requires `--clear-selection`, `--yes`, and
+`--acknowledge-selection-change`; omitted Profile/Tag flags never mean an empty
+selection. A successful terminal run records empty ordered intent, while any
+decline, block, cancellation, or failure preserves the prior authoritative
+Installed Selection. Rerunning after a partial removal converges from current
+filesystem and metadata evidence without manual repair.

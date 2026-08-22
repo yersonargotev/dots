@@ -6,6 +6,7 @@
 package uninstall
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,8 +53,7 @@ type Result struct {
 // stale plan or a target that drifted between preview and apply is never removed
 // by surprise. Every removal is confined to home, metadata is pruned for what
 // was removed, and the metadata file is deleted once empty.
-func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
-	var result Result
+func Apply(p plan.UninstallPlan, opts Options) (result Result, resultErr error) {
 	var restorableRemoved []string
 
 	home, err := cleanAbs(opts.Home)
@@ -70,7 +70,12 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 		return result, err
 	}
 
-	meta, err := state.Load(state.Path(opts.StateRoot))
+	metadata, err := state.LockMetadata(state.Path(opts.StateRoot))
+	if err != nil {
+		return result, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, metadata.Close()) }()
+	meta, err := metadata.Load()
 	if err != nil {
 		return result, err
 	}
@@ -155,7 +160,7 @@ func Apply(p plan.UninstallPlan, opts Options) (Result, error) {
 	}
 
 	prunedTargets := append(append(append([]string(nil), result.Removed...), result.Updated...), result.Retained...)
-	if err := pruneMetadata(opts.StateRoot, meta, prunedTargets); err != nil {
+	if err := pruneMetadata(metadata, meta, prunedTargets); err != nil {
 		return result, err
 	}
 
@@ -413,19 +418,15 @@ func latestSetContaining(meta backups.Metadata, target string) (backups.BackupSe
 // pruneMetadata drops the records for removed targets and persists the result. To
 // leave a clean state, the metadata file is deleted entirely once no records
 // remain rather than left as an empty entry list.
-func pruneMetadata(stateRoot string, meta state.Metadata, removed []string) error {
+func pruneMetadata(metadata *state.LockedMetadata, meta state.Metadata, removed []string) error {
 	if len(removed) == 0 {
 		return nil
 	}
 	pruned := meta.Remove(removed...)
-	path := state.Path(stateRoot)
 	if len(pruned.Entries) == 0 {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove emptied installation metadata: %w", err)
-		}
-		return nil
+		return metadata.Remove()
 	}
-	return state.Save(path, pruned)
+	return metadata.Save(pruned)
 }
 
 // validateStateRoot mirrors install's guard: a state root inside home must not

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/cli"
+	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/state"
 )
 
@@ -75,6 +76,54 @@ func TestSelectionReconciliationRetainsDependencyAndProvisionerExternalState(t *
 		if action["scope"] == "managed-entry" && action["outcome"] == "remove" {
 			t.Fatalf("external-only reduction reported Managed Entry removal: %#v", action)
 		}
+	}
+}
+
+func TestInstallReductionLeavesDependencyMetadataAndProvisionerEffectsUntouched(t *testing.T) {
+	fixture := newSelectionReconciliationFixture(t, true)
+	metadataPath := state.Path(fixture.stateRoot)
+	metadata, err := state.Load(metadataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisioner := state.ProvisionerRecord{
+		Profiles: []string{"full"}, Tags: []string{"retired"}, Tool: "claude", Executable: "claude",
+		Args: []string{"plugin", "marketplace", "add", "example/tools"}, Status: "provisioned",
+	}
+	metadata.Provisioners = []state.ProvisionerRecord{provisioner}
+	if err := state.Save(metadataPath, metadata); err != nil {
+		t.Fatal(err)
+	}
+	dependencyMetadata := deps.DependencyMetadata{Dependencies: []deps.DependencyRecord{{
+		Dependency: "retired-tool", Provider: "user-local", Path: filepath.Join(fixture.root, "bin", "retired-tool"), InstalledAt: "2026-08-22T00:00:00Z",
+	}}}
+	dependencyPath := deps.DependencyMetadataPath(fixture.stateRoot)
+	if err := deps.SaveDependencyMetadata(dependencyPath, dependencyMetadata); err != nil {
+		t.Fatal(err)
+	}
+	dependencyBefore := mustReadSelectionFile(t, dependencyPath)
+	externalEffect := filepath.Join(fixture.root, "provisioner-effect")
+	if err := os.WriteFile(externalEffect, []byte("external\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	output := runSelectionReconciliationJSON(t, cli.ExitOK, append([]string{"install", "--yes", "--acknowledge-selection-change", "--skip-deps"}, fixture.args...)...)
+	actions := jsonPathSelection(t, output, "data", "plan", "selection_reconciliation", "actions")
+	assertSelectionAction(t, actions, "dependency", "retained-external-state", "retired-tool")
+	assertSelectionAction(t, actions, "provisioner", "retained-external-state", "claude")
+
+	if got := mustReadSelectionFile(t, dependencyPath); !bytes.Equal(got, dependencyBefore) {
+		t.Fatalf("Dependency Installation Metadata changed:\nbefore: %s\nafter: %s", dependencyBefore, got)
+	}
+	if got, err := os.ReadFile(externalEffect); err != nil || string(got) != "external\n" {
+		t.Fatalf("Provisioner effect = %q, %v; want untouched", got, err)
+	}
+	gotMetadata, err := state.Load(metadataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotMetadata.Provisioners, []state.ProvisionerRecord{provisioner}) {
+		t.Fatalf("Provisioner metadata = %#v, want preserved receipt", gotMetadata.Provisioners)
 	}
 }
 

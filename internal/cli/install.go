@@ -23,6 +23,7 @@ import (
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/selectionretirement"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/tui"
 	"github.com/yersonargotev/dots/internal/version"
@@ -52,6 +53,7 @@ func newInstallCommand() *cobra.Command {
 		skipDeps         bool
 		backupAndReplace bool
 		ackSelection     bool
+		clearSelection   bool
 	)
 
 	cmd := &cobra.Command{
@@ -90,24 +92,31 @@ func newInstallCommand() *cobra.Command {
 			}
 			intentProfiles := profiles
 			intentTags := extraTags
-			if len(intentProfiles) == 0 && len(intentTags) == 0 {
-				requestedSelection, err := selection.Resolve(*m, nil, nil)
-				if err != nil {
-					return err
+			var effective selection.Effective
+			if clearSelection {
+				effective, err = selection.ResolveIntent(*m, selection.Intent{
+					Source:     selection.SourceExplicit,
+					AllowEmpty: true,
+				})
+			} else {
+				if len(intentProfiles) == 0 && len(intentTags) == 0 {
+					requestedSelection, resolveErr := selection.Resolve(*m, nil, nil)
+					if resolveErr != nil {
+						return resolveErr
+					}
+					intentProfiles = requestedSelection.Profiles
+					intentTags = requestedSelection.ExtraTags
 				}
-				intentProfiles = requestedSelection.Profiles
-				intentTags = requestedSelection.ExtraTags
+				effective, err = selection.ResolveIntent(*m, selection.Intent{
+					Source:    selection.SourceExplicit,
+					Profiles:  intentProfiles,
+					ExtraTags: intentTags,
+				})
 			}
-			effective, err := selection.ResolveIntent(*m, selection.Intent{
-				Source:    selection.SourceExplicit,
-				Profiles:  intentProfiles,
-				ExtraTags: intentTags,
-			})
 			if err != nil {
 				return err
 			}
 			selectedProfiles := effective.Profiles
-			selectedTags := effective.ExtraTags
 
 			meta, err := loadInstallationMetadata(paths, stateRoot)
 			if err != nil {
@@ -115,7 +124,7 @@ func newInstallCommand() *cobra.Command {
 			}
 			effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, installHostOS)
 			proceed, _, err := guardSelectionChange(cmd, &effective, selectionChangePolicy{
-				DryRun: dryRun, Confirmed: yes, Acknowledge: ackSelection,
+				DryRun: dryRun, Confirmed: yes, Acknowledge: ackSelection, ClearSelection: clearSelection,
 			})
 			if err != nil {
 				return err
@@ -127,7 +136,7 @@ func newInstallCommand() *cobra.Command {
 
 			hostOS := installHostOS
 			hostArch := installHostArch
-			depOptions := deps.Options{Profiles: selectedProfiles, ExtraTags: selectedTags, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot, AppLookup: appInstalled(hostOS, paths.Home), HTTPClient: depsHTTPClient, RollingReleaseURL: depsRollingReleaseURL}
+			depOptions := deps.Options{Selection: &effective.Selection, OS: hostOS, Arch: hostArch, Home: paths.Home, StateRoot: paths.StateRoot, AppLookup: appInstalled(hostOS, paths.Home), HTTPClient: depsHTTPClient, RollingReleaseURL: depsRollingReleaseURL}
 			depTier, err := resolveInstallTier(hostOS)
 			if err != nil {
 				return err
@@ -166,16 +175,16 @@ func newInstallCommand() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout())
 			}
 
+			p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, effective.Selection, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
+			if err != nil {
+				return err
+			}
+			p.Selection = &effective.Report
+			p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, hostOS, paths, prep.SourceReadRoot, len(profiles) > 0 || len(extraTags) > 0 || clearSelection)
+			if err != nil {
+				return err
+			}
 			if dryRun {
-				p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, selectedProfiles, selectedTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
-				if err != nil {
-					return err
-				}
-				p.Selection = &effective.Report
-				p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, hostOS, paths, prep.SourceReadRoot, len(profiles) > 0 || len(extraTags) > 0)
-				if err != nil {
-					return err
-				}
 				if wantsJSON(cmd) {
 					return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: true, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}
@@ -185,9 +194,25 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			var p plan.Plan
-			var provPlan provision.Plan
-			installPlanReady := false
+			retirementOptions := selectionretirement.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot}
+			var selectionRetirementPlan selectionretirement.Plan
+			if p.SelectionReconciliation != nil {
+				selectionRetirementPlan, err = selectionretirement.Build(*p.SelectionReconciliation, meta, retirementOptions)
+				if err != nil {
+					return err
+				}
+			}
+			conflictDecisions, proceed, err := resolveConflictDecisions(cmd, p, paths, yes, noTUI, backupAndReplace)
+			if err != nil {
+				return err
+			}
+			if !proceed {
+				return nil
+			}
+			if err := install.ValidateManagedEntries(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}); err != nil {
+				return err
+			}
+
 			var dependencyEnvironment []string
 
 			if !skipDeps {
@@ -233,13 +258,6 @@ func newInstallCommand() *cobra.Command {
 					renderDepsInstallPreview(cmd.OutOrStdout(), depPreview)
 					depsConfirmed = true
 				}
-				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, selectedProfiles, selectedTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
-				if err != nil {
-					return err
-				}
-				p.Selection = &effective.Report
-				installPlanReady = true
-
 				depReport, depsApplied, runEnvironment, err := runInstallDependencies(cmd, *m, depOptions, depTier, paths.Home, depPreview, depsConfirmed, depLookup, brewDetection.Path)
 				dependencyEnvironment = runEnvironment
 				dependenciesReport.Result = &depReport
@@ -254,14 +272,6 @@ func newInstallCommand() *cobra.Command {
 				}
 			}
 
-			if !installPlanReady {
-				p, provPlan, err = buildInstallPlanAndProvisioners(*m, meta, selectedProfiles, selectedTags, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
-				if err != nil {
-					return err
-				}
-				p.Selection = &effective.Report
-			}
-
 			if !wantsJSON(cmd) {
 				if err := renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, selectedProfiles); err != nil {
 					return err
@@ -272,7 +282,7 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			applied, metadataCommit, err := resolveAndApply(cmd, p, paths, yes, noTUI, backupAndReplace)
+			applied, metadataCommit, err := applyResolvedPlan(p, paths, conflictDecisions)
 			if err != nil {
 				return err
 			}
@@ -287,12 +297,23 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			provResult, err := runProvisionersWithEnvironment(cmd, *m, selectedProfiles, selectedTags, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
+			provResult, err := runProvisionersWithOptionsAndEnvironment(cmd, *m, provision.Options{Selection: &effective.Selection, OS: hostOS}, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
 			if err != nil {
 				if wantsJSON(cmd) {
 					return installProvisionerError{err: err, report: installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
 				}
 				return err
+			}
+			var selectionRetirement *selectionretirement.Result
+			if len(selectionRetirementPlan.Actions) > 0 {
+				result, applyErr := selectionretirement.Apply(selectionRetirementPlan, retirementOptions)
+				selectionRetirement = &result
+				if applyErr != nil {
+					if wantsJSON(cmd) {
+						return installRetirementError{err: applyErr, report: installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult, SelectionRetirement: selectionRetirement}}
+					}
+					return applyErr
+				}
 			}
 			retirement, err := retireHistoricalAgentState(meta, paths.Home)
 			if err != nil {
@@ -303,10 +324,11 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			if !wantsJSON(cmd) {
+				renderSelectionRetirement(cmd.OutOrStdout(), selectionRetirement)
 				renderHistoricalRetirement(cmd.OutOrStdout(), retirement)
 			}
 			if wantsJSON(cmd) {
-				return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, Retirement: retirement})
+				return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, SelectionRetirement: selectionRetirement, Retirement: retirement})
 			}
 			return nil
 		},
@@ -324,6 +346,9 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&skipDeps, "skip-deps", false, "skip dependency provisioning before applying managed configuration")
 	cmd.Flags().BoolVar(&backupAndReplace, "backup-and-replace", false, "with --yes, replace every conflict after creating Backup Sets")
 	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of previously selected Profiles or extra Tags")
+	cmd.Flags().BoolVar(&clearSelection, "clear-selection", false, "request an explicitly empty Installed Selection")
+	cmd.MarkFlagsMutuallyExclusive("clear-selection", "profile")
+	cmd.MarkFlagsMutuallyExclusive("clear-selection", "tag")
 	registerSelectionFlagCompletion(cmd)
 	return cmd
 }
@@ -342,10 +367,9 @@ func renderInstallPlanAndProvisioners(cmd *cobra.Command, m manifest.Manifest, p
 	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS)
 }
 
-func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, profiles []string, extraTags []string, hostOS string, paths resolvedPaths, sourceReadRoot string, legacyMigrations map[string]plan.LegacyMigration) (plan.Plan, provision.Plan, error) {
+func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, selected manifest.Selection, hostOS string, paths resolvedPaths, sourceReadRoot string, legacyMigrations map[string]plan.LegacyMigration) (plan.Plan, provision.Plan, error) {
 	p, err := plan.Build(m, plan.Options{
-		Profiles:         profiles,
-		ExtraTags:        extraTags,
+		Selection:        &selected,
 		OS:               hostOS,
 		SourceRoot:       paths.SourceRoot,
 		SourceReadRoot:   sourceReadRoot,
@@ -358,7 +382,7 @@ func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, p
 		return plan.Plan{}, provision.Plan{}, err
 	}
 
-	provPlan, err := provision.Build(m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: hostOS})
+	provPlan, err := provision.Build(m, provision.Options{Selection: &selected, OS: hostOS})
 	if err != nil {
 		return plan.Plan{}, provision.Plan{}, err
 	}
@@ -439,6 +463,17 @@ func (e installProvisionerError) Error() string { return e.err.Error() }
 func (e installProvisionerError) Unwrap() error { return e.err }
 
 func (e installProvisionerError) JSONErrorData() any { return e.report }
+
+type installRetirementError struct {
+	err    error
+	report installReport
+}
+
+func (e installRetirementError) Error() string { return e.err.Error() }
+
+func (e installRetirementError) Unwrap() error { return e.err }
+
+func (e installRetirementError) JSONErrorData() any { return e.report }
 
 // runInstallDependencies executes the dependency gate for dots install before any
 // Managed Configuration is applied. Interactive runs reuse the deps confirmation
@@ -570,6 +605,14 @@ func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
 // is shared by install and update so post-update installation reuses identical
 // Conflict Resolution and filesystem machinery instead of reimplementing it.
 func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI, backupAndReplace bool) (bool, install.MetadataCommit, error) {
+	decisions, proceed, err := resolveConflictDecisions(cmd, p, paths, yes, noTUI, backupAndReplace)
+	if err != nil || !proceed {
+		return false, install.MetadataCommit{}, err
+	}
+	return applyResolvedPlan(p, paths, decisions)
+}
+
+func resolveConflictDecisions(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI, backupAndReplace bool) (map[string]install.ConflictDecision, bool, error) {
 	var (
 		decisions map[string]install.ConflictDecision
 		err       error
@@ -583,19 +626,22 @@ func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, 
 	case noTUI:
 		decisions, err = promptConflictDecisions(cmd, p, paths.Home, paths.SourceRoot)
 		if err != nil {
-			return false, install.MetadataCommit{}, err
+			return nil, false, err
 		}
 	default:
 		decisions, err = resolveConflictsTUI(cmd, p, paths.Home, paths.SourceRoot)
 		if errors.Is(err, tui.ErrCanceled) {
 			fmt.Fprintln(cmd.OutOrStdout(), "Conflict resolution canceled; no changes applied.")
-			return false, install.MetadataCommit{}, nil
+			return nil, false, nil
 		}
 		if err != nil {
-			return false, install.MetadataCommit{}, err
+			return nil, false, err
 		}
 	}
+	return decisions, true, nil
+}
 
+func applyResolvedPlan(p plan.Plan, paths resolvedPaths, decisions map[string]install.ConflictDecision) (bool, install.MetadataCommit, error) {
 	commit, err := install.ApplyManagedEntries(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
 	return true, commit, err
 }
@@ -774,27 +820,25 @@ func recordProvisionerMetadata(stateRoot, sourceRoot string, report provision.Re
 		return nil
 	}
 	path := state.Path(stateRoot)
-	meta, err := state.Load(path)
-	if err != nil {
-		return err
-	}
-	if meta.Version < 2 {
-		meta.Version = 2
-	}
-	meta.Provenance = state.CaptureProvenance(sourceRoot, version.Value)
-	now := time.Now().UTC().Format(time.RFC3339)
-	for _, item := range report.Items {
-		meta.UpsertProvisioner(state.ProvisionerRecord{
-			Profile:    report.Profile,
-			Profiles:   append([]string(nil), report.Profiles...),
-			Tags:       append([]string(nil), report.Tags...),
-			Tool:       item.Tool,
-			Executable: item.Executable,
-			Args:       append([]string(nil), item.Args...),
-			Status:     string(item.Status),
-			Missing:    append([]string(nil), item.Missing...),
-			LastRunAt:  now,
-		})
-	}
-	return state.Save(path, meta)
+	return state.Update(path, func(meta *state.Metadata) error {
+		if meta.Version < 2 {
+			meta.Version = 2
+		}
+		meta.Provenance = state.CaptureProvenance(sourceRoot, version.Value)
+		now := time.Now().UTC().Format(time.RFC3339)
+		for _, item := range report.Items {
+			meta.UpsertProvisioner(state.ProvisionerRecord{
+				Profile:    report.Profile,
+				Profiles:   append([]string(nil), report.Profiles...),
+				Tags:       append([]string(nil), report.Tags...),
+				Tool:       item.Tool,
+				Executable: item.Executable,
+				Args:       append([]string(nil), item.Args...),
+				Status:     string(item.Status),
+				Missing:    append([]string(nil), item.Missing...),
+				LastRunAt:  now,
+			})
+		}
+		return nil
+	})
 }

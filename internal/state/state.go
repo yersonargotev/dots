@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // CurrentVersion is the current Installation Metadata schema version.
@@ -120,6 +123,29 @@ func (r Record) HasSource(source string) bool {
 	return false
 }
 
+// Clone returns a deep copy suitable for retaining an immutable evidence
+// snapshot while other metadata values continue to evolve.
+func (r Record) Clone() Record {
+	cloned := r
+	cloned.Sources = append([]string(nil), r.Sources...)
+	cloned.OwnedContent = append([]byte(nil), r.OwnedContent...)
+	cloned.OwnedBytes = append([]byte(nil), r.OwnedBytes...)
+	cloned.SeededBaseline = append([]byte(nil), r.SeededBaseline...)
+	cloned.Profiles = append([]string(nil), r.Profiles...)
+	cloned.Tags = append([]string(nil), r.Tags...)
+	if r.Contributions != nil {
+		cloned.Contributions = make([]Contribution, len(r.Contributions))
+		for index, contribution := range r.Contributions {
+			cloned.Contributions[index] = contribution
+			cloned.Contributions[index].SelectorTags = append([]string(nil), contribution.SelectorTags...)
+			cloned.Contributions[index].OwnedContent = append([]byte(nil), contribution.OwnedContent...)
+			cloned.Contributions[index].OwnedBytes = append([]byte(nil), contribution.OwnedBytes...)
+			cloned.Contributions[index].SeededBaseline = append([]byte(nil), contribution.SeededBaseline...)
+		}
+	}
+	return cloned
+}
+
 // ProvisionerRecord describes the last known result for one selected
 // Provisioner command in a profile.
 type ProvisionerRecord struct {
@@ -159,6 +185,10 @@ func CaptureProvenance(sourceRoot, dotsVersion string) Provenance {
 // it simply means nothing has been recorded yet, so an empty Metadata is
 // returned.
 func Load(path string) (Metadata, error) {
+	return load(path)
+}
+
+func load(path string) (Metadata, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -174,9 +204,128 @@ func Load(path string) (Metadata, error) {
 	return meta, nil
 }
 
-// Save atomically writes Installation Metadata to path, creating the state
-// directory if needed. A failed write leaves any prior metadata file intact.
+// LockedMetadata serializes Installation Metadata read-modify-write operations
+// for one installed.json path. Callers must Close it.
+type LockedMetadata struct {
+	path   string
+	file   *os.File
+	closed bool
+}
+
+// LockMetadata acquires an exclusive advisory lock next to installed.json.
+// Every production writer uses this lock so a complete read-modify-write cycle
+// cannot overwrite another dots process's entries or receipts.
+func LockMetadata(path string) (*LockedMetadata, error) {
+	if path == "" {
+		return nil, fmt.Errorf("lock installation metadata: path is required")
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("lock installation metadata: create state directory: %w", err)
+	}
+	lockPath := path + ".lock"
+	fd, err := unix.Open(lockPath, unix.O_CREAT|unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("lock installation metadata: open lock file: %w", err)
+	}
+	file := os.NewFile(uintptr(fd), lockPath)
+	if file == nil {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("lock installation metadata: open lock file returned no handle")
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("lock installation metadata: stat lock file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		_ = file.Close()
+		return nil, fmt.Errorf("lock installation metadata: lock path is not a regular file")
+	}
+	if err := unix.Flock(fd, unix.LOCK_EX); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("lock installation metadata: acquire: %w", err)
+	}
+	return &LockedMetadata{path: path, file: file}, nil
+}
+
+// Load reads the metadata while the exclusive lock is held.
+func (l *LockedMetadata) Load() (Metadata, error) {
+	if l == nil || l.closed {
+		return Metadata{}, fmt.Errorf("load locked installation metadata: lock is closed")
+	}
+	return load(l.path)
+}
+
+// Save atomically writes metadata while the exclusive lock is held.
+func (l *LockedMetadata) Save(meta Metadata) error {
+	if l == nil || l.closed {
+		return fmt.Errorf("save locked installation metadata: lock is closed")
+	}
+	return save(l.path, meta)
+}
+
+// Remove deletes installed.json while the exclusive lock is held.
+func (l *LockedMetadata) Remove() error {
+	if l == nil || l.closed {
+		return fmt.Errorf("remove locked installation metadata: lock is closed")
+	}
+	if err := os.Remove(l.path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove installation metadata: %w", err)
+	}
+	return nil
+}
+
+// Close releases the metadata lock.
+func (l *LockedMetadata) Close() error {
+	if l == nil || l.closed {
+		return nil
+	}
+	l.closed = true
+	unlockErr := unix.Flock(int(l.file.Fd()), unix.LOCK_UN)
+	closeErr := l.file.Close()
+	if unlockErr != nil {
+		unlockErr = fmt.Errorf("unlock installation metadata: %w", unlockErr)
+	}
+	if closeErr != nil {
+		closeErr = fmt.Errorf("close installation metadata lock: %w", closeErr)
+	}
+	return errors.Join(unlockErr, closeErr)
+}
+
+// Update performs one serialized read-modify-write transaction.
+func Update(path string, update func(*Metadata) error) (resultErr error) {
+	if update == nil {
+		return fmt.Errorf("update installation metadata: callback is required")
+	}
+	locked, err := LockMetadata(path)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, locked.Close()) }()
+	meta, err := locked.Load()
+	if err != nil {
+		return err
+	}
+	if err := update(&meta); err != nil {
+		return err
+	}
+	return locked.Save(meta)
+}
+
+// Save serializes and atomically writes Installation Metadata to path,
+// creating the state directory if needed. A failed write leaves prior metadata
+// intact.
 func Save(path string, meta Metadata) error {
+	locked, err := LockMetadata(path)
+	if err != nil {
+		return err
+	}
+	saveErr := locked.Save(meta)
+	return errors.Join(saveErr, locked.Close())
+}
+
+func save(path string, meta Metadata) error {
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode installation metadata: %w", err)

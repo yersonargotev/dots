@@ -129,10 +129,50 @@ func TestBuildRequiresExactWholeTargetContributionEvidence(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Build() error = %v", err)
 			}
-			if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonLostOwnership {
-				t.Fatalf("Action = %#v, want lost ownership block", got)
+			if got := report.Actions[0]; got.Outcome != OutcomeRetain || got.Reason != ReasonLostOwnership {
+				t.Fatalf("Action = %#v, want lost ownership retention", got)
 			}
 		})
+	}
+}
+
+func TestBuildRetainsRetiredWholeTargetWhenLiveContentDrifted(t *testing.T) {
+	previous := selectedEntry("old", "~/.target", "copy", "whole")
+	input := baseInput([]selectedsurface.SelectedEntry{previous}, nil, TargetEvidence{
+		DeclarativeTarget: "~/.target",
+		ResolvedTarget:    "/home/test/.target",
+		Exists:            true,
+		Kind:              TargetKindRegular,
+		Content:           []byte("external\n"),
+	})
+	input.Metadata.Entries = []state.Record{{
+		Target:    "/home/test/.target",
+		Source:    "old",
+		Strategy:  "copy",
+		Ownership: "whole",
+		Contributions: []state.Contribution{{
+			Source: "old", Ownership: "whole", EvidenceRecorded: true, Hash: state.HashBytes([]byte("old\n")),
+		}},
+	}}
+
+	report, err := Build(input)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got := report.Actions[0]; got.Outcome != OutcomeRetain || got.Reason != ReasonWholeTargetDrift {
+		t.Fatalf("Action = %#v, want whole-target Drift retention", got)
+	}
+	if !report.HasFindings() {
+		t.Fatal("retired whole-target Drift must remain a read-only finding")
+	}
+}
+
+func TestReportTreatsLostWholeTargetOwnershipAsFinding(t *testing.T) {
+	report := Report{Actions: []Action{{
+		Scope: ScopeManagedEntry, Outcome: OutcomeRetain, Reason: ReasonLostOwnership,
+	}}}
+	if !report.HasFindings() {
+		t.Fatal("lost whole-target ownership must remain a read-only finding")
 	}
 }
 
@@ -156,8 +196,8 @@ func TestBuildBlocksMultipleWholeTargetContributions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonLostOwnership {
-		t.Fatalf("Action = %#v, want lost ownership block", got)
+	if got := report.Actions[0]; got.Outcome != OutcomeRetain || got.Reason != ReasonLostOwnership {
+		t.Fatalf("Action = %#v, want lost ownership retention", got)
 	}
 }
 
@@ -181,8 +221,8 @@ func TestBuildRequiresExactSymlinkContributionSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonLostOwnership {
-		t.Fatalf("Action = %#v, want lost ownership block", got)
+	if got := report.Actions[0]; got.Outcome != OutcomeRetain || got.Reason != ReasonLostOwnership {
+		t.Fatalf("Action = %#v, want lost ownership retention", got)
 	}
 }
 
@@ -235,7 +275,7 @@ func TestBuildReconcilesSharedJSONTargetInSelectedSurfaceOrder(t *testing.T) {
 	}
 }
 
-func TestBuildNeverUsesLegacyTargetWideProjectionForPartialRetirement(t *testing.T) {
+func TestBuildRetainsPartialRetirementWithoutExactContributionEvidence(t *testing.T) {
 	previous := selectedEntry("a.json", "~/.shared.json", "copy", "json-subset")
 	input := baseInput([]selectedsurface.SelectedEntry{previous}, nil, TargetEvidence{
 		DeclarativeTarget: "~/.shared.json",
@@ -255,20 +295,25 @@ func TestBuildNeverUsesLegacyTargetWideProjectionForPartialRetirement(t *testing
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonAmbiguousPartialOwnership {
-		t.Fatalf("Action = %#v, want ambiguous partial ownership block", got)
+	if got := report.Actions[0]; got.Outcome != OutcomeRetain || got.Reason != ReasonAmbiguousPartialOwnership {
+		t.Fatalf("Action = %#v, want ambiguous partial ownership retention", got)
+	}
+	if !report.HasFindings() {
+		t.Fatal("ambiguous partial ownership must remain a read-only finding")
 	}
 }
 
 func TestBuildClassifiesExactPartialRetirement(t *testing.T) {
 	tests := []struct {
-		name string
-		live []byte
-		want Outcome
+		name       string
+		live       []byte
+		want       Outcome
+		wantReason string
 	}{
 		{name: "remove empty target", live: []byte(`{"a":1}`), want: OutcomeRemove},
 		{name: "retain external target bytes", live: []byte(`{"a":1,"external":true}`), want: OutcomeRetain},
-		{name: "changed owned value blocks", live: []byte(`{"a":2}`), want: OutcomeBlocked},
+		{name: "retain changed owned value", live: []byte(`{"a":2}`), want: OutcomeRetain, wantReason: ReasonAmbiguousPartialOwnership},
+		{name: "retain missing owned value", live: []byte(`{"external":true}`), want: OutcomeRetain, wantReason: ReasonAmbiguousPartialOwnership},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -287,11 +332,11 @@ func TestBuildClassifiesExactPartialRetirement(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Build() error = %v", err)
 			}
-			if got := report.Actions[0].Outcome; got != test.want {
-				t.Fatalf("Outcome = %q, want %q (action %#v)", got, test.want, report.Actions[0])
+			if got := report.Actions[0]; got.Outcome != test.want || got.Reason != test.wantReason {
+				t.Fatalf("Action = %#v, want outcome %q reason %q", got, test.want, test.wantReason)
 			}
-			if test.want == OutcomeBlocked && report.Actions[0].Reason != ReasonAmbiguousPartialOwnership {
-				t.Fatalf("Reason = %q, want ambiguous partial ownership", report.Actions[0].Reason)
+			if test.wantReason != "" && !report.HasFindings() {
+				t.Fatal("unsafe retained partial target must remain a read-only finding")
 			}
 		})
 	}

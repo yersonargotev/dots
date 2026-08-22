@@ -10,6 +10,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/cli"
+	"golang.org/x/sys/unix"
 )
 
 func seedDesktopNerdFont(t *testing.T, home string) {
@@ -119,6 +120,64 @@ func TestInstallRunsDependenciesBeforeManagedConfiguration(t *testing.T) {
 	planIdx := strings.Index(got, "Plan for profile")
 	if previewIdx < 0 || installIdx < 0 || planIdx < 0 || previewIdx > installIdx || installIdx > planIdx {
 		t.Fatalf("dependency actions must render before file plan:\n%s", got)
+	}
+}
+
+func TestInstallValidatesManagedPlanBeforeDependencyMutation(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	binDir := t.TempDir()
+	installMarker := filepath.Join(binDir, "brew-install-ran")
+	writeExecStub(t, filepath.Join(binDir, "brew"), "#!/bin/sh\nif [ \"$1\" = install ]; then touch \"$BREW_INSTALL_MARKER\"; fi\nexit 0\n")
+	t.Setenv("BREW_INSTALL_MARKER", installMarker)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	manifestPath := writeCLIManifest(t, home, installDepsManifest)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "missing-source") {
+		t.Fatalf("Execute() error = %v, want preflight missing-source\noutput:\n%s", err, out.String())
+	}
+	if _, statErr := os.Stat(installMarker); !os.IsNotExist(statErr) {
+		t.Fatalf("dependency provider ran before complete plan validation: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(home, ".zshrc")); !os.IsNotExist(statErr) {
+		t.Fatalf("invalid plan wrote Managed Entry: %v", statErr)
+	}
+}
+
+func TestInstallValidatesConfirmedReplacementBeforeDependencyMutation(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	stateRoot := t.TempDir()
+	binDir := t.TempDir()
+	installMarker := filepath.Join(binDir, "brew-install-ran")
+	writeExecStub(t, filepath.Join(binDir, "brew"), "#!/bin/sh\nif [ \"$1\" = install ]; then touch \"$BREW_INSTALL_MARKER\"; fi\nexit 0\n")
+	t.Setenv("BREW_INSTALL_MARKER", installMarker)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	writeCLISource(t, sourceRoot, "configs/zsh/zshrc", "managed\n")
+	manifestPath := writeCLIManifest(t, home, installDepsManifest)
+	target := filepath.Join(home, ".zshrc")
+	if err := unix.Mkfifo(target, 0o600); err != nil {
+		t.Fatalf("create conflicting FIFO: %v", err)
+	}
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"install", "--yes", "--backup-and-replace", "--file", manifestPath, "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "not a regular file, directory, or symlink") {
+		t.Fatalf("Execute() error = %v, want preflight replacement rejection\noutput:\n%s", err, out.String())
+	}
+	if _, statErr := os.Stat(installMarker); !os.IsNotExist(statErr) {
+		t.Fatalf("dependency provider ran before confirmed replacement validation: %v", statErr)
 	}
 }
 
