@@ -198,6 +198,19 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		{tag: "opencode", osName: "linux", entries: []string{"~/.config/opencode/opencode.json"}, dependencies: []string{"OpenCode"}},
 		{tag: "antigravity", osName: "linux", entries: []string{"~/.gemini/antigravity-cli/settings.json"}, dependencies: []string{"Antigravity"}},
 		{tag: "copilot", osName: "linux", entries: []string{"~/.copilot/settings.json", "~/.copilot/statusline-command.sh"}, dependencies: []string{"Copilot CLI", "jq"}},
+		{tag: "playwright", osName: "linux", dependencies: []string{"Playwright CLI", "npx"}, provisioners: []string{"skills"}},
+		{tag: "frontend-design", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
+		{tag: "vercel-web-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
+		{tag: "claude-chrome-devtools", osName: "linux", dependencies: []string{"claude"}, provisioners: []string{"claude", "claude"}},
+		{tag: "codex-chrome-devtools", osName: "linux", dependencies: []string{"codex"}, provisioners: []string{"codex"}},
+		{tag: "opencode-chrome-devtools", osName: "linux", entries: []string{"~/.config/opencode/opencode.json"}, dependencies: []string{"opencode"}},
+		{tag: "dart-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
+		{tag: "flutter-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
+		{tag: "android-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
+		{tag: "claude-dart-mcp", osName: "linux", dependencies: []string{"claude", "dart"}, provisioners: []string{"claude"}},
+		{tag: "codex-dart-mcp", osName: "linux", dependencies: []string{"codex", "dart"}, provisioners: []string{"codex"}},
+		{tag: "antigravity-dart-mcp", osName: "linux", entries: []string{"~/.gemini/antigravity-cli/settings.json"}},
+		{tag: "vscode-mobile", osName: "linux", entries: []string{"~/.config/Code/User/settings.json"}},
 	}
 
 	for _, tt := range tests {
@@ -283,6 +296,69 @@ func TestRepositoryDesktopAndAgentProfilesPreservePreAtomizationSurfaces(t *test
 			}
 			if got := provisionerTools(surface.Provisioners); len(got) != 0 {
 				t.Errorf("Provisioners changed from the pre-atomization surface: %#v", got)
+			}
+		})
+	}
+}
+
+func TestRepositoryWebAndMobileProfilesPreservePreAtomizationSurfaces(t *testing.T) {
+	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		profile      string
+		osName       string
+		entries      []string
+		dependencies []string
+		provisioners []string
+	}{
+		{
+			profile:      "web",
+			osName:       "darwin",
+			entries:      []string{"~/.config/opencode/opencode.json"},
+			dependencies: []string{"Playwright CLI", "opencode", "npx", "claude", "codex"},
+			provisioners: []string{"skills", "skills", "skills", "claude", "claude", "codex"},
+		},
+		{
+			profile:      "web",
+			osName:       "linux",
+			entries:      []string{"~/.config/opencode/opencode.json"},
+			dependencies: []string{"Playwright CLI", "opencode", "npx", "claude", "codex"},
+			provisioners: []string{"skills", "skills", "skills", "claude", "claude", "codex"},
+		},
+		{
+			profile:      "mobile",
+			osName:       "darwin",
+			entries:      []string{"~/.gemini/antigravity-cli/settings.json", "~/Library/Application Support/Code/User/settings.json"},
+			dependencies: []string{"npx", "claude", "dart", "codex"},
+			provisioners: []string{"skills", "skills", "skills", "claude", "codex"},
+		},
+		{
+			profile:      "mobile",
+			osName:       "linux",
+			entries:      []string{"~/.gemini/antigravity-cli/settings.json", "~/.config/Code/User/settings.json"},
+			dependencies: []string{"npx", "claude", "dart", "codex"},
+			provisioners: []string{"skills", "skills", "skills", "claude", "codex"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.profile+"/"+tt.osName, func(t *testing.T) {
+			selection, err := manifest.ResolveReadOnlySelection(*m, []string{tt.profile}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			surface := selectedsurface.Evaluate(*m, selection.Tags, tt.osName)
+			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, tt.entries) {
+				t.Errorf("Managed Entries changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.entries)
+			}
+			if got := dependencyNames(surface.Dependencies); !reflect.DeepEqual(got, tt.dependencies) {
+				t.Errorf("Dependencies changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.dependencies)
+			}
+			if got := provisionerTools(surface.Provisioners); !reflect.DeepEqual(got, tt.provisioners) {
+				t.Errorf("Provisioners changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.provisioners)
 			}
 		})
 	}

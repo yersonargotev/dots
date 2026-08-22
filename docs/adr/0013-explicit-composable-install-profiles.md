@@ -75,6 +75,11 @@ Agent capability Tags. Neither alias directly owns a Managed Entry, Dependency
 Set, or Provisioner. OpenCode and Antigravity keep their composed JSON targets,
 and Codex keeps its independent source-override behavior.
 
+ADR 0018 extends this atomic model to the `web` and `mobile` Profiles. Their
+former broad Tags are hidden compatibility aliases for the Profiles' ordered
+skill and agent-integration Tags, while `adaptive-theme` and `codegraph` remain
+single current global opt-ins.
+
 ## Amendment: evidence-gated historical retirement
 
 Tags select declarative surface only and do not trigger built-in Go cleanup.

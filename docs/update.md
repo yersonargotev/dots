@@ -133,7 +133,7 @@ failed Managed Entry or Provisioner work preserve the previous intent.
 
 ## Profiles and provisioners
 
-Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` Profile selects the atomic `ghostty`, `warp`, `zed`, and `codexbar` Tags. The `agents` Profile is the native Agent CLI Baseline: atomic `codex`, `claude`, `opencode`, `antigravity`, and `copilot` Tags, each pairing its CLI requirement with dots-owned native Managed Configuration; `claude` and `copilot` share the internal `jq` requirement. It does not select gentle-ai, Engram, Context7, generated permissions, SDD/persona operations, third-party engineering skills, or dots-owned global agent rules. The `core` Profile includes the atomic `gh` and `jq` capabilities; either Tag may also be selected independently. CodeGraph, `web`, and `mobile` retain independent opt-in intent. The `web` Profile composes its Chrome DevTools overlay over OpenCode's native JSON baseline without replacing it. Use `workstation` when you explicitly want core, Ghostty/Warp/Zed, and the Agent CLI Baseline together; CodexBar, web, and mobile remain separate opt-ins.
+Provisioners are scoped by the same resolved tags as file entries. There is no implicit default Profile; reuse a recorded Installed Selection, choose `core`, compose pure capability Profiles such as `--profile agents --profile web`, or use `workstation` for `core + desktop + agents`. The `desktop` Profile selects the atomic `ghostty`, `warp`, `zed`, and `codexbar` Tags. The `agents` Profile is the native Agent CLI Baseline: atomic `codex`, `claude`, `opencode`, `antigravity`, and `copilot` Tags, each pairing its CLI requirement with dots-owned native Managed Configuration; `claude` and `copilot` share the internal `jq` requirement. It does not select gentle-ai, Engram, Context7, generated permissions, SDD/persona operations, third-party engineering skills, or dots-owned global agent rules. The `core` Profile includes the atomic `gh` and `jq` capabilities; either Tag may also be selected independently. The `web` and `mobile` Profiles are ordered presets over their atomic skill and agent-integration Tags, while `adaptive-theme` and `codegraph` remain single global opt-ins. The `opencode-chrome-devtools` Tag composes its JSON subset over OpenCode's native baseline without replacing it. Use `workstation` when you explicitly want core, Ghostty/Warp/Zed, and the Agent CLI Baseline together; CodexBar, web, and mobile remain separate opt-ins.
 
 The retired Codex delegation capability follows the normal Installed Selection
 safety contract. A recorded `codex-delegation` Profile or explicit extra Tag
@@ -162,7 +162,7 @@ To remove residual gentle-ai state, first review it outside dots (for example
 gentle-ai/Engram installation). Use the vendor's explicit uninstall flow or
 remove reviewed residual paths manually only after confirming their ownership.
 Do not delete entire shared agent configuration directories, authentication
-files, or historical dots receipts. OpenCode's `web` Managed Entry composes its MCP subset directly
+files, or historical dots receipts. OpenCode's `opencode-chrome-devtools` Managed Entry composes its MCP subset directly
 into the native `~/.config/opencode/opencode.json`, so
 `--profile agents --profile web` does not depend on `core` shell configuration.
 
@@ -179,7 +179,7 @@ To keep that requirement discoverable, both `install` and `update` print a one-l
 Note: profile "core" skips provisioner(s); run with --profile core --profile agents to keep core and add agent setup.
 ```
 
-File entries are profile-scoped the same way, and `core` intentionally omits profile-specific entries such as the `desktop` Ghostty/Zed configs and the `web` OpenCode MCP overlay. To close the same discoverability gap, both commands print a parallel hint for skipped file entries:
+File entries are profile-scoped the same way, and `core` intentionally omits profile-specific entries such as the `desktop` Ghostty/Zed configs and the `opencode-chrome-devtools` OpenCode MCP subset selected by the `web` Profile. To close the same discoverability gap, both commands print a parallel hint for skipped file entries:
 
 ```
 Note: profile "core" skips file entries; run with --profile core --profile desktop to keep core and add desktop entries.
