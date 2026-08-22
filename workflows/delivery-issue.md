@@ -190,20 +190,10 @@ Before implementation begins, classify whether the change spans
 managed filesystem mutation, persisted metadata or receipts, recovery or
 rollback, or authority or identity that may change concurrently. For an
 applicable change, read the reference completely:
-[mutation-safety-gate.md](mutation-safety-gate.md). Complete its safety case.
-Documentation-, skill-, CI-, or metadata-only changes with no mutation boundary
-may record `not applicable` with direct evidence.
-
-The gate passes only when every required part of the safety case is complete and
-its independent design challenge has zero actionable findings. Repair local,
-reversible gaps inside the gate. A material product or architecture decision not
-authorized by the Delivery Contract returns `needs-triage`; an unavailable
-required capability returns `blocked` under the existing outcome rules.
-
-A later change that changes the approved mutation model invalidates the prior
-gate evidence; repeat the gate before further implementation. The design
-challenge is an early adversarial review. Final independent review remains
-required.
+[mutation-safety-gate.md](mutation-safety-gate.md). Use that reference as the
+sole authority for completion, outcomes, invalidation, and gate evidence. Do not
+enter Implementation and local gates until the reference permits continuation.
+Its early design challenge does not replace the final independent review below.
 
 ## Implementation and local gates
 

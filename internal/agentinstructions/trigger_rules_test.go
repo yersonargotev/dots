@@ -638,8 +638,6 @@ func TestDeliveryContractPreservesNativeExecutionStateAndSnapshots(t *testing.T)
 func TestDeliveryContractAdmissionScenarioMatrix(t *testing.T) {
 	root := filepath.Join("..", "..")
 	path := filepath.Join(root, "docs", "agents", "delivery-contract.md")
-	scenarios := readMarkdownScenarioMatrix(t, path)
-
 	wants := map[string][2]string{
 		"historical-agent-brief": {"complete Agent Brief", "using the Agent Brief as the Contract Source"},
 		"standalone-body":        {"complete issue body", "using the standalone body as the Contract Source"},
@@ -650,22 +648,7 @@ func TestDeliveryContractAdmissionScenarioMatrix(t *testing.T) {
 		"contradictory-source":   {"Duplicate or conflicting", "Return `needs-triage`"},
 		"stale-snapshot":         {"relationship identity, state, or `updatedAt` snapshot differs", "Restart admission before code mutation, PR creation, or merge"},
 	}
-	if len(scenarios) != len(wants) {
-		t.Fatalf("admission scenario count = %d, want %d: %#v", len(scenarios), len(wants), scenarios)
-	}
-	for name, want := range wants {
-		got, ok := scenarios[name]
-		if !ok {
-			t.Errorf("admission scenario %q is missing", name)
-			continue
-		}
-		if !strings.Contains(got[0], want[0]) {
-			t.Errorf("admission scenario %q evidence = %q, want %q", name, got[0], want[0])
-		}
-		if !strings.Contains(got[1], want[1]) {
-			t.Errorf("admission scenario %q result = %q, want %q", name, got[1], want[1])
-		}
-	}
+	assertScenarioMatrix(t, path, wants)
 }
 
 func TestDeliveryWorkflowInvokesMutationSafetyGate(t *testing.T) {
@@ -689,9 +672,9 @@ func TestDeliveryWorkflowInvokesMutationSafetyGate(t *testing.T) {
 		"authority or identity that may change concurrently",
 		"read the reference completely",
 		"Before implementation begins",
-		"changes the approved mutation model",
-		"repeat the gate before further implementation",
-		"final independent review remains required",
+		"sole authority for completion, outcomes, invalidation, and gate evidence",
+		"Do not enter Implementation and local gates until the reference permits continuation",
+		"does not replace the final independent review",
 		"mutation-safety result or its `not applicable` evidence",
 	} {
 		if !strings.Contains(strings.ToLower(normalized), strings.ToLower(want)) {
@@ -722,30 +705,14 @@ func TestMutationSafetyGateContract(t *testing.T) {
 		"does not replace final Spec and Standards review",
 	})
 
-	scenarios := readMarkdownScenarioMatrix(t, path)
 	wants := map[string][2]string{
-		"required-mutation":      {"filesystem, persisted evidence, recovery, rollback, or concurrent authority", "Complete the safety case before implementation"},
+		"required-mutation":      {"managed filesystem mutation, persisted metadata or receipts, recovery or rollback, or authority or identity that may change concurrently", "Complete the safety case before implementation"},
 		"not-applicable":         {"Documentation, skill, CI, or metadata-only change with no mutation boundary", "Record `not applicable` with direct evidence"},
 		"unauthorized-decision":  {"Material product or architecture decision", "Return `needs-triage`"},
-		"missing-capability":     {"Required independent design capability is unavailable", "Return `blocked`"},
+		"missing-capability":     {"A required gate capability is unavailable", "Return `blocked`"},
 		"mutation-model-changed": {"Implementation changes the approved mutation model", "Invalidate the result and repeat the gate before further implementation"},
 	}
-	if len(scenarios) != len(wants) {
-		t.Fatalf("mutation safety scenario count = %d, want %d: %#v", len(scenarios), len(wants), scenarios)
-	}
-	for name, want := range wants {
-		got, ok := scenarios[name]
-		if !ok {
-			t.Errorf("mutation safety scenario %q is missing", name)
-			continue
-		}
-		if !strings.Contains(got[0], want[0]) {
-			t.Errorf("mutation safety scenario %q evidence = %q, want %q", name, got[0], want[0])
-		}
-		if !strings.Contains(got[1], want[1]) {
-			t.Errorf("mutation safety scenario %q result = %q, want %q", name, got[1], want[1])
-		}
-	}
+	assertScenarioMatrix(t, path, wants)
 }
 
 func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t *testing.T) {
@@ -860,4 +827,25 @@ func readMarkdownScenarioMatrix(t *testing.T, path string) map[string][2]string 
 		scenarios[name] = [2]string{strings.TrimSpace(cells[2]), strings.TrimSpace(cells[3])}
 	}
 	return scenarios
+}
+
+func assertScenarioMatrix(t *testing.T, path string, wants map[string][2]string) {
+	t.Helper()
+	scenarios := readMarkdownScenarioMatrix(t, path)
+	if len(scenarios) != len(wants) {
+		t.Fatalf("scenario count in %s = %d, want %d: %#v", path, len(scenarios), len(wants), scenarios)
+	}
+	for name, want := range wants {
+		got, ok := scenarios[name]
+		if !ok {
+			t.Errorf("scenario %q is missing from %s", name, path)
+			continue
+		}
+		if !strings.Contains(got[0], want[0]) {
+			t.Errorf("scenario %q evidence in %s = %q, want %q", name, path, got[0], want[0])
+		}
+		if !strings.Contains(got[1], want[1]) {
+			t.Errorf("scenario %q result in %s = %q, want %q", name, path, got[1], want[1])
+		}
+	}
 }

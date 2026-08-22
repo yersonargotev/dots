@@ -105,10 +105,10 @@ Use exactly one result from this matrix:
 
 | Scenario | Evidence | Result |
 | --- | --- | --- |
-| `required-mutation` | Change spans filesystem, persisted evidence, recovery, rollback, or concurrent authority | Complete the safety case before implementation |
+| `required-mutation` | Change spans managed filesystem mutation, persisted metadata or receipts, recovery or rollback, or authority or identity that may change concurrently | Complete the safety case before implementation |
 | `not-applicable` | Documentation, skill, CI, or metadata-only change with no mutation boundary | Record `not applicable` with direct evidence |
 | `unauthorized-decision` | Material product or architecture decision is absent from the Delivery Contract | Return `needs-triage` with the decision and evidence required |
-| `missing-capability` | Required independent design capability is unavailable | Return `blocked` with the unavailable capability |
+| `missing-capability` | A required gate capability is unavailable | Return `blocked` with the unavailable capability |
 | `mutation-model-changed` | Implementation changes the approved mutation model | Invalidate the result and repeat the gate before further implementation |
 
 Local, reversible design gaps remain inside the gate until repaired. A restart
