@@ -95,9 +95,9 @@ map, transaction boundary, matrix, and evidence plan. Require it to challenge:
 - failure points without deterministic injection; and
 - tests that prove only the planned implementation shape.
 
-Resolve every actionable finding inside the safety case. Pass only with zero
-actionable findings. This challenge does not replace final Spec and Standards
-review of the implemented commit.
+Resolve every actionable finding inside the safety case and return the challenge
+result to the parent workflow's completion gate. This challenge does not replace
+final Spec and Standards review of the implemented commit.
 
 ## Gate results and invalidation
 

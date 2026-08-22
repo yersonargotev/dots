@@ -186,13 +186,18 @@ evidence cannot be proved for that state.
 
 ## Mutation safety gate
 
-Before implementation begins, classify whether the change spans
-managed filesystem mutation, persisted metadata or receipts, recovery or
-rollback, or authority or identity that may change concurrently. For an
-applicable change, read the reference completely:
-[mutation-safety-gate.md](mutation-safety-gate.md). Use that reference as the
-sole authority for completion, outcomes, invalidation, and gate evidence. Do not
-enter Implementation and local gates until the reference permits continuation.
+Before implementation begins, use the `Gate results and invalidation` matrix in
+[mutation-safety-gate.md](mutation-safety-gate.md) to classify whether the
+change spans managed filesystem mutation, persisted metadata or receipts,
+recovery or rollback, or authority or identity that may change concurrently.
+For `required-mutation`, read the reference completely. Other classifications
+need only its result and evidence sections.
+
+The gate passes only when every required part of the safety case is complete and
+its independent design challenge has zero actionable findings. Do not enter
+Implementation and local gates until that criterion passes or the reference
+returns a result that permits continuation. The reference is the sole authority
+for detailed safety-case rules, outcome routing, invalidation, and gate evidence.
 Its early design challenge does not replace the final independent review below.
 
 ## Implementation and local gates
@@ -448,8 +453,7 @@ as intentionally pending synchronization.
 - A Tracking Issue returns `tracking` without creating a branch or PR.
 - The complete source, category, readiness, and relationship snapshot is
   revalidated before code mutation, PR creation, and merge.
-- Applicable mutation work completes its safety gate before implementation and
-  repeats it whenever the approved mutation model changes.
+- Applicable mutation work follows the referenced mutation-safety gate.
 - Pull requests retain exactly one `type:*` label and durable Delivery Evidence.
 - The adapter remains explicit-only and delegates all runtime rules to this
   normative workflow.

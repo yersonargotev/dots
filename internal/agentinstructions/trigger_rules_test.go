@@ -670,10 +670,14 @@ func TestDeliveryWorkflowInvokesMutationSafetyGate(t *testing.T) {
 		"persisted metadata or receipts",
 		"recovery or rollback",
 		"authority or identity that may change concurrently",
+		"use the `Gate results and invalidation` matrix",
+		"Other classifications need only its result and evidence sections",
 		"read the reference completely",
 		"Before implementation begins",
-		"sole authority for completion, outcomes, invalidation, and gate evidence",
-		"Do not enter Implementation and local gates until the reference permits continuation",
+		"every required part of the safety case is complete",
+		"independent design challenge has zero actionable findings",
+		"Do not enter Implementation and local gates until that criterion passes",
+		"sole authority for detailed safety-case rules, outcome routing, invalidation, and gate evidence",
 		"does not replace the final independent review",
 		"mutation-safety result or its `not applicable` evidence",
 	} {
@@ -701,7 +705,7 @@ func TestMutationSafetyGateContract(t *testing.T) {
 		"preserved or explicitly authorized to change",
 		"Every applicable threat or failure",
 		"mitigation, planned test, or specific `not applicable` reason",
-		"zero actionable findings",
+		"Resolve every actionable finding",
 		"does not replace final Spec and Standards review",
 	})
 
