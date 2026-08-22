@@ -157,6 +157,74 @@ func TestSaveThenLoadRoundTripsOpaqueSeededBaselineV5(t *testing.T) {
 	}
 }
 
+func TestSaveThenLoadRoundTripsOrderedContributionOwnershipV7(t *testing.T) {
+	path := state.Path(t.TempDir())
+	want := state.Metadata{
+		Version: state.CurrentVersion,
+		Entries: []state.Record{{
+			Target:       "/home/user/.config/shared.json",
+			Source:       "configs/opencode/settings.json",
+			Sources:      []string{"configs/opencode/settings.json", "configs/antigravity/settings.json"},
+			Strategy:     "copy",
+			Ownership:    "json-subset",
+			OwnedContent: []byte(`{"agents":{"antigravity":true,"opencode":true}}`),
+			Contributions: []state.Contribution{
+				{
+					Source:           "configs/opencode/settings.json",
+					SelectorTags:     []string{"opencode"},
+					Ownership:        "json-subset",
+					EvidenceRecorded: true,
+					Hash:             "opencode-hash",
+					OwnedContent:     []byte(`{"agents":{"opencode":true}}`),
+				},
+				{
+					Source:           "configs/antigravity/settings.json",
+					SelectorTags:     []string{"antigravity"},
+					Ownership:        "json-subset",
+					EvidenceRecorded: true,
+					Hash:             "antigravity-hash",
+					OwnedContent:     []byte(`{"agents":{"antigravity":true}}`),
+				},
+			},
+		}},
+	}
+
+	if err := state.Save(path, want); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, err := state.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.Version != want.Version || len(got.Entries) != 1 {
+		t.Fatalf("Load() metadata = %+v, want one v%d record", got, want.Version)
+	}
+	gotRecord, wantRecord := got.Entries[0], want.Entries[0]
+	if gotRecord.Source != wantRecord.Source || !reflect.DeepEqual(gotRecord.Sources, wantRecord.Sources) || len(gotRecord.Contributions) != len(wantRecord.Contributions) {
+		t.Fatalf("Load() record = %+v, want ordered sources and contributions %+v", gotRecord, wantRecord)
+	}
+	for i := range wantRecord.Contributions {
+		gotContribution, wantContribution := gotRecord.Contributions[i], wantRecord.Contributions[i]
+		if gotContribution.Source != wantContribution.Source ||
+			!reflect.DeepEqual(gotContribution.SelectorTags, wantContribution.SelectorTags) ||
+			gotContribution.Ownership != wantContribution.Ownership ||
+			gotContribution.EvidenceRecorded != wantContribution.EvidenceRecorded ||
+			gotContribution.Hash != wantContribution.Hash {
+			t.Fatalf("Load() contribution[%d] = %+v, want %+v", i, gotContribution, wantContribution)
+		}
+		var gotOwned, wantOwned any
+		if err := json.Unmarshal(gotContribution.OwnedContent, &gotOwned); err != nil {
+			t.Fatalf("decode loaded contribution[%d]: %v", i, err)
+		}
+		if err := json.Unmarshal(wantContribution.OwnedContent, &wantOwned); err != nil {
+			t.Fatalf("decode wanted contribution[%d]: %v", i, err)
+		}
+		if !reflect.DeepEqual(gotOwned, wantOwned) {
+			t.Fatalf("Load() contribution[%d] owned content = %v, want %v", i, gotOwned, wantOwned)
+		}
+	}
+}
+
 func TestLoadLegacyRecordDoesNotGainPartialOwnershipEvidence(t *testing.T) {
 	path := state.Path(t.TempDir())
 	data := `{"version":3,"entries":[{"target":"/home/user/.config/shared.json","source":"configs/shared.json","strategy":"copy","hash":"abc","installedAt":"now"}]}`
@@ -169,6 +237,42 @@ func TestLoadLegacyRecordDoesNotGainPartialOwnershipEvidence(t *testing.T) {
 	}
 	if len(got.Entries) != 1 || got.Entries[0].Ownership != "" || len(got.Entries[0].OwnedContent) != 0 {
 		t.Fatalf("Load() legacy record = %+v, want no partial ownership evidence", got.Entries)
+	}
+	if len(got.Entries[0].Contributions) != 0 {
+		t.Fatalf("Load() legacy contributions = %+v, want none synthesized", got.Entries[0].Contributions)
+	}
+	unchanged, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read legacy metadata after Load(): %v", err)
+	}
+	if string(unchanged) != data {
+		t.Fatalf("Load() rewrote legacy metadata = %q, want %q", unchanged, data)
+	}
+}
+
+func TestLoadPreviousMetadataVersionsDoesNotRewriteOrAttribute(t *testing.T) {
+	for version := 1; version < state.CurrentVersion; version++ {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			path := state.Path(t.TempDir())
+			data := []byte(fmt.Sprintf(`{"version":%d,"entries":[{"target":"/home/user/.config/app","source":"configs/app","strategy":"copy","hash":"abc","installedAt":"now"}]}`, version))
+			if err := os.WriteFile(path, data, 0o600); err != nil {
+				t.Fatalf("write previous metadata: %v", err)
+			}
+			got, err := state.Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got.Version != version || len(got.Entries) != 1 || len(got.Entries[0].Contributions) != 0 {
+				t.Fatalf("Load() metadata = %+v, want unchanged v%d record without attribution", got, version)
+			}
+			unchanged, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read previous metadata after Load(): %v", err)
+			}
+			if !reflect.DeepEqual(unchanged, data) {
+				t.Fatalf("Load() rewrote v%d metadata = %q, want %q", version, unchanged, data)
+			}
+		})
 	}
 }
 

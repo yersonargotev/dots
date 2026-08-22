@@ -58,6 +58,21 @@ func TestWorkstationAndMobileComposeAntigravitySettingsInSandbox(t *testing.T) {
 	if !reflect.DeepEqual(rec.SourceList(), wantSources) {
 		t.Fatalf("metadata sources = %#v, want %#v", rec.SourceList(), wantSources)
 	}
+	if len(rec.Contributions) != 2 {
+		t.Fatalf("metadata contributions = %+v, want two attributed sources", rec.Contributions)
+	}
+	for i, want := range []struct {
+		source string
+		tag    string
+	}{
+		{source: "configs/antigravity/settings.json", tag: "antigravity"},
+		{source: "configs/antigravity/mobile-mcp-settings.json", tag: "antigravity-dart-mcp"},
+	} {
+		contribution := rec.Contributions[i]
+		if contribution.Source != want.source || !reflect.DeepEqual(contribution.SelectorTags, []string{want.tag}) || contribution.Ownership != "json-subset" {
+			t.Fatalf("metadata contribution[%d] = %+v, want %s selected by %s", i, contribution, want.source, want.tag)
+		}
+	}
 	if meta.InstalledSelection == nil || !reflect.DeepEqual(meta.InstalledSelection.Profiles, []string{"workstation", "mobile"}) {
 		t.Fatalf("installed selection = %+v, want workstation + mobile", meta.InstalledSelection)
 	}

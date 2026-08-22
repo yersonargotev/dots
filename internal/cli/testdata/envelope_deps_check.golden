@@ -1,5 +1,5 @@
 {
-  "schema_version": "8",
+  "schema_version": "9",
   "command": "deps check",
   "status": "findings",
   "data": {

@@ -104,6 +104,11 @@ func TestHerdrTOMLSubsetLifecycleMigratesAdaptiveConfigAndPreservesExternalConte
 	if !ok || rec.Source != "configs/herdr/config-adaptive.toml" || rec.Ownership != "toml-subset" || !bytes.Equal(rec.OwnedBytes, incomingAdaptiveBaseline) {
 		t.Fatalf("Herdr ownership record = %#v, want adaptive TOML contribution", rec)
 	}
+	if len(rec.Contributions) != 1 || rec.Contributions[0].Source != "configs/herdr/config-adaptive.toml" ||
+		!bytes.Equal(rec.Contributions[0].OwnedBytes, incomingAdaptiveBaseline) ||
+		len(rec.Contributions[0].SelectorTags) != 2 || rec.Contributions[0].SelectorTags[0] != "core" || rec.Contributions[0].SelectorTags[1] != "adaptive-theme" {
+		t.Fatalf("Herdr contribution attribution = %#v, want core + adaptive-theme exact TOML evidence", rec.Contributions)
+	}
 	report, err := status.Build(newManifest, meta, status.Options{Profile: "default", ExtraTags: []string{"adaptive-theme"}, OS: "darwin", SourceRoot: sourceRoot, Home: home})
 	if err != nil || len(report.Entries) != 1 || report.Entries[0].State != status.StateOK {
 		t.Fatalf("status after migration = (%#v, %v), want ok", report, err)

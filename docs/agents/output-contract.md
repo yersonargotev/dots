@@ -38,7 +38,7 @@ state.
 
 ```json
 {
-  "schema_version": "8",
+  "schema_version": "9",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -59,7 +59,7 @@ Schema version `3` introduced this partial-error report allowance:
 
 ```json
 {
-  "schema_version": "8",
+  "schema_version": "9",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
@@ -145,6 +145,18 @@ prose the text surface prints:
   diagnostic, so an absent Installed Selection or partial Profile coverage
   remains `status: "ok"`; use `status` or `doctor` when an agent needs
   drift/dependency findings.
+- Each `data.managed_entries` item identifies whether its Source of Truth
+  evidence is `recorded-contribution` or `legacy-unattributed` in
+  `attribution`. Attributed items expose their exact `ownership` mode, a
+  non-sensitive `ownership_evidence` discriminator (`source-identity`,
+  `source-hash`, `owned-json`, `owned-jsonc`, `owned-toml`,
+  `owned-marked-block`, `seeded-baseline`, or `missing` for an incomplete
+  attributed record), and selector Tags with
+  `tags_source: "recorded-contribution"`. Legacy items use
+  `ownership_evidence: "legacy-target-wide"`; dots may still report their
+  historical target-level Tags, but does not claim per-contribution
+  attribution. Raw owned content and seeded baselines are never included in
+  installed output.
 - For Installation Metadata v1/v2 without an Installed Selection, `installed`
   may add `data.selection_migration` alongside (never inside) the historical
   inventory. It contains stable arrays `profiles`, `extra_tags`,
@@ -218,6 +230,10 @@ prose the text surface prints:
 - Schema version `8` changes Install Catalog `replaced_by` values from one Tag
   string to an ordered array of current replacement Tags and adds optional
   `tag_migrations` evidence to selection reports.
+- Schema version `9` adds mandatory Managed Entry `attribution` and
+  `ownership_evidence` fields to `installed`, plus optional `ownership`, so
+  agents can distinguish exact per-contribution evidence from historical
+  target-wide inventory without receiving raw configuration bytes.
 - Plan actions and Status Managed Entry items may add the optional reason
   `source-override-not-selected` and a deterministic `matching_tags` array when
   a conflicting target exactly matches one or more alternate sources whose

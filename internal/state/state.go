@@ -18,7 +18,7 @@ import (
 )
 
 // CurrentVersion is the current Installation Metadata schema version.
-const CurrentVersion = 6
+const CurrentVersion = 7
 
 // Metadata is the machine-readable record of installed managed targets.
 type Metadata struct {
@@ -53,9 +53,10 @@ func (p Provenance) Empty() bool {
 
 // Record describes a single managed target the CLI installed. Version 4 records
 // explicit whole or partial Ownership; version 5 adds opaque seeded-baseline
-// evidence, and version 6 adds opaque byte contribution evidence for TOML
-// subset and marked-block ownership. An
-// empty Ownership is legacy and grants no force-removal authority.
+// evidence, version 6 adds opaque byte contribution evidence for TOML subset
+// and marked-block ownership, and version 7 attributes exact ownership evidence
+// to each Source of Truth contribution. An empty Ownership is legacy and grants
+// no force-removal authority.
 // Copy-like strategies may record a source content hash; symlink records leave
 // Hash empty because drift is detected from the link destination.
 type Record struct {
@@ -71,11 +72,29 @@ type Record struct {
 	// SeededBaseline is the exact opaque Source of Truth baseline last applied
 	// to Seeded Runtime State. []byte uses JSON base64 encoding, so the state
 	// itself need not be JSON.
-	SeededBaseline []byte   `json:"seeded_baseline,omitempty"`
-	Hash           string   `json:"hash"`
-	InstalledAt    string   `json:"installedAt"`
-	Profiles       []string `json:"profiles,omitempty"`
-	Tags           []string `json:"tags,omitempty"`
+	SeededBaseline []byte         `json:"seeded_baseline,omitempty"`
+	Contributions  []Contribution `json:"contributions,omitempty"`
+	Hash           string         `json:"hash"`
+	InstalledAt    string         `json:"installedAt"`
+	Profiles       []string       `json:"profiles,omitempty"`
+	Tags           []string       `json:"tags,omitempty"`
+}
+
+// Contribution records the exact ownership evidence attributable to one
+// selected Source of Truth contribution. SelectorTags identifies the selected
+// declarative Tags that caused this source to contribute. EvidenceRecorded
+// distinguishes exact empty evidence from an incomplete attributed record.
+// Records continue to retain target-wide compatibility fields for older
+// metadata consumers.
+type Contribution struct {
+	Source           string          `json:"source"`
+	SelectorTags     []string        `json:"selector_tags,omitempty"`
+	Ownership        string          `json:"ownership"`
+	EvidenceRecorded bool            `json:"evidence_recorded,omitempty"`
+	Hash             string          `json:"hash,omitempty"`
+	OwnedContent     json.RawMessage `json:"owned_content,omitempty"`
+	OwnedBytes       []byte          `json:"owned_bytes,omitempty"`
+	SeededBaseline   []byte          `json:"seeded_baseline,omitempty"`
 }
 
 // SourceList returns every Source of Truth contribution for the managed target.

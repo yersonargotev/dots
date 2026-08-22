@@ -134,6 +134,8 @@ func renderInstalled(w io.Writer, report inst.Report) {
 		fmt.Fprintf(w, "Managed Entries (%d)\n", len(report.ManagedEntries))
 		for _, entry := range report.ManagedEntries {
 			fmt.Fprintf(w, "  %-8s %s -> %s\n", entry.Strategy, entry.Source, entry.Target)
+			fmt.Fprintf(w, "    attribution: %s\n", entry.Attribution)
+			fmt.Fprintf(w, "    ownership: %s (%s)\n", renderValueOrUnknown(entry.Ownership), entry.OwnershipEvidence)
 			fmt.Fprintf(w, "    tags: %s (%s)\n", renderListOrUnknown(entry.Tags), entry.TagsSource)
 			fmt.Fprintf(w, "    profiles: %s (%s)\n", renderListOrUnknown(entry.Profiles), entry.ProfilesSource)
 			if entry.InstalledAt != "" {

@@ -31,16 +31,19 @@ type MetadataSummary struct {
 
 // ManagedEntry is one Managed Entry recorded in Installation Metadata.
 type ManagedEntry struct {
-	Source          string   `json:"source"`
-	Target          string   `json:"target"`
-	Strategy        string   `json:"strategy"`
-	Hash            string   `json:"hash,omitempty"`
-	InstalledAt     string   `json:"installed_at,omitempty"`
-	Tags            []string `json:"tags,omitempty"`
-	TagsSource      string   `json:"tags_source"`
-	Profiles        []string `json:"profiles,omitempty"`
-	ProfilesSource  string   `json:"profiles_source"`
-	ManifestMatched bool     `json:"manifest_matched"`
+	Source            string   `json:"source"`
+	Target            string   `json:"target"`
+	Strategy          string   `json:"strategy"`
+	Attribution       string   `json:"attribution"`
+	Ownership         string   `json:"ownership,omitempty"`
+	OwnershipEvidence string   `json:"ownership_evidence"`
+	Hash              string   `json:"hash,omitempty"`
+	InstalledAt       string   `json:"installed_at,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
+	TagsSource        string   `json:"tags_source"`
+	Profiles          []string `json:"profiles,omitempty"`
+	ProfilesSource    string   `json:"profiles_source"`
+	ManifestMatched   bool     `json:"manifest_matched"`
 }
 
 // ProfileCoverage summarizes whether a Profile is explicit in metadata or can be
@@ -116,8 +119,10 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 	legacyTagsInferred := false
 	legacyProfilesInferred := false
 	unmatchedEntries := false
+	missingContributionTags := false
 
-	for _, rec := range expandedRecords(meta.Entries) {
+	for _, expanded := range expandedRecords(meta.Entries) {
+		rec := expanded.Record
 		entry, matched, err := matchEntry(m, rec, opts)
 		if err != nil {
 			return Report{}, err
@@ -128,7 +133,14 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 
 		tags := append([]string(nil), rec.Tags...)
 		tagsSource := "recorded"
-		if len(tags) == 0 && matched {
+		if expanded.Attributed {
+			tags = append([]string(nil), expanded.Contribution.SelectorTags...)
+			tagsSource = "recorded-contribution"
+			if len(tags) == 0 {
+				tagsSource = "unknown"
+				missingContributionTags = true
+			}
+		} else if len(tags) == 0 && matched {
 			tags = append([]string(nil), entry.Tags...)
 			tagsSource = "inferred-from-manifest"
 			legacyTagsInferred = true
@@ -151,17 +163,28 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			explicitProfiles.add(profile)
 		}
 
+		attribution := "legacy-unattributed"
+		ownership := rec.Ownership
+		ownershipEvidence := "legacy-target-wide"
+		if expanded.Attributed {
+			attribution = "recorded-contribution"
+			ownership = expanded.Contribution.Ownership
+			ownershipEvidence = describeContributionEvidence(rec.Strategy, expanded.Contribution)
+		}
 		report.ManagedEntries = append(report.ManagedEntries, ManagedEntry{
-			Source:          rec.Source,
-			Target:          rec.Target,
-			Strategy:        rec.Strategy,
-			Hash:            rec.Hash,
-			InstalledAt:     rec.InstalledAt,
-			Tags:            tags,
-			TagsSource:      tagsSource,
-			Profiles:        profiles,
-			ProfilesSource:  profilesSource,
-			ManifestMatched: matched,
+			Source:            rec.Source,
+			Target:            rec.Target,
+			Strategy:          rec.Strategy,
+			Attribution:       attribution,
+			Ownership:         ownership,
+			OwnershipEvidence: ownershipEvidence,
+			Hash:              rec.Hash,
+			InstalledAt:       rec.InstalledAt,
+			Tags:              tags,
+			TagsSource:        tagsSource,
+			Profiles:          profiles,
+			ProfilesSource:    profilesSource,
+			ManifestMatched:   matched,
 		})
 	}
 
@@ -224,28 +247,72 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 	if unmatchedEntries {
 		report.Notes = append(report.Notes, "some installed entries no longer match the current manifest; their tags and profile coverage are unknown")
 	}
+	if missingContributionTags {
+		report.Notes = append(report.Notes, "some attributed contributions do not record selector Tags; their historical intent remains unknown")
+	}
 	if meta.Provenance.Empty() {
 		report.Notes = append(report.Notes, "metadata does not record Source of Truth provenance; run a future install/update to capture source revision and dots version")
 	}
 	return report, nil
 }
 
-func expandedRecords(records []state.Record) []state.Record {
-	expanded := make([]state.Record, 0, len(records))
+type expandedRecord struct {
+	Record       state.Record
+	Contribution state.Contribution
+	Attributed   bool
+}
+
+func expandedRecords(records []state.Record) []expandedRecord {
+	expanded := make([]expandedRecord, 0, len(records))
 	for _, rec := range records {
+		if len(rec.Contributions) > 0 {
+			for _, contribution := range rec.Contributions {
+				contributor := rec
+				contributor.Source = contribution.Source
+				contributor.Sources = nil
+				contributor.Contributions = nil
+				contributor.Hash = contribution.Hash
+				expanded = append(expanded, expandedRecord{Record: contributor, Contribution: contribution, Attributed: true})
+			}
+			continue
+		}
 		sources := rec.SourceList()
 		if len(sources) == 0 {
-			expanded = append(expanded, rec)
+			expanded = append(expanded, expandedRecord{Record: rec})
 			continue
 		}
 		for _, source := range sources {
 			contributor := rec
 			contributor.Source = source
 			contributor.Sources = nil
-			expanded = append(expanded, contributor)
+			expanded = append(expanded, expandedRecord{Record: contributor})
 		}
 	}
 	return expanded
+}
+
+func describeContributionEvidence(strategy string, contribution state.Contribution) string {
+	if !contribution.EvidenceRecorded {
+		return "missing"
+	}
+	switch contribution.Ownership {
+	case "json-subset":
+		return "owned-json"
+	case "jsonc-subset":
+		return "owned-jsonc"
+	case "toml-subset":
+		return "owned-toml"
+	case "marked-block":
+		return "owned-marked-block"
+	case "seeded":
+		return "seeded-baseline"
+	case "whole":
+		if strategy == "symlink" {
+			return "source-identity"
+		}
+		return "source-hash"
+	}
+	return "missing"
 }
 
 func matchEntry(m manifest.Manifest, rec state.Record, opts Options) (manifest.Entry, bool, error) {

@@ -1,5 +1,5 @@
 {
-  "schema_version": "8",
+  "schema_version": "9",
   "command": "installed",
   "status": "ok",
   "data": {
@@ -38,6 +38,8 @@
         "source": "configs/zsh/zshrc",
         "target": "/home/user/.zshrc",
         "strategy": "symlink",
+        "attribution": "legacy-unattributed",
+        "ownership_evidence": "legacy-target-wide",
         "installed_at": "2026-07-08T12:00:00Z",
         "tags": [
           "core"
