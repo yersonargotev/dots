@@ -5,8 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/configsubset"
+	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/selectionreconciliation"
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -90,7 +93,8 @@ func TestBuildLeavesAdditionOnlySourceChangesToForwardInstall(t *testing.T) {
 		},
 	)
 
-	got, err := Build(report, state.Metadata{}, Options{Home: home, SourceRoot: t.TempDir()})
+	forward := plan.Plan{Actions: []plan.Action{{Target: target, Status: plan.StatusUpdate}}}
+	got, err := Build(report, state.Metadata{}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -197,7 +201,7 @@ func TestBuildAllowsEntirePartialOwnershipTargetToRetire(t *testing.T) {
 	}
 }
 
-func TestBuildRejectsPartialRetirementFromStillSelectedTarget(t *testing.T) {
+func TestBuildDelegatesSafePartialRetirementToForwardPlan(t *testing.T) {
 	home := t.TempDir()
 	target := writeTarget(t, home, ".shared.json", `{}`)
 	report := explicitReport(selectionreconciliation.Action{
@@ -208,9 +212,132 @@ func TestBuildRejectsPartialRetirementFromStillSelectedTarget(t *testing.T) {
 		CurrentSources:  []string{"kept.json"},
 	})
 
+	record, previous := exactSharedJSONRecord(t, target)
+	fingerprint, err := state.RecordEvidenceFingerprint(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forward := plan.Plan{Actions: []plan.Action{{
+		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
+		PreviousContent: previous, PreviousRecordFingerprint: fingerprint, Contributions: []plan.Contribution{{Source: "kept.json"}},
+	}}}
+	got, err := Build(report, state.Metadata{Entries: []state.Record{record}}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(got.Actions) != 0 {
+		t.Fatalf("Build() actions = %#v, want forward plan to own still-selected target", got.Actions)
+	}
+	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != `{}` {
+		t.Fatalf("target changed during Build: content=%q err=%v", got, readErr)
+	}
+}
+
+func TestBuildRejectsPartialRetirementWithUnrelatedForwardAction(t *testing.T) {
+	home := t.TempDir()
+	target := writeTarget(t, home, ".shared.json", `{}`)
+	record, previous := exactSharedJSONRecord(t, target)
+	fingerprint, err := state.RecordEvidenceFingerprint(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := explicitReport(selectionreconciliation.Action{
+		Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeReconcile, ResolvedTarget: target,
+		PreviousSources: []string{"removed.json", "kept.json"}, CurrentSources: []string{"kept.json"},
+	})
+	base := plan.Action{
+		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
+		PreviousContent: previous, PreviousRecordFingerprint: fingerprint, Contributions: []plan.Contribution{{Source: "kept.json"}},
+	}
+	tests := []struct {
+		name string
+		edit func(*plan.Action)
+		want string
+	}{
+		{name: "source", edit: func(action *plan.Action) { action.Source = "other.json" }, want: "sources"},
+		{name: "strategy", edit: func(action *plan.Action) { action.Strategy = "symlink" }, want: "mode"},
+		{name: "ownership", edit: func(action *plan.Action) { action.Ownership = "whole" }, want: "mode"},
+		{name: "previous evidence", edit: func(action *plan.Action) { action.PreviousContent = []byte(`{"other":true}`) }, want: "previous contribution evidence"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			candidate := base
+			tt.edit(&candidate)
+			forward := plan.Plan{Actions: []plan.Action{candidate}}
+			_, err := Build(report, state.Metadata{Entries: []state.Record{record}}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Build() error = %v, want %q mismatch", err, tt.want)
+			}
+		})
+	}
+}
+
+func exactSharedJSONRecord(t *testing.T, target string) (state.Record, []byte) {
+	t.Helper()
+	removed := []byte(`{"removed":true}`)
+	kept := []byte(`{"kept":true}`)
+	previous, err := configsubset.MergeJSON(removed, kept)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return state.Record{
+		Target: target, Source: "removed.json", Sources: []string{"removed.json", "kept.json"}, Strategy: "copy", Ownership: "json-subset",
+		OwnedContent: previous, Hash: state.HashBytes(previous),
+		Contributions: []state.Contribution{
+			{Source: "removed.json", Ownership: "json-subset", EvidenceRecorded: true, Hash: state.HashBytes(removed), OwnedContent: removed},
+			{Source: "kept.json", Ownership: "json-subset", EvidenceRecorded: true, Hash: state.HashBytes(kept), OwnedContent: kept},
+		},
+	}, previous
+}
+
+func TestBuildRejectsForwardEvidenceFromContradictoryTargetWideRecord(t *testing.T) {
+	home := t.TempDir()
+	target := writeTarget(t, home, ".shared.json", `{}`)
+	exact := []byte(`{"removed":true,"kept":true}`)
+	contradictory := []byte(`{"removed":true,"kept":true,"external":"not-owned"}`)
+	report := explicitReport(selectionreconciliation.Action{
+		Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeReconcile, ResolvedTarget: target,
+		PreviousSources: []string{"recorded.json"}, CurrentSources: []string{"kept.json"},
+	})
+	record := state.Record{
+		Target: target, Source: "recorded.json", Strategy: "copy", Ownership: "json-subset", OwnedContent: contradictory,
+		Hash: state.HashBytes(contradictory),
+		Contributions: []state.Contribution{{
+			Source: "recorded.json", Ownership: "json-subset", EvidenceRecorded: true,
+			Hash: state.HashBytes(exact), OwnedContent: exact,
+		}},
+	}
+	forward := plan.Plan{Actions: []plan.Action{{
+		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
+		PreviousContent: contradictory, Contributions: []plan.Contribution{{Source: "kept.json"}},
+	}}}
+	fingerprint, fingerprintErr := state.RecordEvidenceFingerprint(record)
+	if fingerprintErr != nil {
+		t.Fatal(fingerprintErr)
+	}
+	forward.Actions[0].PreviousRecordFingerprint = fingerprint
+
+	_, err := Build(report, state.Metadata{Entries: []state.Record{record}}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
+	if err == nil || !strings.Contains(err.Error(), "exact recorded previous contribution evidence") {
+		t.Fatalf("Build() error = %v, want contradictory target-wide evidence rejected", err)
+	}
+}
+
+func TestBuildRejectsUnsafePartialRetirementBeforeMutation(t *testing.T) {
+	home := t.TempDir()
+	target := writeTarget(t, home, ".shared.json", `{}`)
+	report := explicitReport(selectionreconciliation.Action{
+		Scope:           selectionreconciliation.ScopeManagedEntry,
+		Outcome:         selectionreconciliation.OutcomeBlocked,
+		Reason:          selectionreconciliation.ReasonAmbiguousPartialOwnership,
+		ResolvedTarget:  target,
+		PreviousSources: []string{"removed.json", "kept.json"},
+		CurrentSources:  []string{"kept.json"},
+	})
+
 	_, err := Build(report, state.Metadata{}, Options{Home: home, SourceRoot: t.TempDir()})
-	if err == nil {
-		t.Fatal("Build() error = nil, want partial-retirement rejection")
+	if err == nil || !strings.Contains(err.Error(), "partial retirement outcome \"blocked\" is unsafe") {
+		t.Fatalf("Build() error = %v, want unsafe partial-retirement rejection", err)
 	}
 	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != `{}` {
 		t.Fatalf("target changed during Build: content=%q err=%v", got, readErr)

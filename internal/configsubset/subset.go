@@ -144,12 +144,12 @@ func ReconcileJSON(targetData, previousData, currentData []byte) (JSONReconcilia
 	if !result.compatible {
 		return JSONReconciliation{}, nil
 	}
-	data, err := json.MarshalIndent(result.value, "", "  ")
+	data, err := patchJSONC(targetData, targetValue, result.value)
 	if err != nil {
-		return JSONReconciliation{}, fmt.Errorf("encode reconciled JSON: %w", err)
+		return JSONReconciliation{}, fmt.Errorf("patch reconciled JSON: %w", err)
 	}
 	return JSONReconciliation{
-		Content:    append(data, '\n'),
+		Content:    data,
 		Changed:    result.changed,
 		Compatible: true,
 	}, nil

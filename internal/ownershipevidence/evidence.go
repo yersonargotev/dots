@@ -145,6 +145,44 @@ func (m Mode) Project(target string, contributions []state.Contribution) (state.
 	}, nil
 }
 
+// ProjectRecord reconstructs target-wide evidence exclusively from exact,
+// ordered per-contribution evidence and rejects contradictory compatibility
+// fields. Legacy records without Contributions are intentionally unsupported.
+func ProjectRecord(record state.Record) (state.Contribution, error) {
+	sources := record.SourceList()
+	if len(sources) == 0 || len(record.Contributions) != len(sources) {
+		return state.Contribution{}, fmt.Errorf("project record for %s: ordered contribution evidence is incomplete", record.Target)
+	}
+	for i, contribution := range record.Contributions {
+		if contribution.Source != sources[i] {
+			return state.Contribution{}, fmt.Errorf("project record for %s: contribution source %q does not match ordered source %q", record.Target, contribution.Source, sources[i])
+		}
+	}
+	projected, err := For(record.Strategy, record.Ownership).Project(record.Target, record.Contributions)
+	if err != nil {
+		return state.Contribution{}, err
+	}
+	if record.Hash != projected.Hash {
+		return state.Contribution{}, fmt.Errorf("project record for %s: target-wide hash contradicts exact contributions: %w", record.Target, ErrDrift)
+	}
+	ownedContentEqual := bytes.Equal(record.OwnedContent, projected.OwnedContent)
+	if record.Ownership == "json-subset" || record.Ownership == "jsonc-subset" {
+		recordCanonical, recordErr := configsubset.CanonicalJSONC(record.OwnedContent)
+		projectedCanonical, projectedErr := configsubset.CanonicalJSONC(projected.OwnedContent)
+		ownedContentEqual = recordErr == nil && projectedErr == nil && bytes.Equal(recordCanonical, projectedCanonical)
+	}
+	if !ownedContentEqual {
+		return state.Contribution{}, fmt.Errorf("project record for %s: target-wide owned content contradicts exact contributions: %w", record.Target, ErrDrift)
+	}
+	if !bytes.Equal(record.OwnedBytes, projected.OwnedBytes) {
+		return state.Contribution{}, fmt.Errorf("project record for %s: target-wide owned bytes contradict exact contributions: %w", record.Target, ErrDrift)
+	}
+	if !bytes.Equal(record.SeededBaseline, projected.SeededBaseline) {
+		return state.Contribution{}, fmt.Errorf("project record for %s: target-wide seeded baseline contradicts exact contributions: %w", record.Target, ErrDrift)
+	}
+	return projected, nil
+}
+
 // Validate confirms that target still converges with evidence immediately
 // before evidence is committed. resolvedSources is used to verify symlink
 // identity. seededFinal accepts zero or one value: zero validates the recorded

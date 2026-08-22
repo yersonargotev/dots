@@ -92,11 +92,10 @@ selection residue stays `retained-external-state` in the shared report.
 
 An entirely deselected structured target can be removed when exact subset
 evidence proves that subtraction leaves it empty; if external content remains,
-the target is retained and its ownership record is released. Partial retirement
-from a still-selected target, including structured subset ownership and
-source-override reconciliation, remains blocked before mutation and belongs to
-the subsequent contribution-reconciliation slice. Install Manifest evolution
-remains report-only and never authorizes retirement.
+the target is retained and its ownership record is released. The contribution
+reconciliation amendment below governs partial retirement from a still-selected
+target and source-override fallback. Install Manifest evolution remains
+report-only and never authorizes retirement.
 
 `--clear-selection` supplies explicit empty-selection authority. Interactive
 execution requires the literal `clear` acknowledgement. Non-interactive
@@ -106,3 +105,62 @@ selection. A successful terminal run records empty ordered intent, while any
 decline, block, cancellation, or failure preserves the prior authoritative
 Installed Selection. Rerunning after a partial removal converges from current
 filesystem and metadata evidence without manual repair.
+
+## Contribution reconciliation amendment
+
+Issue #467 authorizes an acknowledged explicit Installed Selection reduction to
+reconcile a target that remains selected when exact ordered per-contribution
+Installation Metadata proves both the retired and retained Source of Truth
+inputs. The read-only Selection Reconciliation Plan remains the authority for
+the semantic outcome. Before any dependency or filesystem mutation, the
+retirement gate requires every safe `create`, `update`, `preserve`, or
+`reconcile` outcome to have a matching forward Managed Entry action; `blocked`,
+ambiguous, incompatible, or mismatched forward behavior stops the entire run.
+
+The forward Managed Entry plan owns each still-selected target and applies it
+exactly once. Shared JSON targets compose only the selected contributions before
+three-way reconciliation. JSON, JSONC, TOML, and marked-block updates subtract
+retired values only from exact compatible evidence and preserve target-only
+content according to their existing ownership contracts. Target-wide
+compatibility fields must equal the projection of exact ordered contribution
+evidence; contradictory metadata fails closed. A whole-target source
+override may return to its selected base source only when the live target still
+matches the exact previously recorded contribution hash. Missing or legacy
+target-wide attribution, changed retired values, unsafe target types, and stale
+forward classifications fail closed before mutation.
+
+Source override retirement replaces the prior override contribution with the
+selected base contribution. Successful shared reconciliation records only the
+retained ordered contributions and commits the requested Installed Selection at
+terminal success. A failure after the filesystem update preserves the previous
+Installed Selection and contribution evidence. Installation Metadata version 8
+adds a recovery-only reconciliation receipt containing the exact resulting
+target hash plus the ordered current source identities and hashes. A rerun may
+recognize already removed retired values only when that receipt matches every
+byte and source; absent or mismatched receipts remain ambiguous and fail closed.
+The receipt is persisted immediately after each applied reconciliation, before
+the next Managed Entry action; terminal metadata commit replaces the old
+contribution evidence and clears the receipt. Both writes compare the locked
+record with the exact evidence fingerprint that authorized the plan; the
+terminal replacement additionally requires the exact receipt produced by that
+action. A concurrent record or receipt change therefore aborts without
+overwriting either metadata or the prior Installed Selection. The initial
+receipt transaction holds that metadata lock while it snapshots the selected
+sources through confined, identity-checked descriptors, applies those exact
+bytes through the confined target descriptor, and persists hashes of those
+source and resulting target bytes. Source symlinks retain the repository's
+existing contract: in-root destinations are allowed and escapes are rejected
+by the opened root. If receipt storage fails, dots restores the
+target bytes captured by the same descriptor only while the live target still
+equals the result dots just wrote; a concurrent application edit is preserved
+and reported instead of being overwritten.
+
+Every in-place copy update is confined beneath the selected home through an
+opened filesystem root. Whole, JSON, JSONC, TOML, marked-block, and seeded
+updates reject a final symlink, verify that the opened descriptor is the same
+regular file that was inspected, and read and write through that descriptor.
+The shared read-only report also treats a conflicting or missing forward action
+for a partial retirement as blocked, so reporting and mutation gates cannot
+disagree about authority. Seeded Runtime State keeps its existing
+whole-retirement rule: its physical bytes remain while dots releases only the
+ownership record.

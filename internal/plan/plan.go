@@ -12,6 +12,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/ownershipevidence"
 	"github.com/yersonargotev/dots/internal/seededstate"
 	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/selection"
@@ -55,16 +56,25 @@ type Action struct {
 	// Content is the conservatively composed baseline for a shared json-subset
 	// target. Apply writes or merges it once instead of mutating per contributor.
 	Content []byte `json:"-"`
-	// PreviousContent is the last recorded dots-owned JSON contribution. It is
-	// used only to revalidate a reversible update at apply time.
-	PreviousContent []byte   `json:"-"`
-	Target          string   `json:"target"`
-	TargetRoot      string   `json:"target_root,omitempty"`
-	Strategy        string   `json:"strategy"`
-	Status          Status   `json:"status"`
-	Reason          string   `json:"reason,omitempty"`
-	MatchingTags    []string `json:"matching_tags,omitempty"`
-	Ownership       string   `json:"-"`
+	// PreviousContent is the last recorded dots-owned partial contribution. It
+	// is used only to revalidate a reversible update at apply time.
+	PreviousContent []byte `json:"-"`
+	// PreviousHash proves that a whole-target source override still matches the
+	// exact contribution recorded before switching back to a selected source.
+	PreviousHash string `json:"-"`
+	// PreviousRecordFingerprint binds an applied reconciliation and its recovery
+	// receipt to the exact Installation Metadata record that authorized it. The
+	// receipt snapshot is compared separately because the operation may replace
+	// it while retaining the underlying contribution authority.
+	PreviousRecordFingerprint     string                       `json:"-"`
+	PreviousReconciliationReceipt *state.ReconciliationReceipt `json:"-"`
+	Target                        string                       `json:"target"`
+	TargetRoot                    string                       `json:"target_root,omitempty"`
+	Strategy                      string                       `json:"strategy"`
+	Status                        Status                       `json:"status"`
+	Reason                        string                       `json:"reason,omitempty"`
+	MatchingTags                  []string                     `json:"matching_tags,omitempty"`
+	Ownership                     string                       `json:"-"`
 	// Migration carries pre-refresh evidence for an ownership-changing legacy
 	// symlink. It is intentionally excluded from machine output; status is the
 	// portable contract and captured workstation content may be sensitive.
@@ -255,15 +265,15 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 				}
 			}
 		}
-		if rec, ok := opts.Metadata.FindByTarget(target); ok && rec.Ownership == action.Ownership {
-			if isJSONOwnership(rec.Ownership) && len(rec.OwnedContent) > 0 {
-				action.PreviousContent = append([]byte(nil), rec.OwnedContent...)
-			} else if rec.Ownership == "toml-subset" && len(rec.OwnedBytes) > 0 {
-				action.PreviousContent = append([]byte(nil), rec.OwnedBytes...)
-			} else if rec.Ownership == "seeded" {
-				action.PreviousContent = append([]byte(nil), rec.SeededBaseline...)
-			} else if rec.Ownership == "marked-block" {
-				action.PreviousContent = append([]byte(nil), rec.OwnedBytes...)
+		if rec, ok := opts.Metadata.FindByTarget(target); ok && normalizedEntryOwnership(rec.Ownership) == normalizedEntryOwnership(action.Ownership) {
+			action.PreviousContent = recordedPreviousContent(rec)
+			action.PreviousRecordFingerprint = exactRecordEvidenceFingerprint(rec)
+			action.PreviousReconciliationReceipt = rec.PendingReconciliation.Clone()
+		}
+		if rec, ok := opts.Metadata.FindByTarget(target); ok {
+			if contribution, exact := exactCompatibleRecordedContribution(entry, defaultSource, rec); exact &&
+				normalizedEntryOwnership(entry.Ownership) == "whole" && contribution.Source != action.Source {
+				action.PreviousHash = contribution.Hash
 			}
 		}
 		targetKey := filepath.Clean(target)
@@ -288,13 +298,13 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 				return Plan{}, fmt.Errorf("compose shared target %s: %w", targetKey, err)
 			}
 			existing.Content = composed
-			if rec, ok := opts.Metadata.FindByTarget(existing.Target); ok && rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
-				existing.PreviousContent = append([]byte(nil), rec.OwnedContent...)
+			if rec, ok := opts.Metadata.FindByTarget(existing.Target); ok && rec.Ownership == "json-subset" {
+				existing.PreviousContent = recordedPreviousContent(rec)
 			}
 			if unsafeTargetByTarget[targetKey] || unsafeTargetParent {
 				existing.Status = StatusConflict
 			} else {
-				existing.Status, err = composedJSONStatus(*existing, opts.Metadata)
+				existing.Status, err = composedJSONStatus(*existing, opts.Metadata, readSourcesByTarget[targetKey])
 				if err != nil {
 					return Plan{}, err
 				}
@@ -437,7 +447,7 @@ func scheduledLegacyParent(target string, parents map[string]struct{}) string {
 	return ""
 }
 
-func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
+func composedJSONStatus(action Action, meta state.Metadata, readSources []string) (Status, error) {
 	info, err := os.Lstat(action.Target)
 	if os.IsNotExist(err) {
 		return StatusCreate, nil
@@ -453,6 +463,20 @@ func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
 		return StatusUnchanged, nil
 	}
 	rec, ok := meta.FindByTarget(action.Target)
+	if ok {
+		if len(rec.Contributions) > 0 {
+			if _, projectionErr := ownershipevidence.ProjectRecord(rec); projectionErr != nil {
+				return StatusConflict, nil
+			}
+		}
+		sourceContents, readErr := readSourceContents(readSources)
+		if readErr != nil {
+			return "", readErr
+		}
+		if rec.PendingReconciliationMatches(targetData, action.Strategy, normalizedEntryOwnership(action.Ownership), action.Sources, sourceContents) {
+			return StatusUnchanged, nil
+		}
+	}
 	recordedSources := rec.SourceList()
 	trusted := ok && rec.Strategy == action.Strategy && len(recordedSources) > 0
 	selectedSources := make(map[string]struct{}, len(action.Sources))
@@ -466,8 +490,9 @@ func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
 	if !trusted {
 		return StatusConflict, nil
 	}
-	if rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
-		reconciliation, err := configsubset.ReconcileJSON(targetData, rec.OwnedContent, action.Content)
+	previous := recordedPreviousContent(rec)
+	if rec.Ownership == "json-subset" && len(previous) > 0 {
+		reconciliation, err := configsubset.ReconcileJSON(targetData, previous, action.Content)
 		if err != nil {
 			return "", fmt.Errorf("reconcile shared JSON target %s: %w", action.Target, err)
 		}
@@ -491,6 +516,18 @@ func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
 	default:
 		return StatusConflict, nil
 	}
+}
+
+func readSourceContents(paths []string) ([][]byte, error) {
+	contents := make([][]byte, len(paths))
+	for i, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read reconciliation source %s: %w", path, err)
+		}
+		contents[i] = data
+	}
+	return contents, nil
 }
 
 // MatchingUnselectedSourceOverrideTags returns the deterministic set of
@@ -819,10 +856,34 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 			return StatusConflict, nil
 		}
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
-			if entry.Ownership == "marked-block" {
-				rec, ok := meta.FindByTarget(target)
-				if !ok || rec.Strategy != entry.Strategy || rec.Source != entry.Source || rec.Ownership != "marked-block" || len(rec.OwnedBytes) == 0 {
+			rec, recorded := meta.FindByTarget(target)
+			if recorded && len(rec.Contributions) > 0 {
+				if _, projectionErr := ownershipevidence.ProjectRecord(rec); projectionErr != nil {
 					return StatusConflict, nil
+				}
+			}
+			if recorded {
+				targetData, targetErr := os.ReadFile(target)
+				if targetErr != nil {
+					return "", fmt.Errorf("read pending reconciliation target %s: %w", target, targetErr)
+				}
+				sourceData, sourceErr := os.ReadFile(sourceAbs)
+				if sourceErr != nil {
+					return "", fmt.Errorf("read pending reconciliation source %s: %w", sourceAbs, sourceErr)
+				}
+				if rec.PendingReconciliationMatches(targetData, entry.Strategy, normalizedEntryOwnership(entry.Ownership), []string{entry.Source}, [][]byte{sourceData}) {
+					return StatusUnchanged, nil
+				}
+			}
+			previousContribution, exactCompatible := exactCompatibleRecordedContribution(entry, defaultSource, rec)
+			if entry.Ownership == "marked-block" {
+				previous := recordedPreviousContent(rec)
+				if !recorded || rec.Strategy != entry.Strategy || rec.Ownership != "marked-block" ||
+					(rec.Source != entry.Source && !exactCompatible) || len(previous) == 0 {
+					return StatusConflict, nil
+				}
+				if exactCompatible {
+					previous = previousContribution.OwnedBytes
 				}
 				live, readErr := os.ReadFile(target)
 				if readErr != nil {
@@ -832,7 +893,7 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 				if readErr != nil {
 					return "", fmt.Errorf("read marked-block source %s: %w", sourceAbs, readErr)
 				}
-				reconciliation := textblock.ReconcileOwned(live, rec.OwnedBytes, current, textblock.DotsManagedMarkers())
+				reconciliation := textblock.ReconcileOwned(live, previous, current, textblock.DotsManagedMarkers())
 				if !reconciliation.Compatible {
 					return StatusConflict, nil
 				}
@@ -846,6 +907,10 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 				if !ok || rec.Strategy != entry.Strategy || rec.Source != entry.Source || rec.Ownership != "seeded" {
 					return StatusConflict, nil
 				}
+				previous := recordedPreviousContent(rec)
+				if len(rec.Contributions) > 0 && previous == nil {
+					return StatusConflict, nil
+				}
 				live, readErr := os.ReadFile(target)
 				if readErr != nil {
 					return "", fmt.Errorf("read seeded target %s: %w", target, readErr)
@@ -854,14 +919,18 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 				if readErr != nil {
 					return "", fmt.Errorf("read seeded source %s: %w", sourceAbs, readErr)
 				}
-				if seededstate.Reconcile(live, rec.SeededBaseline, current).Classification == seededstate.AdvanceBaseline {
+				if seededstate.Reconcile(live, previous, current).Classification == seededstate.AdvanceBaseline {
 					return StatusUpdate, nil
 				}
 				return StatusUnchanged, nil
 			}
-			if isSubsetOwned(entry.Ownership) && (meta.MatchesEntry(target, entry.Source, entry.Strategy) || meta.MatchesEntry(target, defaultSource, entry.Strategy)) {
+			if isSubsetOwned(entry.Ownership) && (meta.MatchesEntry(target, entry.Source, entry.Strategy) || meta.MatchesEntry(target, defaultSource, entry.Strategy) || exactCompatible) {
 				if isJSONOwnership(entry.Ownership) {
-					if rec, ok := meta.FindByTarget(target); ok && rec.Ownership == entry.Ownership && len(rec.OwnedContent) > 0 {
+					previous := recordedPreviousContent(rec)
+					if recorded && rec.Ownership == entry.Ownership && len(previous) > 0 {
+						if exactCompatible {
+							previous = previousContribution.OwnedContent
+						}
 						targetData, readErr := os.ReadFile(target)
 						if readErr != nil {
 							return "", fmt.Errorf("read JSON target %s: %w", target, readErr)
@@ -873,9 +942,9 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 						var reconciliation configsubset.JSONReconciliation
 						var reconcileErr error
 						if entry.Ownership == "jsonc-subset" {
-							reconciliation, reconcileErr = configsubset.ReconcileJSONC(targetData, rec.OwnedContent, currentData)
+							reconciliation, reconcileErr = configsubset.ReconcileJSONC(targetData, previous, currentData)
 						} else {
-							reconciliation, reconcileErr = configsubset.ReconcileJSON(targetData, rec.OwnedContent, currentData)
+							reconciliation, reconcileErr = configsubset.ReconcileJSON(targetData, previous, currentData)
 						}
 						if reconcileErr != nil {
 							return "", fmt.Errorf("reconcile JSON target %s: %w", target, reconcileErr)
@@ -913,7 +982,11 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 						return StatusUpdate, nil
 					}
 				} else if entry.Ownership == "toml-subset" {
-					if rec, ok := meta.FindByTarget(target); ok && rec.Ownership == "toml-subset" && len(rec.OwnedBytes) > 0 {
+					previous := recordedPreviousContent(rec)
+					if recorded && rec.Ownership == "toml-subset" && len(previous) > 0 {
+						if exactCompatible {
+							previous = previousContribution.OwnedBytes
+						}
 						targetData, readErr := os.ReadFile(target)
 						if readErr != nil {
 							return "", fmt.Errorf("read TOML target %s: %w", target, readErr)
@@ -922,7 +995,7 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 						if readErr != nil {
 							return "", fmt.Errorf("read source TOML %s: %w", sourceAbs, readErr)
 						}
-						reconciliation, reconcileErr := configsubset.ReconcileTOML(targetData, rec.OwnedBytes, currentData)
+						reconciliation, reconcileErr := configsubset.ReconcileTOML(targetData, previous, currentData)
 						if reconcileErr != nil {
 							return "", fmt.Errorf("reconcile TOML target %s: %w", target, reconcileErr)
 						}
@@ -953,6 +1026,13 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 			}
 			if entry.Ownership == "toml-subset" && targetContainsCompatibleRecordedSource(entry, target, sourceRoot, meta, defaultSource) {
 				return StatusUpdate, nil
+			}
+			if normalizedEntryOwnership(entry.Ownership) == "whole" && exactCompatible &&
+				previousContribution.Source != entry.Source && previousContribution.Hash != "" {
+				liveHash, hashErr := state.HashFile(target)
+				if hashErr == nil && liveHash == previousContribution.Hash {
+					return StatusUpdate, nil
+				}
 			}
 			return StatusConflict, nil
 		}
@@ -1004,6 +1084,71 @@ func compatibleEntrySource(entry manifest.Entry, defaultSource, source string) b
 		}
 	}
 	return false
+}
+
+func exactCompatibleRecordedContribution(entry manifest.Entry, defaultSource string, rec state.Record) (state.Contribution, bool) {
+	if rec.Strategy != entry.Strategy || normalizedEntryOwnership(rec.Ownership) != normalizedEntryOwnership(entry.Ownership) || len(rec.Contributions) != 1 {
+		return state.Contribution{}, false
+	}
+	if _, err := ownershipevidence.ProjectRecord(rec); err != nil {
+		return state.Contribution{}, false
+	}
+	contribution := rec.Contributions[0]
+	sources := rec.SourceList()
+	if !contribution.EvidenceRecorded || len(sources) != 1 || sources[0] != contribution.Source ||
+		normalizedEntryOwnership(contribution.Ownership) != normalizedEntryOwnership(entry.Ownership) ||
+		!compatibleEntrySource(entry, defaultSource, contribution.Source) {
+		return state.Contribution{}, false
+	}
+	return contribution, true
+}
+
+func recordedPreviousContent(rec state.Record) []byte {
+	if len(rec.Contributions) > 0 {
+		projected, err := ownershipevidence.ProjectRecord(rec)
+		if err != nil {
+			return nil
+		}
+		switch normalizedEntryOwnership(rec.Ownership) {
+		case "json-subset", "jsonc-subset":
+			return append([]byte(nil), projected.OwnedContent...)
+		case "toml-subset", "marked-block":
+			return append([]byte(nil), projected.OwnedBytes...)
+		case "seeded":
+			return append([]byte(nil), projected.SeededBaseline...)
+		}
+		return nil
+	}
+	switch normalizedEntryOwnership(rec.Ownership) {
+	case "json-subset", "jsonc-subset":
+		return append([]byte(nil), rec.OwnedContent...)
+	case "toml-subset", "marked-block":
+		return append([]byte(nil), rec.OwnedBytes...)
+	case "seeded":
+		return append([]byte(nil), rec.SeededBaseline...)
+	}
+	return nil
+}
+
+func exactRecordEvidenceFingerprint(rec state.Record) string {
+	if len(rec.Contributions) == 0 {
+		return ""
+	}
+	if _, err := ownershipevidence.ProjectRecord(rec); err != nil {
+		return ""
+	}
+	fingerprint, err := state.RecordEvidenceFingerprint(rec)
+	if err != nil {
+		return ""
+	}
+	return fingerprint
+}
+
+func normalizedEntryOwnership(ownership string) string {
+	if ownership == "" {
+		return "whole"
+	}
+	return ownership
 }
 
 func safeSourceExists(sourceAbs, sourceRoot string) (bool, error) {

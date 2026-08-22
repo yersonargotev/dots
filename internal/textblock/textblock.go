@@ -127,8 +127,14 @@ func ValidOwnedSource(source []byte, markers Markers) bool {
 // byte before and after it. Ambiguous placement or markers fail closed.
 func ReconcileOwned(live, previous, current []byte, markers Markers) Reconciliation {
 	liveBlock, ok := parseOwned(live, markers)
-	if !ok || !ValidOwnedSource(previous, markers) || !ValidOwnedSource(current, markers) ||
-		!bytes.Equal(live[liveBlock.start:liveBlock.end], previous) {
+	if !ok || !ValidOwnedSource(previous, markers) || !ValidOwnedSource(current, markers) {
+		return Reconciliation{}
+	}
+	liveOwned := live[liveBlock.start:liveBlock.end]
+	if bytes.Equal(liveOwned, current) {
+		return Reconciliation{Content: append([]byte(nil), live...), Compatible: true}
+	}
+	if !bytes.Equal(liveOwned, previous) {
 		return Reconciliation{}
 	}
 	content := replaceOwned(live, liveBlock.start, liveBlock.end, current)

@@ -486,7 +486,7 @@ func TestBuildPlansProvenanceBackedLegacyJSONMigration(t *testing.T) {
 	if len(p.Actions) != 1 || p.Actions[0].Status != plan.StatusMigrate || p.Actions[0].Migration == nil {
 		t.Fatalf("actions = %#v, want migrate", p.Actions)
 	}
-	if got := string(p.Actions[0].Migration.FinalContent); got != "{\n  \"owned\": 2,\n  \"runtime\": true\n}\n" {
+	if got := string(p.Actions[0].Migration.FinalContent); got != "{\"owned\":2,\"runtime\":true}\n" {
 		t.Fatalf("migration content = %q", got)
 	}
 }
@@ -552,7 +552,22 @@ func TestBuildJSONSubsetUsesRecordedContributionForReversibleRemoval(t *testing.
 		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
 	}, meta)
 	if action.Status != plan.StatusConflict {
-		t.Fatalf("Status = %q, want conflict for missing retired key", action.Status)
+		t.Fatalf("Status = %q, want conflict for an unproven missing retired key", action.Status)
+	}
+	currentSource := []byte(`{"owned":{"keep":true,"added":"new"}}`)
+	convergedTarget := []byte(`{"owned":{"keep":true,"added":"new"},"external":"preserve"}`)
+	if err := os.WriteFile(target, convergedTarget, 0o600); err != nil {
+		t.Fatalf("write receipt-backed target: %v", err)
+	}
+	meta.Entries[0].PendingReconciliation = &state.ReconciliationReceipt{
+		TargetHash: state.HashBytes(convergedTarget), Sources: []string{"configs/shared.json"},
+		SourceHashes: []string{state.HashBytes(currentSource)}, Strategy: "copy", Ownership: "json-subset",
+	}
+	action = buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	}, meta)
+	if action.Status != plan.StatusUnchanged {
+		t.Fatalf("Status = %q, want unchanged only with exact recovery receipt", action.Status)
 	}
 }
 
@@ -574,6 +589,37 @@ func TestBuildJSONSubsetLegacyMetadataDoesNotAuthorizeRemoval(t *testing.T) {
 	}, meta)
 	if action.Status != plan.StatusUnchanged || len(action.PreviousContent) != 0 {
 		t.Fatalf("action = %+v, want unchanged without removal evidence", action)
+	}
+}
+
+func TestBuildRejectsTargetWideEvidenceThatContradictsExactContributions(t *testing.T) {
+	sourceRoot := t.TempDir()
+	home := t.TempDir()
+	source := []byte(`{"owned":{"keep":true}}`)
+	writeSource(t, sourceRoot, "configs/shared.json", string(source))
+	target := filepath.Join(home, ".config", "shared.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(`{"owned":{"keep":true,"retired":"old"},"external":"preserve"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	exact := []byte(`{"owned":{"keep":true,"retired":"old"}}`)
+	contradictory := []byte(`{"owned":{"keep":true,"retired":"old"},"external":"preserve"}`)
+	meta := state.Metadata{Entries: []state.Record{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset",
+		OwnedContent: contradictory, Hash: state.HashBytes(contradictory),
+		Contributions: []state.Contribution{{
+			Source: "configs/shared.json", Ownership: "json-subset", EvidenceRecorded: true,
+			Hash: state.HashBytes(exact), OwnedContent: exact,
+		}},
+	}}}
+
+	action := buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	}, meta)
+	if action.Status != plan.StatusConflict || action.PreviousContent != nil {
+		t.Fatalf("Action = %#v, want contradictory target-wide evidence to fail closed", action)
 	}
 }
 

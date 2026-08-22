@@ -76,6 +76,9 @@ func TestApplyComposedJSONSubsetCreatesAndUpdatesOneSharedTarget(t *testing.T) {
 	if len(rec.Contributions) != 2 {
 		t.Fatalf("metadata contributions = %+v, want two attributed sources", rec.Contributions)
 	}
+	if _, err := ownershipevidence.ProjectRecord(rec); err != nil {
+		t.Fatalf("project exact metadata contributions: %v; record=%+v", err, rec)
+	}
 	for i, want := range []struct {
 		source string
 		tag    string
@@ -121,7 +124,7 @@ func TestApplyComposedJSONSubsetCreatesAndUpdatesOneSharedTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read updated target: %v", err)
 	}
-	for _, want := range []string{`"userOnly": "keep"`, `"mobile": true`, `"two"`} {
+	for _, want := range []string{`"userOnly":"keep"`, `"mobile":true`, `"two"`} {
 		if !strings.Contains(string(got), want) {
 			t.Fatalf("updated target missing %s:\n%s", want, got)
 		}
@@ -1291,7 +1294,7 @@ func TestApplyReconcilesRecordedJSONContributionAndPreservesExternalContent(t *t
 	if err != nil {
 		t.Fatalf("read target: %v", err)
 	}
-	for _, want := range []string{`"added": "new"`, `"external": "preserve"`, `"targetOnly": true`, `"external"`} {
+	for _, want := range []string{`"added":"new"`, `"external":"preserve"`, `"targetOnly":true`, `"external"`} {
 		if !strings.Contains(string(got), want) {
 			t.Fatalf("reconciled target missing %s:\n%s", want, got)
 		}

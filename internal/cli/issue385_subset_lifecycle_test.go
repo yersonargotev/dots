@@ -68,7 +68,7 @@ func TestJSONSubsetLifecycleReconcilesAndUninstallsOwnedContribution(t *testing.
 	if err != nil {
 		t.Fatalf("read reconciled target: %v", err)
 	}
-	for _, want := range []string{`"added": "new"`, `"external": "preserve"`, `"targetOnly": true`, `"external"`} {
+	for _, want := range []string{`"added":"new"`, `"external":"preserve"`, `"targetOnly":true`, `"external"`} {
 		if !strings.Contains(string(got), want) {
 			t.Fatalf("reconciled target missing %s:\n%s", want, got)
 		}

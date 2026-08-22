@@ -1,0 +1,224 @@
+package install
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/yersonargotev/dots/internal/plan"
+	"github.com/yersonargotev/dots/internal/state"
+)
+
+func TestUpdateWholeTargetRejectsLastMomentDrift(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, ".config")
+	source := filepath.Join(t.TempDir(), "source")
+	if err := os.WriteFile(target, []byte("changed\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("current\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	action := plan.Action{Target: target, PreviousHash: state.HashBytes([]byte("previous\n"))}
+
+	err := updateWholeTarget(action, source, home)
+	if err == nil || !strings.Contains(err.Error(), "changed before update") {
+		t.Fatalf("updateWholeTarget() error = %v, want stale target rejection", err)
+	}
+	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != "changed\n" {
+		t.Fatalf("drifted target = %q, %v; want unchanged", got, readErr)
+	}
+}
+
+func TestUpdateWholeTargetRejectsSymlinkReplacementOutsideHome(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, ".config")
+	outside := filepath.Join(t.TempDir(), "outside")
+	source := filepath.Join(t.TempDir(), "source")
+	if err := os.WriteFile(outside, []byte("previous\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("current\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, target); err != nil {
+		t.Fatal(err)
+	}
+	action := plan.Action{Target: target, PreviousHash: state.HashBytes([]byte("previous\n"))}
+
+	err := updateWholeTarget(action, source, home)
+	if err == nil || !strings.Contains(err.Error(), "non-symlink regular file") {
+		t.Fatalf("updateWholeTarget() error = %v, want root confinement rejection", err)
+	}
+	if got, readErr := os.ReadFile(outside); readErr != nil || string(got) != "previous\n" {
+		t.Fatalf("outside file = %q, %v; want unchanged", got, readErr)
+	}
+}
+
+func TestUpdateWholeTargetRejectsSymlinkReplacementInsideHome(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, ".config")
+	other := filepath.Join(home, ".other")
+	source := filepath.Join(t.TempDir(), "source")
+	if err := os.WriteFile(other, []byte("previous\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("current\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Base(other), target); err != nil {
+		t.Fatal(err)
+	}
+	action := plan.Action{Target: target, PreviousHash: state.HashBytes([]byte("previous\n"))}
+
+	err := updateWholeTarget(action, source, home)
+	if err == nil || !strings.Contains(err.Error(), "non-symlink regular file") {
+		t.Fatalf("updateWholeTarget() error = %v, want in-home symlink rejection", err)
+	}
+	if got, readErr := os.ReadFile(other); readErr != nil || string(got) != "previous\n" {
+		t.Fatalf("in-home destination = %q, %v; want unchanged", got, readErr)
+	}
+}
+
+func TestApplyPartialUpdateRejectsSymlinkTargets(t *testing.T) {
+	markers := "# >>> dots managed >>>\nold\n# <<< dots managed <<<\n"
+	tests := []struct {
+		name      string
+		ownership string
+		previous  []byte
+		current   []byte
+	}{
+		{name: "JSON", ownership: "json-subset", previous: []byte(`{"old":true}`), current: []byte(`{"new":true}`)},
+		{name: "JSONC", ownership: "jsonc-subset", previous: []byte("{\n  // old\n  \"old\": true\n}\n"), current: []byte("{\n  \"new\": true\n}\n")},
+		{name: "TOML", ownership: "toml-subset", previous: []byte("old = true\n"), current: []byte("new = true\n")},
+		{name: "marked block", ownership: "marked-block", previous: []byte(markers), current: []byte("new\n")},
+		{name: "seeded", ownership: "seeded", previous: []byte("old\n"), current: []byte("new\n")},
+	}
+	for _, test := range tests {
+		for _, destinationScope := range []string{"outside", "inside"} {
+			t.Run(test.name+"/"+destinationScope, func(t *testing.T) {
+				home := t.TempDir()
+				destinationRoot := t.TempDir()
+				if destinationScope == "inside" {
+					destinationRoot = home
+				}
+				destination := filepath.Join(destinationRoot, ".destination")
+				target := filepath.Join(home, ".target")
+				source := filepath.Join(t.TempDir(), "source")
+				if err := os.WriteFile(destination, test.previous, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(source, test.current, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				linkDestination := destination
+				if destinationScope == "inside" {
+					linkDestination = filepath.Base(destination)
+				}
+				if err := os.Symlink(linkDestination, target); err != nil {
+					t.Fatal(err)
+				}
+				action := plan.Action{
+					Target: target, Strategy: "copy", Ownership: test.ownership,
+					PreviousContent: test.previous,
+				}
+
+				_, err := applyUpdate(action, source, Options{Home: home, StateRoot: t.TempDir()})
+				if err == nil || !strings.Contains(err.Error(), "non-symlink regular file") {
+					t.Fatalf("applyUpdate() error = %v, want confined symlink rejection", err)
+				}
+				got, readErr := os.ReadFile(destination)
+				if readErr != nil || string(got) != string(test.previous) {
+					t.Fatalf("destination = %q, %v; want unchanged", got, readErr)
+				}
+			})
+		}
+	}
+}
+
+func TestReadConfinedRegularFileConfinesSymlinkSources(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside")
+	inside := filepath.Join(root, "inside")
+	if err := os.WriteFile(outside, []byte("outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(inside, []byte("inside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outsideLink := filepath.Join(root, "outside-link")
+	if err := os.Symlink(outside, outsideLink); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readConfinedRegularFile(outsideLink, root); err == nil {
+		t.Fatal("readConfinedRegularFile() accepted a symlink escaping the source root")
+	}
+
+	insideLink := filepath.Join(root, "inside-link")
+	if err := os.Symlink(filepath.Base(inside), insideLink); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readConfinedRegularFile(insideLink, root)
+	if err != nil || string(got) != "inside\n" {
+		t.Fatalf("readConfinedRegularFile() = %q, %v; want confined in-root symlink content", got, err)
+	}
+}
+
+func TestRestoreConfinedRegularFileRequiresExactAppliedBytes(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, ".target")
+	applied := []byte("applied\n")
+	previous := []byte("previous\n")
+	external := []byte("external\n")
+	if err := os.WriteFile(target, external, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := restoreConfinedRegularFile(target, home, applied, previous)
+	if err == nil || !strings.Contains(err.Error(), "refusing rollback") {
+		t.Fatalf("restoreConfinedRegularFile() error = %v, want concurrent edit rejection", err)
+	}
+	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != string(external) {
+		t.Fatalf("target = %q, %v; want external bytes preserved", got, readErr)
+	}
+}
+
+func TestRewriteOpenedRegularFileRestoresAfterPartialWriteFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "target")
+	previous := []byte("previous content\n")
+	updated := []byte("updated content\n")
+	if err := os.WriteFile(path, previous, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failing := &partialWriteFile{File: file, failNextWrite: true}
+	err = rewriteOpenedRegularFile(failing, path, updated, previous)
+	if closeErr := file.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if err == nil || !strings.Contains(err.Error(), "injected partial write") {
+		t.Fatalf("rewriteOpenedRegularFile() error = %v, want injected write failure", err)
+	}
+	if got, readErr := os.ReadFile(path); readErr != nil || string(got) != string(previous) {
+		t.Fatalf("target = %q, %v; want restored previous bytes", got, readErr)
+	}
+}
+
+type partialWriteFile struct {
+	*os.File
+	failNextWrite bool
+}
+
+func (f *partialWriteFile) Write(data []byte) (int, error) {
+	if !f.failNextWrite {
+		return f.File.Write(data)
+	}
+	f.failNextWrite = false
+	written, err := f.File.Write(data[:len(data)/2])
+	return written, errors.Join(err, errors.New("injected partial write"))
+}

@@ -356,6 +356,43 @@ func TestLoadPreviousMetadataVersionsDoesNotRewriteOrAttribute(t *testing.T) {
 	}
 }
 
+func TestPendingReconciliationMatchesOnlyExactTargetAndOrderedSources(t *testing.T) {
+	target := []byte("target bytes\n")
+	first := []byte("first source\n")
+	second := []byte("second source\n")
+	record := state.Record{PendingReconciliation: &state.ReconciliationReceipt{
+		TargetHash:   state.HashBytes(target),
+		Sources:      []string{"first", "second"},
+		SourceHashes: []string{state.HashBytes(first), state.HashBytes(second)},
+		Strategy:     "copy",
+		Ownership:    "json-subset",
+	}}
+	if !record.PendingReconciliationMatches(target, "copy", "json-subset", []string{"first", "second"}, [][]byte{first, second}) {
+		t.Fatal("exact reconciliation receipt did not match")
+	}
+	tests := []struct {
+		name      string
+		target    []byte
+		strategy  string
+		ownership string
+		sources   []string
+		contents  [][]byte
+	}{
+		{name: "target drift", target: []byte("changed\n"), strategy: "copy", ownership: "json-subset", sources: []string{"first", "second"}, contents: [][]byte{first, second}},
+		{name: "source drift", target: target, strategy: "copy", ownership: "json-subset", sources: []string{"first", "second"}, contents: [][]byte{first, []byte("changed\n")}},
+		{name: "source order", target: target, strategy: "copy", ownership: "json-subset", sources: []string{"second", "first"}, contents: [][]byte{second, first}},
+		{name: "strategy", target: target, strategy: "symlink", ownership: "json-subset", sources: []string{"first", "second"}, contents: [][]byte{first, second}},
+		{name: "ownership", target: target, strategy: "copy", ownership: "whole", sources: []string{"first", "second"}, contents: [][]byte{first, second}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if record.PendingReconciliationMatches(tt.target, tt.strategy, tt.ownership, tt.sources, tt.contents) {
+				t.Fatal("mismatched reconciliation receipt was accepted")
+			}
+		})
+	}
+}
+
 func TestLoadLegacyMetadataHasNoInstalledSelection(t *testing.T) {
 	for _, version := range []int{1, 2} {
 		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
