@@ -9,6 +9,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/configsubset"
+	"github.com/yersonargotev/dots/internal/ownershipevidence"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/textblock"
@@ -38,11 +39,41 @@ type Options struct {
 	ConflictDecisions map[string]ConflictDecision
 }
 
-// Apply performs safe filesystem changes described by an Install Plan.
+// MetadataCommit finalizes exact contribution evidence after every terminal
+// install step has succeeded. Its fields are intentionally opaque so callers
+// cannot commit evidence for a plan that was not applied and validated here.
+type MetadataCommit struct {
+	profiles []string
+	tags     []string
+	opts     Options
+	actions  []metadataAction
+}
+
+type metadataAction struct {
+	action          plan.Action
+	resolvedSources []string
+	stagedRecord    state.Record
+	recordsEvidence bool
+}
+
+// Apply performs safe filesystem changes described by an Install Plan and
+// immediately commits their metadata. Command workflows with later terminal
+// steps use ApplyManagedEntries and commit only after those steps succeed.
 func Apply(p plan.Plan, opts Options) error {
-	resolvedSources, err := validatePlan(p, opts)
+	commit, err := ApplyManagedEntries(p, opts)
 	if err != nil {
 		return err
+	}
+	return commit.Commit(nil)
+}
+
+// ApplyManagedEntries applies and validates Managed Entries while persisting
+// only compatibility inventory. Exact per-contribution evidence is kept out of
+// Installation Metadata until the returned commit reaches terminal success.
+func ApplyManagedEntries(p plan.Plan, opts Options) (MetadataCommit, error) {
+	resolvedSources, err := validatePlan(p, opts)
+	if err != nil {
+		return MetadataCommit{}, err
 	}
 
 	for i, action := range p.Actions {
@@ -52,15 +83,15 @@ func Apply(p plan.Plan, opts Options) error {
 			continue
 		case plan.StatusCreate:
 			if err := applyCreate(action, source); err != nil {
-				return err
+				return MetadataCommit{}, err
 			}
 		case plan.StatusUpdate:
 			if err := applyUpdate(action, source, opts); err != nil {
-				return err
+				return MetadataCommit{}, err
 			}
 		case plan.StatusMigrate:
 			if err := applyMigration(action, source, opts); err != nil {
-				return err
+				return MetadataCommit{}, err
 			}
 		case plan.StatusConflict:
 			switch conflictDecision(action, opts) {
@@ -70,88 +101,69 @@ func Apply(p plan.Plan, opts Options) error {
 				continue
 			case DecisionReplace:
 				if err := applyReplace(action, source, opts); err != nil {
-					return err
+					return MetadataCommit{}, err
 				}
 			case DecisionAdopt:
 				if err := applyAdopt(action, source, opts); err != nil {
-					return err
+					return MetadataCommit{}, err
 				}
 			}
 		}
 	}
 
-	return recordMetadata(p, resolvedSources, opts)
+	commit := newMetadataCommit(p, resolvedSources, opts)
+	if opts.StateRoot != "" {
+		if err := commit.captureStagedEvidence(); err != nil {
+			return MetadataCommit{}, err
+		}
+	}
+	if err := commit.recordPartialInventory(); err != nil {
+		return MetadataCommit{}, err
+	}
+	return commit, nil
 }
 
-// recordMetadata upserts Installation Metadata for every managed target the plan
-// installed or confirmed unchanged, so dots status has an authoritative record
-// of what dots owns. Copy-like records include a Source of Truth hash; symlink
-// records leave Hash empty because status compares the link destination.
-func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error {
-	if opts.StateRoot == "" {
+// Commit revalidates sources and live targets, then atomically records exact
+// contribution evidence and, when supplied, the authoritative selection.
+func (c MetadataCommit) Commit(installed *state.InstalledSelection) error {
+	if c.opts.StateRoot == "" {
 		return nil
 	}
+	if err := c.validateTerminalPaths(); err != nil {
+		return err
+	}
 
-	path := state.Path(opts.StateRoot)
+	path := state.Path(c.opts.StateRoot)
 	meta, err := state.Load(path)
 	if err != nil {
 		return err
 	}
 	meta.Version = state.CurrentVersion
-	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
+	meta.Provenance = state.CaptureProvenance(c.opts.SourceRoot, version.Value)
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	legacyTargets := map[string]struct{}{}
-	for i, action := range p.Actions {
-		if !recordsMetadata(action, conflictDecision(action, opts)) {
+	for _, stagedAction := range c.actions {
+		if !stagedAction.recordsEvidence {
 			continue
 		}
-		if action.Ownership == "seeded" && action.Reason == plan.ReasonSeededLocalEvolution {
-			// Preserve the baseline that originally seeded locally evolved state.
-			// Replacing it with the new Source of Truth baseline would destroy the
-			// evidence needed to recognize a later reset and advance safely.
-			continue
-		}
-		hash := ""
-		var ownedContent []byte
-		var ownedBytes []byte
-		var seededBaseline []byte
-		recordedOwnership := action.Ownership
-		if recordedOwnership == "" {
-			recordedOwnership = "whole"
-		}
-		contributions, err := recordContributions(action, resolvedSources[i], recordedOwnership)
+		action := stagedAction.action
+		staged, err := stagedAction.evidence()
 		if err != nil {
 			return err
 		}
-		targetWide, err := targetWideEvidence(action, resolvedSources[i], contributions, recordedOwnership)
+		current, err := buildMetadataRecord(c.profiles, c.tags, action, stagedAction.resolvedSources, staged.InstalledAt)
 		if err != nil {
 			return err
 		}
-		if len(contributions) > 0 {
-			if err := validateRecordedConvergence(action, resolvedSources[i], targetWide, contributions); err != nil {
-				return err
-			}
+		if !sameRecordEvidence(staged, current) {
+			return fmt.Errorf("source contribution evidence changed before terminal metadata commit for %s: %w", action.Target, ownershipevidence.ErrDrift)
 		}
-		hash = targetWide.Hash
-		ownedContent = targetWide.OwnedContent
-		ownedBytes = targetWide.OwnedBytes
-		seededBaseline = targetWide.SeededBaseline
-		upsertRecord(&meta, state.Record{
-			Target:         action.Target,
-			Source:         action.Source,
-			Sources:        append([]string(nil), action.Sources...),
-			Strategy:       action.Strategy,
-			Ownership:      recordedOwnership,
-			OwnedContent:   ownedContent,
-			OwnedBytes:     ownedBytes,
-			SeededBaseline: seededBaseline,
-			Contributions:  contributions,
-			Hash:           hash,
-			InstalledAt:    now,
-			Profiles:       append([]string(nil), p.Profiles...),
-			Tags:           append([]string(nil), p.Tags...),
-		})
+		if err := validateMetadataRecord(action, stagedAction.resolvedSources, staged); err != nil {
+			return fmt.Errorf("validate staged contribution evidence for %s: %w", action.Target, err)
+		}
+		staged.InstalledAt = now
+		upsertRecord(&meta, staged)
 		if action.Migration != nil && action.Migration.LegacyTarget != "" {
 			legacyTargets[action.Migration.LegacyTarget] = struct{}{}
 		}
@@ -159,153 +171,303 @@ func recordMetadata(p plan.Plan, resolvedSources [][]string, opts Options) error
 	for target := range legacyTargets {
 		meta = meta.Remove(target)
 	}
+	if installed != nil {
+		selection := *installed
+		meta.InstalledSelection = &selection
+	}
 
 	return state.Save(path, meta)
 }
 
-func recordContributions(action plan.Action, resolvedSources []string, ownership string) ([]state.Contribution, error) {
+func (c *MetadataCommit) captureStagedEvidence() error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	for i := range c.actions {
+		stagedAction := &c.actions[i]
+		if !stagedAction.recordsEvidence {
+			continue
+		}
+		record, err := buildMetadataRecord(c.profiles, c.tags, stagedAction.action, stagedAction.resolvedSources, now)
+		if err != nil {
+			return err
+		}
+		stagedAction.stagedRecord = record
+	}
+	return nil
+}
+
+// recordPartialInventory retains the existing rerunnable failed-install
+// inventory without replacing any previously committed exact evidence.
+func (c MetadataCommit) recordPartialInventory() error {
+	if c.opts.StateRoot == "" {
+		return nil
+	}
+	path := state.Path(c.opts.StateRoot)
+	meta, err := state.Load(path)
+	if err != nil {
+		return err
+	}
+	meta.Version = state.CurrentVersion
+	meta.Provenance = state.CaptureProvenance(c.opts.SourceRoot, version.Value)
+	for _, stagedAction := range c.actions {
+		if !stagedAction.recordsEvidence {
+			continue
+		}
+		action := stagedAction.action
+		if hasCommittedContributions(meta, action.Target) {
+			continue
+		}
+		record, err := stagedAction.evidence()
+		if err != nil {
+			return err
+		}
+		record.Contributions = nil
+		upsertRecord(&meta, record)
+	}
+	return state.Save(path, meta)
+}
+
+func (a metadataAction) evidence() (state.Record, error) {
+	if a.stagedRecord.Target == "" {
+		return state.Record{}, fmt.Errorf("terminal metadata commit has no staged evidence for %s", a.action.Target)
+	}
+	return a.stagedRecord, nil
+}
+
+func buildMetadataRecord(profiles, tags []string, action plan.Action, resolvedSources []string, installedAt string) (state.Record, error) {
+	mode := ownershipevidence.For(action.Strategy, action.Ownership)
+	contributions, projectionInputs, err := captureContributions(mode, action, resolvedSources)
+	if err != nil {
+		return state.Record{}, err
+	}
+	targetWide, err := mode.Project(action.Target, projectionInputs)
+	if err != nil {
+		return state.Record{}, err
+	}
+	err = validateProjectedEvidence(mode, action, resolvedSources, targetWide)
+	if err != nil {
+		return state.Record{}, fmt.Errorf("validate terminal contribution evidence for %s: %w", action.Target, err)
+	}
+	return state.Record{
+		Target:         action.Target,
+		Source:         action.Source,
+		Sources:        append([]string(nil), action.Sources...),
+		Strategy:       action.Strategy,
+		Ownership:      mode.Ownership(),
+		OwnedContent:   append([]byte(nil), targetWide.OwnedContent...),
+		OwnedBytes:     append([]byte(nil), targetWide.OwnedBytes...),
+		SeededBaseline: append([]byte(nil), targetWide.SeededBaseline...),
+		Contributions:  contributions,
+		Hash:           targetWide.Hash,
+		InstalledAt:    installedAt,
+		Profiles:       append([]string(nil), profiles...),
+		Tags:           append([]string(nil), tags...),
+	}, nil
+}
+
+func validateMetadataRecord(action plan.Action, resolvedSources []string, record state.Record) error {
+	mode := ownershipevidence.For(action.Strategy, record.Ownership)
+	return validateProjectedEvidence(mode, action, resolvedSources, state.Contribution{
+		Ownership:        record.Ownership,
+		EvidenceRecorded: true,
+		Hash:             record.Hash,
+		OwnedContent:     append([]byte(nil), record.OwnedContent...),
+		OwnedBytes:       append([]byte(nil), record.OwnedBytes...),
+		SeededBaseline:   append([]byte(nil), record.SeededBaseline...),
+	})
+}
+
+func validateProjectedEvidence(mode ownershipevidence.Mode, action plan.Action, resolvedSources []string, evidence state.Contribution) error {
+	if action.Migration != nil && mode.Ownership() == "seeded" {
+		return mode.Validate(action.Target, resolvedSources, evidence, action.Migration.FinalContent)
+	}
+	return mode.Validate(action.Target, resolvedSources, evidence)
+}
+
+func sameRecordEvidence(staged, current state.Record) bool {
+	if staged.Ownership != current.Ownership || staged.Hash != current.Hash ||
+		!bytes.Equal(staged.OwnedContent, current.OwnedContent) ||
+		!bytes.Equal(staged.OwnedBytes, current.OwnedBytes) ||
+		!bytes.Equal(staged.SeededBaseline, current.SeededBaseline) ||
+		len(staged.Contributions) != len(current.Contributions) {
+		return false
+	}
+	for i := range staged.Contributions {
+		if !sameContributionEvidence(staged.Contributions[i], current.Contributions[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameContributionEvidence(staged, current state.Contribution) bool {
+	if staged.Source != current.Source || staged.Ownership != current.Ownership ||
+		staged.EvidenceRecorded != current.EvidenceRecorded || staged.Hash != current.Hash ||
+		len(staged.SelectorTags) != len(current.SelectorTags) ||
+		!bytes.Equal(staged.OwnedContent, current.OwnedContent) ||
+		!bytes.Equal(staged.OwnedBytes, current.OwnedBytes) ||
+		!bytes.Equal(staged.SeededBaseline, current.SeededBaseline) {
+		return false
+	}
+	for i := range staged.SelectorTags {
+		if staged.SelectorTags[i] != current.SelectorTags[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func captureContributions(mode ownershipevidence.Mode, action plan.Action, resolvedSources []string) ([]state.Contribution, []state.Contribution, error) {
 	planned := action.Contributions
 	if len(planned) == 0 {
-		return nil, nil
+		if len(resolvedSources) != 1 {
+			return nil, nil, fmt.Errorf("record contribution evidence for %s: no contribution identities for %d resolved sources", action.Target, len(resolvedSources))
+		}
+		recorded, err := mode.Capture(action.Source, resolvedSources[0], nil, seededBaseline(action))
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, []state.Contribution{recorded}, nil
 	}
 	if len(planned) != len(resolvedSources) {
-		return nil, fmt.Errorf("record contribution evidence for %s: %d contributions for %d resolved sources", action.Target, len(planned), len(resolvedSources))
+		return nil, nil, fmt.Errorf("record contribution evidence for %s: %d contributions for %d resolved sources", action.Target, len(planned), len(resolvedSources))
 	}
 
 	contributions := make([]state.Contribution, 0, len(planned))
 	for i, contribution := range planned {
-		recorded, err := captureContributionEvidence(action, contribution, resolvedSources[i], ownership)
+		recorded, err := mode.Capture(contribution.Source, resolvedSources[i], contribution.SelectorTags, seededBaseline(action))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		contributions = append(contributions, recorded)
 	}
-	return contributions, nil
+	return contributions, contributions, nil
 }
 
-func captureContributionEvidence(action plan.Action, contribution plan.Contribution, resolvedSource, ownership string) (state.Contribution, error) {
-	recorded := state.Contribution{
-		Source:           contribution.Source,
-		SelectorTags:     append([]string(nil), contribution.SelectorTags...),
-		Ownership:        ownership,
-		EvidenceRecorded: true,
+func seededBaseline(action plan.Action) []byte {
+	if action.Migration != nil && action.Migration.RecordedBaseline != nil {
+		return action.Migration.RecordedBaseline
 	}
-	if action.Strategy == "symlink" {
-		return recorded, nil
-	}
+	return nil
+}
 
-	raw, err := os.ReadFile(resolvedSource)
+func hasCommittedContributions(meta state.Metadata, target string) bool {
+	for _, record := range meta.Entries {
+		if record.Target == target {
+			return len(record.Contributions) > 0
+		}
+	}
+	return false
+}
+
+func newMetadataCommit(p plan.Plan, resolvedSources [][]string, opts Options) MetadataCommit {
+	commit := MetadataCommit{
+		profiles: append([]string(nil), p.Profiles...),
+		tags:     append([]string(nil), p.Tags...),
+		opts:     cloneOptions(opts),
+		actions:  make([]metadataAction, len(p.Actions)),
+	}
+	for i, action := range p.Actions {
+		commit.actions[i] = metadataAction{
+			action:          action,
+			resolvedSources: append([]string(nil), resolvedSources[i]...),
+			recordsEvidence: recordsContributionEvidence(action, conflictDecision(action, opts)),
+		}
+	}
+	return commit
+}
+
+func cloneOptions(opts Options) Options {
+	cloned := opts
+	if opts.ConflictDecisions != nil {
+		cloned.ConflictDecisions = make(map[string]ConflictDecision, len(opts.ConflictDecisions))
+		for target, decision := range opts.ConflictDecisions {
+			cloned.ConflictDecisions[target] = decision
+		}
+	}
+	return cloned
+}
+
+// validateTerminalPaths repeats the security boundary checks that can become
+// stale while Provisioners run. It intentionally does not repeat pre-apply
+// target-status checks, because successfully created targets now exist.
+func (c MetadataCommit) validateTerminalPaths() error {
+	home, err := cleanAbs(c.opts.Home)
 	if err != nil {
-		return state.Contribution{}, fmt.Errorf("read %s contribution %s: %w", ownership, resolvedSource, err)
+		return fmt.Errorf("resolve home: %w", err)
 	}
-	recorded.Hash = state.HashBytes(raw)
-	switch ownership {
-	case "json-subset":
-		recorded.OwnedContent = append([]byte{}, raw...)
-	case "jsonc-subset":
-		recorded.OwnedContent, err = configsubset.CanonicalJSONC(raw)
-		if err != nil {
-			return state.Contribution{}, fmt.Errorf("canonicalize owned jsonc contribution %s: %w", resolvedSource, err)
-		}
-	case "toml-subset", "marked-block":
-		recorded.OwnedBytes = append([]byte{}, raw...)
-	case "seeded":
-		if action.Migration != nil && action.Migration.RecordedBaseline != nil {
-			recorded.SeededBaseline = append([]byte{}, action.Migration.RecordedBaseline...)
-		} else {
-			recorded.SeededBaseline = append([]byte{}, raw...)
-		}
-	}
-	return recorded, nil
-}
-
-func targetWideEvidence(action plan.Action, resolvedSources []string, contributions []state.Contribution, ownership string) (state.Contribution, error) {
-	if len(contributions) == 0 {
-		return captureContributionEvidence(action, plan.Contribution{Source: action.Source}, resolvedSources[0], ownership)
-	}
-	if len(contributions) == 1 {
-		return contributions[0], nil
-	}
-	if ownership != "json-subset" {
-		return state.Contribution{}, fmt.Errorf("compose target-wide evidence for %s: unsupported ownership %s", action.Target, ownership)
-	}
-
-	composed := append([]byte(nil), contributions[0].OwnedContent...)
-	var err error
-	for _, contribution := range contributions[1:] {
-		composed, err = configsubset.MergeJSON(composed, contribution.OwnedContent)
-		if err != nil {
-			return state.Contribution{}, fmt.Errorf("compose target-wide evidence for %s: %w", action.Target, err)
-		}
-	}
-	return state.Contribution{
-		Ownership:        ownership,
-		EvidenceRecorded: true,
-		Hash:             state.HashBytes(composed),
-		OwnedContent:     composed,
-	}, nil
-}
-
-func validateRecordedConvergence(action plan.Action, resolvedSources []string, targetWide state.Contribution, contributions []state.Contribution) error {
-	if action.Strategy == "symlink" {
-		if len(contributions) != 1 {
-			return fmt.Errorf("managed target %s no longer converged: symlink has %d contributions", action.Target, len(contributions))
-		}
-		info, err := os.Lstat(action.Target)
-		if err != nil {
-			return fmt.Errorf("inspect converged symlink %s: %w", action.Target, err)
-		}
-		if info.Mode()&os.ModeSymlink == 0 {
-			return fmt.Errorf("managed target %s no longer converged: expected symlink", action.Target)
-		}
-		destination, err := os.Readlink(action.Target)
-		if err != nil {
-			return fmt.Errorf("read converged symlink %s: %w", action.Target, err)
-		}
-		if filepath.Clean(destination) != filepath.Clean(resolvedSources[0]) {
-			return fmt.Errorf("managed target %s no longer converged: symlink destination changed", action.Target)
-		}
-		return nil
-	}
-
-	live, err := os.ReadFile(action.Target)
+	sourceRoot, err := cleanAbs(c.opts.SourceRoot)
 	if err != nil {
-		return fmt.Errorf("read converged target %s: %w", action.Target, err)
+		return fmt.Errorf("resolve source root: %w", err)
 	}
-	converged := false
-	switch targetWide.Ownership {
-	case "whole":
-		converged = state.HashBytes(live) == targetWide.Hash
-	case "json-subset":
-		relation, analyzeErr := configsubset.AnalyzeJSON(live, targetWide.OwnedContent)
-		if analyzeErr != nil {
-			return fmt.Errorf("validate converged json target %s: %w", action.Target, analyzeErr)
-		}
-		converged = relation.Contains
-	case "jsonc-subset":
-		relation, analyzeErr := configsubset.AnalyzeJSONC(live, targetWide.OwnedContent)
-		if analyzeErr != nil {
-			return fmt.Errorf("validate converged jsonc target %s: %w", action.Target, analyzeErr)
-		}
-		converged = relation.Contains
-	case "toml-subset":
-		relation, analyzeErr := configsubset.AnalyzeTOML(live, targetWide.OwnedBytes)
-		if analyzeErr != nil {
-			return fmt.Errorf("validate converged toml target %s: %w", action.Target, analyzeErr)
-		}
-		converged = relation.Contains
-	case "marked-block":
-		reconciliation := textblock.ReconcileOwned(live, targetWide.OwnedBytes, targetWide.OwnedBytes, textblock.DotsManagedMarkers())
-		converged = reconciliation.Compatible && !reconciliation.Changed
-	case "seeded":
-		if action.Migration != nil {
-			converged = bytes.Equal(live, action.Migration.FinalContent)
-		} else {
-			converged = bytes.Equal(live, targetWide.SeededBaseline)
-		}
+	if err := validateStateRoot(c.opts.StateRoot, home); err != nil {
+		return err
 	}
-	if !converged {
-		return fmt.Errorf("managed target %s no longer converged; contribution evidence was not recorded", action.Target)
+
+	seenTargets := map[string]struct{}{}
+	for _, stagedAction := range c.actions {
+		if !stagedAction.recordsEvidence {
+			continue
+		}
+		action := stagedAction.action
+		if err := plan.ValidateResolvedTarget(action.Target, home); err != nil {
+			return err
+		}
+		targetKey, err := cleanAbs(action.Target)
+		if err != nil {
+			return fmt.Errorf("resolve target %s: %w", action.Target, err)
+		}
+		if _, exists := seenTargets[targetKey]; exists {
+			return fmt.Errorf("terminal metadata commit contains duplicate target %s", targetKey)
+		}
+		seenTargets[targetKey] = struct{}{}
+		if err := validateTargetParentInsideHome(action.Target, home); err != nil {
+			return err
+		}
+		if action.Strategy == "copy" {
+			if err := plan.ValidateFilePathInsideHomeNoSymlinkEscape(action.Target, home, "terminal managed target"); err != nil {
+				return err
+			}
+		}
+
+		sourceNames := []string{action.Source}
+		declaredResolved := []string{action.ResolvedSource}
+		if len(action.Sources) > 0 {
+			sourceNames = action.Sources
+			declaredResolved = action.ResolvedSources
+		}
+		if len(sourceNames) != len(stagedAction.resolvedSources) {
+			return fmt.Errorf("terminal metadata commit for %s has %d sources, want %d", action.Target, len(sourceNames), len(stagedAction.resolvedSources))
+		}
+		if len(action.Contributions) > 0 && len(action.Contributions) != len(sourceNames) {
+			return fmt.Errorf("terminal metadata commit has %d contributions for %d sources on %s", len(action.Contributions), len(sourceNames), action.Target)
+		}
+		for j, sourceName := range sourceNames {
+			source, err := plan.ResolveSource(sourceName, sourceRoot)
+			if err != nil {
+				return err
+			}
+			if source != stagedAction.resolvedSources[j] {
+				return fmt.Errorf("terminal source %q resolved to %q after applying from %q", sourceName, source, stagedAction.resolvedSources[j])
+			}
+			if j < len(declaredResolved) && declaredResolved[j] != "" && declaredResolved[j] != source {
+				return fmt.Errorf("install plan source %q resolved to %q, want %q", sourceName, declaredResolved[j], source)
+			}
+			if len(action.Contributions) > 0 && action.Contributions[j].Source != sourceName {
+				return fmt.Errorf("install plan contribution source %q does not match source %q on %s", action.Contributions[j].Source, sourceName, action.Target)
+			}
+			if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
+				return err
+			}
+		}
+		if len(action.Sources) > 0 {
+			composed, err := configsubset.ComposeJSONFiles(stagedAction.resolvedSources)
+			if err != nil {
+				return fmt.Errorf("validate terminal composed target %s: %w", action.Target, err)
+			}
+			if !bytes.Equal(composed, action.Content) {
+				return fmt.Errorf("install plan composed content changed before terminal metadata commit for %s", action.Target)
+			}
+		}
 	}
 	return nil
 }
@@ -546,6 +708,16 @@ func recordsMetadata(action plan.Action, decision ConflictDecision) bool {
 		return true
 	}
 	return action.Status == plan.StatusConflict && (decision == DecisionReplace || decision == DecisionAdopt)
+}
+
+func recordsContributionEvidence(action plan.Action, decision ConflictDecision) bool {
+	if !recordsMetadata(action, decision) {
+		return false
+	}
+	// Preserve the baseline that originally seeded locally evolved state.
+	// Replacing it with the new Source of Truth baseline would destroy the
+	// evidence needed to recognize a later reset and advance safely.
+	return action.Ownership != "seeded" || action.Reason != plan.ReasonSeededLocalEvolution
 }
 
 func validateStateRoot(stateRoot, home string) error {

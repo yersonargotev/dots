@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/ownershipevidence"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selectedsurface"
@@ -137,7 +138,6 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 			tags = append([]string(nil), expanded.Contribution.SelectorTags...)
 			tagsSource = "recorded-contribution"
 			if len(tags) == 0 {
-				tagsSource = "unknown"
 				missingContributionTags = true
 			}
 		} else if len(tags) == 0 && matched {
@@ -169,7 +169,7 @@ func Build(m manifest.Manifest, meta state.Metadata, opts Options) (Report, erro
 		if expanded.Attributed {
 			attribution = "recorded-contribution"
 			ownership = expanded.Contribution.Ownership
-			ownershipEvidence = describeContributionEvidence(rec.Strategy, expanded.Contribution)
+			ownershipEvidence = ownershipevidence.For(rec.Strategy, expanded.Contribution.Ownership).Discriminator(expanded.Contribution)
 		}
 		report.ManagedEntries = append(report.ManagedEntries, ManagedEntry{
 			Source:            rec.Source,
@@ -289,30 +289,6 @@ func expandedRecords(records []state.Record) []expandedRecord {
 		}
 	}
 	return expanded
-}
-
-func describeContributionEvidence(strategy string, contribution state.Contribution) string {
-	if !contribution.EvidenceRecorded {
-		return "missing"
-	}
-	switch contribution.Ownership {
-	case "json-subset":
-		return "owned-json"
-	case "jsonc-subset":
-		return "owned-jsonc"
-	case "toml-subset":
-		return "owned-toml"
-	case "marked-block":
-		return "owned-marked-block"
-	case "seeded":
-		return "seeded-baseline"
-	case "whole":
-		if strategy == "symlink" {
-			return "source-identity"
-		}
-		return "source-hash"
-	}
-	return "missing"
 }
 
 func matchEntry(m manifest.Manifest, rec state.Record, opts Options) (manifest.Entry, bool, error) {

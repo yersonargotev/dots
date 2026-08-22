@@ -310,7 +310,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	applied, err := resolveAndApply(cmd, p, paths, opts.yes, opts.noTUI, false)
+	applied, metadataCommit, err := resolveAndApply(cmd, p, paths, opts.yes, opts.noTUI, false)
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -327,7 +327,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 			return updateReport{}, err
 		}
 		installedSelection := effective.InstalledSelection(state.CaptureProvenance(paths.SourceRoot, version.Value))
-		if err := recordInstalledSelection(state.Path(paths.StateRoot), installedSelection); err != nil {
+		if err := commitInstallationMetadata(metadataCommit, installedSelection); err != nil {
 			return updateReport{}, err
 		}
 		if !wantsJSON(cmd) {

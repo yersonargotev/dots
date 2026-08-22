@@ -123,6 +123,67 @@ entries:
 	}
 }
 
+func TestInstalledJSONKeepsRecordedTagProvenanceForIncompleteContribution(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	sourceRoot := t.TempDir()
+	writeCLISource(t, sourceRoot, "configs/shared.json", "{\"portable-secret-value\":true}\n")
+	manifestPath := writeCLIManifest(t, home, `version: 1
+profiles:
+  default:
+    tags: [shared]
+entries:
+  - source: configs/shared.json
+    target: ~/.config/shared.json
+    strategy: copy
+    ownership: json-subset
+    tags: [shared]
+`)
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{{
+		Target: filepath.Join(home, ".config", "shared.json"), Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset",
+		Contributions: []state.Contribution{{
+			Source: "configs/shared.json", Ownership: "json-subset", OwnedContent: []byte(`{"portable-secret-value":true}`),
+		}},
+	}}}); err != nil {
+		t.Fatalf("save metadata: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{
+		"installed", "--output", "json", "--file", manifestPath,
+		"--source-root", sourceRoot, "--home", home, "--state-root", stateRoot,
+	}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	env := decodeEnvelopeForCommand(t, out.String(), "installed")
+	var report struct {
+		ManagedEntries []struct {
+			Attribution       string   `json:"attribution"`
+			OwnershipEvidence string   `json:"ownership_evidence"`
+			Tags              []string `json:"tags"`
+			TagsSource        string   `json:"tags_source"`
+		} `json:"managed_entries"`
+		Notes []string `json:"notes"`
+	}
+	if err := json.Unmarshal(env.Data, &report); err != nil {
+		t.Fatalf("decode installed report: %v\ndata:\n%s", err, env.Data)
+	}
+	if len(report.ManagedEntries) != 1 {
+		t.Fatalf("ManagedEntries = %+v, want one entry", report.ManagedEntries)
+	}
+	entry := report.ManagedEntries[0]
+	if entry.Attribution != "recorded-contribution" || entry.TagsSource != "recorded-contribution" || entry.OwnershipEvidence != "missing" || len(entry.Tags) != 0 {
+		t.Fatalf("ManagedEntry = %+v, want incomplete recorded-contribution provenance", entry)
+	}
+	if got := strings.Join(report.Notes, "\n"); !strings.Contains(got, "do not record selector Tags") {
+		t.Fatalf("Notes = %q, want missing selector Tags explanation", got)
+	}
+	if strings.Contains(out.String(), "owned_content") || strings.Contains(out.String(), "portable-secret-value") {
+		t.Fatalf("installed JSON exposed raw ownership evidence:\n%s", out.String())
+	}
+}
+
 func TestInstalledJSONMatchesXDGStateEntryWithCompleteCoverage(t *testing.T) {
 	home := t.TempDir()
 	stateRoot := t.TempDir()

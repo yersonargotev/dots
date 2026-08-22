@@ -3,6 +3,7 @@ package installed_test
 import (
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	inst "github.com/yersonargotev/dots/internal/installed"
@@ -123,6 +124,35 @@ func TestBuildReportsRecordedEmptyOwnershipEvidence(t *testing.T) {
 				t.Fatalf("ManagedEntries = %+v, want empty %s evidence reported as %s", report.ManagedEntries, tt.ownership, tt.evidence)
 			}
 		})
+	}
+}
+
+func TestBuildKeepsRecordedContributionTagProvenanceWhenSelectorTagsAreMissing(t *testing.T) {
+	home := t.TempDir()
+	target := filepath.Join(home, ".config", "shared.json")
+	m := manifest.Manifest{Version: 1, Entries: []manifest.Entry{{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"shared"},
+	}}}
+	meta := state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{{
+		Target: target, Source: "configs/shared.json", Strategy: "copy", Ownership: "json-subset",
+		Contributions: []state.Contribution{{
+			Source: "configs/shared.json", Ownership: "json-subset",
+		}},
+	}}}
+
+	report, err := inst.Build(m, meta, inst.Options{StatePath: filepath.Join(home, "installed.json"), Home: home, OS: "linux"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(report.ManagedEntries) != 1 {
+		t.Fatalf("ManagedEntries = %+v, want one attributed entry", report.ManagedEntries)
+	}
+	entry := report.ManagedEntries[0]
+	if entry.Attribution != "recorded-contribution" || entry.TagsSource != "recorded-contribution" || entry.OwnershipEvidence != "missing" || len(entry.Tags) != 0 {
+		t.Fatalf("ManagedEntry = %+v, want incomplete recorded-contribution provenance", entry)
+	}
+	if got := strings.Join(report.Notes, "\n"); !strings.Contains(got, "do not record selector Tags") {
+		t.Fatalf("Notes = %q, want missing selector Tags explanation", got)
 	}
 }
 
