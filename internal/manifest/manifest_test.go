@@ -671,8 +671,8 @@ func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) 
 	if codex == nil {
 		t.Fatal("repository manifest missing codex MCP provisioner for chrome-devtools")
 	}
-	if !hasString(codex.Tags, "web") {
-		t.Errorf("codex provisioner %#v missing web tag", codex.Spec)
+	if !sameStrings(codex.Tags, []string{"codex-chrome-devtools"}) {
+		t.Errorf("codex provisioner tags = %#v, want [codex-chrome-devtools]", codex.Tags)
 	}
 	if !sameStrings(codex.OS, []string{"darwin", "linux"}) {
 		t.Errorf("codex provisioner OS = %#v, want [darwin linux]", codex.OS)
@@ -691,11 +691,14 @@ func TestRepositoryManifestIncludesDartFlutterMCPProvisioners(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	want := map[string][]string{
-		"claude": {"dart", "mcp-server"},
-		"codex":  {"dart", "mcp-server", "--force-roots-fallback"},
+	want := map[string]struct {
+		tag     string
+		command []string
+	}{
+		"claude": {tag: "claude-dart-mcp", command: []string{"dart", "mcp-server"}},
+		"codex":  {tag: "codex-dart-mcp", command: []string{"dart", "mcp-server", "--force-roots-fallback"}},
 	}
-	for tool, wantCommand := range want {
+	for tool, wantProvisioner := range want {
 		var prov *manifest.Provisioner
 		for i := range got.Provisioners {
 			candidate := &got.Provisioners[i]
@@ -708,14 +711,14 @@ func TestRepositoryManifestIncludesDartFlutterMCPProvisioners(t *testing.T) {
 		if prov == nil {
 			t.Fatalf("repository manifest missing %s MCP provisioner for Dart and Flutter", tool)
 		}
-		if !hasString(prov.Tags, "mobile") {
-			t.Errorf("%s MCP provisioner %#v missing mobile tag", tool, prov.Spec)
+		if !sameStrings(prov.Tags, []string{wantProvisioner.tag}) {
+			t.Errorf("%s MCP provisioner tags = %#v, want [%s]", tool, prov.Tags, wantProvisioner.tag)
 		}
 		if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
 			t.Errorf("%s MCP provisioner OS = %#v, want [darwin linux]", tool, prov.OS)
 		}
-		if !sameStrings(prov.Spec.Command, wantCommand) {
-			t.Errorf("%s MCP command = %#v, want %#v", tool, prov.Spec.Command, wantCommand)
+		if !sameStrings(prov.Spec.Command, wantProvisioner.command) {
+			t.Errorf("%s MCP command = %#v, want %#v", tool, prov.Spec.Command, wantProvisioner.command)
 		}
 		if !hasDependency(prov.Dependencies, tool) || !hasDependency(prov.Dependencies, "dart") {
 			t.Errorf("%s MCP provisioner dependencies = %#v, want %s and dart", tool, prov.Dependencies, tool)
@@ -743,10 +746,11 @@ func TestRepositoryManifestIncludesMobileAgentMCPConfigEntries(t *testing.T) {
 	wantEntries := []struct {
 		source string
 		target string
+		tag    string
 	}{
-		{source: "configs/antigravity/mobile-mcp-settings.json", target: "~/.gemini/antigravity-cli/settings.json"},
-		{source: "configs/vscode/settings.json", target: "~/Library/Application Support/Code/User/settings.json"},
-		{source: "configs/vscode/settings.json", target: "~/.config/Code/User/settings.json"},
+		{source: "configs/antigravity/mobile-mcp-settings.json", target: "~/.gemini/antigravity-cli/settings.json", tag: "antigravity-dart-mcp"},
+		{source: "configs/vscode/settings.json", target: "~/Library/Application Support/Code/User/settings.json", tag: "vscode-mobile"},
+		{source: "configs/vscode/settings.json", target: "~/.config/Code/User/settings.json", tag: "vscode-mobile"},
 	}
 	for _, want := range wantEntries {
 		source, target := want.source, want.target
@@ -768,8 +772,8 @@ func TestRepositoryManifestIncludesMobileAgentMCPConfigEntries(t *testing.T) {
 		if entry.Ownership != "json-subset" {
 			t.Errorf("%s ownership = %q, want json-subset", source, entry.Ownership)
 		}
-		if !hasString(entry.Tags, "mobile") {
-			t.Errorf("%s tags = %#v, want mobile", source, entry.Tags)
+		if !sameStrings(entry.Tags, []string{want.tag}) {
+			t.Errorf("%s tags = %#v, want [%s]", source, entry.Tags, want.tag)
 		}
 	}
 }
@@ -785,7 +789,7 @@ func TestRepositoryManifestWebDependencySetIncludesPlaywrightCLI(t *testing.T) {
 
 	var dep manifest.Dependency
 	for _, set := range got.Dependencies {
-		if !hasString(set.Tags, "web") {
+		if !hasString(set.Tags, "playwright") {
 			continue
 		}
 		for _, candidate := range set.Dependencies {
@@ -981,6 +985,114 @@ func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 	}
 }
 
+func TestRepositoryManifestDeclaresAtomicWebAndMobileCapabilities(t *testing.T) {
+	got, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantProfiles := map[string][]string{
+		"web": {
+			"playwright", "frontend-design", "vercel-web-skills",
+			"claude-chrome-devtools", "codex-chrome-devtools", "opencode-chrome-devtools",
+		},
+		"mobile": {
+			"dart-skills", "flutter-skills", "android-skills", "claude-dart-mcp",
+			"codex-dart-mcp", "antigravity-dart-mcp", "vscode-mobile",
+		},
+	}
+	for name, wantTags := range wantProfiles {
+		for _, tagName := range wantTags {
+			tag, ok := got.Tags[tagName]
+			if !ok {
+				t.Errorf("repository manifest missing atomic %s Tag %q", name, tagName)
+				continue
+			}
+			if tag.Kind != "surface" || tag.Status != "current" || strings.TrimSpace(tag.Description) == "" {
+				t.Errorf("Tag %q = %#v, want described current surface", tagName, tag)
+			}
+		}
+
+		legacy := got.Tags[name]
+		if legacy.Kind != "compatibility" || legacy.Status != "legacy" || !sameStrings(legacy.ReplacedBy, wantTags) {
+			t.Errorf("%s Tag = %#v, want ordered compatibility alias for %#v", name, legacy, wantTags)
+		}
+		if profile := got.Profiles[name]; !sameStrings(profile.Tags, wantTags) {
+			t.Errorf("%s Profile Tags = %#v, want %#v", name, profile.Tags, wantTags)
+		}
+		legacySelection, err := manifest.ResolveSelection(*got, nil, []string{name})
+		if err != nil {
+			t.Errorf("ResolveSelection(--tag %s) error = %v", name, err)
+		} else if !sameStrings(legacySelection.Tags, wantTags) {
+			t.Errorf("legacy %s selection Tags = %#v, want %#v", name, legacySelection.Tags, wantTags)
+		}
+	}
+
+	for i, set := range got.Dependencies {
+		if hasString(set.Tags, "web") || hasString(set.Tags, "mobile") {
+			t.Errorf("dependencies[%d] still selects a legacy broad Tag: %#v", i, set.Tags)
+		}
+	}
+	for i, entry := range got.Entries {
+		if hasString(entry.Tags, "web") || hasString(entry.Tags, "mobile") {
+			t.Errorf("entries[%d] %q still selects a legacy broad Tag: %#v", i, entry.Target, entry.Tags)
+		}
+	}
+	for i, provisioner := range got.Provisioners {
+		if hasString(provisioner.Tags, "web") || hasString(provisioner.Tags, "mobile") {
+			t.Errorf("provisioners[%d] %q still selects a legacy broad Tag: %#v", i, provisioner.Tool, provisioner.Tags)
+		}
+	}
+
+	for _, name := range []string{"adaptive-theme", "codegraph"} {
+		tag := got.Tags[name]
+		if tag.Kind != "surface" || tag.Status != "current" || len(tag.ReplacedBy) != 0 {
+			t.Errorf("global Tag %q = %#v, want one current opt-in without replacements", name, tag)
+		}
+		for profileName, profile := range got.Profiles {
+			if hasString(profile.Tags, name) {
+				t.Errorf("Profile %q includes global opt-in Tag %q", profileName, name)
+			}
+		}
+	}
+
+	for _, entry := range selectedsurface.Evaluate(*got, []string{"adaptive-theme"}, "darwin").Entries {
+		if entry.Entry.Target == "~/.config/herdr/config.toml" || entry.Entry.Target == "~/.config/zellij/config.kdl" {
+			t.Errorf("adaptive-theme selected unrequested consumer %q", entry.Entry.Target)
+		}
+	}
+	for _, entry := range selectedsurface.Evaluate(*got, []string{"codegraph"}, "linux").Entries {
+		if entry.Entry.Target == "~/.codex/config.toml" {
+			t.Errorf("codegraph selected the unrequested Codex consumer")
+		}
+	}
+
+	wantOverrides := []struct {
+		tags   []string
+		osName string
+		target string
+		source string
+	}{
+		{tags: []string{"herdr", "adaptive-theme"}, osName: "darwin", target: "~/.config/herdr/config.toml", source: "configs/herdr/config-adaptive.toml"},
+		{tags: []string{"codex", "codegraph"}, osName: "linux", target: "~/.codex/config.toml", source: "configs/codex/config-codegraph.toml"},
+	}
+	for _, want := range wantOverrides {
+		found := false
+		for _, entry := range selectedsurface.Evaluate(*got, want.tags, want.osName).Entries {
+			if entry.Entry.Target != want.target {
+				continue
+			}
+			found = true
+			if entry.Source != want.source {
+				t.Errorf("%q source = %q, want %q", want.target, entry.Source, want.source)
+			}
+		}
+		if !found {
+			t.Errorf("Tags %#v did not select consumer %q", want.tags, want.target)
+		}
+	}
+}
+
 func TestRepositoryAtomicAgentCompositionAndCodexSourceOverride(t *testing.T) {
 	got, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
@@ -993,8 +1105,8 @@ func TestRepositoryAtomicAgentCompositionAndCodexSourceOverride(t *testing.T) {
 		target  string
 		sources []string
 	}{
-		{name: "OpenCode baseline plus web subset", tags: []string{"opencode", "web"}, target: "~/.config/opencode/opencode.json", sources: []string{"configs/opencode/opencode.json", "configs/opencode/mcp.json"}},
-		{name: "Antigravity baseline plus mobile subset", tags: []string{"antigravity", "mobile"}, target: "~/.gemini/antigravity-cli/settings.json", sources: []string{"configs/antigravity/settings.json", "configs/antigravity/mobile-mcp-settings.json"}},
+		{name: "OpenCode baseline plus Chrome DevTools subset", tags: []string{"opencode", "opencode-chrome-devtools"}, target: "~/.config/opencode/opencode.json", sources: []string{"configs/opencode/opencode.json", "configs/opencode/mcp.json"}},
+		{name: "Antigravity baseline plus Dart MCP subset", tags: []string{"antigravity", "antigravity-dart-mcp"}, target: "~/.gemini/antigravity-cli/settings.json", sources: []string{"configs/antigravity/settings.json", "configs/antigravity/mobile-mcp-settings.json"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1114,8 +1226,8 @@ func TestRepositoryManifestIncludesPlaywrightCLISkillProvisioner(t *testing.T) {
 	if skills == nil {
 		t.Fatal("repository manifest missing skills provisioner for microsoft/playwright-cli")
 	}
-	if !hasString(skills.Tags, "web") {
-		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
+	if !sameStrings(skills.Tags, []string{"playwright"}) {
+		t.Errorf("skills provisioner tags = %#v, want [playwright]", skills.Tags)
 	}
 	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
 		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
@@ -1151,8 +1263,8 @@ func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
 	if skills == nil {
 		t.Fatal("repository manifest missing skills provisioner for vercel-labs/agent-skills")
 	}
-	if !hasString(skills.Tags, "web") {
-		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
+	if !sameStrings(skills.Tags, []string{"vercel-web-skills"}) {
+		t.Errorf("skills provisioner tags = %#v, want [vercel-web-skills]", skills.Tags)
 	}
 	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
 		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
@@ -1194,8 +1306,8 @@ func TestRepositoryManifestIncludesAnthropicFrontendDesignSkillProvisioner(t *te
 	if skills == nil {
 		t.Fatal("repository manifest missing skills provisioner for anthropics/skills")
 	}
-	if !hasString(skills.Tags, "web") {
-		t.Errorf("skills provisioner %#v missing web tag", skills.Spec)
+	if !sameStrings(skills.Tags, []string{"frontend-design"}) {
+		t.Errorf("skills provisioner tags = %#v, want [frontend-design]", skills.Tags)
 	}
 	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
 		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
@@ -1224,17 +1336,19 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 	if !ok {
 		t.Fatal("repository manifest missing mobile profile")
 	}
-	if !sameStrings(mobile.Tags, []string{"mobile"}) {
-		t.Fatalf("mobile profile tags = %#v, want [mobile]", mobile.Tags)
+	wantMobileTags := []string{"dart-skills", "flutter-skills", "android-skills", "claude-dart-mcp", "codex-dart-mcp", "antigravity-dart-mcp", "vscode-mobile"}
+	if !sameStrings(mobile.Tags, wantMobileTags) {
+		t.Fatalf("mobile profile tags = %#v, want %#v", mobile.Tags, wantMobileTags)
 	}
 
 	mobileSkillPackages := []struct {
 		name       string
+		tag        string
 		wantSkills []string
 	}{
-		{name: "dart-lang/skills"},
-		{name: "flutter/skills"},
-		{name: "android/skills", wantSkills: []string{"android-cli"}},
+		{name: "dart-lang/skills", tag: "dart-skills"},
+		{name: "flutter/skills", tag: "flutter-skills"},
+		{name: "android/skills", tag: "android-skills", wantSkills: []string{"android-cli"}},
 	}
 
 	for _, pkg := range mobileSkillPackages {
@@ -1250,8 +1364,8 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 			if skills == nil {
 				t.Fatalf("repository manifest missing skills provisioner for %s", pkg.name)
 			}
-			if !hasString(skills.Tags, "mobile") {
-				t.Errorf("skills provisioner %#v missing mobile tag", skills.Spec)
+			if !sameStrings(skills.Tags, []string{pkg.tag}) {
+				t.Errorf("skills provisioner tags = %#v, want [%s]", skills.Tags, pkg.tag)
 			}
 			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
 				t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
@@ -1356,8 +1470,8 @@ func TestRepositoryManifestIncludesChromeDevToolsPluginProvisioners(t *testing.T
 	}
 
 	for _, prov := range []*manifest.Provisioner{market, plugin} {
-		if !hasString(prov.Tags, "web") {
-			t.Errorf("claude provisioner %#v missing web tag", prov.Spec)
+		if !sameStrings(prov.Tags, []string{"claude-chrome-devtools"}) {
+			t.Errorf("claude provisioner tags = %#v, want [claude-chrome-devtools]", prov.Tags)
 		}
 		if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
 			t.Errorf("claude provisioner OS = %#v, want [darwin linux]", prov.OS)

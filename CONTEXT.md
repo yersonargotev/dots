@@ -197,11 +197,11 @@ The executable name users run to manage installation, status, diagnostics, backu
 _Avoid_: binary name, CLI name, app name
 
 **Profile**:
-A named installation selection that represents an intended workstation role, such as `core`, `desktop`, `agents`, or `workstation`. A Profile contains descriptive lifecycle metadata and an ordered list of Tags only; it does not own Dependencies, Managed Entries, Provisioners, or other Profiles. Repeated Profiles compose by ordered Tag union.
+An ordered preset of Tags that represents an intended workstation role, such as `core`, `desktop`, `agents`, or `workstation`. A Profile contains descriptive lifecycle metadata and Tags only; it does not own Dependencies, Managed Entries, Provisioners, or other Profiles. Repeated Profiles compose by ordered Tag union.
 _Avoid_: install profile, machine config, host config, preset
 
 **Tag**:
-A label for the smallest cohesive capability that makes sense to install or stop managing independently, such as `zsh`, `git`, `node`, or `jq`. A Tag may select Managed Entries, Dependencies, Provisioners, or a coherent combination of them. Tags from repeated Profiles and explicit `--tag` flags are de-duplicated while preserving order. Legacy compatibility Tags normalize to their ordered current replacements before Selected Surface evaluation.
+The smallest independently meaningful capability that makes sense to install or stop managing, such as `zsh`, `git`, `node`, or `jq`. A Tag may select Managed Entries, Dependencies, Provisioners, or a cohesive combination of them. Tags from repeated Profiles and explicit `--tag` flags are de-duplicated while preserving order. Legacy compatibility Tags normalize to their ordered current replacements before Selected Surface evaluation.
 Tags are declarative selection only: they do not authorize built-in cleanup, removal, or historical migrations.
 _Avoid_: category, group, label
 

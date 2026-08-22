@@ -1,11 +1,58 @@
 package catalog
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 )
+
+func TestRepositoryCatalogExposesAtomicWebAndMobileInventory(t *testing.T) {
+	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := Build(*m, Options{OS: "linux"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantCurrent := []string{
+		"playwright", "frontend-design", "vercel-web-skills", "claude-chrome-devtools",
+		"codex-chrome-devtools", "opencode-chrome-devtools", "dart-skills", "flutter-skills",
+		"android-skills", "claude-dart-mcp", "codex-dart-mcp", "antigravity-dart-mcp", "vscode-mobile",
+		"adaptive-theme", "codegraph",
+	}
+	visible := make(map[string]bool, len(report.Tags))
+	for _, tag := range report.Tags {
+		visible[tag.Name] = true
+	}
+	for _, name := range wantCurrent {
+		if !visible[name] {
+			t.Errorf("normal repository catalog omitted current Tag %q", name)
+		}
+	}
+	for _, name := range []string{"core", "desktop", "agents", "web", "mobile"} {
+		if visible[name] {
+			t.Errorf("normal repository catalog exposed legacy broad Tag %q", name)
+		}
+	}
+
+	all, err := Build(*m, Options{OS: "linux", IncludeLegacy: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allNames := make(map[string]bool, len(all.Tags))
+	for _, tag := range all.Tags {
+		allNames[tag.Name] = true
+	}
+	for _, name := range []string{"web", "mobile"} {
+		if !allNames[name] {
+			t.Errorf("legacy-inclusive repository catalog omitted compatibility Tag %q", name)
+		}
+	}
+}
 
 func TestBuildHidesLegacyAndSortsDeclaredCatalog(t *testing.T) {
 	m := fixtureManifest()

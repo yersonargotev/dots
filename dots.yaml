@@ -189,14 +189,81 @@ tags:
       - opencode
       - antigravity
       - copilot
+  playwright:
+    description: Playwright CLI dependency and upstream agent skill.
+    kind: surface
+    status: current
+  frontend-design:
+    description: Anthropic frontend design skill for supported agents.
+    kind: surface
+    status: current
+  vercel-web-skills:
+    description: Vercel React and web design skills for supported agents.
+    kind: surface
+    status: current
+  claude-chrome-devtools:
+    description: Claude Chrome DevTools marketplace and plugin integration.
+    kind: surface
+    status: current
+  codex-chrome-devtools:
+    description: Codex Chrome DevTools MCP integration.
+    kind: surface
+    status: current
+  opencode-chrome-devtools:
+    description: OpenCode Chrome DevTools JSON subset integration.
+    kind: surface
+    status: current
   web:
-    description: Optional frontend/browser workbench with web skills and Chrome DevTools integrations.
+    description: Legacy Web workbench alias; use the atomic web capability Tags.
+    kind: compatibility
+    status: legacy
+    replaced_by:
+      - playwright
+      - frontend-design
+      - vercel-web-skills
+      - claude-chrome-devtools
+      - codex-chrome-devtools
+      - opencode-chrome-devtools
+  dart-skills:
+    description: Dart agent skills for supported agents.
+    kind: surface
+    status: current
+  flutter-skills:
+    description: Flutter agent skills for supported agents.
+    kind: surface
+    status: current
+  android-skills:
+    description: Android CLI agent skill for supported agents.
+    kind: surface
+    status: current
+  claude-dart-mcp:
+    description: Claude Dart and Flutter MCP integration.
+    kind: surface
+    status: current
+  codex-dart-mcp:
+    description: Codex Dart and Flutter MCP integration.
+    kind: surface
+    status: current
+  antigravity-dart-mcp:
+    description: Antigravity Dart and Flutter MCP settings contribution.
+    kind: surface
+    status: current
+  vscode-mobile:
+    description: VS Code Dart MCP settings for mobile development.
     kind: surface
     status: current
   mobile:
-    description: Optional Dart, Flutter, and Android development skills and MCP integrations.
-    kind: surface
-    status: current
+    description: Legacy Mobile workbench alias; use the atomic mobile capability Tags.
+    kind: compatibility
+    status: legacy
+    replaced_by:
+      - dart-skills
+      - flutter-skills
+      - android-skills
+      - claude-dart-mcp
+      - codex-dart-mcp
+      - antigravity-dart-mcp
+      - vscode-mobile
   adaptive-theme:
     description: Opt-in adaptive-theme marker and supported app-specific sources or fragments.
     kind: surface
@@ -257,12 +324,23 @@ profiles:
     description: Optional frontend and browser workbench.
     status: current
     tags:
-      - web
+      - playwright
+      - frontend-design
+      - vercel-web-skills
+      - claude-chrome-devtools
+      - codex-chrome-devtools
+      - opencode-chrome-devtools
   mobile:
     description: Optional Dart and Flutter mobile development capabilities.
     status: current
     tags:
-      - mobile
+      - dart-skills
+      - flutter-skills
+      - android-skills
+      - claude-dart-mcp
+      - codex-dart-mcp
+      - antigravity-dart-mcp
+      - vscode-mobile
   workstation:
     description: Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in.
     status: current
@@ -324,7 +402,7 @@ dependencies:
         darwin_app: CodexBar.app
         brew_cask: codexbar
   - tags:
-      - web
+      - playwright
     os:
       - darwin
       - linux
@@ -1052,7 +1130,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - mobile
+      - antigravity-dart-mcp
     os:
       - darwin
       - linux
@@ -1061,7 +1139,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - mobile
+      - vscode-mobile
     os:
       - darwin
   - source: configs/vscode/settings.json
@@ -1069,7 +1147,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - mobile
+      - vscode-mobile
     os:
       - linux
   - source: configs/opencode/opencode.json
@@ -1088,7 +1166,7 @@ entries:
     strategy: copy
     ownership: json-subset
     tags:
-      - web
+      - opencode-chrome-devtools
     os:
       - darwin
       - linux
@@ -1122,7 +1200,7 @@ provisioners:
         pacman: curl
   - tool: skills
     tags:
-      - web
+      - playwright
     spec:
       package: microsoft/playwright-cli
       agents:
@@ -1140,7 +1218,7 @@ provisioners:
         command: npx
   - tool: skills
     tags:
-      - web
+      - frontend-design
     spec:
       package: anthropics/skills
       agents:
@@ -1157,7 +1235,7 @@ provisioners:
         command: npx
   - tool: skills
     tags:
-      - web
+      - vercel-web-skills
     spec:
       package: vercel-labs/agent-skills
       agents:
@@ -1177,7 +1255,7 @@ provisioners:
         command: npx
   - tool: skills
     tags:
-      - mobile
+      - dart-skills
     spec:
       package: dart-lang/skills
       agents:
@@ -1192,7 +1270,7 @@ provisioners:
         command: npx
   - tool: skills
     tags:
-      - mobile
+      - flutter-skills
     spec:
       package: flutter/skills
       agents:
@@ -1207,7 +1285,7 @@ provisioners:
         command: npx
   - tool: skills
     tags:
-      - mobile
+      - android-skills
     spec:
       package: android/skills
       agents:
@@ -1224,7 +1302,7 @@ provisioners:
         command: npx
   - tool: claude
     tags:
-      - mobile
+      - claude-dart-mcp
     os:
       - darwin
       - linux
@@ -1247,7 +1325,7 @@ provisioners:
           install --profile mobile.
   - tool: codex
     tags:
-      - mobile
+      - codex-dart-mcp
     os:
       - darwin
       - linux
@@ -1269,7 +1347,7 @@ provisioners:
           install --profile mobile.
   - tool: claude
     tags:
-      - web
+      - claude-chrome-devtools
     os:
       - darwin
       - linux
@@ -1282,7 +1360,7 @@ provisioners:
           recipe: claude
   - tool: claude
     tags:
-      - web
+      - claude-chrome-devtools
     os:
       - darwin
       - linux
@@ -1296,7 +1374,7 @@ provisioners:
           recipe: claude
   - tool: codex
     tags:
-      - web
+      - codex-chrome-devtools
     os:
       - darwin
       - linux
