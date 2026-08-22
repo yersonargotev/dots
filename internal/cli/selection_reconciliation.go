@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
@@ -15,7 +16,7 @@ import (
 	"github.com/yersonargotev/dots/internal/state"
 )
 
-func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effective selection.Effective, installPlan plan.Plan, hostOS string, paths resolvedPaths, sourceReadRoot string) (*selectionreconciliation.Report, error) {
+func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effective selection.Effective, installPlan plan.Plan, hostOS string, paths resolvedPaths, sourceReadRoot string, explicitIntent bool) (*selectionreconciliation.Report, error) {
 	installed := meta.InstalledSelection
 	if installed == nil {
 		return nil, nil
@@ -26,13 +27,20 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 
 	previousSurface := selectedsurface.Evaluate(m, installed.ResolvedTags, hostOS)
 	currentSurface := selectedsurface.Evaluate(m, effective.Selection.Tags, hostOS)
+	previousSurface, manifestEvolutionTargets := supplementRecordedManagedEntries(previousSurface, currentSurface, meta, *installed, paths)
 	evidence, err := inspectSelectionReconciliation(previousSurface, currentSurface, installPlan, paths, sourceReadRoot)
 	if err != nil {
 		return nil, fmt.Errorf("inspect selection reconciliation: %w", err)
 	}
 
+	for index := range evidence.Targets {
+		if manifestEvolutionTargets[evidence.Targets[index].DeclarativeTarget] {
+			evidence.Targets[index].RetirementAuthority = selectionreconciliation.AuthorityManifestEvolution
+		}
+	}
+
 	authority := selectionreconciliation.AuthorityManifestEvolution
-	if effective.Report.Source == selection.SourceExplicit {
+	if explicitIntent && effective.Report.Source == selection.SourceExplicit && installedIntentDiffers(*installed, effective) {
 		authority = selectionreconciliation.AuthorityExplicitRequest
 	}
 	report, err := selectionreconciliation.Build(selectionreconciliation.Input{
@@ -57,6 +65,100 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 		return nil, err
 	}
 	return &report, nil
+}
+
+func installedIntentDiffers(installed state.InstalledSelection, effective selection.Effective) bool {
+	return !slices.Equal(installed.Profiles, effective.Profiles) || !slices.Equal(installed.ExtraTags, effective.ExtraTags)
+}
+
+func supplementRecordedManagedEntries(previous, current selectedsurface.Surface, meta state.Metadata, installed state.InstalledSelection, paths resolvedPaths) (selectedsurface.Surface, map[string]bool) {
+	type targetIdentity struct {
+		declarative string
+		entry       manifest.Entry
+	}
+
+	identities := make(map[string]targetIdentity)
+	seen := make(map[string]bool)
+	for _, selected := range orderedReconciliationEntries(previous.Entries, current.Entries) {
+		resolved, err := plan.ResolveEntryTarget(selected.Entry, paths.Home, paths.XDGStateHome)
+		if err != nil {
+			continue
+		}
+		resolved = filepath.Clean(resolved)
+		if _, exists := identities[resolved]; !exists {
+			identities[resolved] = targetIdentity{declarative: selected.Entry.Target, entry: selected.Entry}
+		}
+		seen[resolved+"\x00"+selected.Source] = true
+	}
+
+	manifestEvolutionTargets := make(map[string]bool)
+	for _, record := range meta.Entries {
+		resolved := filepath.Clean(record.Target)
+		if err := plan.ValidateResolvedTarget(resolved, paths.Home); err != nil {
+			continue
+		}
+		identity, ok := identities[resolved]
+		if !ok {
+			declarative, declarativeOK := homeRelativeTarget(resolved, paths.Home)
+			if !declarativeOK {
+				continue
+			}
+			identity = targetIdentity{
+				declarative: declarative,
+				entry: manifest.Entry{
+					Target:    declarative,
+					Strategy:  record.Strategy,
+					Ownership: record.Ownership,
+				},
+			}
+		}
+
+		appendContribution := func(source, ownership string, selectorTags []string) {
+			key := resolved + "\x00" + source
+			if source == "" || seen[key] || !sharesSelectionTag(selectorTags, installed.ResolvedTags) {
+				return
+			}
+			entry := identity.entry
+			entry.Source = source
+			entry.Strategy = record.Strategy
+			entry.Ownership = ownership
+			entry.Tags = append([]string(nil), selectorTags...)
+			previous.Entries = append(previous.Entries, selectedsurface.SelectedEntry{Entry: entry, Source: source})
+			seen[key] = true
+			manifestEvolutionTargets[identity.declarative] = true
+		}
+
+		if len(record.Contributions) > 0 {
+			for _, contribution := range record.Contributions {
+				appendContribution(contribution.Source, contribution.Ownership, contribution.SelectorTags)
+			}
+			continue
+		}
+		for _, source := range record.SourceList() {
+			appendContribution(source, record.Ownership, record.Tags)
+		}
+	}
+	return previous, manifestEvolutionTargets
+}
+
+func homeRelativeTarget(target, home string) (string, bool) {
+	relative, err := filepath.Rel(home, target)
+	if err != nil || !filepath.IsLocal(relative) {
+		return "", false
+	}
+	if relative == "." {
+		return "~", true
+	}
+	return "~/" + filepath.ToSlash(relative), true
+}
+
+func sharesSelectionTag(left, right []string) bool {
+	for _, leftTag := range left {
+		if slices.Contains(right, leftTag) {
+			return true
+		}
+	}
+	return false
 }
 
 func inspectSelectionReconciliation(previous, current selectedsurface.Surface, installPlan plan.Plan, paths resolvedPaths, sourceReadRoot string) (evidence selectionreconciliation.Evidence, err error) {

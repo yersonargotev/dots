@@ -72,9 +72,14 @@ func TestBuildClassifiesWholeTargetReplacementFromRecordedEvidence(t *testing.T)
 				Content:           test.live,
 			})
 			input.Metadata.Entries = []state.Record{{
-				Target: "/home/test/.target",
-				Source: "old",
-				Hash:   state.HashBytes([]byte("old\n")),
+				Target:    "/home/test/.target",
+				Source:    "old",
+				Strategy:  "copy",
+				Ownership: "whole",
+				Hash:      state.HashBytes([]byte("old\n")),
+				Contributions: []state.Contribution{{
+					Source: "old", Ownership: "whole", EvidenceRecorded: true, Hash: state.HashBytes([]byte("old\n")),
+				}},
 			}}
 			input.Evidence.Sources = []SourceEvidence{{
 				DeclarativeTarget: "~/.target", Source: "new", Exists: true, Content: []byte("new\n"),
@@ -88,6 +93,71 @@ func TestBuildClassifiesWholeTargetReplacementFromRecordedEvidence(t *testing.T)
 				t.Fatalf("Action = %#v, want outcome %q reason %q", got, test.want, test.wantReason)
 			}
 		})
+	}
+}
+
+func TestBuildRequiresExactWholeTargetContributionEvidence(t *testing.T) {
+	previous := selectedEntry("old", "~/.target", "copy", "whole")
+	tests := []struct {
+		name   string
+		record state.Record
+	}{
+		{
+			name: "legacy target-wide hash",
+			record: state.Record{
+				Target: "/home/test/.target", Source: "old", Strategy: "copy", Ownership: "whole", Hash: state.HashBytes([]byte("old\n")),
+			},
+		},
+		{
+			name: "different attributed source",
+			record: state.Record{
+				Target: "/home/test/.target", Source: "other", Strategy: "copy", Ownership: "whole", Hash: state.HashBytes([]byte("old\n")),
+				Contributions: []state.Contribution{{
+					Source: "other", Ownership: "whole", EvidenceRecorded: true, Hash: state.HashBytes([]byte("old\n")),
+				}},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := baseInput([]selectedsurface.SelectedEntry{previous}, nil, TargetEvidence{
+				DeclarativeTarget: "~/.target", ResolvedTarget: "/home/test/.target",
+				Exists: true, Kind: TargetKindRegular, Content: []byte("old\n"),
+			})
+			input.Metadata.Entries = []state.Record{test.record}
+			report, err := Build(input)
+			if err != nil {
+				t.Fatalf("Build() error = %v", err)
+			}
+			if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonLostOwnership {
+				t.Fatalf("Action = %#v, want lost ownership block", got)
+			}
+		})
+	}
+}
+
+func TestBuildRequiresExactSymlinkContributionSet(t *testing.T) {
+	previous := selectedEntry("source", "~/.target", "symlink", "whole")
+	input := baseInput([]selectedsurface.SelectedEntry{previous}, nil, TargetEvidence{
+		DeclarativeTarget: "~/.target", ResolvedTarget: "/home/test/.target",
+		Exists: true, Kind: TargetKindSymlink, LinkDestination: "/repo/source",
+	})
+	input.Evidence.Sources = []SourceEvidence{{
+		DeclarativeTarget: "~/.target", Source: "source", ResolvedSource: "/repo/source", Exists: true,
+	}}
+	input.Metadata.Entries = []state.Record{{
+		Target: "/home/test/.target", Strategy: "symlink", Ownership: "whole",
+		Contributions: []state.Contribution{
+			{Source: "source", Ownership: "whole", EvidenceRecorded: true},
+			{Source: "other", Ownership: "whole", EvidenceRecorded: true},
+		},
+	}}
+	report, err := Build(input)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonLostOwnership {
+		t.Fatalf("Action = %#v, want lost ownership block", got)
 	}
 }
 
@@ -111,13 +181,18 @@ func TestBuildReconcilesSharedJSONTargetInSelectedSurfaceOrder(t *testing.T) {
 	}}
 	input.Metadata.Entries = []state.Record{
 		{
-			Target: "/home/test/.shared.json",
+			Target: "/home/test/.shared.json", Strategy: "copy", Ownership: "json-subset",
 			Contributions: []state.Contribution{
 				{Source: "a.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: json.RawMessage(`{"a":1}`)},
 				{Source: "b.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: json.RawMessage(`{"b":2}`)},
 			},
 		},
-		{Target: "/home/test/.old", Source: "old", Hash: state.HashBytes([]byte("old"))},
+		{
+			Target: "/home/test/.old", Source: "old", Strategy: "copy", Ownership: "whole", Hash: state.HashBytes([]byte("old")),
+			Contributions: []state.Contribution{{
+				Source: "old", Ownership: "whole", EvidenceRecorded: true, Hash: state.HashBytes([]byte("old")),
+			}},
+		},
 	}
 
 	report, err := Build(input)
@@ -178,7 +253,7 @@ func TestBuildClassifiesExactPartialRetirement(t *testing.T) {
 				Exists: true, Kind: TargetKindRegular, Content: test.live,
 			})
 			input.Metadata.Entries = []state.Record{{
-				Target: "/home/test/.shared.json",
+				Target: "/home/test/.shared.json", Strategy: "copy", Ownership: "json-subset",
 				Contributions: []state.Contribution{{
 					Source: "a.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: json.RawMessage(`{"a":1}`),
 				}},

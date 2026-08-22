@@ -97,12 +97,15 @@ const (
 type TargetEvidence struct {
 	DeclarativeTarget string
 	ResolvedTarget    string
-	Exists            bool
-	Kind              TargetKind
-	Content           []byte
-	LinkDestination   string
-	ForwardStatus     ForwardStatus
-	ForwardReason     string
+	// RetirementAuthority overrides the requested intent for contributions
+	// reconstructed only from Installation Metadata after manifest evolution.
+	RetirementAuthority Authority
+	Exists              bool
+	Kind                TargetKind
+	Content             []byte
+	LinkDestination     string
+	ForwardStatus       ForwardStatus
+	ForwardReason       string
 }
 
 // SourceEvidence is an immutable snapshot of the selected source contribution.
@@ -298,12 +301,16 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 	ownership = normalizedOwnership(ownership)
 
 	record, recorded := findRecord(input.Metadata.Entries, target.ResolvedTarget)
-	if current.target == "" && input.RequestedIntent.Authority == AuthorityManifestEvolution {
+	retirementAuthority := input.RequestedIntent.Authority
+	if target.RetirementAuthority != "" {
+		retirementAuthority = target.RetirementAuthority
+	}
+	if current.target == "" && retirementAuthority == AuthorityManifestEvolution {
 		action.Outcome = OutcomeRetain
 		action.Reason = ReasonManifestEvolution
 		return action, nil
 	}
-	if current.target != "" && hasRetiredSources(previous, current) && input.RequestedIntent.Authority == AuthorityManifestEvolution {
+	if current.target != "" && hasRetiredSources(previous, current) && retirementAuthority == AuthorityManifestEvolution {
 		action.Outcome = OutcomeRetain
 		action.Reason = ReasonManifestEvolution
 		return action, nil
@@ -334,10 +341,10 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 		return blocked(action, ReasonLostOwnership), nil
 	}
 	if ownership == "whole" {
-		return classifyWhole(action, current, target.Content, currentContent, record, recorded), nil
+		return classifyWhole(action, previous, current, target.Content, currentContent, record, recorded), nil
 	}
 	if ownership == "seeded" {
-		return classifySeeded(action, current, target.Content, currentContent, record, recorded), nil
+		return classifySeeded(action, previous, current, target.Content, currentContent, record, recorded), nil
 	}
 	return classifyPartial(action, previous, current, ownership, target.Content, currentContent, record, recorded)
 }
@@ -347,10 +354,10 @@ func classifySymlink(action Action, previous, current targetGroup, target Target
 		return blocked(action, ReasonLostOwnership)
 	}
 	if current.target == "" {
-		if !recorded || target.LinkDestination == "" || !recordHasExactSource(record, action.PreviousSources) {
+		if !recorded || target.LinkDestination == "" || !recordHasExactContributions(record, action.PreviousSources, "symlink", "whole") {
 			return blocked(action, ReasonLostOwnership)
 		}
-		if len(action.PreviousSources) != 1 || !record.HasSource(action.PreviousSources[0]) ||
+		if len(action.PreviousSources) != 1 ||
 			target.LinkDestination != resolvedSource(evidence, previous.target, action.PreviousSources[0]) {
 			return blocked(action, ReasonLostOwnership)
 		}
@@ -364,7 +371,7 @@ func classifySymlink(action Action, previous, current targetGroup, target Target
 		action.Outcome = OutcomePreserve
 		return action
 	}
-	if recorded && previous.target != "" && recordHasExactSource(record, action.PreviousSources) {
+	if recorded && previous.target != "" && recordHasExactContributions(record, action.PreviousSources, "symlink", "whole") {
 		if len(action.PreviousSources) != 1 || target.LinkDestination != resolvedSource(evidence, previous.target, action.PreviousSources[0]) {
 			return blocked(action, ReasonLostOwnership)
 		}
@@ -374,15 +381,16 @@ func classifySymlink(action Action, previous, current targetGroup, target Target
 	return blocked(action, ReasonLostOwnership)
 }
 
-func classifyWhole(action Action, current targetGroup, live, desired []byte, record state.Record, recorded bool) Action {
+func classifyWhole(action Action, previous, current targetGroup, live, desired []byte, record state.Record, recorded bool) Action {
 	if current.target != "" && bytes.Equal(live, desired) {
 		action.Outcome = OutcomePreserve
 		return action
 	}
-	if !recorded {
+	if !recorded || previous.target == "" || !recordHasExactContributions(record, action.PreviousSources, previous.entries[0].Entry.Strategy, "whole") {
 		return blocked(action, ReasonLostOwnership)
 	}
-	if record.Hash == "" || state.HashBytes(live) != record.Hash {
+	contribution, _ := exactContribution(record.Contributions, action.PreviousSources[0], "whole")
+	if contribution.Hash == "" || state.HashBytes(live) != contribution.Hash {
 		return blocked(action, ReasonWholeTargetDrift)
 	}
 	if current.target == "" {
@@ -393,23 +401,23 @@ func classifyWhole(action Action, current targetGroup, live, desired []byte, rec
 	return action
 }
 
-func classifySeeded(action Action, current targetGroup, live, desired []byte, record state.Record, recorded bool) Action {
+func classifySeeded(action Action, previous, current targetGroup, live, desired []byte, record state.Record, recorded bool) Action {
 	if current.target == "" {
 		action.Outcome = OutcomeRetain
 		return action
 	}
-	if !recorded {
+	if !recorded || previous.target == "" || !recordHasExactContributions(record, action.PreviousSources, previous.entries[0].Entry.Strategy, "seeded") {
 		if bytes.Equal(live, desired) {
 			action.Outcome = OutcomePreserve
 			return action
 		}
 		return blocked(action, ReasonLostOwnership)
 	}
-	previous, ok := exactSeededBaseline(record, action.PreviousSources)
+	previousBaseline, ok := exactSeededBaseline(record, action.PreviousSources)
 	if !ok {
 		return blocked(action, ReasonAmbiguousPartialOwnership)
 	}
-	result := seededstate.Reconcile(live, previous, desired)
+	result := seededstate.Reconcile(live, previousBaseline, desired)
 	switch result.Classification {
 	case seededstate.AlignedCurrent:
 		action.Outcome = OutcomePreserve
@@ -434,7 +442,7 @@ func classifyPartial(action Action, previous, current targetGroup, ownership str
 		action.Outcome = outcome
 		return action, nil
 	}
-	if !recorded {
+	if !recorded || !recordHasExactContributions(record, action.PreviousSources, previous.entries[0].Entry.Strategy, ownership) {
 		return blocked(action, ReasonAmbiguousPartialOwnership), nil
 	}
 	previousOwned, ok, err := exactPreviousContent(previous, ownership, record)
@@ -722,20 +730,17 @@ func exactSeededBaseline(record state.Record, sources []string) ([]byte, bool) {
 	return cloneBytes(contribution.SeededBaseline), true
 }
 
-func recordHasExactSource(record state.Record, sources []string) bool {
-	for _, source := range sources {
-		found := false
-		for _, contribution := range record.Contributions {
-			if contribution.Source == source && contribution.EvidenceRecorded {
-				found = true
-				break
-			}
-		}
-		if !found {
+func recordHasExactContributions(record state.Record, sources []string, strategy, ownership string) bool {
+	if len(sources) == 0 || record.Strategy != strategy || record.Ownership != ownership || len(record.Contributions) != len(sources) {
+		return false
+	}
+	for index, source := range sources {
+		contribution := record.Contributions[index]
+		if contribution.Source != source || !contribution.EvidenceRecorded || contribution.Ownership != ownership {
 			return false
 		}
 	}
-	return len(sources) > 0
+	return true
 }
 
 func findTargetEvidence(evidence []TargetEvidence, target string) (TargetEvidence, bool) {

@@ -101,6 +101,53 @@ func TestSelectionReconciliationManifestEvolutionNeverAuthorizesRetirement(t *te
 	}
 }
 
+func TestSelectionReconciliationExplicitUnchangedIntentDoesNotAuthorizeManifestEvolution(t *testing.T) {
+	fixture := newSelectionReconciliationFixture(t, false)
+	manifestPath := fixture.args[3]
+	manifest, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest = bytes.Replace(manifest, []byte("  full:\n    tags: [kept, retired]"), []byte("  full:\n    tags: [kept]"), 1)
+	if err := os.WriteFile(manifestPath, manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	args := append([]string(nil), fixture.args...)
+	args[1] = "full"
+	plan := runSelectionReconciliationJSON(t, cli.ExitOK, append([]string{"plan"}, args...)...)
+	actions := jsonPathSelection(t, plan, "data", "selection_reconciliation", "actions")
+	assertSelectionAction(t, actions, "managed-entry", "retain", "manifest-evolution-report-only")
+	for _, raw := range actions.([]any) {
+		action := raw.(map[string]any)
+		if action["scope"] == "managed-entry" && action["outcome"] == "remove" {
+			t.Fatalf("unchanged explicit intent authorized manifest retirement: %#v", action)
+		}
+	}
+}
+
+func TestSelectionReconciliationReportsManifestRemovedRecordedEntry(t *testing.T) {
+	fixture := newSelectionReconciliationFixture(t, false)
+	manifestPath := fixture.args[3]
+	manifest, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest = bytes.Replace(manifest, []byte(`  - source: configs/retired.conf
+    target: ~/.config/retired.conf
+    strategy: copy
+    tags: [retired]
+`), nil, 1)
+	if err := os.WriteFile(manifestPath, manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	plan := runSelectionReconciliationJSON(t, cli.ExitOK, append([]string{"plan"}, fixture.args[2:]...)...)
+	actions := jsonPathSelection(t, plan, "data", "selection_reconciliation", "actions")
+	assertSelectionAction(t, actions, "managed-entry", "retain", fixture.retiredTarget)
+	assertSelectionAction(t, actions, "managed-entry", "retain", "manifest-evolution-report-only")
+}
+
 func TestSelectionReconciliationParentSymlinkEscapeIsBlockedWithoutReadingTarget(t *testing.T) {
 	fixture := newSelectionReconciliationFixture(t, false)
 	external := filepath.Join(fixture.root, "external")
