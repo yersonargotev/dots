@@ -10,6 +10,7 @@ import (
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/selectionretirement"
 	"github.com/yersonargotev/dots/internal/status"
 	"github.com/yersonargotev/dots/internal/uninstall"
 	"github.com/yersonargotev/dots/internal/upgrade"
@@ -49,6 +50,7 @@ type installReport struct {
 	Provisioners        provision.Plan                      `json:"provisioners"`
 	BackupSets          []installBackupSetReport            `json:"backup_sets,omitempty"`
 	ProvisionerResults  *provision.Report                   `json:"provisioner_results,omitempty"`
+	SelectionRetirement *selectionretirement.Result         `json:"selection_retirement,omitempty"`
 	Retirement          *agentinstructions.RetirementReport `json:"retirement,omitempty"`
 }
 

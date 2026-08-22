@@ -123,60 +123,65 @@ func ApplyManagedEntries(p plan.Plan, opts Options) (MetadataCommit, error) {
 	return commit, nil
 }
 
+// ValidateManagedEntries validates the complete forward Install Plan without
+// mutating the filesystem or Installation Metadata. Action workflows call it
+// before dependency or provisioner effects, then ApplyManagedEntries repeats
+// validation against the latest filesystem state immediately before applying.
+func ValidateManagedEntries(p plan.Plan, opts Options) error {
+	_, err := validatePlan(p, opts)
+	return err
+}
+
 // Commit revalidates sources and live targets, then atomically records exact
 // contribution evidence and, when supplied, the authoritative selection.
 func (c MetadataCommit) Commit(installed *state.InstalledSelection) error {
 	if c.opts.StateRoot == "" {
 		return nil
 	}
-	if err := c.validateTerminalPaths(); err != nil {
-		return err
-	}
-
 	path := state.Path(c.opts.StateRoot)
-	meta, err := state.Load(path)
-	if err != nil {
-		return err
-	}
-	meta.Version = state.CurrentVersion
-	meta.Provenance = state.CaptureProvenance(c.opts.SourceRoot, version.Value)
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	legacyTargets := map[string]struct{}{}
-	for _, stagedAction := range c.actions {
-		if !stagedAction.recordsEvidence {
-			continue
-		}
-		action := stagedAction.action
-		staged, err := stagedAction.evidence()
-		if err != nil {
+	return state.Update(path, func(meta *state.Metadata) error {
+		if err := c.validateTerminalPaths(); err != nil {
 			return err
 		}
-		current, err := buildMetadataRecord(c.profiles, c.tags, action, stagedAction.resolvedSources, staged.InstalledAt)
-		if err != nil {
-			return err
-		}
-		if !sameRecordEvidence(staged, current) {
-			return fmt.Errorf("source contribution evidence changed before terminal metadata commit for %s: %w", action.Target, ownershipevidence.ErrDrift)
-		}
-		if err := validateMetadataRecord(action, stagedAction.resolvedSources, staged); err != nil {
-			return fmt.Errorf("validate staged contribution evidence for %s: %w", action.Target, err)
-		}
-		staged.InstalledAt = now
-		upsertRecord(&meta, staged)
-		if action.Migration != nil && action.Migration.LegacyTarget != "" {
-			legacyTargets[action.Migration.LegacyTarget] = struct{}{}
-		}
-	}
-	for target := range legacyTargets {
-		meta = meta.Remove(target)
-	}
-	if installed != nil {
-		selection := *installed
-		meta.InstalledSelection = &selection
-	}
+		meta.Version = state.CurrentVersion
+		meta.Provenance = state.CaptureProvenance(c.opts.SourceRoot, version.Value)
 
-	return state.Save(path, meta)
+		now := time.Now().UTC().Format(time.RFC3339)
+		legacyTargets := map[string]struct{}{}
+		for _, stagedAction := range c.actions {
+			if !stagedAction.recordsEvidence {
+				continue
+			}
+			action := stagedAction.action
+			staged, err := stagedAction.evidence()
+			if err != nil {
+				return err
+			}
+			current, err := buildMetadataRecord(c.profiles, c.tags, action, stagedAction.resolvedSources, staged.InstalledAt)
+			if err != nil {
+				return err
+			}
+			if !sameRecordEvidence(staged, current) {
+				return fmt.Errorf("source contribution evidence changed before terminal metadata commit for %s: %w", action.Target, ownershipevidence.ErrDrift)
+			}
+			if err := validateMetadataRecord(action, stagedAction.resolvedSources, staged); err != nil {
+				return fmt.Errorf("validate staged contribution evidence for %s: %w", action.Target, err)
+			}
+			staged.InstalledAt = now
+			upsertRecord(meta, staged)
+			if action.Migration != nil && action.Migration.LegacyTarget != "" {
+				legacyTargets[action.Migration.LegacyTarget] = struct{}{}
+			}
+		}
+		for target := range legacyTargets {
+			*meta = meta.Remove(target)
+		}
+		if installed != nil {
+			selection := *installed
+			meta.InstalledSelection = &selection
+		}
+		return nil
+	})
 }
 
 func (c *MetadataCommit) captureStagedEvidence() error {
@@ -202,28 +207,26 @@ func (c MetadataCommit) recordPartialInventory() error {
 		return nil
 	}
 	path := state.Path(c.opts.StateRoot)
-	meta, err := state.Load(path)
-	if err != nil {
-		return err
-	}
-	meta.Version = state.CurrentVersion
-	meta.Provenance = state.CaptureProvenance(c.opts.SourceRoot, version.Value)
-	for _, stagedAction := range c.actions {
-		if !stagedAction.recordsEvidence {
-			continue
+	return state.Update(path, func(meta *state.Metadata) error {
+		meta.Version = state.CurrentVersion
+		meta.Provenance = state.CaptureProvenance(c.opts.SourceRoot, version.Value)
+		for _, stagedAction := range c.actions {
+			if !stagedAction.recordsEvidence {
+				continue
+			}
+			action := stagedAction.action
+			if hasCommittedContributions(*meta, action.Target) {
+				continue
+			}
+			record, err := stagedAction.evidence()
+			if err != nil {
+				return err
+			}
+			record.Contributions = nil
+			upsertRecord(meta, record)
 		}
-		action := stagedAction.action
-		if hasCommittedContributions(meta, action.Target) {
-			continue
-		}
-		record, err := stagedAction.evidence()
-		if err != nil {
-			return err
-		}
-		record.Contributions = nil
-		upsertRecord(&meta, record)
-	}
-	return state.Save(path, meta)
+		return nil
+	})
 }
 
 func (a metadataAction) evidence() (state.Record, error) {

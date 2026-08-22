@@ -26,6 +26,7 @@ type selectionChangePolicy struct {
 	Confirmed       bool
 	Acknowledge     bool
 	AlreadyAccepted bool
+	ClearSelection  bool
 }
 
 func (e *selectionChangeAcknowledgementError) Error() string {
@@ -41,10 +42,16 @@ func (e *selectionChangeAcknowledgementError) JSONErrorData() any {
 }
 
 func guardSelectionChange(cmd *cobra.Command, effective *selection.Effective, policy selectionChangePolicy) (bool, bool, error) {
-	if effective.Report.Change == nil {
+	if effective.Report.Change == nil && !policy.ClearSelection {
 		return true, policy.AlreadyAccepted, nil
 	}
+	if effective.Report.Change == nil {
+		effective.Report.Change = &selection.Change{}
+	}
 	change := effective.Report.Change
+	if policy.ClearSelection {
+		change.AcknowledgementRequired = true
+	}
 	if policy.AlreadyAccepted {
 		change.AcknowledgementAccepted = true
 		return true, true, nil
@@ -58,7 +65,7 @@ func guardSelectionChange(cmd *cobra.Command, effective *selection.Effective, po
 		return true, change.AcknowledgementAccepted, nil
 	}
 
-	if policy.DryRun {
+	if policy.DryRun && !policy.ClearSelection {
 		if !wantsJSON(cmd) {
 			renderSelectionChange(cmd.OutOrStdout(), *change)
 		}
@@ -79,7 +86,13 @@ func guardSelectionChange(cmd *cobra.Command, effective *selection.Effective, po
 	if !wantsJSON(cmd) {
 		renderSelectionChange(cmd.OutOrStdout(), *change)
 	}
-	confirmed, err := confirmSelectionChange(cmd.InOrStdin(), cmd.OutOrStdout())
+	var confirmed bool
+	var err error
+	if policy.ClearSelection {
+		confirmed, err = confirmClearSelection(cmd.InOrStdin(), cmd.OutOrStdout())
+	} else {
+		confirmed, err = confirmSelectionChange(cmd.InOrStdin(), cmd.OutOrStdout())
+	}
 	if err != nil {
 		return false, false, err
 	}
@@ -90,6 +103,18 @@ func guardSelectionChange(cmd *cobra.Command, effective *selection.Effective, po
 	change.AcknowledgementAccepted = true
 	fmt.Fprintln(cmd.OutOrStdout(), "Installed Selection change acknowledgement accepted.")
 	return true, true, nil
+}
+
+func confirmClearSelection(r io.Reader, w io.Writer) (bool, error) {
+	fmt.Fprint(w, "Type clear to remove every selected Managed Entry from dots management: ")
+	scanner := bufio.NewScanner(r)
+	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return false, fmt.Errorf("read clear-selection confirmation: %w", err)
+		}
+		return false, nil
+	}
+	return strings.TrimSpace(scanner.Text()) == "clear", nil
 }
 
 func renderSelectionChange(w io.Writer, change selection.Change) {

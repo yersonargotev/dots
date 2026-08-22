@@ -61,8 +61,13 @@
   },
   {
     "scenario": "empty recorded",
-    "exit_code": 1,
-    "error": "recorded selection: at least one Profile or extra Tag is required"
+    "exit_code": 0,
+    "selection": {
+      "effective_tags": [],
+      "extra_tags": [],
+      "profiles": [],
+      "source": "recorded"
+    }
   },
   {
     "scenario": "empty explicit",

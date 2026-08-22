@@ -688,6 +688,67 @@ func TestResolveReadOnlyRequiresInvocationOrRecordedSelection(t *testing.T) {
 	}
 }
 
+func TestResolveIntentAcceptsExplicitlyAllowedEmptySelection(t *testing.T) {
+	m := manifest.Manifest{Profiles: map[string]manifest.Profile{
+		"default": {Tags: []string{"must-not-be-used"}},
+	}}
+
+	got, err := selection.ResolveIntent(m, selection.Intent{
+		Source:     selection.SourceExplicit,
+		AllowEmpty: true,
+	})
+	if err != nil {
+		t.Fatalf("ResolveIntent() error = %v", err)
+	}
+	if len(got.Profiles) != 0 || len(got.ExtraTags) != 0 || len(got.Selection.Tags) != 0 || len(got.Report.EffectiveTags) != 0 {
+		t.Fatalf("Effective = %#v, want empty selection", got)
+	}
+	if intent := got.Intent(); !intent.AllowEmpty {
+		t.Fatalf("Intent() = %#v, want empty-selection authority preserved", intent)
+	}
+
+	evolved, err := selection.CompareEvolution(m, m, got, "linux")
+	if err != nil {
+		t.Fatalf("CompareEvolution() error = %v", err)
+	}
+	if !evolved.Intent().AllowEmpty || len(evolved.Selection.Tags) != 0 {
+		t.Fatalf("evolved Effective = %#v, want authorized empty selection", evolved)
+	}
+
+	installed := evolved.InstalledSelection(state.Provenance{})
+	if len(installed.Profiles) != 0 || len(installed.ExtraTags) != 0 || len(installed.ResolvedTags) != 0 {
+		t.Fatalf("InstalledSelection() = %#v, want empty selection", installed)
+	}
+}
+
+func TestResolveIntentRejectsUnapprovedEmptySelection(t *testing.T) {
+	_, err := selection.ResolveIntent(manifest.Manifest{}, selection.Intent{Source: selection.SourceExplicit})
+	if err == nil || err.Error() != "explicit selection: at least one Profile or extra Tag is required" {
+		t.Fatalf("ResolveIntent() error = %v, want unapproved empty selection rejection", err)
+	}
+}
+
+func TestResolveReadOnlyAcceptsRecordedEmptySelection(t *testing.T) {
+	m := manifest.Manifest{Profiles: map[string]manifest.Profile{
+		"default": {Tags: []string{"must-not-be-used"}},
+	}}
+
+	got, err := selection.ResolveReadOnly(m, nil, nil, &state.InstalledSelection{})
+	if err != nil {
+		t.Fatalf("ResolveReadOnly() error = %v", err)
+	}
+	if got.Report.Source != selection.SourceRecorded {
+		t.Fatalf("Source = %q, want %q", got.Report.Source, selection.SourceRecorded)
+	}
+	if len(got.Profiles) != 0 || len(got.ExtraTags) != 0 || len(got.Selection.Tags) != 0 || len(got.Report.EffectiveTags) != 0 {
+		t.Fatalf("Effective = %#v, want empty recorded selection", got)
+	}
+	installed := got.InstalledSelection(state.Provenance{})
+	if len(installed.Profiles) != 0 || len(installed.ExtraTags) != 0 || len(installed.ResolvedTags) != 0 {
+		t.Fatalf("InstalledSelection() = %#v, want empty selection", installed)
+	}
+}
+
 func TestResolveReadOnlyValidatesSelectedSource(t *testing.T) {
 	m := manifest.Manifest{Profiles: map[string]manifest.Profile{
 		"core": {Tags: []string{"core"}},
@@ -729,7 +790,6 @@ func TestResolveReadOnlyRejectsEmptyIntentValues(t *testing.T) {
 		{name: "explicit empty tag", tags: []string{""}, want: "explicit selection: tags must not be empty"},
 		{name: "explicit whitespace profile", profiles: []string{" \t"}, want: "explicit selection: profile names must not be empty"},
 		{name: "explicit whitespace tag", tags: []string{" \t"}, want: "explicit selection: tags must not be empty"},
-		{name: "recorded empty", recorded: &state.InstalledSelection{}, want: "recorded selection: at least one Profile or extra Tag is required"},
 		{name: "recorded whitespace tag", recorded: &state.InstalledSelection{ExtraTags: []string{" "}}, want: "recorded selection: tags must not be empty"},
 	}
 	for _, tt := range tests {

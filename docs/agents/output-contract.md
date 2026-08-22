@@ -204,6 +204,12 @@ prose the text surface prints:
   `selection-change-acknowledgement-required`; error `data` contains `code` and
   the complete `selection_change`. This acknowledgement is independent from
   Conflict Resolution and `--backup-and-replace`.
+- `install --clear-selection` is the only explicit empty-selection request.
+  Interactive execution requires typing `clear`; non-interactive and JSON
+  execution, including `--dry-run`, requires `--clear-selection`, `--yes`, and
+  `--acknowledge-selection-change`. Successful reports keep the ordinary
+  `data.selection` shape with empty `profiles`, `extra_tags`, and
+  `effective_tags`; omitted selection flags never imply these empty arrays.
 - After a successful `install`, `update`, or `upgrade` finds sufficiently
   specific historical Installation Metadata evidence for retired Gentle AI or
   Codex delegation capabilities, `data.retirement` records portable `removed`
@@ -244,7 +250,8 @@ prose the text surface prints:
   target-wide inventory without receiving raw configuration bytes.
 - Schema version `10` adds the Selection Reconciliation Plan under
   `plan`'s `data.selection_reconciliation`. The same report is embedded under
-  `install --dry-run`'s `data.plan.selection_reconciliation`; both surfaces
+  `install`'s `data.plan.selection_reconciliation` for previews and confirmed
+  reductions; all surfaces
   preserve identical semantic actions, reasons, and deterministic ordering.
   Reconciliation actions are `create`, `update`, `preserve`, `reconcile`,
   `remove`, `retain`, `blocked`, and `retained-external-state`. Reasons
@@ -254,6 +261,15 @@ prose the text surface prints:
   this report never removes or reverses their installed effects. Install
   Manifest evolution is report-only and does not authorize retirement or
   Installation Metadata mutation.
+  A confirmed explicit retirement of a target that entirely leaves the
+  Selected Surface may additionally emit optional
+  `data.selection_retirement`. Its `removed` array lists targets that were
+  deleted after last-moment ownership revalidation; its `retained` array lists
+  Drifted, missing, no-longer-owned, or externally extended subset targets
+  whose filesystem state was preserved while dots released its ownership
+  record. Empty arrays remain
+  present when the result object is emitted. This optional result is
+  schema-compatible with version `10`.
   Provisioner actions include a non-sensitive `identity` digest of the exact
   rendered command so separate effects from the same tool remain distinguishable
   without exposing command arguments.

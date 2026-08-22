@@ -176,11 +176,16 @@ type Report struct {
 	Actions         []Action `json:"actions"`
 }
 
-// HasFindings reports whether any action is blocked. Retained External State is
-// intentionally informational and does not by itself become a finding.
+// HasFindings reports whether the plan contains a blocked action or unsafe
+// whole-target evidence that a read-only caller must surface as divergence.
+// Retained External State and manifest-evolution retention stay informational.
 func (r Report) HasFindings() bool {
 	for _, action := range r.Actions {
 		if action.Outcome == OutcomeBlocked {
+			return true
+		}
+		if action.Scope == ScopeManagedEntry && action.Outcome == OutcomeRetain &&
+			(action.Reason == ReasonWholeTargetDrift || action.Reason == ReasonLostOwnership || action.Reason == ReasonAmbiguousPartialOwnership) {
 			return true
 		}
 	}
@@ -406,6 +411,11 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 		return action, nil
 	}
 	if !target.Exists {
+		if current.target == "" {
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonLostOwnership
+			return action, nil
+		}
 		return blocked(action, ReasonLostOwnership), nil
 	}
 
@@ -413,6 +423,11 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 		return classifySymlink(action, previous, current, target, currentSources, record, recorded, input.Evidence.Sources), nil
 	}
 	if target.Kind != TargetKindRegular {
+		if current.target == "" {
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonLostOwnership
+			return action, nil
+		}
 		return blocked(action, ReasonLostOwnership), nil
 	}
 	if ownership == "whole" {
@@ -426,15 +441,24 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 
 func classifySymlink(action Action, previous, current targetGroup, target TargetEvidence, currentSources []SourceEvidence, record state.Record, recorded bool, evidence []SourceEvidence) Action {
 	if target.Kind != TargetKindSymlink {
+		if current.target == "" {
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonLostOwnership
+			return action
+		}
 		return blocked(action, ReasonLostOwnership)
 	}
 	if current.target == "" {
 		if !recorded || target.LinkDestination == "" || !recordHasExactContributions(record, action.PreviousSources, "symlink", "whole") {
-			return blocked(action, ReasonLostOwnership)
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonLostOwnership
+			return action
 		}
 		if len(action.PreviousSources) != 1 ||
 			target.LinkDestination != resolvedSource(evidence, previous.target, action.PreviousSources[0]) {
-			return blocked(action, ReasonLostOwnership)
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonLostOwnership
+			return action
 		}
 		action.Outcome = OutcomeRemove
 		return action
@@ -462,10 +486,20 @@ func classifyWhole(action Action, previous, current targetGroup, live, desired [
 		return action
 	}
 	if !recorded || previous.target == "" || !recordHasExactContributions(record, action.PreviousSources, previous.entries[0].Entry.Strategy, "whole") {
+		if current.target == "" {
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonLostOwnership
+			return action
+		}
 		return blocked(action, ReasonLostOwnership)
 	}
 	contribution, _ := exactContribution(record.Contributions, action.PreviousSources[0], "whole")
 	if contribution.Hash == "" || state.HashBytes(live) != contribution.Hash {
+		if current.target == "" {
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonWholeTargetDrift
+			return action
+		}
 		return blocked(action, ReasonWholeTargetDrift)
 	}
 	if current.target == "" {
@@ -518,6 +552,11 @@ func classifyPartial(action Action, previous, current targetGroup, ownership str
 		return action, nil
 	}
 	if !recorded || !recordHasExactContributions(record, action.PreviousSources, previous.entries[0].Entry.Strategy, ownership) {
+		if current.target == "" {
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonAmbiguousPartialOwnership
+			return action, nil
+		}
 		return blocked(action, ReasonAmbiguousPartialOwnership), nil
 	}
 	previousOwned, ok, err := exactPreviousContent(previous, ownership, record)
@@ -525,6 +564,11 @@ func classifyPartial(action Action, previous, current targetGroup, ownership str
 		return Action{}, fmt.Errorf("compose exact previous contribution: %w", err)
 	}
 	if !ok {
+		if current.target == "" {
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonAmbiguousPartialOwnership
+			return action, nil
+		}
 		return blocked(action, ReasonAmbiguousPartialOwnership), nil
 	}
 
@@ -534,10 +578,13 @@ func classifyPartial(action Action, previous, current targetGroup, ownership str
 			return Action{}, fmt.Errorf("analyze partial retirement: %w", removeErr)
 		}
 		if !compatible {
-			return blocked(action, ReasonAmbiguousPartialOwnership), nil
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonAmbiguousPartialOwnership
+			return action, nil
 		}
 		if !changed {
-			action.Outcome = OutcomePreserve
+			action.Outcome = OutcomeRetain
+			action.Reason = ReasonAmbiguousPartialOwnership
 		} else if empty {
 			action.Outcome = OutcomeRemove
 		} else {

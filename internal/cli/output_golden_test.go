@@ -17,6 +17,7 @@ import (
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/selectionmigration"
 	"github.com/yersonargotev/dots/internal/selectionreconciliation"
+	"github.com/yersonargotev/dots/internal/selectionretirement"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 	"github.com/yersonargotev/dots/internal/uninstall"
@@ -341,6 +342,10 @@ func TestEnvelopeGolden(t *testing.T) {
 						BackupSet: backups.BackupSet{ID: "backup-20260627T140000.000000000Z", CreatedAt: "2026-06-27T14:00:00Z", Reason: "pre-install conflict protection", Targets: []string{"/home/user/.gitconfig"}},
 						Path:      "/home/user/.local/state/dots/backups/backup-20260627T140000.000000000Z",
 					}},
+					SelectionRetirement: &selectionretirement.Result{
+						Removed:  []string{"/home/user/.work"},
+						Retained: []string{"/home/user/.drifted"},
+					},
 					Retirement: &agentinstructions.RetirementReport{
 						Removed:       []string{"~/.codex/AGENTS.md delegation blocks", "~/.codex/agents/dots-explorer.toml"},
 						ManualCleanup: []string{"~/.agents/skills/delegation"},

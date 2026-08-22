@@ -109,11 +109,12 @@ entries:
 			emptyRecordedStateRoot := filepath.Join(emptyRecordedHome, ".local", "state", "dots")
 			saveEmptyInstalledSelection(t, emptyRecordedStateRoot)
 			emptyRecordedArgs := selectionCommandArgs(command.args, manifestPath, emptyRecordedHome, sourceRoot, emptyRecordedStateRoot, command.isDeps)
-			code, _, envelopeError = runSelectionJSON(t, emptyRecordedArgs)
-			if code != 1 || envelopeError != "recorded selection: at least one Profile or extra Tag is required" {
-				t.Fatalf("empty recorded selection = code %d error %q", code, envelopeError)
+			code, data, envelopeError = runSelectionJSON(t, emptyRecordedArgs)
+			if code != 0 || envelopeError != "" {
+				t.Fatalf("empty recorded selection = code %d error %q, want valid aligned selection", code, envelopeError)
 			}
-			golden = append(golden, selectionOutcome("empty recorded", code, nil, envelopeError))
+			assertSelectionJSON(t, data, "recorded", nil, nil, nil)
+			golden = append(golden, selectionOutcome("empty recorded", code, data, envelopeError))
 
 			emptyExplicitArgs := append(append([]string{}, command.args...), "--profile", "")
 			emptyExplicitArgs = selectionCommandArgs(emptyExplicitArgs, manifestPath, commandHome, sourceRoot, stateRoot, command.isDeps)

@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/yersonargotev/dots/internal/state"
 )
@@ -21,6 +23,84 @@ func TestLoadReturnsEmptyMetadataWhenFileAbsent(t *testing.T) {
 	}
 	if len(got.Entries) != 0 {
 		t.Fatalf("Load() entries = %d, want 0 for absent file", len(got.Entries))
+	}
+}
+
+func TestLockedMetadataSerializesReadModifyWrite(t *testing.T) {
+	path := state.Path(t.TempDir())
+	if err := state.Save(path, state.Metadata{Version: state.CurrentVersion}); err != nil {
+		t.Fatal(err)
+	}
+	locked, err := state.LockMetadata(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	done := make(chan error, 1)
+	go func() {
+		defer wg.Done()
+		done <- state.Update(path, func(meta *state.Metadata) error {
+			meta.Provisioners = append(meta.Provisioners, state.ProvisionerRecord{Tool: "serialized"})
+			return nil
+		})
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("Update() completed before lock release: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if err := locked.Close(); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	got, err := state.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Provisioners) != 1 || got.Provisioners[0].Tool != "serialized" {
+		t.Fatalf("serialized metadata = %#v", got)
+	}
+}
+
+func TestLockMetadataRejectsSymlinkLockFile(t *testing.T) {
+	stateRoot := t.TempDir()
+	path := state.Path(stateRoot)
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("unchanged"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, path+".lock"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.LockMetadata(path); err == nil {
+		t.Fatal("LockMetadata() error = nil, want symlink rejection")
+	}
+	got, err := os.ReadFile(outside)
+	if err != nil || string(got) != "unchanged" {
+		t.Fatalf("outside lock target = %q, %v", got, err)
+	}
+}
+
+func TestRecordCloneDoesNotAliasEvidence(t *testing.T) {
+	original := state.Record{
+		Sources:      []string{"source"},
+		OwnedContent: []byte("owned"),
+		Contributions: []state.Contribution{{
+			SelectorTags: []string{"tag"}, OwnedBytes: []byte("bytes"),
+		}},
+	}
+	cloned := original.Clone()
+	cloned.Sources[0] = "changed"
+	cloned.OwnedContent[0] = 'X'
+	cloned.Contributions[0].SelectorTags[0] = "changed"
+	cloned.Contributions[0].OwnedBytes[0] = 'X'
+	if original.Sources[0] != "source" || string(original.OwnedContent) != "owned" || original.Contributions[0].SelectorTags[0] != "tag" || string(original.Contributions[0].OwnedBytes) != "bytes" {
+		t.Fatalf("Clone() aliases original evidence: %#v", original)
 	}
 }
 
