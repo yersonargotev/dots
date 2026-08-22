@@ -98,10 +98,11 @@ func newStatusCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to evaluate")
-	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, "profile to evaluate")
-	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, "include an additional manifest tag; repeat to include multiple tags")
+	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, selectionProfileHelp)
+	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, selectionTagHelp)
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to evaluate (default: the current user's home); use a sandbox path to inspect without touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")
+	registerSelectionFlagCompletion(cmd)
 	return cmd
 }
