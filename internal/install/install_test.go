@@ -503,6 +503,54 @@ func TestMetadataCommitRejectsChangedSourceEvidenceEvenWhenTargetContainsIt(t *t
 	}
 }
 
+func TestMetadataCommitRejectsChangedRelativeSourceRootIdentity(t *testing.T) {
+	workspace := t.TempDir()
+	firstWorkingDir := filepath.Join(workspace, "first")
+	secondWorkingDir := filepath.Join(workspace, "second")
+	for _, workingDir := range []string{firstWorkingDir, secondWorkingDir} {
+		if err := os.MkdirAll(filepath.Join(workingDir, "repo", "configs"), 0o755); err != nil {
+			t.Fatalf("mkdir source root: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(workingDir, "repo", "configs", "tool.conf"), []byte("same content\n"), 0o600); err != nil {
+			t.Fatalf("write source: %v", err)
+		}
+	}
+	t.Chdir(firstWorkingDir)
+
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".local", "state", "dots")
+	firstSource := filepath.Join(firstWorkingDir, "repo", "configs", "tool.conf")
+	target := filepath.Join(home, ".config", "tool.conf")
+	p := plan.Plan{Actions: []plan.Action{{
+		Source:         "configs/tool.conf",
+		ResolvedSource: firstSource,
+		Target:         target,
+		Strategy:       "copy",
+		Status:         plan.StatusCreate,
+	}}}
+	commit, err := install.ApplyManagedEntries(p, install.Options{SourceRoot: "repo", Home: home, StateRoot: stateRoot})
+	if err != nil {
+		t.Fatalf("ApplyManagedEntries() error = %v", err)
+	}
+	t.Chdir(secondWorkingDir)
+
+	installed := state.InstalledSelection{ExtraTags: []string{"tool"}, ResolvedTags: []string{"tool"}}
+	if err := commit.Commit(&installed); err == nil || !strings.Contains(err.Error(), "terminal source") || !strings.Contains(err.Error(), "after applying from") {
+		t.Fatalf("Commit() error = %v, want changed terminal source identity error", err)
+	}
+
+	final, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load metadata after source identity change: %v", err)
+	}
+	if len(final.Entries) != 1 || len(final.Entries[0].Contributions) != 0 {
+		t.Fatalf("Entries after source identity change = %+v, want compatibility inventory without exact evidence", final.Entries)
+	}
+	if final.InstalledSelection != nil {
+		t.Fatalf("InstalledSelection after source identity change = %+v, want nil", final.InstalledSelection)
+	}
+}
+
 func TestApplyMetadataWriteFailurePreservesPreviousContributionEvidence(t *testing.T) {
 	sourceRoot := t.TempDir()
 	home := t.TempDir()

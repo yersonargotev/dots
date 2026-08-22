@@ -429,38 +429,17 @@ func (c MetadataCommit) validateTerminalPaths() error {
 			}
 		}
 
-		sourceNames := []string{action.Source}
-		declaredResolved := []string{action.ResolvedSource}
-		if len(action.Sources) > 0 {
-			sourceNames = action.Sources
-			declaredResolved = action.ResolvedSources
+		resolvedSources, err := validateActionSources(action, sourceRoot, stagedAction.resolvedSources)
+		if err != nil {
+			return err
 		}
-		if len(sourceNames) != len(stagedAction.resolvedSources) {
-			return fmt.Errorf("terminal metadata commit for %s has %d sources, want %d", action.Target, len(sourceNames), len(stagedAction.resolvedSources))
-		}
-		if len(action.Contributions) > 0 && len(action.Contributions) != len(sourceNames) {
-			return fmt.Errorf("terminal metadata commit has %d contributions for %d sources on %s", len(action.Contributions), len(sourceNames), action.Target)
-		}
-		for j, sourceName := range sourceNames {
-			source, err := plan.ResolveSource(sourceName, sourceRoot)
-			if err != nil {
-				return err
-			}
-			if source != stagedAction.resolvedSources[j] {
-				return fmt.Errorf("terminal source %q resolved to %q after applying from %q", sourceName, source, stagedAction.resolvedSources[j])
-			}
-			if j < len(declaredResolved) && declaredResolved[j] != "" && declaredResolved[j] != source {
-				return fmt.Errorf("install plan source %q resolved to %q, want %q", sourceName, declaredResolved[j], source)
-			}
-			if len(action.Contributions) > 0 && action.Contributions[j].Source != sourceName {
-				return fmt.Errorf("install plan contribution source %q does not match source %q on %s", action.Contributions[j].Source, sourceName, action.Target)
-			}
+		for _, source := range resolvedSources {
 			if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
 				return err
 			}
 		}
 		if len(action.Sources) > 0 {
-			composed, err := configsubset.ComposeJSONFiles(stagedAction.resolvedSources)
+			composed, err := configsubset.ComposeJSONFiles(resolvedSources)
 			if err != nil {
 				return fmt.Errorf("validate terminal composed target %s: %w", action.Target, err)
 			}
@@ -516,34 +495,9 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			return nil, fmt.Errorf("install plan contains duplicate target %s", targetKey)
 		}
 		seenTargets[targetKey] = struct{}{}
-		sources := []string{action.Source}
-		declaredResolved := []string{action.ResolvedSource}
-		if len(action.Sources) > 0 {
-			sources = action.Sources
-			declaredResolved = action.ResolvedSources
-			if action.Strategy != "copy" || action.Ownership != "json-subset" || len(sources) < 2 {
-				return nil, fmt.Errorf("composed target %s requires at least two copy/json-subset sources", action.Target)
-			}
-		}
-		if len(action.Contributions) > 0 {
-			if len(action.Contributions) != len(sources) {
-				return nil, fmt.Errorf("install plan has %d contributions for %d sources on %s", len(action.Contributions), len(sources), action.Target)
-			}
-			for j, contribution := range action.Contributions {
-				if contribution.Source != sources[j] {
-					return nil, fmt.Errorf("install plan contribution source %q does not match source %q on %s", contribution.Source, sources[j], action.Target)
-				}
-			}
-		}
-		for j, sourceName := range sources {
-			source, err := plan.ResolveSource(sourceName, sourceRoot)
-			if err != nil {
-				return nil, err
-			}
-			if j < len(declaredResolved) && declaredResolved[j] != "" && declaredResolved[j] != source {
-				return nil, fmt.Errorf("install plan source %q resolved to %q, want %q", sourceName, declaredResolved[j], source)
-			}
-			resolvedSources[i] = append(resolvedSources[i], source)
+		resolvedSources[i], err = validateActionSources(action, sourceRoot, nil)
+		if err != nil {
+			return nil, err
 		}
 		source := resolvedSources[i][0]
 		if len(action.Sources) > 0 {
@@ -688,6 +642,52 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 		default:
 			return nil, fmt.Errorf("install plan contains unsupported status %q for %s", action.Status, action.Target)
 		}
+	}
+	return resolvedSources, nil
+}
+
+// validateActionSources resolves and validates an Action's ordered Source of
+// Truth inputs. A non-nil expected slice also enforces the identity captured
+// by an earlier validation.
+func validateActionSources(action plan.Action, sourceRoot string, expected []string) ([]string, error) {
+	sourceNames := []string{action.Source}
+	declaredResolved := []string{action.ResolvedSource}
+	if len(action.Sources) > 0 {
+		sourceNames = action.Sources
+		declaredResolved = action.ResolvedSources
+		if action.Strategy != "copy" || action.Ownership != "json-subset" || len(sourceNames) < 2 {
+			return nil, fmt.Errorf("composed target %s requires at least two copy/json-subset sources", action.Target)
+		}
+	}
+
+	if expected != nil && len(sourceNames) != len(expected) {
+		return nil, fmt.Errorf("terminal metadata commit for %s has %d sources, want %d", action.Target, len(sourceNames), len(expected))
+	}
+	if len(action.Contributions) > 0 && len(action.Contributions) != len(sourceNames) {
+		if expected != nil {
+			return nil, fmt.Errorf("terminal metadata commit has %d contributions for %d sources on %s", len(action.Contributions), len(sourceNames), action.Target)
+		}
+		return nil, fmt.Errorf("install plan has %d contributions for %d sources on %s", len(action.Contributions), len(sourceNames), action.Target)
+	}
+	for i, contribution := range action.Contributions {
+		if contribution.Source != sourceNames[i] {
+			return nil, fmt.Errorf("install plan contribution source %q does not match source %q on %s", contribution.Source, sourceNames[i], action.Target)
+		}
+	}
+
+	resolvedSources := make([]string, len(sourceNames))
+	for i, sourceName := range sourceNames {
+		resolved, err := plan.ResolveSource(sourceName, sourceRoot)
+		if err != nil {
+			return nil, err
+		}
+		if expected != nil && resolved != expected[i] {
+			return nil, fmt.Errorf("terminal source %q resolved to %q after applying from %q", sourceName, resolved, expected[i])
+		}
+		if i < len(declaredResolved) && declaredResolved[i] != "" && declaredResolved[i] != resolved {
+			return nil, fmt.Errorf("install plan source %q resolved to %q, want %q", sourceName, declaredResolved[i], resolved)
+		}
+		resolvedSources[i] = resolved
 	}
 	return resolvedSources, nil
 }

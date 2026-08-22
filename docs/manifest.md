@@ -331,31 +331,32 @@ Current Managed Entries:
 
 | Source | Target | Strategy | Tags | OS | Dependencies |
 |--------|--------|----------|------|----|--------------|
-| `configs/zsh/loader.zsh` | `~/.zshrc` | `copy` (`marked-block`) | `core` | `darwin`, `linux` | `zsh` |
-| `configs/zsh/zshrc` | `~/.config/dots/zsh/zshrc` | `symlink` | `core` | `darwin`, `linux` | None |
-| `configs/zsh/zimrc` | `~/.zimrc` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
-| `configs/zsh/zshenv` | `~/.zshenv` | `symlink` | `core` | `darwin`, `linux` | `zsh` |
-| `configs/git/loader.gitconfig` | `~/.gitconfig` | `copy` (`marked-block`) | `core` | `darwin`, `linux` | `git` |
-| `configs/git/gitconfig` | `~/.config/dots/git/gitconfig` | `symlink` | `core` | `darwin`, `linux` | None |
-| `configs/dots/theme.sh` | `~/.config/dots/theme.sh` | `symlink` | `core` | `darwin`, `linux` | None |
+| `configs/zsh/loader.zsh` | `~/.zshrc` | `copy` (`marked-block`) | `zsh` | `darwin`, `linux` | `zsh` |
+| `configs/zsh/zshrc` | `~/.config/dots/zsh/zshrc` | `symlink` | `zsh` | `darwin`, `linux` | None |
+| `configs/zsh/zimrc` | `~/.zimrc` | `symlink` | `zimfw` | `darwin`, `linux` | `zsh` |
+| `configs/zsh/zshenv` | `~/.zshenv` | `symlink` | `zsh` | `darwin`, `linux` | `zsh` |
+| `configs/git/loader.gitconfig` | `~/.gitconfig` | `copy` (`marked-block`) | `git` | `darwin`, `linux` | `git` |
+| `configs/git/gitconfig` | `~/.config/dots/git/gitconfig` | `symlink` | `git` | `darwin`, `linux` | None |
+| `configs/tuicr/config.toml` | `~/.config/tuicr/config.toml` | `copy` | `tuicr` | `darwin`, `linux` | `tuicr`; owns TOML subset |
+| `configs/dots/theme.sh` | `~/.config/dots/theme.sh` | `symlink` | `tmux`, `neovim` | `darwin`, `linux` | None |
 | `configs/dots/adaptive-theme` | `~/.config/dots/adaptive-theme` | `symlink` | `adaptive-theme` | `darwin`, `linux` | None |
-| `configs/starship/starship.toml` | `~/.config/starship.toml` | `symlink` | `core` | `darwin`, `linux` | `starship` |
-| `configs/tmux/tmux.conf` | `~/.tmux.conf` | `symlink` | `core` | `darwin`, `linux` | `tmux` |
-| `configs/herdr/config.toml` (`adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` | `core` | `darwin` | `herdr`; owns TOML subset |
-| `configs/zellij/config.kdl` (`adaptive-theme` override: `configs/zellij/config-adaptive.kdl`) | `~/.config/zellij/config.kdl` | `copy` | `core` | `darwin`, `linux` | `zellij`; whole-target ownership |
-| `configs/zellij/layouts/default.kdl` | `~/.config/zellij/layouts/default.kdl` | `symlink` | `core` | `darwin`, `linux` | `zellij` |
+| `configs/starship/starship.toml` | `~/.config/starship.toml` | `symlink` | `starship` | `darwin`, `linux` | `starship` |
+| `configs/tmux/tmux.conf` | `~/.tmux.conf` | `symlink` | `tmux` | `darwin`, `linux` | `tmux` |
+| `configs/herdr/config.toml` (`adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` | `herdr` | `darwin` | `herdr`; owns TOML subset |
+| `configs/zellij/config.kdl` (`adaptive-theme` override: `configs/zellij/config-adaptive.kdl`) | `~/.config/zellij/config.kdl` | `copy` | `zellij` | `darwin`, `linux` | `zellij`; whole-target ownership |
+| `configs/zellij/layouts/default.kdl` | `~/.config/zellij/layouts/default.kdl` | `symlink` | `zellij` | `darwin`, `linux` | `zellij` |
 | `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `ghostty` | `darwin`, `linux` | `ghostty` |
 | `configs/ghostty/adaptive/adaptive-theme.ghostty` | `~/.config/ghostty/adaptive-theme.ghostty` | `symlink` | `adaptive-theme` | `darwin` | None |
 | `configs/warp/settings.toml` | `~/.warp/settings.toml` | `copy` | `warp` | `darwin` | None |
 | `configs/warp/keybindings.yaml` | `~/.warp/keybindings.yaml` | `copy` | `warp` | `darwin` | None |
 | `configs/warp/settings.toml` | `~/.config/warp-terminal/settings.toml` | `copy` | `warp` | `linux` | `Warp` |
 | `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `warp` | `linux` | `Warp` |
-| `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `copy` | `core` | `darwin`, `linux` | `atuin`; owns TOML subset |
-| `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `core` | `darwin`, `linux` | `atuin` |
-| `configs/bat/config` | `~/.config/bat/config` | `copy` | `core` | `darwin`, `linux` | `bat`; whole-target ownership |
-| `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `core` | `darwin`, `linux` | None |
-| `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `core` | `darwin`, `linux` | `neovim` |
-| `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `core` | `darwin`, `linux` | None |
+| `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `copy` | `atuin` | `darwin`, `linux` | `atuin`; owns TOML subset |
+| `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `atuin` | `darwin`, `linux` | `atuin` |
+| `configs/bat/config` | `~/.config/bat/config` | `copy` | `bat` | `darwin`, `linux` | `bat`; whole-target ownership |
+| `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `neovim` | `darwin`, `linux` | None |
+| `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `neovim` | `darwin`, `linux` | `neovim` |
+| `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `neovim` | `darwin`, `linux` | None |
 | `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `zed` | `darwin`, `linux` | `zed` |
 | `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `copy` (`seeded`) | `zed` | `darwin`, `linux` | `zed` |
 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `zed` | `darwin`, `linux` | `zed` |
@@ -576,7 +577,7 @@ Current Provisioners:
 
 | Tool | Tags | OS | Rendered intent | Dependencies |
 |------|------|----|-----------------|--------------|
-| `zimfw` | `core` | all | Install the ZimFW runtime under `~/.zim` when missing and run `zimfw init -q` using the dots-managed `~/.zimrc`. | `zsh`, `git`, `curl` |
+| `zimfw` | `zimfw` | all | Install the ZimFW runtime under `~/.zim` when missing and run `zimfw init -q` using the dots-managed `~/.zimrc`. | `zsh`, `git`, `curl` |
 | `skills` | `playwright` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
 | `skills` | `frontend-design` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `vercel-web-skills` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
