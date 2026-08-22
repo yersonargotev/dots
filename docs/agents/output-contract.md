@@ -38,7 +38,7 @@ state.
 
 ```json
 {
-  "schema_version": "9",
+  "schema_version": "10",
   "command": "doctor",
   "status": "ok",
   "data": { "...": "command-specific report" }
@@ -59,7 +59,7 @@ Schema version `3` introduced this partial-error report allowance:
 
 ```json
 {
-  "schema_version": "9",
+  "schema_version": "10",
   "command": "doctor",
   "status": "error",
   "error": "read manifest: open dots.yaml: no such file or directory"
@@ -85,6 +85,14 @@ The `2` findings code applies only to read-only diagnostic commands such as
 `0`/`1` even when their JSON payload includes a plan or preview. Reserving `1`
 for real failures means existing `|| handle-error` scripts never confuse a
 divergent-but-healthy run with a broken one.
+
+For a Selection Reconciliation Plan, read-only `dots plan` returns
+`status: "findings"` and exit `2` when the report contains a blocked action,
+whole-target Drift, lost whole-target ownership, or ambiguous partial ownership.
+The same report embedded by `dots install --dry-run` remains an action preview:
+it returns `status: "ok"` and exit `0` unless planning itself fails. Callers
+must inspect the embedded reconciliation report when they need its finding
+semantics; the action-command exit code does not erase or reclassify them.
 
 ```bash
 dots status --output json
@@ -234,6 +242,18 @@ prose the text surface prints:
   `ownership_evidence` fields to `installed`, plus optional `ownership`, so
   agents can distinguish exact per-contribution evidence from historical
   target-wide inventory without receiving raw configuration bytes.
+- Schema version `10` adds the Selection Reconciliation Plan under
+  `plan`'s `data.selection_reconciliation`. The same report is embedded under
+  `install --dry-run`'s `data.plan.selection_reconciliation`; both surfaces
+  preserve identical semantic actions, reasons, and deterministic ordering.
+  Reconciliation actions are `create`, `update`, `preserve`, `reconcile`,
+  `remove`, `retain`, `blocked`, and `retained-external-state`. Reasons
+  distinguish whole-target Drift, lost whole-target ownership, and ambiguous
+  partial ownership rather than collapsing them into one unsafe-removal state.
+  Dependency and Provisioner reductions use `retained-external-state` because
+  this report never removes or reverses their installed effects. Install
+  Manifest evolution is report-only and does not authorize retirement or
+  Installation Metadata mutation.
 - Plan actions and Status Managed Entry items may add the optional reason
   `source-override-not-selected` and a deterministic `matching_tags` array when
   a conflicting target exactly matches one or more alternate sources whose

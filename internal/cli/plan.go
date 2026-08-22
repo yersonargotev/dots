@@ -66,6 +66,10 @@ func newPlanCommand() *cobra.Command {
 				return err
 			}
 			p.Selection = &effective.Report
+			p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, runtime.GOOS, paths, paths.SourceRoot)
+			if err != nil {
+				return err
+			}
 
 			return renderOrEmit(cmd, p, func() error {
 				renderPlan(cmd.OutOrStdout(), p)

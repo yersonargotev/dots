@@ -172,6 +172,10 @@ func newInstallCommand() *cobra.Command {
 					return err
 				}
 				p.Selection = &effective.Report
+				p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, hostOS, paths, prep.SourceReadRoot)
+				if err != nil {
+					return err
+				}
 				if wantsJSON(cmd) {
 					return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: true, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
 				}

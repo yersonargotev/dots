@@ -15,6 +15,7 @@ import (
 	"github.com/yersonargotev/dots/internal/seededstate"
 	"github.com/yersonargotev/dots/internal/selectedsurface"
 	"github.com/yersonargotev/dots/internal/selection"
+	"github.com/yersonargotev/dots/internal/selectionreconciliation"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/textblock"
 )
@@ -100,17 +101,21 @@ type LegacyMigration struct {
 
 // Plan is the preview of changes the installer would apply for a Profile.
 type Plan struct {
-	Profile   string            `json:"profile,omitempty"`
-	Profiles  []string          `json:"profiles,omitempty"`
-	Tags      []string          `json:"tags,omitempty"`
-	Selection *selection.Report `json:"selection,omitempty"`
-	Actions   []Action          `json:"actions"`
+	Profile                 string                          `json:"profile,omitempty"`
+	Profiles                []string                        `json:"profiles,omitempty"`
+	Tags                    []string                        `json:"tags,omitempty"`
+	Selection               *selection.Report               `json:"selection,omitempty"`
+	SelectionReconciliation *selectionreconciliation.Report `json:"selection_reconciliation,omitempty"`
+	Actions                 []Action                        `json:"actions"`
 }
 
 // HasFindings reports whether the Install Plan contains an action the caller
 // must act on before a clean apply: an unresolved Conflict, or a missing source
 // the manifest declares but the Installed Repository does not provide.
 func (p Plan) HasFindings() bool {
+	if p.SelectionReconciliation != nil && p.SelectionReconciliation.HasFindings() {
+		return true
+	}
 	for _, a := range p.Actions {
 		switch a.Status {
 		case StatusConflict, StatusMissingSource:
@@ -163,6 +168,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	plan := Plan{Profile: resolved.Profile, Profiles: resolved.Profiles, Tags: resolved.Tags}
 	actionByTarget := map[string]int{}
 	readSourcesByTarget := map[string][]string{}
+	unsafeTargetByTarget := map[string]bool{}
 	scheduledLegacyParents := map[string]struct{}{}
 	for _, selected := range selectedEntries(m, tags, opts.OS) {
 		entry := selected.Entry
@@ -181,9 +187,13 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			return Plan{}, err
 		}
 		entry.Source = source
-		actionStatus, err := status(entry, target, readSourceAbs, readRoot, sourceAbs, opts.Metadata, defaultSource)
-		if err != nil {
-			return Plan{}, err
+		unsafeTargetParent := ValidateTargetParentInsideHome(target, opts.Home) != nil
+		actionStatus := StatusConflict
+		if !unsafeTargetParent {
+			actionStatus, err = status(entry, target, readSourceAbs, readRoot, sourceAbs, opts.Metadata, defaultSource)
+			if err != nil {
+				return Plan{}, err
+			}
 		}
 		legacyParent := ""
 		if actionStatus == StatusConflict {
@@ -203,7 +213,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			}
 		}
 		var matchingTags []string
-		if actionStatus == StatusConflict {
+		if actionStatus == StatusConflict && !unsafeTargetParent {
 			matchingTags, err = matchingUnselectedSourceOverrideTags(entry, tags, target, readRoot, opts.SourceRoot)
 			if err != nil {
 				return Plan{}, err
@@ -228,7 +238,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			Ownership:    entry.Ownership,
 			LegacyParent: legacyParent,
 		}
-		if actionStatus == StatusConflict || actionStatus == StatusCreate {
+		if !unsafeTargetParent && (actionStatus == StatusConflict || actionStatus == StatusCreate) {
 			if migration, ok := opts.LegacyMigrations[target]; ok && ((migration.LegacyTarget == "" && actionStatus == StatusConflict) || (migration.LegacyTarget != "" && actionStatus == StatusCreate)) {
 				planned, compatible, migrateErr := planLegacyMigration(entry, readSourceAbs, migration)
 				if migrateErr != nil {
@@ -281,15 +291,20 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			if rec, ok := opts.Metadata.FindByTarget(existing.Target); ok && rec.Ownership == "json-subset" && len(rec.OwnedContent) > 0 {
 				existing.PreviousContent = append([]byte(nil), rec.OwnedContent...)
 			}
-			existing.Status, err = composedJSONStatus(*existing, opts.Metadata)
-			if err != nil {
-				return Plan{}, err
+			if unsafeTargetByTarget[targetKey] || unsafeTargetParent {
+				existing.Status = StatusConflict
+			} else {
+				existing.Status, err = composedJSONStatus(*existing, opts.Metadata)
+				if err != nil {
+					return Plan{}, err
+				}
 			}
 			existing.Reason = ""
 			existing.MatchingTags = nil
 			continue
 		}
 		actionByTarget[targetKey] = len(plan.Actions)
+		unsafeTargetByTarget[targetKey] = unsafeTargetParent
 		readSourcesByTarget[targetKey] = []string{readSourceAbs}
 		plan.Actions = append(plan.Actions, action)
 	}

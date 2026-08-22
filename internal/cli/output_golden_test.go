@@ -16,6 +16,7 @@ import (
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/selectionmigration"
+	"github.com/yersonargotev/dots/internal/selectionreconciliation"
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/status"
 	"github.com/yersonargotev/dots/internal/uninstall"
@@ -81,6 +82,15 @@ func TestEnvelopeGolden(t *testing.T) {
 		},
 		MissingProfiles: []string{},
 		StaleExtraTags:  []string{"retired"},
+	}
+	reconciliationReport := &selectionreconciliation.Report{
+		PreviousIntent:  selectionreconciliation.Intent{Authority: selectionreconciliation.AuthorityRecorded, Profiles: []string{"core"}, ExtraTags: []string{"adaptive-theme"}, ResolvedTags: []string{"core", "adaptive-theme"}},
+		RequestedIntent: selectionreconciliation.Intent{Authority: selectionreconciliation.AuthorityExplicitRequest, Profiles: []string{"core"}, ExtraTags: []string{}, ResolvedTags: []string{"core"}},
+		Actions: []selectionreconciliation.Action{
+			{Scope: selectionreconciliation.ScopeSelection, Outcome: selectionreconciliation.OutcomeRemove, PreviousSources: []string{}, CurrentSources: []string{}, Names: []string{"adaptive-theme"}},
+			{Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeBlocked, Reason: selectionreconciliation.ReasonAmbiguousPartialOwnership, DeclarativeTarget: "~/.config/app/settings.json", ResolvedTarget: "/home/user/.config/app/settings.json", PreviousSources: []string{"configs/app/adaptive.json"}, CurrentSources: []string{"configs/app/base.json"}, Names: []string{}},
+			{Scope: selectionreconciliation.ScopeDependency, Outcome: selectionreconciliation.OutcomeRetainedExternalState, PreviousSources: []string{}, CurrentSources: []string{}, Names: []string{"theme-helper"}},
+		},
 	}
 	tests := []struct {
 		name   string
@@ -190,7 +200,7 @@ func TestEnvelopeGolden(t *testing.T) {
 				Status:        statusFindings,
 				Data: plan.Plan{Profile: "default", Selection: &selection.Report{
 					Source: selection.SourceExplicit, Profiles: []string{"default"}, ExtraTags: []string{"work"}, EffectiveTags: []string{"core", "work"},
-				}, Actions: []plan.Action{
+				}, SelectionReconciliation: reconciliationReport, Actions: []plan.Action{
 					{Source: "configs/zsh/zshrc", ResolvedSource: "/abs/machine/local/path/MUST/NOT/APPEAR", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
 					{Source: "configs/nvim/lazy-lock.json", ResolvedSource: "/abs/MUST/NOT/APPEAR", Target: "/home/user/.local/state/nvim/lazy-lock.json", TargetRoot: "xdg-state", Strategy: "copy", Status: plan.StatusUnchanged, Reason: plan.ReasonSeededLocalEvolution},
 					{Source: "configs/app/settings.json", ResolvedSource: "/abs/MUST/NOT/APPEAR", Target: "/home/user/.config/app/settings.json", Strategy: "copy", Status: plan.StatusMigrate, Migration: &plan.LegacyMigration{CapturedContent: []byte("MUST NOT APPEAR")}},
@@ -320,7 +330,7 @@ func TestEnvelopeGolden(t *testing.T) {
 						Preview: &installPreview,
 						Result:  &installResult,
 					},
-					Plan: plan.Plan{Profile: "default", Selection: &installSelection, Actions: []plan.Action{
+					Plan: plan.Plan{Profile: "default", Selection: &installSelection, SelectionReconciliation: reconciliationReport, Actions: []plan.Action{
 						{Source: "configs/zsh/zshrc", Target: "/home/user/.zshrc", Strategy: "symlink", Status: plan.StatusCreate},
 					}},
 					Provisioners: provision.Plan{Profile: "default", Steps: []provision.Step{

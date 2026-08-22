@@ -1,6 +1,10 @@
 package plan
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/yersonargotev/dots/internal/selectionreconciliation"
+)
 
 func TestPlanHasFindings(t *testing.T) {
 	cases := []struct {
@@ -28,5 +32,16 @@ func TestPlanHasFindings(t *testing.T) {
 func TestPlanHasFindingsEmpty(t *testing.T) {
 	if (Plan{}).HasFindings() {
 		t.Fatal("an empty plan must not report findings")
+	}
+}
+
+func TestPlanHasFindingsIncludesSelectionReconciliation(t *testing.T) {
+	clean := &selectionreconciliation.Report{Actions: []selectionreconciliation.Action{{Outcome: selectionreconciliation.OutcomeRetainedExternalState}}}
+	if (Plan{SelectionReconciliation: clean}).HasFindings() {
+		t.Fatal("Retained External State must not be a finding")
+	}
+	blocked := &selectionreconciliation.Report{Actions: []selectionreconciliation.Action{{Outcome: selectionreconciliation.OutcomeBlocked}}}
+	if !(Plan{SelectionReconciliation: blocked}).HasFindings() {
+		t.Fatal("blocked reconciliation action must be a finding")
 	}
 }
