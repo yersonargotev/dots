@@ -671,7 +671,8 @@ func TestDeliveryWorkflowInvokesMutationSafetyGate(t *testing.T) {
 		"recovery or rollback",
 		"authority or identity that may change concurrently",
 		"use the `Gate results and invalidation` matrix",
-		"Other classifications need only its result and evidence sections",
+		"For `not-applicable`, read its matrix row and `Delivery evidence` section",
+		"For every other result, follow only the matching matrix row",
 		"read the reference completely",
 		"Before implementation begins",
 		"every required part of the safety case is complete",
@@ -706,7 +707,6 @@ func TestMutationSafetyGateContract(t *testing.T) {
 		"Every applicable threat or failure",
 		"mitigation, planned test, or specific `not applicable` reason",
 		"Resolve every actionable finding",
-		"does not replace final Spec and Standards review",
 	})
 
 	wants := map[string][2]string{

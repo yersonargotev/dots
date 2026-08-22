@@ -190,8 +190,9 @@ Before implementation begins, use the `Gate results and invalidation` matrix in
 [mutation-safety-gate.md](mutation-safety-gate.md) to classify whether the
 change spans managed filesystem mutation, persisted metadata or receipts,
 recovery or rollback, or authority or identity that may change concurrently.
-For `required-mutation`, read the reference completely. Other classifications
-need only its result and evidence sections.
+For `required-mutation`, read the reference completely. For `not-applicable`,
+read its matrix row and `Delivery evidence` section. For every other result,
+follow only the matching matrix row.
 
 The gate passes only when every required part of the safety case is complete and
 its independent design challenge has zero actionable findings. Do not enter
