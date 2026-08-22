@@ -90,6 +90,7 @@ func TestEnvelopeGolden(t *testing.T) {
 			{Scope: selectionreconciliation.ScopeSelection, Outcome: selectionreconciliation.OutcomeRemove, PreviousSources: []string{}, CurrentSources: []string{}, Names: []string{"adaptive-theme"}},
 			{Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeBlocked, Reason: selectionreconciliation.ReasonAmbiguousPartialOwnership, DeclarativeTarget: "~/.config/app/settings.json", ResolvedTarget: "/home/user/.config/app/settings.json", PreviousSources: []string{"configs/app/adaptive.json"}, CurrentSources: []string{"configs/app/base.json"}, Names: []string{}},
 			{Scope: selectionreconciliation.ScopeDependency, Outcome: selectionreconciliation.OutcomeRetainedExternalState, PreviousSources: []string{}, CurrentSources: []string{}, Names: []string{"theme-helper"}},
+			{Scope: selectionreconciliation.ScopeProvisioner, Outcome: selectionreconciliation.OutcomeRetainedExternalState, PreviousSources: []string{}, CurrentSources: []string{}, Names: []string{"claude"}, Identity: "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
 		},
 	}
 	tests := []struct {

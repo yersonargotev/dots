@@ -288,6 +288,16 @@
             "names": [
               "theme-helper"
             ]
+          },
+          {
+            "scope": "provisioner",
+            "outcome": "retained-external-state",
+            "previous_sources": [],
+            "current_sources": [],
+            "names": [
+              "claude"
+            ],
+            "identity": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
           }
         ]
       },
