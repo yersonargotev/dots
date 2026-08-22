@@ -161,11 +161,6 @@ func reconcileJSONCValue(target, previous, current any) (any, bool, bool) {
 			currentChild, remainsOwned := currentObject[key]
 			targetChild, exists := targetObject[key]
 			if !exists {
-				if !remainsOwned {
-					// A prior interrupted reconciliation may already have
-					// removed this retired value.
-					continue
-				}
 				return target, false, false
 			}
 			if !remainsOwned {
@@ -367,7 +362,7 @@ func applyJSONCDesired(value *hujson.Value, target, desired any) error {
 
 func moveJSONCMemberExtra(object *hujson.Object, index int) {
 	member := object.Members[index]
-	extra := append(hujson.Extra(nil), member.Name.BeforeExtra...)
+	extra := appendJSONCCommentExtra(nil, member.Name.BeforeExtra)
 	extra = appendJSONCCommentExtra(extra, member.Name.AfterExtra)
 	extra = appendJSONCValueComments(extra, member.Value)
 	if len(extra) == 0 {

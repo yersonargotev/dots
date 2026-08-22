@@ -436,7 +436,7 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 	if ownership == "seeded" {
 		return classifySeeded(action, previous, current, target.Content, currentContent, record, recorded), nil
 	}
-	return classifyPartial(action, previous, current, ownership, target.Content, currentContent, record, recorded)
+	return classifyPartial(action, previous, current, ownership, target.Content, currentContent, currentSources, record, recorded)
 }
 
 func classifySymlink(action Action, previous, current targetGroup, target TargetEvidence, currentSources []SourceEvidence, record state.Record, recorded bool, evidence []SourceEvidence) Action {
@@ -539,7 +539,7 @@ func classifySeeded(action Action, previous, current targetGroup, live, desired 
 	return action
 }
 
-func classifyPartial(action Action, previous, current targetGroup, ownership string, live, desired []byte, record state.Record, recorded bool) (Action, error) {
+func classifyPartial(action Action, previous, current targetGroup, ownership string, live, desired []byte, currentEvidence []SourceEvidence, record state.Record, recorded bool) (Action, error) {
 	if previous.target == "" {
 		outcome, err := analyzePartialAddition(ownership, live, desired)
 		if err != nil {
@@ -558,6 +558,14 @@ func classifyPartial(action Action, previous, current targetGroup, ownership str
 			return action, nil
 		}
 		return blocked(action, ReasonAmbiguousPartialOwnership), nil
+	}
+	currentContents := make([][]byte, len(currentEvidence))
+	for i := range currentEvidence {
+		currentContents[i] = currentEvidence[i].Content
+	}
+	if record.PendingReconciliationMatches(live, previous.entries[0].Entry.Strategy, ownership, action.CurrentSources, currentContents) {
+		action.Outcome = OutcomePreserve
+		return action, nil
 	}
 	previousOwned, ok, err := exactPreviousContent(previous, ownership, record)
 	if err != nil {

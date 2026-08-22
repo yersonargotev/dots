@@ -137,18 +137,7 @@ func TestReconcileJSONAddsAndRemovesOwnedValuesWhilePreservingTargetOnlyContent(
 	if !got.Compatible || !got.Changed {
 		t.Fatalf("ReconcileJSON() = %#v, want compatible change", got)
 	}
-	want := `{
-  "items": [
-    "external",
-    "new"
-  ],
-  "settings": {
-    "added": "new",
-    "external": "local",
-    "keep": true
-  }
-}
-`
+	want := "{\"settings\":{\"keep\":true,\"external\":\"local\", \"added\":\"new\"},\"items\":[\"external\",\"new\"]}"
 	if string(got.Content) != want {
 		t.Fatalf("ReconcileJSON() content =\n%s\nwant:\n%s", got.Content, want)
 	}
@@ -168,7 +157,22 @@ func TestReconcileJSONRejectsChangedRetiredValue(t *testing.T) {
 	}
 }
 
-func TestReconcileJSONAcceptsAlreadyRemovedRetiredObjectKey(t *testing.T) {
+func TestReconcileJSONPreservesExactUnrelatedBytes(t *testing.T) {
+	target := []byte("{\n  \"external\" : { \"spacing\": [1,  2] },\n  \"owned\": true,\n  \"retired\": \"old\"\n}\n")
+	previous := []byte(`{"owned":true,"retired":"old"}`)
+	current := []byte(`{"owned":true}`)
+	want := []byte("{\n  \"external\" : { \"spacing\": [1,  2] },\n  \"owned\": true\n}\n")
+
+	got, err := ReconcileJSON(target, previous, current)
+	if err != nil {
+		t.Fatalf("ReconcileJSON() error = %v", err)
+	}
+	if !got.Compatible || !got.Changed || !bytes.Equal(got.Content, want) {
+		t.Fatalf("ReconcileJSON() = %q, want exact unrelated bytes %q", got.Content, want)
+	}
+}
+
+func TestReconcileJSONRejectsAlreadyRemovedRetiredObjectKeyWithoutReceipt(t *testing.T) {
 	target := []byte(`{"settings":{"external":true}}`)
 	previous := []byte(`{"settings":{"retired":"old"}}`)
 	current := []byte(`{"settings":{}}`)
@@ -177,12 +181,12 @@ func TestReconcileJSONAcceptsAlreadyRemovedRetiredObjectKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReconcileJSON() error = %v", err)
 	}
-	if !got.Compatible || got.Changed || !bytes.Contains(got.Content, []byte(`"external": true`)) {
-		t.Fatalf("ReconcileJSON() = %#v, want already-removed key to be converged", got)
+	if got.Compatible || got.Changed || got.Content != nil {
+		t.Fatalf("ReconcileJSON() = %#v, want ambiguous missing key rejected", got)
 	}
 }
 
-func TestReconcileJSONAcceptsAlreadyRemovedRetiredArrayItem(t *testing.T) {
+func TestReconcileJSONRejectsAlreadyRemovedRetiredArrayItemWithoutReceipt(t *testing.T) {
 	target := []byte(`{"items":["locally-changed"]}`)
 	previous := []byte(`{"items":["old"]}`)
 	current := []byte(`{"items":[]}`)
@@ -191,8 +195,8 @@ func TestReconcileJSONAcceptsAlreadyRemovedRetiredArrayItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReconcileJSON() error = %v", err)
 	}
-	if !got.Compatible || got.Changed || !bytes.Contains(got.Content, []byte(`"locally-changed"`)) {
-		t.Fatalf("ReconcileJSON() = %#v, want target-only array item preserved", got)
+	if got.Compatible || got.Changed || got.Content != nil {
+		t.Fatalf("ReconcileJSON() = %#v, want ambiguous array replacement rejected", got)
 	}
 }
 
@@ -575,7 +579,7 @@ runtime = false # Atuin wrote this
 	}
 }
 
-func TestReconcileTOMLAcceptsAlreadyRemovedRetiredValue(t *testing.T) {
+func TestReconcileTOMLRejectsAlreadyRemovedRetiredValueWithoutReceipt(t *testing.T) {
 	previous := []byte("keep = true\nretired = \"old\"\n")
 	current := []byte("keep = true\n")
 	target := []byte("# external sentinel\nexternal = \"keep\"\nkeep = true\n")
@@ -584,8 +588,8 @@ func TestReconcileTOMLAcceptsAlreadyRemovedRetiredValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReconcileTOML() error = %v", err)
 	}
-	if !got.Compatible || got.Changed || !bytes.Equal(got.Content, target) {
-		t.Fatalf("ReconcileTOML() = %#v, want already-removed value to be converged", got)
+	if got.Compatible || got.Changed || got.Content != nil {
+		t.Fatalf("ReconcileTOML() = %#v, want ambiguous missing value rejected", got)
 	}
 }
 

@@ -144,12 +144,12 @@ func ReconcileJSON(targetData, previousData, currentData []byte) (JSONReconcilia
 	if !result.compatible {
 		return JSONReconciliation{}, nil
 	}
-	data, err := json.MarshalIndent(result.value, "", "  ")
+	data, err := patchJSONC(targetData, targetValue, result.value)
 	if err != nil {
-		return JSONReconciliation{}, fmt.Errorf("encode reconciled JSON: %w", err)
+		return JSONReconciliation{}, fmt.Errorf("patch reconciled JSON: %w", err)
 	}
 	return JSONReconciliation{
-		Content:    append(data, '\n'),
+		Content:    data,
 		Changed:    result.changed,
 		Compatible: true,
 	}, nil
@@ -312,9 +312,7 @@ func reconcileJSONValue(target, previous, current any) jsonMergeResult {
 			currentChild, currentExists := currentObject[key]
 			if !currentExists {
 				if !targetExists {
-					// A prior interrupted reconciliation may already have
-					// removed this retired value. No subtraction is needed.
-					continue
+					return jsonMergeResult{value: target}
 				}
 				removed := subtractJSONValue(targetChild, previousChild)
 				if !removed.compatible {
@@ -377,9 +375,7 @@ func reconcileJSONValue(target, previous, current any) jsonMergeResult {
 		for _, previousItem := range multisetDifference(previousArray, currentArray) {
 			index := equalJSONIndex(result, previousItem)
 			if index < 0 {
-				// Treat an already-removed retired item as converged while
-				// preserving every target-only array item.
-				continue
+				return jsonMergeResult{value: target}
 			}
 			result = append(result[:index], result[index+1:]...)
 			changed = true

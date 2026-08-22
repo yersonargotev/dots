@@ -527,6 +527,9 @@ entries:
 	if err != nil {
 		t.Fatal(err)
 	}
+	if want := []byte("{\"base\":true,\"external\":\"preserve\"}\n"); !bytes.Equal(got, want) {
+		t.Fatalf("reconciled shared target bytes = %q, want unrelated compact bytes preserved as %q", got, want)
+	}
 	var content map[string]any
 	if err := json.Unmarshal(got, &content); err != nil {
 		t.Fatalf("decode reconciled shared target: %v\n%s", err, got)
@@ -595,6 +598,9 @@ entries:
 	got, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if want := []byte("{\"base\":true,\"external\":\"preserve\"}\n"); !bytes.Equal(got, want) {
+		t.Fatalf("reconciled Antigravity target bytes = %q, want unrelated compact bytes preserved as %q", got, want)
 	}
 	var content map[string]any
 	if err := json.Unmarshal(got, &content); err != nil {
@@ -903,6 +909,10 @@ provisioners:
 	if !ok || len(failedRecord.Contributions) != 2 {
 		t.Fatalf("failed run replaced previous contribution evidence: %#v", failedRecord)
 	}
+	if failedRecord.PendingReconciliation == nil || failedRecord.PendingReconciliation.TargetHash != state.HashBytes(got) ||
+		!reflect.DeepEqual(failedRecord.PendingReconciliation.Sources, []string{"configs/base.json"}) {
+		t.Fatalf("failed run recovery receipt = %#v, want exact reconciled target and current source", failedRecord.PendingReconciliation)
+	}
 	if failedMeta.InstalledSelection == nil || !reflect.DeepEqual(failedMeta.InstalledSelection.Profiles, []string{"old"}) {
 		t.Fatalf("failed run committed requested selection: %#v", failedMeta.InstalledSelection)
 	}
@@ -919,6 +929,9 @@ provisioners:
 	finalRecord, ok := finalMeta.FindByTarget(target)
 	if !ok || len(finalRecord.Contributions) != 1 || finalRecord.Contributions[0].Source != "configs/base.json" {
 		t.Fatalf("rerun contribution evidence = %#v, want selected base only", finalRecord)
+	}
+	if finalRecord.PendingReconciliation != nil {
+		t.Fatalf("terminal commit retained recovery receipt: %#v", finalRecord.PendingReconciliation)
 	}
 	if finalMeta.InstalledSelection == nil || !reflect.DeepEqual(finalMeta.InstalledSelection.Profiles, []string{"next"}) {
 		t.Fatalf("rerun Installed Selection = %#v, want next", finalMeta.InstalledSelection)

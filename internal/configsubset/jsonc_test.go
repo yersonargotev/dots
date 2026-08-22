@@ -93,7 +93,7 @@ func TestReconcileJSONCRemovesRetiredKeysAndPreservesTargetOnlyContent(t *testin
 	}
 }
 
-func TestReconcileJSONCAcceptsAlreadyRemovedRetiredKey(t *testing.T) {
+func TestReconcileJSONCRejectsAlreadyRemovedRetiredKeyWithoutReceipt(t *testing.T) {
 	target := []byte("{\n  // external sentinel\n  \"external\": true,\n  \"keep\": true,\n}\n")
 	previous := []byte(`{"keep":true,"retired":"old"}`)
 	current := []byte(`{"keep":true}`)
@@ -102,8 +102,8 @@ func TestReconcileJSONCAcceptsAlreadyRemovedRetiredKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReconcileJSONC() error = %v", err)
 	}
-	if !got.Compatible || got.Changed || !bytes.Equal(got.Content, target) {
-		t.Fatalf("ReconcileJSONC() = %#v, want already-removed key to preserve exact bytes", got)
+	if got.Compatible || got.Changed || got.Content != nil {
+		t.Fatalf("ReconcileJSONC() = %#v, want ambiguous missing key rejected", got)
 	}
 }
 

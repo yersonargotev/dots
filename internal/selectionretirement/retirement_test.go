@@ -211,8 +211,20 @@ func TestBuildDelegatesSafePartialRetirementToForwardPlan(t *testing.T) {
 		CurrentSources:  []string{"kept.json"},
 	})
 
-	forward := plan.Plan{Actions: []plan.Action{{Target: target, Status: plan.StatusUpdate}}}
-	got, err := Build(report, state.Metadata{}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
+	previous := []byte(`{"removed":true,"kept":true}`)
+	record := state.Record{
+		Target: target, Source: "removed.json", Sources: []string{"removed.json", "kept.json"}, Strategy: "copy", Ownership: "json-subset",
+		OwnedContent: previous,
+		Contributions: []state.Contribution{
+			{Source: "removed.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: []byte(`{"removed":true}`)},
+			{Source: "kept.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: []byte(`{"kept":true}`)},
+		},
+	}
+	forward := plan.Plan{Actions: []plan.Action{{
+		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
+		PreviousContent: previous, Contributions: []plan.Contribution{{Source: "kept.json"}},
+	}}}
+	got, err := Build(report, state.Metadata{Entries: []state.Record{record}}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -221,6 +233,45 @@ func TestBuildDelegatesSafePartialRetirementToForwardPlan(t *testing.T) {
 	}
 	if got, readErr := os.ReadFile(target); readErr != nil || string(got) != `{}` {
 		t.Fatalf("target changed during Build: content=%q err=%v", got, readErr)
+	}
+}
+
+func TestBuildRejectsPartialRetirementWithUnrelatedForwardAction(t *testing.T) {
+	home := t.TempDir()
+	target := writeTarget(t, home, ".shared.json", `{}`)
+	previous := []byte(`{"removed":true,"kept":true}`)
+	report := explicitReport(selectionreconciliation.Action{
+		Scope: selectionreconciliation.ScopeManagedEntry, Outcome: selectionreconciliation.OutcomeReconcile, ResolvedTarget: target,
+		PreviousSources: []string{"removed.json", "kept.json"}, CurrentSources: []string{"kept.json"},
+	})
+	record := state.Record{
+		Target: target, Source: "removed.json", Sources: []string{"removed.json", "kept.json"}, Strategy: "copy", Ownership: "json-subset",
+		OwnedContent: previous,
+	}
+	base := plan.Action{
+		Source: "kept.json", Target: target, Strategy: "copy", Ownership: "json-subset", Status: plan.StatusUpdate,
+		PreviousContent: previous, Contributions: []plan.Contribution{{Source: "kept.json"}},
+	}
+	tests := []struct {
+		name string
+		edit func(*plan.Action)
+		want string
+	}{
+		{name: "source", edit: func(action *plan.Action) { action.Source = "other.json" }, want: "sources"},
+		{name: "strategy", edit: func(action *plan.Action) { action.Strategy = "symlink" }, want: "mode"},
+		{name: "ownership", edit: func(action *plan.Action) { action.Ownership = "whole" }, want: "mode"},
+		{name: "previous evidence", edit: func(action *plan.Action) { action.PreviousContent = []byte(`{"other":true}`) }, want: "previous contribution evidence"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			candidate := base
+			tt.edit(&candidate)
+			forward := plan.Plan{Actions: []plan.Action{candidate}}
+			_, err := Build(report, state.Metadata{Entries: []state.Record{record}}, Options{Home: home, SourceRoot: t.TempDir(), ForwardPlan: &forward})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Build() error = %v, want %q mismatch", err, tt.want)
+			}
+		})
 	}
 }
 

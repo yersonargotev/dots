@@ -76,13 +76,17 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 		if action.Reason == selectionreconciliation.ReasonManifestEvolution {
 			continue
 		}
+		rec, recorded := meta.FindByTarget(action.ResolvedTarget)
 		if len(action.CurrentSources) != 0 {
 			switch action.Outcome {
 			case selectionreconciliation.OutcomeCreate,
 				selectionreconciliation.OutcomeUpdate,
 				selectionreconciliation.OutcomePreserve,
 				selectionreconciliation.OutcomeReconcile:
-				if err := validateForwardReconciliation(action, opts.ForwardPlan); err != nil {
+				if !recorded {
+					return Plan{}, fmt.Errorf("build selection retirement for %s: installation metadata record is required for partial retirement", action.ResolvedTarget)
+				}
+				if err := validateForwardReconciliation(action, rec, opts.ForwardPlan); err != nil {
 					return Plan{}, fmt.Errorf("build selection retirement for %s: %w", action.ResolvedTarget, err)
 				}
 				// The forward Managed Entry plan owns still-selected targets. Its
@@ -108,8 +112,7 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 			return Plan{}, fmt.Errorf("build selection retirement for %s: outcome %q is unsupported", action.ResolvedTarget, action.Outcome)
 		}
 
-		rec, ok := meta.FindByTarget(action.ResolvedTarget)
-		if !ok {
+		if !recorded {
 			if action.Outcome == selectionreconciliation.OutcomeRemove {
 				return Plan{}, fmt.Errorf("build selection retirement for %s: installation metadata record is required", action.ResolvedTarget)
 			}
@@ -132,7 +135,7 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 	return result, nil
 }
 
-func validateForwardReconciliation(action selectionreconciliation.Action, forward *plan.Plan) error {
+func validateForwardReconciliation(action selectionreconciliation.Action, record state.Record, forward *plan.Plan) error {
 	if forward == nil {
 		return fmt.Errorf("forward plan is required for partial retirement")
 	}
@@ -145,16 +148,76 @@ func validateForwardReconciliation(action selectionreconciliation.Action, forwar
 	case selectionreconciliation.OutcomePreserve:
 		want = plan.StatusUnchanged
 	}
-	for _, candidate := range forward.Actions {
+	var matched *plan.Action
+	for i := range forward.Actions {
+		candidate := &forward.Actions[i]
 		if candidate.Target != action.ResolvedTarget {
 			continue
 		}
-		if candidate.Status != want {
-			return fmt.Errorf("forward action status %q does not implement safe outcome %q", candidate.Status, action.Outcome)
+		if matched != nil {
+			return fmt.Errorf("forward plan contains duplicate target %s", action.ResolvedTarget)
 		}
-		return nil
+		matched = candidate
 	}
-	return fmt.Errorf("forward action is required for partial retirement")
+	if matched == nil {
+		return fmt.Errorf("forward action is required for partial retirement")
+	}
+	if matched.Status != want {
+		return fmt.Errorf("forward action status %q does not implement safe outcome %q", matched.Status, action.Outcome)
+	}
+	currentSources := []string{matched.Source}
+	if len(matched.Sources) > 0 {
+		currentSources = matched.Sources
+	}
+	if !reflect.DeepEqual(currentSources, action.CurrentSources) {
+		return fmt.Errorf("forward action sources %v do not match reconciliation sources %v", currentSources, action.CurrentSources)
+	}
+	if !reflect.DeepEqual(record.SourceList(), action.PreviousSources) {
+		return fmt.Errorf("recorded sources %v do not match reconciliation evidence %v", record.SourceList(), action.PreviousSources)
+	}
+	if matched.Strategy != record.Strategy || normalizedOwnership(matched.Ownership) != normalizedOwnership(record.Ownership) {
+		return fmt.Errorf("forward action mode %s/%s does not match recorded mode %s/%s", matched.Strategy, normalizedOwnership(matched.Ownership), record.Strategy, normalizedOwnership(record.Ownership))
+	}
+	if len(matched.Contributions) != len(action.CurrentSources) {
+		return fmt.Errorf("forward action has %d contribution identities for %d current sources", len(matched.Contributions), len(action.CurrentSources))
+	}
+	for i, contribution := range matched.Contributions {
+		if contribution.Source != action.CurrentSources[i] {
+			return fmt.Errorf("forward contribution source %q does not match reconciliation source %q", contribution.Source, action.CurrentSources[i])
+		}
+	}
+	if want == plan.StatusUpdate && !matchesPreviousEvidence(*matched, record, action.PreviousSources) {
+		return fmt.Errorf("forward update does not carry the exact recorded previous contribution evidence")
+	}
+	return nil
+}
+
+func normalizedOwnership(ownership string) string {
+	if ownership == "" {
+		return "whole"
+	}
+	return ownership
+}
+
+func matchesPreviousEvidence(action plan.Action, record state.Record, previousSources []string) bool {
+	switch normalizedOwnership(record.Ownership) {
+	case "json-subset", "jsonc-subset":
+		return len(action.PreviousContent) > 0 && reflect.DeepEqual(action.PreviousContent, []byte(record.OwnedContent))
+	case "toml-subset", "marked-block":
+		return len(action.PreviousContent) > 0 && reflect.DeepEqual(action.PreviousContent, record.OwnedBytes)
+	case "seeded":
+		return action.PreviousContent != nil && reflect.DeepEqual(action.PreviousContent, record.SeededBaseline)
+	case "whole":
+		if len(previousSources) != 1 || action.PreviousHash == "" {
+			return false
+		}
+		for _, contribution := range record.Contributions {
+			if contribution.Source == previousSources[0] && contribution.Ownership == "whole" {
+				return action.PreviousHash == contribution.Hash
+			}
+		}
+	}
+	return false
 }
 
 func hasSelectionReduction(actions []selectionreconciliation.Action) bool {

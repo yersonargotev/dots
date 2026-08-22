@@ -275,6 +275,50 @@ func TestBuildReconcilesSharedJSONTargetInSelectedSurfaceOrder(t *testing.T) {
 	}
 }
 
+func TestBuildAcceptsAlreadyAppliedSharedReconciliationOnlyWithExactReceipt(t *testing.T) {
+	previous := []selectedsurface.SelectedEntry{
+		selectedEntry("a.json", "~/.shared.json", "copy", "json-subset"),
+		selectedEntry("b.json", "~/.shared.json", "copy", "json-subset"),
+	}
+	current := []selectedsurface.SelectedEntry{selectedEntry("b.json", "~/.shared.json", "copy", "json-subset")}
+	live := []byte(`{"b":2,"external":true}`)
+	currentSource := []byte(`{"b":2}`)
+	input := baseInput(previous, current, TargetEvidence{
+		DeclarativeTarget: "~/.shared.json", ResolvedTarget: "/home/test/.shared.json", Exists: true, Kind: TargetKindRegular, Content: live,
+	})
+	input.Evidence.Sources = []SourceEvidence{{
+		DeclarativeTarget: "~/.shared.json", Source: "b.json", Exists: true, Content: currentSource,
+	}}
+	input.Metadata.Entries = []state.Record{{
+		Target: "/home/test/.shared.json", Strategy: "copy", Ownership: "json-subset",
+		Contributions: []state.Contribution{
+			{Source: "a.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: json.RawMessage(`{"a":1}`)},
+			{Source: "b.json", Ownership: "json-subset", EvidenceRecorded: true, OwnedContent: json.RawMessage(currentSource)},
+		},
+		PendingReconciliation: &state.ReconciliationReceipt{
+			TargetHash: state.HashBytes(live), Sources: []string{"b.json"}, SourceHashes: []string{state.HashBytes(currentSource)},
+			Strategy: "copy", Ownership: "json-subset",
+		},
+	}}
+
+	report, err := Build(input)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got := report.Actions[0]; got.Outcome != OutcomePreserve || got.Reason != "" {
+		t.Fatalf("receipt-backed Action = %#v, want preserve", got)
+	}
+
+	input.Evidence.Targets[0].Content = []byte(`{"b":2,"external":"changed"}`)
+	report, err = Build(input)
+	if err != nil {
+		t.Fatalf("Build(drifted) error = %v", err)
+	}
+	if got := report.Actions[0]; got.Outcome != OutcomeBlocked || got.Reason != ReasonAmbiguousPartialOwnership {
+		t.Fatalf("drifted receipt Action = %#v, want ambiguous block", got)
+	}
+}
+
 func TestBuildRetainsPartialRetirementWithoutExactContributionEvidence(t *testing.T) {
 	previous := selectedEntry("a.json", "~/.shared.json", "copy", "json-subset")
 	input := baseInput([]selectedsurface.SelectedEntry{previous}, nil, TargetEvidence{

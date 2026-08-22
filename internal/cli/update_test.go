@@ -262,7 +262,7 @@ entries:
 		t.Fatalf("target not migrated to regular file: mode=%v err=%v", info, err)
 	}
 	content, _ := os.ReadFile(target)
-	if string(content) != "{\n  \"owned\": 2,\n  \"runtime\": true\n}\n" {
+	if string(content) != "{\"owned\":2,\"runtime\":true}\n" {
 		t.Fatalf("migrated content = %q", content)
 	}
 	after, err := backups.Load(backups.Path(stateRoot))

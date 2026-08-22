@@ -21,7 +21,7 @@ import (
 )
 
 // CurrentVersion is the current Installation Metadata schema version.
-const CurrentVersion = 7
+const CurrentVersion = 8
 
 // Metadata is the machine-readable record of installed managed targets.
 type Metadata struct {
@@ -57,9 +57,10 @@ func (p Provenance) Empty() bool {
 // Record describes a single managed target the CLI installed. Version 4 records
 // explicit whole or partial Ownership; version 5 adds opaque seeded-baseline
 // evidence, version 6 adds opaque byte contribution evidence for TOML subset
-// and marked-block ownership, and version 7 attributes exact ownership evidence
-// to each Source of Truth contribution. An empty Ownership is legacy and grants
-// no force-removal authority.
+// and marked-block ownership, version 7 attributes exact ownership evidence to
+// each Source of Truth contribution, and version 8 adds an exact recovery
+// receipt for an applied reconciliation whose terminal metadata commit has not
+// completed. An empty Ownership is legacy and grants no force-removal authority.
 // Copy-like strategies may record a source content hash; symlink records leave
 // Hash empty because drift is detected from the link destination.
 type Record struct {
@@ -77,10 +78,25 @@ type Record struct {
 	// itself need not be JSON.
 	SeededBaseline []byte         `json:"seeded_baseline,omitempty"`
 	Contributions  []Contribution `json:"contributions,omitempty"`
-	Hash           string         `json:"hash"`
-	InstalledAt    string         `json:"installedAt"`
-	Profiles       []string       `json:"profiles,omitempty"`
-	Tags           []string       `json:"tags,omitempty"`
+	// PendingReconciliation proves the exact live bytes and selected sources
+	// produced by dots before a later terminal step failed. It never replaces
+	// committed contribution evidence or Installed Selection.
+	PendingReconciliation *ReconciliationReceipt `json:"pending_reconciliation,omitempty"`
+	Hash                  string                 `json:"hash"`
+	InstalledAt           string                 `json:"installedAt"`
+	Profiles              []string               `json:"profiles,omitempty"`
+	Tags                  []string               `json:"tags,omitempty"`
+}
+
+// ReconciliationReceipt is a recovery-only proof for a previously applied
+// forward reconciliation. Source hashes bind the receipt to the same selected
+// Source of Truth inputs; TargetHash rejects any later external mutation.
+type ReconciliationReceipt struct {
+	TargetHash   string   `json:"target_hash"`
+	Sources      []string `json:"sources"`
+	SourceHashes []string `json:"source_hashes"`
+	Strategy     string   `json:"strategy"`
+	Ownership    string   `json:"ownership"`
 }
 
 // Contribution records the exact ownership evidence attributable to one
@@ -133,6 +149,12 @@ func (r Record) Clone() Record {
 	cloned.SeededBaseline = append([]byte(nil), r.SeededBaseline...)
 	cloned.Profiles = append([]string(nil), r.Profiles...)
 	cloned.Tags = append([]string(nil), r.Tags...)
+	if r.PendingReconciliation != nil {
+		pending := *r.PendingReconciliation
+		pending.Sources = append([]string(nil), r.PendingReconciliation.Sources...)
+		pending.SourceHashes = append([]string(nil), r.PendingReconciliation.SourceHashes...)
+		cloned.PendingReconciliation = &pending
+	}
 	if r.Contributions != nil {
 		cloned.Contributions = make([]Contribution, len(r.Contributions))
 		for index, contribution := range r.Contributions {
@@ -144,6 +166,25 @@ func (r Record) Clone() Record {
 		}
 	}
 	return cloned
+}
+
+// PendingReconciliationMatches reports whether a recovery receipt proves that
+// the exact live target was produced from the same ordered current sources.
+func (r Record) PendingReconciliationMatches(targetData []byte, strategy, ownership string, sources []string, sourceContents [][]byte) bool {
+	pending := r.PendingReconciliation
+	if pending == nil || pending.TargetHash == "" || pending.Strategy != strategy || pending.Ownership != ownership ||
+		!stringSlicesEqual(pending.Sources, sources) || len(pending.SourceHashes) != len(sourceContents) {
+		return false
+	}
+	if HashBytes(targetData) != pending.TargetHash {
+		return false
+	}
+	for i, content := range sourceContents {
+		if HashBytes(content) != pending.SourceHashes[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ProvisionerRecord describes the last known result for one selected

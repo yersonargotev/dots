@@ -486,7 +486,7 @@ func TestBuildPlansProvenanceBackedLegacyJSONMigration(t *testing.T) {
 	if len(p.Actions) != 1 || p.Actions[0].Status != plan.StatusMigrate || p.Actions[0].Migration == nil {
 		t.Fatalf("actions = %#v, want migrate", p.Actions)
 	}
-	if got := string(p.Actions[0].Migration.FinalContent); got != "{\n  \"owned\": 2,\n  \"runtime\": true\n}\n" {
+	if got := string(p.Actions[0].Migration.FinalContent); got != "{\"owned\":2,\"runtime\":true}\n" {
 		t.Fatalf("migration content = %q", got)
 	}
 }
@@ -551,8 +551,23 @@ func TestBuildJSONSubsetUsesRecordedContributionForReversibleRemoval(t *testing.
 	action = buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
 		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
 	}, meta)
-	if action.Status != plan.StatusUpdate {
-		t.Fatalf("Status = %q, want convergent update for already removed retired key", action.Status)
+	if action.Status != plan.StatusConflict {
+		t.Fatalf("Status = %q, want conflict for an unproven missing retired key", action.Status)
+	}
+	currentSource := []byte(`{"owned":{"keep":true,"added":"new"}}`)
+	convergedTarget := []byte(`{"owned":{"keep":true,"added":"new"},"external":"preserve"}`)
+	if err := os.WriteFile(target, convergedTarget, 0o600); err != nil {
+		t.Fatalf("write receipt-backed target: %v", err)
+	}
+	meta.Entries[0].PendingReconciliation = &state.ReconciliationReceipt{
+		TargetHash: state.HashBytes(convergedTarget), Sources: []string{"configs/shared.json"},
+		SourceHashes: []string{state.HashBytes(currentSource)}, Strategy: "copy", Ownership: "json-subset",
+	}
+	action = buildOneWithMetadata(t, sourceRoot, home, manifest.Entry{
+		Source: "configs/shared.json", Target: "~/.config/shared.json", Strategy: "copy", Ownership: "json-subset", Tags: []string{"core"},
+	}, meta)
+	if action.Status != plan.StatusUnchanged {
+		t.Fatalf("Status = %q, want unchanged only with exact recovery receipt", action.Status)
 	}
 }
 

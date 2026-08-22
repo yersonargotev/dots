@@ -3,6 +3,7 @@ package install
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -53,6 +54,7 @@ type metadataAction struct {
 	action          plan.Action
 	resolvedSources []string
 	stagedRecord    state.Record
+	pending         *state.ReconciliationReceipt
 	recordsEvidence bool
 }
 
@@ -196,8 +198,42 @@ func (c *MetadataCommit) captureStagedEvidence() error {
 			return err
 		}
 		stagedAction.stagedRecord = record
+		pending, err := buildReconciliationReceipt(stagedAction.action, record)
+		if err != nil {
+			return err
+		}
+		stagedAction.pending = pending
 	}
 	return nil
+}
+
+func buildReconciliationReceipt(action plan.Action, record state.Record) (*state.ReconciliationReceipt, error) {
+	if action.Strategy != "copy" || (action.Status != plan.StatusUpdate && action.Status != plan.StatusUnchanged) ||
+		(len(action.PreviousContent) == 0 && action.PreviousHash == "") {
+		return nil, nil
+	}
+	sources := record.SourceList()
+	if len(sources) == 0 || len(record.Contributions) != len(sources) {
+		return nil, fmt.Errorf("record reconciliation receipt for %s: exact current contributions are required", action.Target)
+	}
+	sourceHashes := make([]string, len(record.Contributions))
+	for i, contribution := range record.Contributions {
+		if contribution.Source != sources[i] || contribution.Hash == "" {
+			return nil, fmt.Errorf("record reconciliation receipt for %s: exact hash for source %q is required", action.Target, sources[i])
+		}
+		sourceHashes[i] = contribution.Hash
+	}
+	targetHash, err := state.HashFile(action.Target)
+	if err != nil {
+		return nil, fmt.Errorf("record reconciliation receipt for %s: %w", action.Target, err)
+	}
+	return &state.ReconciliationReceipt{
+		TargetHash:   targetHash,
+		Sources:      append([]string(nil), sources...),
+		SourceHashes: sourceHashes,
+		Strategy:     action.Strategy,
+		Ownership:    record.Ownership,
+	}, nil
 }
 
 // recordPartialInventory retains the existing rerunnable failed-install
@@ -216,6 +252,9 @@ func (c MetadataCommit) recordPartialInventory() error {
 			}
 			action := stagedAction.action
 			if hasCommittedContributions(*meta, action.Target) {
+				if stagedAction.pending != nil {
+					setPendingReconciliation(meta, action.Target, stagedAction.pending)
+				}
 				continue
 			}
 			record, err := stagedAction.evidence()
@@ -227,6 +266,19 @@ func (c MetadataCommit) recordPartialInventory() error {
 		}
 		return nil
 	})
+}
+
+func setPendingReconciliation(meta *state.Metadata, target string, receipt *state.ReconciliationReceipt) {
+	for i := range meta.Entries {
+		if meta.Entries[i].Target != target {
+			continue
+		}
+		pending := *receipt
+		pending.Sources = append([]string(nil), receipt.Sources...)
+		pending.SourceHashes = append([]string(nil), receipt.SourceHashes...)
+		meta.Entries[i].PendingReconciliation = &pending
+		return
+	}
 }
 
 func (a metadataAction) evidence() (state.Record, error) {
@@ -966,29 +1018,74 @@ func applyUpdate(action plan.Action, source string, opts Options) error {
 			return fmt.Errorf("update marked block %s: %w", action.Target, err)
 		}
 	case "", "whole":
-		if action.PreviousHash == "" {
-			return fmt.Errorf("previous whole-target evidence is required for %s", action.Target)
-		}
-		liveHash, err := state.HashFile(action.Target)
-		if err != nil {
-			return fmt.Errorf("hash whole target %s: %w", action.Target, err)
-		}
-		if liveHash != action.PreviousHash {
-			return fmt.Errorf("install plan is stale: whole target %s changed before update", action.Target)
-		}
-		current, err := os.ReadFile(source)
-		if err != nil {
-			return fmt.Errorf("read current whole target source %s: %w", source, err)
-		}
-		info, err := os.Stat(action.Target)
-		if err != nil {
-			return fmt.Errorf("stat whole target %s: %w", action.Target, err)
-		}
-		if err := os.WriteFile(action.Target, current, info.Mode().Perm()); err != nil {
-			return fmt.Errorf("update whole target %s: %w", action.Target, err)
+		if err := updateWholeTarget(action, source, opts.Home); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("update ownership %q is not supported for %s", action.Ownership, action.Target)
+	}
+	return nil
+}
+
+func updateWholeTarget(action plan.Action, source, home string) error {
+	if action.PreviousHash == "" {
+		return fmt.Errorf("previous whole-target evidence is required for %s", action.Target)
+	}
+	current, err := os.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("read current whole target source %s: %w", source, err)
+	}
+	homeAbs, err := cleanAbs(home)
+	if err != nil {
+		return fmt.Errorf("resolve home for whole target %s: %w", action.Target, err)
+	}
+	targetAbs, err := cleanAbs(action.Target)
+	if err != nil {
+		return fmt.Errorf("resolve whole target %s: %w", action.Target, err)
+	}
+	relative, err := filepath.Rel(homeAbs, targetAbs)
+	if err != nil || !filepath.IsLocal(relative) || relative == "." {
+		return fmt.Errorf("confine whole target %s beneath home %s", action.Target, homeAbs)
+	}
+	root, err := os.OpenRoot(homeAbs)
+	if err != nil {
+		return fmt.Errorf("open home root %s: %w", homeAbs, err)
+	}
+	defer root.Close()
+	file, err := root.OpenFile(relative, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("open confined whole target %s: %w", action.Target, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("stat confined whole target %s: %w", action.Target, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("confined whole target %s is not a regular file", action.Target)
+	}
+	live, err := io.ReadAll(file)
+	if err != nil {
+		return fmt.Errorf("read confined whole target %s: %w", action.Target, err)
+	}
+	if state.HashBytes(live) != action.PreviousHash {
+		return fmt.Errorf("install plan is stale: whole target %s changed before update", action.Target)
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("rewind confined whole target %s: %w", action.Target, err)
+	}
+	if err := file.Truncate(0); err != nil {
+		return fmt.Errorf("truncate confined whole target %s: %w", action.Target, err)
+	}
+	written, err := file.Write(current)
+	if err != nil {
+		return fmt.Errorf("write confined whole target %s: %w", action.Target, err)
+	}
+	if written != len(current) {
+		return fmt.Errorf("write confined whole target %s: wrote %d of %d bytes", action.Target, written, len(current))
+	}
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("sync confined whole target %s: %w", action.Target, err)
 	}
 	return nil
 }

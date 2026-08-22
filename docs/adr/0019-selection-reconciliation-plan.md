@@ -131,8 +131,11 @@ Source override retirement replaces the prior override contribution with the
 selected base contribution. Successful shared reconciliation records only the
 retained ordered contributions and commits the requested Installed Selection at
 terminal success. A failure after the filesystem update preserves the previous
-Installed Selection and contribution evidence; rerunning recognizes already
-removed retired values while still rejecting changed owned values, then
-converges without applying the target twice. Seeded Runtime State keeps its
-existing whole-retirement rule: its physical bytes remain while dots releases
-only the ownership record.
+Installed Selection and contribution evidence. Installation Metadata version 8
+adds a recovery-only reconciliation receipt containing the exact resulting
+target hash plus the ordered current source identities and hashes. A rerun may
+recognize already removed retired values only when that receipt matches every
+byte and source; absent or mismatched receipts remain ambiguous and fail closed.
+Terminal metadata commit replaces the old contribution evidence and clears the
+receipt. Seeded Runtime State keeps its existing whole-retirement rule: its
+physical bytes remain while dots releases only the ownership record.

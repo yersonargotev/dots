@@ -303,7 +303,7 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			if unsafeTargetByTarget[targetKey] || unsafeTargetParent {
 				existing.Status = StatusConflict
 			} else {
-				existing.Status, err = composedJSONStatus(*existing, opts.Metadata)
+				existing.Status, err = composedJSONStatus(*existing, opts.Metadata, readSourcesByTarget[targetKey])
 				if err != nil {
 					return Plan{}, err
 				}
@@ -446,7 +446,7 @@ func scheduledLegacyParent(target string, parents map[string]struct{}) string {
 	return ""
 }
 
-func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
+func composedJSONStatus(action Action, meta state.Metadata, readSources []string) (Status, error) {
 	info, err := os.Lstat(action.Target)
 	if os.IsNotExist(err) {
 		return StatusCreate, nil
@@ -462,6 +462,15 @@ func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
 		return StatusUnchanged, nil
 	}
 	rec, ok := meta.FindByTarget(action.Target)
+	if ok {
+		sourceContents, readErr := readSourceContents(readSources)
+		if readErr != nil {
+			return "", readErr
+		}
+		if rec.PendingReconciliationMatches(targetData, action.Strategy, normalizedEntryOwnership(action.Ownership), action.Sources, sourceContents) {
+			return StatusUnchanged, nil
+		}
+	}
 	recordedSources := rec.SourceList()
 	trusted := ok && rec.Strategy == action.Strategy && len(recordedSources) > 0
 	selectedSources := make(map[string]struct{}, len(action.Sources))
@@ -500,6 +509,18 @@ func composedJSONStatus(action Action, meta state.Metadata) (Status, error) {
 	default:
 		return StatusConflict, nil
 	}
+}
+
+func readSourceContents(paths []string) ([][]byte, error) {
+	contents := make([][]byte, len(paths))
+	for i, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read reconciliation source %s: %w", path, err)
+		}
+		contents[i] = data
+	}
+	return contents, nil
 }
 
 // MatchingUnselectedSourceOverrideTags returns the deterministic set of
@@ -829,6 +850,19 @@ func status(entry manifest.Entry, target, sourceAbs, sourceRoot, canonicalSource
 		}
 		if same, err := sameContent(target, sourceAbs); err != nil || !same {
 			rec, recorded := meta.FindByTarget(target)
+			if recorded {
+				targetData, targetErr := os.ReadFile(target)
+				if targetErr != nil {
+					return "", fmt.Errorf("read pending reconciliation target %s: %w", target, targetErr)
+				}
+				sourceData, sourceErr := os.ReadFile(sourceAbs)
+				if sourceErr != nil {
+					return "", fmt.Errorf("read pending reconciliation source %s: %w", sourceAbs, sourceErr)
+				}
+				if rec.PendingReconciliationMatches(targetData, entry.Strategy, normalizedEntryOwnership(entry.Ownership), []string{entry.Source}, [][]byte{sourceData}) {
+					return StatusUnchanged, nil
+				}
+			}
 			previousContribution, exactCompatible := exactCompatibleRecordedContribution(entry, defaultSource, rec)
 			if entry.Ownership == "marked-block" {
 				if !recorded || rec.Strategy != entry.Strategy || rec.Ownership != "marked-block" ||
