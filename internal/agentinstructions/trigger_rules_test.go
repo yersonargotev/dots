@@ -726,6 +726,27 @@ func TestDeliveryWorkflowRecordsBothMutationChallenges(t *testing.T) {
 			"final reviewed head",
 		})
 	}
+
+	gate := readContractDocument(t, gatePath)
+	evidenceStart := strings.Index(gate, "## Delivery evidence")
+	if evidenceStart < 0 {
+		t.Fatal("mutation safety gate is missing its Delivery evidence section")
+	}
+	evidence := strings.Join(strings.Fields(gate[evidenceStart:]), " ")
+	for _, want := range []string{
+		"early independent design challenge result",
+		"base commit and mutation-boundary diff digest",
+		"input references and focused-test evidence",
+		"questions covered",
+		"every finding and resolution",
+		"implementation-conformance challenge result",
+		"final reviewed head",
+		"comparison proving its mutation-boundary digest matches",
+	} {
+		if !strings.Contains(strings.ToLower(evidence), strings.ToLower(want)) {
+			t.Errorf("mutation safety Delivery evidence section missing %q", want)
+		}
+	}
 }
 
 func TestMutationSafetyGateContract(t *testing.T) {
