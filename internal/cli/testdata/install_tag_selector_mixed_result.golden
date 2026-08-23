@@ -34,4 +34,3 @@ Retained External State:
   provisioner  claude [sha256:5ad1ba026bb241cda935498a093942a764ade70f9f396b81cae8f709cf5fffeb]
 Selection retirement:
   removed /home/test/.retired and released dots ownership
-

@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -217,6 +218,254 @@ func TestInstallTagSelectorCandidateStoreUsesUIRequestOrder(t *testing.T) {
 	}
 }
 
+func TestInstallTagSelectorCandidateStoreCleanupErrorsDeliveredOnce(t *testing.T) {
+	t.Run("superseded", func(t *testing.T) {
+		injected := errors.New("injected superseded release failure")
+		store := newInstallTagSelectorCandidateStore()
+		var releases int
+		store.release = func(candidate installTagSelectorCandidate) error {
+			releases++
+			if candidate.Preview.SemanticDigest == "sha256:first" {
+				return injected
+			}
+			return nil
+		}
+
+		token, ok, err := store.activate(1)
+		if err != nil || !ok {
+			t.Fatalf("activate first candidate = (%q, %t, %v)", token, ok, err)
+		}
+		if stored, err := store.put(1, token, installTagSelectorCandidate{Preview: tagselectortui.Preview{SemanticDigest: "sha256:first"}}); err != nil || !stored {
+			t.Fatalf("put first candidate = (%t, %v)", stored, err)
+		}
+		_, ok, err = store.activate(2)
+		if !ok || !errors.Is(err, injected) || !strings.Contains(err.Error(), `release superseded tag selector candidate "selector-preview-1"`) {
+			t.Fatalf("activate replacement = (%t, %v), want contextual wrapped cleanup failure", ok, err)
+		}
+		if err := store.close(); err != nil {
+			t.Fatalf("close replayed superseded cleanup failure: %v", err)
+		}
+		if err := store.close(); err != nil {
+			t.Fatalf("second close replayed superseded cleanup failure: %v", err)
+		}
+		if releases != 1 {
+			t.Fatalf("release calls = %d, want 1", releases)
+		}
+	})
+
+	t.Run("rejected", func(t *testing.T) {
+		injected := errors.New("injected rejected release failure")
+		store := newInstallTagSelectorCandidateStore()
+		var releases int
+		store.release = func(installTagSelectorCandidate) error {
+			releases++
+			return injected
+		}
+
+		token, ok, err := store.activate(1)
+		if err != nil || !ok {
+			t.Fatalf("activate first candidate = (%q, %t, %v)", token, ok, err)
+		}
+		if _, ok, err := store.activate(2); err != nil || !ok {
+			t.Fatalf("activate newer candidate = (%t, %v)", ok, err)
+		}
+		stored, err := store.put(1, token, installTagSelectorCandidate{})
+		if stored || !errors.Is(err, injected) || !strings.Contains(err.Error(), `release rejected tag selector candidate "selector-preview-1"`) {
+			t.Fatalf("put rejected candidate = (%t, %v), want contextual wrapped cleanup failure", stored, err)
+		}
+		if err := store.close(); err != nil {
+			t.Fatalf("close replayed rejected cleanup failure: %v", err)
+		}
+		if err := store.close(); err != nil {
+			t.Fatalf("second close replayed rejected cleanup failure: %v", err)
+		}
+		if releases != 1 {
+			t.Fatalf("release calls = %d, want 1", releases)
+		}
+	})
+
+	t.Run("replaced", func(t *testing.T) {
+		injected := errors.New("injected replaced release failure")
+		store := newInstallTagSelectorCandidateStore()
+		releases := make(map[string]int)
+		store.release = func(candidate installTagSelectorCandidate) error {
+			digest := candidate.Preview.SemanticDigest
+			releases[digest]++
+			if digest == "sha256:first" {
+				return injected
+			}
+			return nil
+		}
+
+		token, ok, err := store.activate(1)
+		if err != nil || !ok {
+			t.Fatalf("activate candidate = (%q, %t, %v)", token, ok, err)
+		}
+		if stored, err := store.put(1, token, installTagSelectorCandidate{Preview: tagselectortui.Preview{SemanticDigest: "sha256:first"}}); err != nil || !stored {
+			t.Fatalf("put first candidate = (%t, %v)", stored, err)
+		}
+		stored, err := store.put(1, token, installTagSelectorCandidate{Preview: tagselectortui.Preview{SemanticDigest: "sha256:second"}})
+		if !stored || !errors.Is(err, injected) || !strings.Contains(err.Error(), `release replaced tag selector candidate "selector-preview-1"`) {
+			t.Fatalf("put replacement candidate = (%t, %v), want contextual wrapped cleanup failure", stored, err)
+		}
+		if err := store.close(); err != nil {
+			t.Fatalf("close replayed replaced cleanup failure: %v", err)
+		}
+		if err := store.close(); err != nil {
+			t.Fatalf("second close replayed replaced cleanup failure: %v", err)
+		}
+		if releases["sha256:first"] != 1 || releases["sha256:second"] != 1 {
+			t.Fatalf("release calls = %v, want each candidate once", releases)
+		}
+	})
+
+	t.Run("stored close", func(t *testing.T) {
+		injected := errors.New("injected stored release failure")
+		store := newInstallTagSelectorCandidateStore()
+		var releases int
+		store.release = func(installTagSelectorCandidate) error {
+			releases++
+			return injected
+		}
+
+		token, ok, err := store.activate(1)
+		if err != nil || !ok {
+			t.Fatalf("activate candidate = (%q, %t, %v)", token, ok, err)
+		}
+		if stored, err := store.put(1, token, installTagSelectorCandidate{}); err != nil || !stored {
+			t.Fatalf("put candidate = (%t, %v)", stored, err)
+		}
+		err = store.close()
+		if !errors.Is(err, injected) || !strings.Contains(err.Error(), `release stored tag selector candidate "selector-preview-1"`) {
+			t.Fatalf("close error = %v, want contextual wrapped cleanup failure", err)
+		}
+		if err := store.close(); err != nil {
+			t.Fatalf("second close replayed stored cleanup failure: %v", err)
+		}
+		if releases != 1 {
+			t.Fatalf("release calls = %d, want 1", releases)
+		}
+	})
+}
+
+func TestInstallTagSelectorPreviewProviderReturnsSynchronousCleanupOnce(t *testing.T) {
+	t.Run("superseded", func(t *testing.T) {
+		injected := errors.New("injected synchronous supersede failure")
+		store := newInstallTagSelectorCandidateStore()
+		var releases int
+		store.release = func(installTagSelectorCandidate) error {
+			releases++
+			return injected
+		}
+		lateErrors := make(chan error, 1)
+		var builds int
+		provider := &installTagSelectorPreviewProvider{
+			store:     store,
+			lateError: func(err error) { lateErrors <- err },
+			build: func([]string) (installTagSelectorCandidate, error) {
+				builds++
+				return installTagSelectorCandidate{Preview: tagselectortui.Preview{SemanticDigest: "sha256:candidate"}}, nil
+			},
+		}
+		if _, err := provider.preview(1, []string{"first"}); err != nil {
+			t.Fatal(err)
+		}
+		_, err := provider.preview(2, []string{"second"})
+		if !errors.Is(err, injected) || !strings.Contains(err.Error(), `release superseded tag selector candidate "selector-preview-1"`) {
+			t.Fatalf("preview error = %v, want synchronous contextual cleanup failure", err)
+		}
+		if err := provider.close(); err != nil {
+			t.Fatalf("close replayed synchronous cleanup failure: %v", err)
+		}
+		if err := provider.close(); err != nil {
+			t.Fatalf("second close replayed synchronous cleanup failure: %v", err)
+		}
+		select {
+		case err := <-lateErrors:
+			t.Fatalf("synchronous cleanup was also sent to late sink: %v", err)
+		default:
+		}
+		if releases != 1 || builds != 1 {
+			t.Fatalf("release calls = %d, builds = %d, want 1 and 1", releases, builds)
+		}
+	})
+
+	t.Run("rejected", func(t *testing.T) {
+		injected := errors.New("injected synchronous reject failure")
+		store := newInstallTagSelectorCandidateStore()
+		var releases int
+		store.release = func(installTagSelectorCandidate) error {
+			releases++
+			return injected
+		}
+		lateErrors := make(chan error, 1)
+		provider := &installTagSelectorPreviewProvider{
+			store:     store,
+			lateError: func(err error) { lateErrors <- err },
+			build: func([]string) (installTagSelectorCandidate, error) {
+				if _, ok, err := store.activate(2); err != nil || !ok {
+					t.Fatalf("supersede active request = (%t, %v)", ok, err)
+				}
+				return installTagSelectorCandidate{Preview: tagselectortui.Preview{SemanticDigest: "sha256:rejected"}}, nil
+			},
+		}
+		_, err := provider.preview(1, []string{"first"})
+		if !errors.Is(err, injected) || !strings.Contains(err.Error(), `release rejected tag selector candidate "selector-preview-1"`) {
+			t.Fatalf("preview error = %v, want synchronous contextual cleanup failure", err)
+		}
+		if err := provider.close(); err != nil {
+			t.Fatalf("close replayed synchronous cleanup failure: %v", err)
+		}
+		if err := provider.close(); err != nil {
+			t.Fatalf("second close replayed synchronous cleanup failure: %v", err)
+		}
+		select {
+		case err := <-lateErrors:
+			t.Fatalf("synchronous cleanup was also sent to late sink: %v", err)
+		default:
+		}
+		if releases != 1 {
+			t.Fatalf("release calls = %d, want 1", releases)
+		}
+	})
+}
+
+func TestInstallTagSelectorPreviewProviderReturnsStoredCloseCleanupOnce(t *testing.T) {
+	injected := errors.New("injected stored close failure")
+	store := newInstallTagSelectorCandidateStore()
+	var releases int
+	store.release = func(installTagSelectorCandidate) error {
+		releases++
+		return injected
+	}
+	lateErrors := make(chan error, 1)
+	provider := &installTagSelectorPreviewProvider{
+		store:     store,
+		lateError: func(err error) { lateErrors <- err },
+		build: func([]string) (installTagSelectorCandidate, error) {
+			return installTagSelectorCandidate{Preview: tagselectortui.Preview{SemanticDigest: "sha256:stored"}}, nil
+		},
+	}
+	if _, err := provider.preview(1, []string{"stored"}); err != nil {
+		t.Fatal(err)
+	}
+	err := provider.close()
+	if !errors.Is(err, injected) || !strings.Contains(err.Error(), `release stored tag selector candidate "selector-preview-1"`) {
+		t.Fatalf("close error = %v, want contextual wrapped cleanup failure", err)
+	}
+	if err := provider.close(); err != nil {
+		t.Fatalf("second close replayed stored cleanup failure: %v", err)
+	}
+	select {
+	case err := <-lateErrors:
+		t.Fatalf("stored close cleanup was also sent to late sink: %v", err)
+	default:
+	}
+	if releases != 1 {
+		t.Fatalf("release calls = %d, want 1", releases)
+	}
+}
+
 func TestInstallTagSelectorPreviewProviderSerializesCandidateBuilds(t *testing.T) {
 	store := newInstallTagSelectorCandidateStore()
 	t.Cleanup(func() {
@@ -289,16 +538,24 @@ func TestInstallTagSelectorPreviewProviderSerializesCandidateBuilds(t *testing.T
 
 func TestInstallTagSelectorPreviewProviderClosesWithoutWaitingForActiveBuild(t *testing.T) {
 	store := newInstallTagSelectorCandidateStore()
+	var releaseCount atomic.Int32
 	store.release = func(installTagSelectorCandidate) error {
+		releaseCount.Add(1)
 		return errors.New("injected late release failure")
 	}
 	entered := make(chan string, 2)
 	release := make(chan struct{})
-	lateErrors := make(chan error, 1)
+	lateErrors := make(chan error, 2)
+	var lateErrorCount atomic.Int32
+	var buildCount atomic.Int32
 	provider := &installTagSelectorPreviewProvider{
-		store:     store,
-		lateError: func(err error) { lateErrors <- err },
+		store: store,
+		lateError: func(err error) {
+			lateErrorCount.Add(1)
+			lateErrors <- err
+		},
 		build: func(tags []string) (installTagSelectorCandidate, error) {
+			buildCount.Add(1)
 			entered <- tags[0]
 			<-release
 			return installTagSelectorCandidate{Preview: tagselectortui.Preview{SemanticDigest: "sha256:" + tags[0]}}, nil
@@ -328,24 +585,41 @@ func TestInstallTagSelectorPreviewProviderClosesWithoutWaitingForActiveBuild(t *
 		t.Fatal("preview provider close waited for the active build")
 	}
 	release <- struct{}{}
-	if err := <-first; err == nil || !strings.Contains(err.Error(), "closed during cleanup") {
-		t.Fatalf("active preview error = %v, want closed cleanup response", err)
+	if err := <-first; err == nil || err.Error() != "tag selector preview provider is closed" {
+		t.Fatalf("active preview error = %v, want generic closed response", err)
 	}
 	select {
 	case err := <-lateErrors:
-		if !strings.Contains(err.Error(), "injected late release failure") {
-			t.Fatalf("late cleanup sink error = %v", err)
+		if !strings.Contains(err.Error(), `release rejected tag selector candidate "selector-preview-1"`) || !strings.Contains(err.Error(), "injected late release failure") {
+			t.Fatalf("late cleanup sink error = %v, want candidate and operation context", err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("late release failure was not reported to the asynchronous cleanup sink")
 	}
-	if err := <-second; err == nil || !strings.Contains(err.Error(), "closed") {
-		t.Fatalf("queued preview error = %v, want closed store rejection", err)
+	if err := <-second; err == nil || err.Error() != "tag selector preview provider is closed" {
+		t.Fatalf("queued preview error = %v, want generic closed response", err)
 	}
 	select {
 	case got := <-entered:
 		t.Fatalf("queued build %q entered after provider close", got)
 	default:
+	}
+	if err := provider.close(); err != nil {
+		t.Fatalf("second close replayed late cleanup failure: %v", err)
+	}
+	select {
+	case err := <-lateErrors:
+		t.Fatalf("late cleanup was delivered more than once: %v", err)
+	default:
+	}
+	if got := releaseCount.Load(); got != 1 {
+		t.Fatalf("release calls = %d, want 1", got)
+	}
+	if got := lateErrorCount.Load(); got != 1 {
+		t.Fatalf("late sink calls = %d, want 1", got)
+	}
+	if got := buildCount.Load(); got != 1 {
+		t.Fatalf("build calls = %d, want 1", got)
 	}
 }
 
