@@ -113,13 +113,14 @@ func (s *installTagSelectorCandidateStore) activate(requestID uint64) (string, b
 	}
 	token := fmt.Sprintf("selector-preview-%d", requestID)
 	previous := s.candidate
+	previousToken := s.latestToken
 	s.candidate = nil
 	s.latestID = requestID
 	s.latestToken = token
 	s.mu.Unlock()
 	if previous != nil {
 		if err := s.releaseCandidate(*previous); err != nil {
-			return token, true, fmt.Errorf("release superseded Tag selector candidate: %w", err)
+			return token, true, fmt.Errorf("release superseded tag selector candidate %q: %w", previousToken, err)
 		}
 	}
 	return token, true, nil
@@ -130,7 +131,7 @@ func (s *installTagSelectorCandidateStore) put(requestID uint64, token string, c
 	if s.closed || requestID != s.latestID || token == "" || token != s.latestToken {
 		s.mu.Unlock()
 		if err := s.releaseCandidate(candidate); err != nil {
-			return false, fmt.Errorf("release rejected Tag selector candidate: %w", err)
+			return false, fmt.Errorf("release rejected tag selector candidate %q: %w", token, err)
 		}
 		return false, nil
 	}
@@ -139,7 +140,7 @@ func (s *installTagSelectorCandidateStore) put(requestID uint64, token string, c
 	s.mu.Unlock()
 	if previous != nil {
 		if err := s.releaseCandidate(*previous); err != nil {
-			return true, fmt.Errorf("release replaced Tag selector candidate: %w", err)
+			return true, fmt.Errorf("release replaced tag selector candidate %q: %w", token, err)
 		}
 	}
 	return true, nil
@@ -157,13 +158,12 @@ func (s *installTagSelectorCandidateStore) take(token string) (installTagSelecto
 }
 
 type installTagSelectorPreviewProvider struct {
-	store      *installTagSelectorCandidateStore
-	buildMu    sync.Mutex
-	releaseMu  sync.Mutex
-	releaseErr error
-	closed     bool
-	lateError  func(error)
-	build      func([]string) (installTagSelectorCandidate, error)
+	store     *installTagSelectorCandidateStore
+	buildMu   sync.Mutex
+	releaseMu sync.Mutex
+	closed    bool
+	lateError func(error)
+	build     func([]string) (installTagSelectorCandidate, error)
 }
 
 func (p *installTagSelectorPreviewProvider) preview(requestID uint64, tags []string) (tagselectortui.Preview, error) {
@@ -171,15 +171,17 @@ func (p *installTagSelectorPreviewProvider) preview(requestID uint64, tags []str
 	defer p.buildMu.Unlock()
 
 	token, ok, releaseErr := p.store.activate(requestID)
-	reportedLate := p.recordReleaseError(releaseErr)
 	if releaseErr != nil {
-		if reportedLate {
-			return tagselectortui.Preview{}, errors.New("Tag selector preview provider closed during cleanup")
+		if p.reportCleanupErrorIfClosed(releaseErr) {
+			return tagselectortui.Preview{}, errors.New("tag selector preview provider is closed")
 		}
 		return tagselectortui.Preview{}, releaseErr
 	}
 	if !ok {
-		return tagselectortui.Preview{}, fmt.Errorf("Tag selector preview request is stale or the candidate store is closed")
+		if p.isClosed() {
+			return tagselectortui.Preview{}, errors.New("tag selector preview provider is closed")
+		}
+		return tagselectortui.Preview{}, errors.New("tag selector preview request is stale")
 	}
 	candidate, err := p.build(tags)
 	if err != nil {
@@ -187,47 +189,55 @@ func (p *installTagSelectorPreviewProvider) preview(requestID uint64, tags []str
 	}
 	candidate.Preview.CandidateToken = token
 	stored, releaseErr := p.store.put(requestID, token, candidate)
-	reportedLate = p.recordReleaseError(releaseErr)
 	if releaseErr != nil {
-		if reportedLate {
-			return tagselectortui.Preview{}, errors.New("Tag selector preview provider closed during cleanup")
+		if p.reportCleanupErrorIfClosed(releaseErr) {
+			return tagselectortui.Preview{}, errors.New("tag selector preview provider is closed")
 		}
 		return tagselectortui.Preview{}, releaseErr
 	}
 	if !stored {
-		return tagselectortui.Preview{}, fmt.Errorf("Tag selector preview request was superseded")
+		if p.isClosed() {
+			return tagselectortui.Preview{}, errors.New("tag selector preview provider is closed")
+		}
+		return tagselectortui.Preview{}, errors.New("tag selector preview request was superseded")
 	}
 	return candidate.Preview, nil
 }
 
-func (p *installTagSelectorPreviewProvider) recordReleaseError(err error) bool {
+func (p *installTagSelectorPreviewProvider) reportCleanupErrorIfClosed(err error) bool {
 	if err == nil {
 		return false
 	}
 	p.releaseMu.Lock()
-	if p.closed {
-		report := p.lateError
-		p.releaseMu.Unlock()
-		if report != nil {
-			report(err)
-		} else {
-			slog.Error("late Tag selector cleanup failed", "error", err)
-		}
-		return true
-	}
-	p.releaseErr = errors.Join(p.releaseErr, err)
+	closed := p.closed
+	report := p.lateError
 	p.releaseMu.Unlock()
-	return false
+	if !closed {
+		return false
+	}
+	if report != nil {
+		report(err)
+	} else {
+		slog.Error("late tag selector cleanup failed", "error", err)
+	}
+	return true
+}
+
+func (p *installTagSelectorPreviewProvider) isClosed() bool {
+	p.releaseMu.Lock()
+	defer p.releaseMu.Unlock()
+	return p.closed
 }
 
 func (p *installTagSelectorPreviewProvider) close() error {
-	closeErr := p.store.close()
 	p.releaseMu.Lock()
-	defer p.releaseMu.Unlock()
-	result := errors.Join(p.releaseErr, closeErr)
-	p.releaseErr = nil
+	if p.closed {
+		p.releaseMu.Unlock()
+		return nil
+	}
 	p.closed = true
-	return result
+	p.releaseMu.Unlock()
+	return p.store.close()
 }
 
 func (s *installTagSelectorCandidateStore) releaseCandidate(candidate installTagSelectorCandidate) error {
@@ -249,7 +259,7 @@ func (s *installTagSelectorCandidateStore) close() error {
 	s.mu.Unlock()
 	if candidate != nil {
 		if err := s.releaseCandidate(*candidate); err != nil {
-			return fmt.Errorf("release stored Tag selector candidate: %w", err)
+			return fmt.Errorf("release stored tag selector candidate %q: %w", s.latestToken, err)
 		}
 	}
 	return nil
@@ -284,7 +294,7 @@ func runInstallTagSelector(cmd *cobra.Command, m manifest.Manifest, meta state.M
 	}
 	defer func() {
 		if err := provider.close(); err != nil {
-			resultErr = errors.Join(resultErr, fmt.Errorf("close Tag selector preview provider: %w", err))
+			resultErr = errors.Join(resultErr, fmt.Errorf("close tag selector preview provider: %w", err))
 		}
 	}()
 	result, err := installTagSelectorRunner(cmd.InOrStdin(), cmd.OutOrStdout(), browseData, initial, provider.preview)
@@ -304,11 +314,11 @@ func runInstallTagSelector(cmd *cobra.Command, m manifest.Manifest, meta state.M
 	}
 	defer func() {
 		if err := candidate.releaseCapturedSources(); err != nil {
-			resultErr = errors.Join(resultErr, fmt.Errorf("release accepted Tag selector candidate: %w", err))
+			resultErr = errors.Join(resultErr, fmt.Errorf("release accepted tag selector candidate %q: %w", candidate.Preview.CandidateToken, err))
 		}
 	}()
 	if err := provider.close(); err != nil {
-		return fmt.Errorf("close Tag selector preview provider: %w", err)
+		return fmt.Errorf("close tag selector preview provider: %w", err)
 	}
 	if !reflect.DeepEqual(result.Preview, candidate.Preview) || !slices.Equal(result.Tags, candidate.Effective.Selection.Tags) {
 		return fmt.Errorf("run Tag selector: accepted preview does not match its immutable candidate")
@@ -1020,7 +1030,13 @@ func renderTagSelectorFinalResult(w io.Writer, candidate installTagSelectorCandi
 	fmt.Fprintln(w, "  Historical retirement: not run (Tag selector path)")
 	renderTagSelectorManagedEntryResults(w, candidate.Plan, conflictDecisions)
 	renderTagSelectorRetainedExternalState(w, candidate.Plan.SelectionReconciliation)
-	renderSelectionRetirement(w, retirement)
+	renderTagSelectorSelectionRetirement(w, retirement)
+}
+
+func renderTagSelectorSelectionRetirement(w io.Writer, result *selectionretirement.Result) {
+	var rendered strings.Builder
+	renderSelectionRetirement(&rendered, result)
+	fmt.Fprint(w, strings.TrimSuffix(rendered.String(), "\n"))
 }
 
 func renderTagSelectorManagedEntryResults(w io.Writer, p plan.Plan, conflictDecisions map[string]install.ConflictDecision) {

@@ -23,6 +23,128 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// cleanup operations are variables so tests can inject deterministic failures
+// without exhausting process descriptors. Tests that replace them must run
+// serially and restore the original operation.
+var (
+	closeRootOperation    = func(root *os.Root) error { return root.Close() }
+	closeFileOperation    = func(file *os.File) error { return file.Close() }
+	closeFDOperation      = unix.Close
+	newFileOperation      = os.NewFile
+	writeFileOperation    = func(file *os.File, data []byte) (int, error) { return file.Write(data) }
+	writeAllFileOperation = func(file *os.File, data []byte) error { return writeAll(file, data) }
+)
+
+type cleanupFailure struct {
+	err error
+}
+
+func (e *cleanupFailure) Error() string { return e.err.Error() }
+func (e *cleanupFailure) Unwrap() error { return e.err }
+func (e *cleanupFailure) CleanupFailure() bool {
+	return true
+}
+
+type completedActionCleanupFailure struct {
+	err error
+}
+
+func (e *completedActionCleanupFailure) Error() string { return e.err.Error() }
+func (e *completedActionCleanupFailure) Unwrap() error { return e.err }
+
+type errorWithPreservedMessage struct {
+	message string
+	err     error
+}
+
+func (e *errorWithPreservedMessage) Error() string { return e.message }
+func (e *errorWithPreservedMessage) Unwrap() error { return e.err }
+
+func classifyCleanup(err error) error {
+	if err == nil || isCleanupFailure(err) {
+		return err
+	}
+	return &cleanupFailure{err: err}
+}
+
+func completedActionCleanup(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &completedActionCleanupFailure{err: classifyCleanup(err)}
+}
+
+func isCleanupFailure(err error) bool {
+	var classified interface{ CleanupFailure() bool }
+	return errors.As(err, &classified) && classified.CleanupFailure()
+}
+
+func isCompletedActionCleanup(err error) bool {
+	var completed *completedActionCleanupFailure
+	return errors.As(err, &completed)
+}
+
+func withoutCompletedActionMarker(err error) error {
+	if err == nil {
+		return nil
+	}
+	var stripped []error
+	var collect func(error)
+	collect = func(current error) {
+		switch typed := current.(type) {
+		case *completedActionCleanupFailure:
+			collect(typed.err)
+		case interface{ Unwrap() []error }:
+			for _, nested := range typed.Unwrap() {
+				collect(nested)
+			}
+		case interface{ Unwrap() error }:
+			if isCompletedActionCleanup(current) {
+				strippedNested := withoutCompletedActionMarker(typed.Unwrap())
+				if strippedNested != nil {
+					stripped = append(stripped, &errorWithPreservedMessage{
+						message: current.Error(),
+						err:     strippedNested,
+					})
+				}
+				return
+			}
+			stripped = append(stripped, current)
+		default:
+			stripped = append(stripped, current)
+		}
+	}
+	collect(err)
+	return errors.Join(stripped...)
+}
+
+func closeRootOnce(root *os.Root, path string) error {
+	// Never retry a genuine close: the descriptor number may already have been
+	// reused even when close reports an error.
+	if err := closeRootOperation(root); err != nil {
+		return classifyCleanup(fmt.Errorf("close filesystem root %s: %w", path, err))
+	}
+	return nil
+}
+
+func closeFileOnce(file *os.File, path string) error {
+	// Never retry a genuine close: the descriptor number may already have been
+	// reused even when close reports an error.
+	if err := closeFileOperation(file); err != nil {
+		return classifyCleanup(fmt.Errorf("close file %s: %w", path, err))
+	}
+	return nil
+}
+
+func closeFDOnce(fd int, target string) error {
+	// unix.Close is deliberately attempted exactly once because retrying can
+	// close an unrelated descriptor after fd reuse.
+	if err := closeFDOperation(fd); err != nil {
+		return classifyCleanup(fmt.Errorf("close descriptor for %s: %w", target, err))
+	}
+	return nil
+}
+
 // ConflictDecision describes the explicit per-target action selected for a
 // conflict. The zero value is intentionally equivalent to skip so unattended
 // installs preserve existing workstation files.
@@ -104,8 +226,8 @@ func (i *capturedFileIdentity) release() error {
 	}
 	file := i.file
 	i.file = nil
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close captured identity: %w", err)
+	if err := closeFileOnce(file, file.Name()); err != nil {
+		return fmt.Errorf("close captured identity for %s: %w", file.Name(), err)
 	}
 	return nil
 }
@@ -254,11 +376,23 @@ func applyManagedEntriesWithApply(p plan.Plan, opts Options, applyAction managed
 	for i, action := range p.Actions {
 		action, err = prepareCapturedAction(action, resolvedSources[i], opts)
 		if err != nil {
+			if isCleanupFailure(err) {
+				err = errors.Join(err, persistCompletedPrefix(p, appliedActions, appliedReceipts, resolvedSources, opts, i))
+			}
 			return MetadataCommit{}, err
 		}
 		source := resolvedSources[i][0]
 		prepared, receipt, err := applyActionWithReconciliationReceipt(action, source, resolvedSources[i], opts, applyAction)
 		if err != nil {
+			if isCleanupFailure(err) {
+				completed := i
+				if isCompletedActionCleanup(err) {
+					appliedActions[i] = prepared
+					appliedReceipts[i] = receipt
+					completed++
+				}
+				err = errors.Join(err, persistCompletedPrefix(p, appliedActions, appliedReceipts, resolvedSources, opts, completed))
+			}
 			return MetadataCommit{}, err
 		}
 		appliedActions[i] = prepared
@@ -279,6 +413,26 @@ func applyManagedEntriesWithApply(p plan.Plan, opts Options, applyAction managed
 		return MetadataCommit{}, err
 	}
 	return commit, nil
+}
+
+func persistCompletedPrefix(p plan.Plan, actions []plan.Action, receipts []*state.ReconciliationReceipt, resolvedSources [][]string, opts Options, completed int) error {
+	if completed == 0 {
+		return nil
+	}
+	p.Actions = append([]plan.Action(nil), actions[:completed]...)
+	commit := newMetadataCommit(p, resolvedSources[:completed], opts)
+	for i := range commit.actions {
+		commit.actions[i].pending = receipts[i]
+	}
+	if opts.StateRoot != "" {
+		if err := commit.captureStagedEvidence(); err != nil {
+			return fmt.Errorf("capture completed install prefix evidence: %w", err)
+		}
+	}
+	if err := commit.recordPartialInventory(); err != nil {
+		return fmt.Errorf("persist completed install prefix: %w", err)
+	}
+	return nil
 }
 
 func applyManagedAction(action plan.Action, source string, opts Options) (managedActionResult, error) {
@@ -317,7 +471,16 @@ func applyActionWithReconciliationReceipt(action plan.Action, source string, res
 	if err != nil {
 		return prepared, nil, err
 	}
-	defer func() { resultErr = errors.Join(resultErr, locked.Close()) }()
+	actionCompleted := false
+	defer func() {
+		if closeErr := locked.Close(); closeErr != nil {
+			closeErr = classifyCleanup(fmt.Errorf("close installation metadata lock for %s: %w", action.Target, closeErr))
+			if actionCompleted {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	meta, err := locked.Load()
 	if err != nil {
 		return prepared, nil, err
@@ -330,9 +493,9 @@ func applyActionWithReconciliationReceipt(action plan.Action, source string, res
 	if err != nil {
 		return action, nil, err
 	}
-	result, err := applyAction(prepared, source, opts)
-	if err != nil {
-		return prepared, nil, err
+	result, applyErr := applyAction(prepared, source, opts)
+	if applyErr != nil && !isCompletedActionCleanup(applyErr) {
+		return prepared, nil, applyErr
 	}
 	if !result.ExactTargetContent {
 		return prepared, nil, fmt.Errorf("record reconciliation receipt for %s: apply did not return exact target bytes", action.Target)
@@ -352,7 +515,11 @@ func applyActionWithReconciliationReceipt(action plan.Action, source string, res
 	setPendingReconciliation(&meta, action.Target, receipt)
 	if err := locked.Save(meta); err != nil {
 		rollbackErr := restoreConfinedRegularFile(action.Target, opts.Home, result.TargetContent, result.PreviousTargetContent)
-		return prepared, nil, errors.Join(fmt.Errorf("persist reconciliation receipt for %s: %w", action.Target, err), rollbackErr)
+		return prepared, nil, errors.Join(fmt.Errorf("persist reconciliation receipt for %s: %w", action.Target, err), withoutCompletedActionMarker(applyErr), rollbackErr)
+	}
+	actionCompleted = true
+	if applyErr != nil {
+		return prepared, receipt, completedActionCleanup(applyErr)
 	}
 	return prepared, receipt, nil
 }
@@ -494,24 +661,23 @@ func captureConfinedSource(path, rootPath string, contentRequired bool) (Capture
 	if err != nil {
 		return CapturedSource{}, fmt.Errorf("open source root %s: %w", rootAbs, err)
 	}
-	defer root.Close()
 	observed, err := root.Stat(relative)
 	if err != nil {
-		return CapturedSource{}, fmt.Errorf("inspect confined source %s: %w", path, err)
+		return CapturedSource{}, errors.Join(fmt.Errorf("inspect confined source %s: %w", path, err), closeRootOnce(root, rootAbs))
 	}
 	if contentRequired && !observed.Mode().IsRegular() {
-		return CapturedSource{}, fmt.Errorf("confined source %s does not resolve to a regular file", path)
+		return CapturedSource{}, errors.Join(fmt.Errorf("confined source %s does not resolve to a regular file", path), closeRootOnce(root, rootAbs))
 	}
 	file, err := root.OpenFile(relative, os.O_RDONLY, 0)
 	if err != nil {
-		return CapturedSource{}, fmt.Errorf("open confined source %s: %w", path, err)
+		return CapturedSource{}, errors.Join(fmt.Errorf("open confined source %s: %w", path, err), closeRootOnce(root, rootAbs))
 	}
 	info, err := file.Stat()
 	if err != nil {
-		return CapturedSource{}, errors.Join(fmt.Errorf("stat confined source %s: %w", path, err), file.Close())
+		return CapturedSource{}, errors.Join(fmt.Errorf("stat confined source %s: %w", path, err), closeFileOnce(file, path), closeRootOnce(root, rootAbs))
 	}
 	if (contentRequired && !info.Mode().IsRegular()) || !os.SameFile(observed, info) {
-		return CapturedSource{}, errors.Join(fmt.Errorf("install plan is stale: source %s changed identity before snapshot", path), file.Close())
+		return CapturedSource{}, errors.Join(fmt.Errorf("install plan is stale: source %s changed identity before snapshot", path), closeFileOnce(file, path), closeRootOnce(root, rootAbs))
 	}
 	captured := CapturedSource{
 		Mode:                info.Mode(),
@@ -523,10 +689,15 @@ func captureConfinedSource(path, rootPath string, contentRequired bool) (Capture
 	if contentRequired {
 		data, err := io.ReadAll(file)
 		if err != nil {
-			return CapturedSource{}, errors.Join(fmt.Errorf("read confined source %s: %w", path, err), captured.identity.release())
+			return CapturedSource{}, errors.Join(fmt.Errorf("read confined source %s: %w", path, err), captured.identity.release(), closeRootOnce(root, rootAbs))
 		}
 		captured.Content = append([]byte{}, data...)
 		captured.ContentPresent = true
+	}
+	if err := closeRootOnce(root, rootAbs); err != nil {
+		// The root must be released before ownership of the captured descriptor
+		// transfers to the caller. A root-close fault invalidates the capture.
+		return CapturedSource{}, errors.Join(err, captured.identity.release())
 	}
 	return captured, nil
 }
@@ -1502,7 +1673,7 @@ func createCapturedSymlink(action plan.Action, source string, opts Options) erro
 	return createCapturedSymlinkWithHook(action, source, opts, nil)
 }
 
-func createCapturedSymlinkWithHook(action plan.Action, source string, opts Options, afterCreate func() error) error {
+func createCapturedSymlinkWithHook(action plan.Action, source string, opts Options, afterCreate func() error) (resultErr error) {
 	sourceName := actionSourceList(action)[0]
 	captured, hasCapture := opts.CapturedSources[SourceCaptureKey{Target: action.Target, Source: sourceName}]
 	if hasCapture {
@@ -1526,46 +1697,60 @@ func createCapturedSymlinkWithHook(action plan.Action, source string, opts Optio
 	if err != nil {
 		return fmt.Errorf("open home root %s: %w", homeAbs, err)
 	}
-	defer root.Close()
+	actionCompleted := false
+	defer func() {
+		if closeErr := closeRootOnce(root, homeAbs); closeErr != nil {
+			if actionCompleted {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
+	var creationCleanup error
 	if err := symlinkAtRoot(root, relative, source); err != nil {
-		return err
+		if !isCompletedActionCleanup(err) {
+			return err
+		}
+		creationCleanup = withoutCompletedActionMarker(err)
 	}
 	created, err := root.Lstat(relative)
 	if err != nil {
-		return fmt.Errorf("inspect created symlink: %w", err)
+		return errors.Join(fmt.Errorf("inspect created symlink %s: %w", action.Target, err), creationCleanup)
 	}
 	if afterCreate != nil {
 		if err := afterCreate(); err != nil {
-			return errors.Join(fmt.Errorf("after symlink creation: %w", err), removeCreatedSymlinkIfMatching(root, relative, source, created))
+			return errors.Join(fmt.Errorf("after symlink creation for %s: %w", action.Target, err), creationCleanup, removeCreatedSymlinkIfMatching(root, relative, source, created))
 		}
 	}
 	if !hasCapture {
-		return nil
+		actionCompleted = true
+		return completedActionCleanup(creationCleanup)
 	}
 	resolved, resolveErr := statSymlinkTargetAtRoot(root, relative)
 	capturedInfo, capturedInfoErr := captured.identity.stat()
-	if resolveErr == nil && capturedInfoErr == nil && os.SameFile(resolved, capturedInfo) {
+	if (resolveErr == nil || isCleanupFailure(resolveErr)) && capturedInfoErr == nil && resolved != nil && os.SameFile(resolved, capturedInfo) {
 		// After terminal commit, a managed symlink intentionally follows later
 		// Source of Truth checkout changes. This identity check only closes the
 		// selector review-to-creation window.
-		return nil
+		actionCompleted = true
+		return completedActionCleanup(errors.Join(creationCleanup, resolveErr))
 	}
 	cleanupErr := removeCreatedSymlinkIfMatching(root, relative, source, created)
 	if capturedInfoErr != nil {
-		return errors.Join(fmt.Errorf("resolve captured source identity: %w", capturedInfoErr), cleanupErr)
+		return errors.Join(fmt.Errorf("resolve captured source identity for %s: %w", action.Target, capturedInfoErr), creationCleanup, resolveErr, cleanupErr)
 	}
 	if resolveErr != nil {
-		return errors.Join(fmt.Errorf("resolve created symlink: %w", resolveErr), cleanupErr)
+		return errors.Join(fmt.Errorf("resolve created symlink %s: %w", action.Target, resolveErr), creationCleanup, cleanupErr)
 	}
-	return errors.Join(fmt.Errorf("created symlink resolved to a different source identity"), cleanupErr)
+	return errors.Join(fmt.Errorf("created symlink %s resolved to a different source identity", action.Target), creationCleanup, cleanupErr)
 }
 
-func createConfinedParent(rootPath, target string) error {
+func createConfinedParent(rootPath, target string) (resultErr error) {
 	root, relative, err := openConfinedRoot(rootPath, target)
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func() { resultErr = errors.Join(resultErr, closeRootOnce(root, rootPath)) }()
 	parent := filepath.Dir(relative)
 	if parent == "." {
 		return nil
@@ -1577,11 +1762,11 @@ func createConfinedParent(rootPath, target string) error {
 		}
 		current = filepath.Join(current, component)
 		if err := root.Mkdir(current, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
-			return err
+			return fmt.Errorf("create confined parent %s for %s: %w", current, target, err)
 		}
 		info, err := root.Stat(current)
 		if err != nil {
-			return err
+			return fmt.Errorf("stat confined parent %s for %s: %w", current, target, err)
 		}
 		if !info.IsDir() {
 			return fmt.Errorf("parent %s is not a directory", current)
@@ -1595,10 +1780,19 @@ func symlinkAtRoot(root *os.Root, relative, destination string) (resultErr error
 	if err != nil {
 		return fmt.Errorf("open symlink parent: %w", err)
 	}
-	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	created := false
+	defer func() {
+		if closeErr := closeFileOnce(parent, "parent of "+relative); closeErr != nil {
+			if created {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	if err := unix.Symlinkat(destination, int(parent.Fd()), base); err != nil {
-		return fmt.Errorf("create confined symlink: %w", err)
+		return fmt.Errorf("create confined symlink %s to %s: %w", relative, destination, err)
 	}
+	created = true
 	return nil
 }
 
@@ -1613,39 +1807,42 @@ func openRootParent(root *os.Root, relative string) (*os.File, string, error) {
 func statSymlinkTargetAtRoot(root *os.Root, relative string) (result os.FileInfo, resultErr error) {
 	parent, base, err := openRootParent(root, relative)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open parent of resolved symlink %s: %w", relative, err)
 	}
-	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	defer func() { resultErr = errors.Join(resultErr, closeFileOnce(parent, "parent of "+relative)) }()
 	fd, err := unix.Openat(int(parent.Fd()), base, unix.O_RDONLY|unix.O_CLOEXEC, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open resolved symlink %s: %w", relative, err)
 	}
-	resolved := os.NewFile(uintptr(fd), relative)
+	resolved := newFileOperation(uintptr(fd), relative)
 	if resolved == nil {
-		_ = unix.Close(fd)
-		return nil, fmt.Errorf("open resolved symlink descriptor")
+		return nil, errors.Join(fmt.Errorf("open resolved symlink descriptor for %s", relative), closeFDOnce(fd, relative))
 	}
-	defer func() { resultErr = errors.Join(resultErr, resolved.Close()) }()
-	return resolved.Stat()
+	defer func() { resultErr = errors.Join(resultErr, closeFileOnce(resolved, relative)) }()
+	result, err = resolved.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat resolved symlink %s: %w", relative, err)
+	}
+	return result, nil
 }
 
 func readlinkAtRoot(root *os.Root, relative string) (result string, resultErr error) {
 	parent, base, err := openRootParent(root, relative)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("open parent of confined symlink %s: %w", relative, err)
 	}
-	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	defer func() { resultErr = errors.Join(resultErr, closeFileOnce(parent, "parent of "+relative)) }()
 	for size := 256; size <= 1<<20; size *= 2 {
 		buffer := make([]byte, size)
 		n, err := unix.Readlinkat(int(parent.Fd()), base, buffer)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("read confined symlink %s: %w", relative, err)
 		}
 		if n < len(buffer) {
 			return string(buffer[:n]), nil
 		}
 	}
-	return "", fmt.Errorf("symlink destination exceeds supported length")
+	return "", fmt.Errorf("read confined symlink %s: destination exceeds supported length", relative)
 }
 
 func removeCreatedSymlinkIfMatching(root *os.Root, relative, destination string, created os.FileInfo) error {
@@ -1659,17 +1856,17 @@ func removeCreatedSymlinkIfMatching(root *os.Root, relative, destination string,
 	if current.Mode()&os.ModeSymlink == 0 || !os.SameFile(current, created) {
 		return fmt.Errorf("created symlink changed before compensation; refusing removal")
 	}
-	currentDestination, err := readlinkAtRoot(root, relative)
-	if err != nil {
-		return fmt.Errorf("read created symlink for compensation: %w", err)
+	currentDestination, readErr := readlinkAtRoot(root, relative)
+	if readErr != nil && !isCleanupFailure(readErr) {
+		return fmt.Errorf("read created symlink %s for compensation: %w", relative, readErr)
 	}
 	if currentDestination != destination {
-		return fmt.Errorf("created symlink destination changed before compensation; refusing removal")
+		return errors.Join(fmt.Errorf("created symlink %s destination changed before compensation; refusing removal", relative), readErr)
 	}
 	if err := root.Remove(relative); err != nil {
-		return fmt.Errorf("remove created symlink during compensation: %w", err)
+		return errors.Join(fmt.Errorf("remove created symlink %s during compensation: %w", relative, err), readErr)
 	}
-	return nil
+	return readErr
 }
 
 func applyReplace(action plan.Action, source string, opts Options) error {
@@ -1702,13 +1899,13 @@ func applyUpdate(action plan.Action, source string, opts Options) (managedAction
 		if len(action.PreviousContent) > 0 {
 			result, err := reconcileJSONContentFile(action.Target, action.PreviousContent, current, opts.Home)
 			if err != nil {
-				return managedActionResult{}, fmt.Errorf("reconcile JSON update for %s: %w", action.Target, err)
+				return result, fmt.Errorf("reconcile JSON update for %s: %w", action.Target, err)
 			}
 			return result, nil
 		}
 		result, err := mergeJSONContentFile(action.Target, current, opts.Home)
 		if err != nil {
-			return managedActionResult{}, fmt.Errorf("merge JSON update for %s: %w", action.Target, err)
+			return result, fmt.Errorf("merge JSON update for %s: %w", action.Target, err)
 		}
 		return result, nil
 	case "jsonc-subset":
@@ -1723,13 +1920,13 @@ func applyUpdate(action plan.Action, source string, opts Options) (managedAction
 		if len(action.PreviousContent) > 0 {
 			result, err := reconcileJSONCContentFile(action.Target, action.PreviousContent, current, opts.Home)
 			if err != nil {
-				return managedActionResult{}, fmt.Errorf("reconcile JSONC update for %s: %w", action.Target, err)
+				return result, fmt.Errorf("reconcile JSONC update for %s: %w", action.Target, err)
 			}
 			return result, nil
 		}
 		result, err := mergeJSONCContentFile(action.Target, current, opts.Home)
 		if err != nil {
-			return managedActionResult{}, fmt.Errorf("merge JSONC update for %s: %w", action.Target, err)
+			return result, fmt.Errorf("merge JSONC update for %s: %w", action.Target, err)
 		}
 		return result, nil
 	case "toml-subset":
@@ -1744,13 +1941,13 @@ func applyUpdate(action plan.Action, source string, opts Options) (managedAction
 		if len(action.PreviousContent) > 0 {
 			result, err := reconcileTOMLContentFile(action.Target, action.PreviousContent, current, opts.Home)
 			if err != nil {
-				return managedActionResult{}, fmt.Errorf("reconcile TOML update for %s: %w", action.Target, err)
+				return result, fmt.Errorf("reconcile TOML update for %s: %w", action.Target, err)
 			}
 			return result, nil
 		}
 		result, err := mergeTOMLContentFile(action.Target, current, opts.Home)
 		if err != nil {
-			return managedActionResult{}, fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
+			return result, fmt.Errorf("merge TOML update for %s: %w", action.Target, err)
 		}
 		return result, nil
 	case "seeded":
@@ -1769,7 +1966,7 @@ func applyUpdate(action plan.Action, source string, opts Options) (managedAction
 			return current, !bytes.Equal(live, current), nil
 		})
 		if err != nil {
-			return managedActionResult{}, fmt.Errorf("advance seeded target %s: %w", action.Target, err)
+			return result, fmt.Errorf("advance seeded target %s: %w", action.Target, err)
 		}
 		return result, nil
 	case "marked-block":
@@ -1789,7 +1986,7 @@ func applyUpdate(action plan.Action, source string, opts Options) (managedAction
 			return reconciliation.Content, !bytes.Equal(reconciliation.Content, live), nil
 		})
 		if err != nil {
-			return managedActionResult{}, fmt.Errorf("update marked block %s: %w", action.Target, err)
+			return result, fmt.Errorf("update marked block %s: %w", action.Target, err)
 		}
 		return result, nil
 	case "", "whole":
@@ -1830,7 +2027,7 @@ func updateWholeTargetWithResult(action plan.Action, source, home string) (manag
 
 type confinedTransform func([]byte) ([]byte, bool, error)
 
-func updateConfinedRegularFile(target, home string, transform confinedTransform) (managedActionResult, error) {
+func updateConfinedRegularFile(target, home string, transform confinedTransform) (result managedActionResult, resultErr error) {
 	homeAbs, err := cleanAbs(home)
 	if err != nil {
 		return managedActionResult{}, fmt.Errorf("resolve home for target %s: %w", target, err)
@@ -1847,7 +2044,15 @@ func updateConfinedRegularFile(target, home string, transform confinedTransform)
 	if err != nil {
 		return managedActionResult{}, fmt.Errorf("open home root %s: %w", homeAbs, err)
 	}
-	defer root.Close()
+	actionCompleted := false
+	defer func() {
+		if closeErr := closeRootOnce(root, homeAbs); closeErr != nil {
+			if actionCompleted {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	observed, err := root.Lstat(relative)
 	if err != nil {
 		return managedActionResult{}, fmt.Errorf("inspect confined target %s: %w", target, err)
@@ -1859,7 +2064,14 @@ func updateConfinedRegularFile(target, home string, transform confinedTransform)
 	if err != nil {
 		return managedActionResult{}, fmt.Errorf("open confined target %s: %w", target, err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := closeFileOnce(file, target); closeErr != nil {
+			if actionCompleted {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	info, err := file.Stat()
 	if err != nil {
 		return managedActionResult{}, fmt.Errorf("stat confined target %s: %w", target, err)
@@ -1875,18 +2087,20 @@ func updateConfinedRegularFile(target, home string, transform confinedTransform)
 	if err != nil {
 		return managedActionResult{}, err
 	}
-	result := managedActionResult{
+	result = managedActionResult{
 		PreviousTargetContent: append([]byte(nil), live...),
 		TargetContent:         append([]byte(nil), updated...),
 		ExactTargetContent:    true,
 	}
 	if !changed {
 		result.TargetContent = append([]byte(nil), live...)
+		actionCompleted = true
 		return result, nil
 	}
 	if err := rewriteOpenedRegularFile(file, target, updated, live); err != nil {
 		return managedActionResult{}, err
 	}
+	actionCompleted = true
 	return result, nil
 }
 
@@ -2064,6 +2278,7 @@ func applyAdopt(action plan.Action, source string, opts Options) error {
 }
 
 func applyCapturedAdopt(action plan.Action, source string, opts Options, snapshot AdoptSnapshot) (resultErr error) {
+	actionCompleted := false
 	if err := validateCapturedFile(action.Target, opts.Home, "adopt target", snapshot.target); err != nil {
 		return fmt.Errorf("install plan is stale: %w", err)
 	}
@@ -2075,12 +2290,26 @@ func applyCapturedAdopt(action plan.Action, source string, opts Options, snapsho
 	if err != nil {
 		return fmt.Errorf("open adopt source root: %w", err)
 	}
-	defer func() { resultErr = errors.Join(resultErr, sourceRoot.Close()) }()
+	defer func() {
+		if closeErr := closeRootOnce(sourceRoot, opts.SourceRoot); closeErr != nil {
+			if actionCompleted {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	sourceFile, err := sourceRoot.OpenFile(sourceRelative, os.O_RDWR, 0)
 	if err != nil {
 		return fmt.Errorf("open adopt source %s: %w", source, err)
 	}
-	defer func() { resultErr = errors.Join(resultErr, sourceFile.Close()) }()
+	defer func() {
+		if closeErr := closeFileOnce(sourceFile, source); closeErr != nil {
+			if actionCompleted {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	sourceInfo, sourceData, err := readCapturedDescriptor(sourceFile, "adopt source", snapshot.source)
 	if err != nil {
 		return err
@@ -2090,21 +2319,29 @@ func applyCapturedAdopt(action plan.Action, source string, opts Options, snapsho
 	if err != nil {
 		return fmt.Errorf("open adopt target root: %w", err)
 	}
-	defer func() { resultErr = errors.Join(resultErr, homeRoot.Close()) }()
+	defer func() {
+		if closeErr := closeRootOnce(homeRoot, opts.Home); closeErr != nil {
+			if actionCompleted {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	targetFile, err := homeRoot.OpenFile(targetRelative, os.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("open adopt target %s: %w", action.Target, err)
 	}
 	_, targetData, targetReadErr := readCapturedDescriptor(targetFile, "adopt target", snapshot.target)
-	targetCloseErr := targetFile.Close()
+	targetCloseErr := closeFileOnce(targetFile, action.Target)
 	if err := errors.Join(targetReadErr, targetCloseErr); err != nil {
-		return err
+		return fmt.Errorf("read captured adopt target %s: %w", action.Target, err)
 	}
 
 	if err := rewriteOpenedRegularFile(sourceFile, source, targetData, sourceData); err != nil {
 		return fmt.Errorf("write captured adopt source %s: %w", source, err)
 	}
 	if action.Strategy != "symlink" {
+		actionCompleted = true
 		return nil
 	}
 	rollbackSource := func() error {
@@ -2141,11 +2378,13 @@ func applyCapturedAdopt(action plan.Action, source string, opts Options, snapsho
 	createOpts.CapturedSources = map[SourceCaptureKey]CapturedSource{
 		{Target: action.Target, Source: action.Source}: adoptedSource,
 	}
-	if err := applyCreate(action, source, createOpts); err != nil {
+	createErr := applyCreate(action, source, createOpts)
+	if createErr != nil && !isCompletedActionCleanup(createErr) {
 		restoreErr := restoreCapturedTargetIfAbsent(homeRoot, targetRelative, snapshot.target)
-		return errors.Join(err, restoreErr, rollbackSource())
+		return errors.Join(createErr, restoreErr, rollbackSource())
 	}
-	return nil
+	actionCompleted = true
+	return completedActionCleanup(createErr)
 }
 
 func openConfinedRoot(rootPath, path string) (*os.Root, string, error) {
@@ -2209,9 +2448,15 @@ func restoreCapturedTargetIfAbsent(root *os.Root, relative string, snapshot Capt
 		}
 		return fmt.Errorf("restore adopted target: %w", err)
 	}
-	writeErr := writeAll(file, snapshot.Content)
+	writeErr := writeAllFileOperation(file, snapshot.Content)
 	chmodErr := file.Chmod(snapshot.Mode.Perm())
-	closeErr := file.Close()
+	closeErr := closeFileOnce(file, relative)
+	if writeErr != nil {
+		writeErr = fmt.Errorf("restore adopted target %s: write: %w", relative, writeErr)
+	}
+	if chmodErr != nil {
+		chmodErr = fmt.Errorf("restore adopted target %s: chmod: %w", relative, chmodErr)
+	}
 	return errors.Join(writeErr, chmodErr, closeErr)
 }
 
@@ -2276,48 +2521,52 @@ func createBackupSet(opts Options, target string) error {
 func copyRegularFile(source, target string) error {
 	info, err := os.Stat(source)
 	if err != nil {
-		return err
+		return fmt.Errorf("stat copy source %s: %w", source, err)
 	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("source is not a regular file")
 	}
 	data, err := os.ReadFile(source)
 	if err != nil {
-		return err
+		return fmt.Errorf("read copy source %s: %w", source, err)
 	}
 	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
 	if err != nil {
-		return err
+		return fmt.Errorf("open copy target %s: %w", target, err)
 	}
-	if _, err := file.Write(data); err != nil {
-		_ = file.Close()
-		_ = os.Remove(target)
-		return err
+	if _, err := writeFileOperation(file, data); err != nil {
+		return errors.Join(fmt.Errorf("write copy target %s: %w", target, err), closeFileOnce(file, target), removePathForCompensation(target))
 	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(target)
-		return err
+	if err := closeFileOnce(file, target); err != nil {
+		return errors.Join(err, removePathForCompensation(target))
 	}
-	return os.Chmod(target, info.Mode().Perm())
+	if err := os.Chmod(target, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("chmod copy target %s: %w", target, err)
+	}
+	return nil
 }
 
 func writeNewFileFromSourceMode(source, target string, data []byte) error {
 	info, err := os.Stat(source)
 	if err != nil {
-		return err
+		return fmt.Errorf("stat source mode %s: %w", source, err)
 	}
 	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
 	if err != nil {
-		return err
+		return fmt.Errorf("open new target %s: %w", target, err)
 	}
-	if _, err := file.Write(data); err != nil {
-		_ = file.Close()
-		_ = os.Remove(target)
-		return err
+	if _, err := writeFileOperation(file, data); err != nil {
+		return errors.Join(fmt.Errorf("write new target %s: %w", target, err), closeFileOnce(file, target), removePathForCompensation(target))
 	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(target)
-		return err
+	if err := closeFileOnce(file, target); err != nil {
+		return errors.Join(err, removePathForCompensation(target))
+	}
+	return nil
+}
+
+func removePathForCompensation(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove target %s during compensation: %w", path, err)
 	}
 	return nil
 }
@@ -2331,7 +2580,15 @@ func writeNewFileWithModeAtRoot(rootPath, target string, data []byte, mode os.Fi
 	if err != nil {
 		return err
 	}
-	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
+	actionCompleted := false
+	defer func() {
+		if closeErr := closeRootOnce(root, rootPath); closeErr != nil {
+			if actionCompleted {
+				closeErr = completedActionCleanup(closeErr)
+			}
+			resultErr = errors.Join(resultErr, closeErr)
+		}
+	}()
 	if beforeOpen != nil {
 		if err := beforeOpen(); err != nil {
 			return fmt.Errorf("before confined target create: %w", err)
@@ -2339,21 +2596,22 @@ func writeNewFileWithModeAtRoot(rootPath, target string, data []byte, mode os.Fi
 	}
 	file, err := root.OpenFile(relative, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode.Perm())
 	if err != nil {
-		return err
+		return fmt.Errorf("open confined target %s: %w", target, err)
 	}
 	created, err := file.Stat()
 	if err != nil {
-		return errors.Join(fmt.Errorf("stat created target: %w", err), file.Close())
+		return errors.Join(fmt.Errorf("stat created target %s: %w", target, err), closeFileOnce(file, target))
 	}
 	if err := writeAll(file, data); err != nil {
-		return errors.Join(err, file.Close(), removeCreatedFileIfMatching(root, relative, created))
+		return errors.Join(fmt.Errorf("write confined target %s: %w", target, err), closeFileOnce(file, target), removeCreatedFileIfMatching(root, relative, created))
 	}
 	if err := file.Chmod(mode.Perm()); err != nil {
-		return errors.Join(err, file.Close(), removeCreatedFileIfMatching(root, relative, created))
+		return errors.Join(fmt.Errorf("chmod confined target %s: %w", target, err), closeFileOnce(file, target), removeCreatedFileIfMatching(root, relative, created))
 	}
-	if err := file.Close(); err != nil {
+	if err := closeFileOnce(file, target); err != nil {
 		return errors.Join(err, removeCreatedFileIfMatching(root, relative, created))
 	}
+	actionCompleted = true
 	return nil
 }
 

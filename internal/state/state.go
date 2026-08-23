@@ -23,6 +23,47 @@ import (
 // CurrentVersion is the current Installation Metadata schema version.
 const CurrentVersion = 8
 
+type fileOperations struct {
+	open       func(string, int, uint32) (int, error)
+	newFile    func(uintptr, string) *os.File
+	stat       func(*os.File) (os.FileInfo, error)
+	flock      func(int, int) error
+	closeFD    func(int) error
+	closeFile  func(*os.File) error
+	createTemp func(string, string) (*os.File, error)
+	chmod      func(*os.File, os.FileMode) error
+	write      func(*os.File, []byte) (int, error)
+	remove     func(string) error
+}
+
+var stateFileOps = fileOperations{
+	open:       unix.Open,
+	newFile:    os.NewFile,
+	stat:       func(file *os.File) (os.FileInfo, error) { return file.Stat() },
+	flock:      unix.Flock,
+	closeFD:    unix.Close,
+	closeFile:  func(file *os.File) error { return file.Close() },
+	createTemp: os.CreateTemp,
+	chmod:      func(file *os.File, mode os.FileMode) error { return file.Chmod(mode) },
+	write:      func(file *os.File, data []byte) (int, error) { return file.Write(data) },
+	remove:     os.Remove,
+}
+
+type cleanupFailure struct {
+	err error
+}
+
+func (e cleanupFailure) Error() string        { return e.err.Error() }
+func (e cleanupFailure) Unwrap() error        { return e.err }
+func (e cleanupFailure) CleanupFailure() bool { return true }
+
+func asCleanupFailure(err error) error {
+	if err == nil {
+		return nil
+	}
+	return cleanupFailure{err: err}
+}
+
 // Metadata is the machine-readable record of installed managed targets.
 type Metadata struct {
 	Version            int                 `json:"version"`
@@ -290,29 +331,40 @@ func LockMetadata(path string) (*LockedMetadata, error) {
 		return nil, fmt.Errorf("lock installation metadata: create state directory: %w", err)
 	}
 	lockPath := path + ".lock"
-	fd, err := unix.Open(lockPath, unix.O_CREAT|unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	fd, err := stateFileOps.open(lockPath, unix.O_CREAT|unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("lock installation metadata: open lock file: %w", err)
+		return nil, fmt.Errorf("lock installation metadata: open lock file %s: %w", lockPath, err)
 	}
-	file := os.NewFile(uintptr(fd), lockPath)
+	file := stateFileOps.newFile(uintptr(fd), lockPath)
 	if file == nil {
-		_ = unix.Close(fd)
-		return nil, fmt.Errorf("lock installation metadata: open lock file returned no handle")
+		primaryErr := fmt.Errorf("lock installation metadata: open lock file %s returned no handle", lockPath)
+		closeErr := stateFileOps.closeFD(fd)
+		if closeErr != nil {
+			closeErr = asCleanupFailure(fmt.Errorf("lock installation metadata: close lock file descriptor %s: %w", lockPath, closeErr))
+		}
+		return nil, errors.Join(primaryErr, closeErr)
 	}
-	info, err := file.Stat()
+	info, err := stateFileOps.stat(file)
 	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("lock installation metadata: stat lock file: %w", err)
+		primaryErr := fmt.Errorf("lock installation metadata: stat lock file %s: %w", lockPath, err)
+		return nil, errors.Join(primaryErr, closeLockFile(file, lockPath))
 	}
 	if !info.Mode().IsRegular() {
-		_ = file.Close()
-		return nil, fmt.Errorf("lock installation metadata: lock path is not a regular file")
+		primaryErr := fmt.Errorf("lock installation metadata: lock path %s is not a regular file", lockPath)
+		return nil, errors.Join(primaryErr, closeLockFile(file, lockPath))
 	}
-	if err := unix.Flock(fd, unix.LOCK_EX); err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("lock installation metadata: acquire: %w", err)
+	if err := stateFileOps.flock(fd, unix.LOCK_EX); err != nil {
+		primaryErr := fmt.Errorf("lock installation metadata: acquire lock file %s: %w", lockPath, err)
+		return nil, errors.Join(primaryErr, closeLockFile(file, lockPath))
 	}
 	return &LockedMetadata{path: path, file: file}, nil
+}
+
+func closeLockFile(file *os.File, lockPath string) error {
+	if err := stateFileOps.closeFile(file); err != nil {
+		return asCleanupFailure(fmt.Errorf("lock installation metadata: close lock file %s: %w", lockPath, err))
+	}
+	return nil
 }
 
 // Load reads the metadata while the exclusive lock is held.
@@ -348,13 +400,14 @@ func (l *LockedMetadata) Close() error {
 		return nil
 	}
 	l.closed = true
-	unlockErr := unix.Flock(int(l.file.Fd()), unix.LOCK_UN)
-	closeErr := l.file.Close()
+	lockPath := l.path + ".lock"
+	unlockErr := stateFileOps.flock(int(l.file.Fd()), unix.LOCK_UN)
+	closeErr := stateFileOps.closeFile(l.file)
 	if unlockErr != nil {
-		unlockErr = fmt.Errorf("unlock installation metadata: %w", unlockErr)
+		unlockErr = asCleanupFailure(fmt.Errorf("unlock installation metadata lock %s: %w", lockPath, unlockErr))
 	}
 	if closeErr != nil {
-		closeErr = fmt.Errorf("close installation metadata lock: %w", closeErr)
+		closeErr = asCleanupFailure(fmt.Errorf("close installation metadata lock %s: %w", lockPath, closeErr))
 	}
 	return errors.Join(unlockErr, closeErr)
 }
@@ -391,7 +444,7 @@ func Save(path string, meta Metadata) error {
 	return errors.Join(saveErr, locked.Close())
 }
 
-func save(path string, meta Metadata) error {
+func save(path string, meta Metadata) (resultErr error) {
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode installation metadata: %w", err)
@@ -401,25 +454,39 @@ func save(path string, meta Metadata) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create state directory: %w", err)
 	}
-	temp, err := os.CreateTemp(dir, ".installed-*.tmp")
+	temp, err := stateFileOps.createTemp(dir, ".installed-*.tmp")
 	if err != nil {
-		return fmt.Errorf("write installation metadata: %w", err)
+		return fmt.Errorf("create installation metadata temporary file for %s: %w", path, err)
 	}
 	tempPath := temp.Name()
-	defer os.Remove(tempPath)
-	if err := temp.Chmod(0o600); err != nil {
-		temp.Close()
-		return fmt.Errorf("write installation metadata: %w", err)
+	defer func() {
+		if err := stateFileOps.remove(tempPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			resultErr = errors.Join(resultErr, asCleanupFailure(fmt.Errorf("remove installation metadata temporary file %s: %w", tempPath, err)))
+		}
+	}()
+	if err := stateFileOps.chmod(temp, 0o600); err != nil {
+		primaryErr := fmt.Errorf("chmod installation metadata temporary file %s: %w", tempPath, err)
+		return errors.Join(primaryErr, closeTemporaryMetadata(temp, tempPath))
 	}
-	if _, err := temp.Write(data); err != nil {
-		temp.Close()
-		return fmt.Errorf("write installation metadata: %w", err)
+	if n, err := stateFileOps.write(temp, data); err != nil {
+		primaryErr := fmt.Errorf("write installation metadata temporary file %s: %w", tempPath, err)
+		return errors.Join(primaryErr, closeTemporaryMetadata(temp, tempPath))
+	} else if n != len(data) {
+		primaryErr := fmt.Errorf("write installation metadata temporary file %s: %w", tempPath, io.ErrShortWrite)
+		return errors.Join(primaryErr, closeTemporaryMetadata(temp, tempPath))
 	}
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("write installation metadata: %w", err)
+	if err := closeTemporaryMetadata(temp, tempPath); err != nil {
+		return err
 	}
 	if err := os.Rename(tempPath, path); err != nil {
-		return fmt.Errorf("write installation metadata: %w", err)
+		return fmt.Errorf("rename installation metadata temporary file %s to %s: %w", tempPath, path, err)
+	}
+	return nil
+}
+
+func closeTemporaryMetadata(temp *os.File, tempPath string) error {
+	if err := stateFileOps.closeFile(temp); err != nil {
+		return asCleanupFailure(fmt.Errorf("close installation metadata temporary file %s: %w", tempPath, err))
 	}
 	return nil
 }
