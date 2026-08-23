@@ -59,20 +59,38 @@ type BrowseData struct {
 	Profiles []Profile
 }
 
+// Confirmation identifies the acknowledgement required after reviewing a
+// preview. The preview provider derives this from the shared selection domain
+// decision rather than the model inferring it from visible Tags.
+type Confirmation string
+
+const (
+	ConfirmationNone      Confirmation = ""
+	ConfirmationReduction Confirmation = "reduction"
+	ConfirmationClear     Confirmation = "clear"
+)
+
 // Preview is the opaque preview value returned across the CLI seam.
 type Preview struct {
 	Text           string
 	SemanticDigest string
+	// CandidateToken binds an accepted UI value to one process-local candidate.
+	// It is opaque presentation data and is not part of the semantic digest.
+	CandidateToken string
 	ForwardOnly    bool
+	Confirmation   Confirmation
 }
 
-// PreviewFunc computes a preview for a detached canonical Tag snapshot.
-type PreviewFunc func([]string) (Preview, error)
+// PreviewFunc computes a preview for a detached canonical Tag snapshot. The
+// request ID is assigned synchronously in UI request order and is opaque to the
+// presentation layer.
+type PreviewFunc func(uint64, []string) (Preview, error)
 
 // Result is a successfully confirmed selection and its accepted preview.
 type Result struct {
-	Tags    []string
-	Preview Preview
+	Tags                    []string
+	Preview                 Preview
+	AcknowledgementAccepted bool
 }
 
 // ErrCanceled means the operator canceled without producing usable intent.
@@ -87,6 +105,8 @@ const (
 	screenDetail
 	screenLoading
 	screenPreview
+	screenReductionConfirmation
+	screenClearConfirmation
 )
 
 // Model is the Bubble Tea model for selecting Tags.
@@ -110,6 +130,9 @@ type Model struct {
 	accepted     Preview
 	previewTags  []string
 	previewError string
+	clearInput   string
+	clearError   string
+	acknowledged bool
 	canceled     bool
 	finished     bool
 	quitting     bool
@@ -225,23 +248,53 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.previewScroll = 0
 			m.screen = screenList
 		case tea.KeyEnter:
+			switch m.confirmation() {
+			case ConfirmationReduction:
+				m.screen = screenReductionConfirmation
+				return m, nil
+			case ConfirmationClear:
+				m.screen = screenClearConfirmation
+				return m, nil
+			}
 			m.finished = true
 			m.quitting = true
 			return m, tea.Quit
 		}
+		return m.scrollPreview(key), nil
+	}
+	if m.screen == screenReductionConfirmation {
+		switch key.Type {
+		case tea.KeyEnter:
+			return m.finishAcknowledged(), tea.Quit
+		case tea.KeyEsc:
+			return m.abandonPreview(), nil
+		}
 		switch key.String() {
-		case "j", "down":
-			m.previewScroll = scrolledOffset(m.previewScroll, 1, len(m.previewContentLines()), m.previewBodyHeight())
-		case "k", "up":
-			m.previewScroll = scrolledOffset(m.previewScroll, -1, len(m.previewContentLines()), m.previewBodyHeight())
-		case "pgdown":
-			m.previewScroll = scrolledOffset(m.previewScroll, max(1, m.previewBodyHeight()-2), len(m.previewContentLines()), m.previewBodyHeight())
-		case "pgup":
-			m.previewScroll = scrolledOffset(m.previewScroll, -max(1, m.previewBodyHeight()-2), len(m.previewContentLines()), m.previewBodyHeight())
-		case "home":
-			m.previewScroll = 0
-		case "end":
-			m.previewScroll = clampScrollOffset(len(m.previewContentLines()), m.previewBodyHeight(), len(m.previewContentLines()))
+		case "y":
+			return m.finishAcknowledged(), tea.Quit
+		case "n":
+			return m.abandonPreview(), nil
+		}
+		return m.scrollPreview(key), nil
+	}
+	if m.screen == screenClearConfirmation {
+		switch key.Type {
+		case tea.KeyEsc:
+			return m.abandonPreview(), nil
+		case tea.KeyEnter:
+			if m.clearInput == string(ConfirmationClear) {
+				return m.finishAcknowledged(), tea.Quit
+			}
+			m.clearError = `Confirmation did not match; type exactly "clear".`
+		case tea.KeyBackspace, tea.KeyDelete:
+			if len(m.clearInput) > 0 {
+				runes := []rune(m.clearInput)
+				m.clearInput = string(runes[:len(runes)-1])
+			}
+			m.clearError = ""
+		case tea.KeyRunes:
+			m.clearInput += string(key.Runes)
+			m.clearError = ""
 		}
 		return m, nil
 	}
@@ -319,6 +372,26 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) scrollPreview(key tea.KeyMsg) Model {
+	bodyHeight := m.previewBodyHeight()
+	contentLines := len(m.previewContentLines())
+	switch key.String() {
+	case "j", "down":
+		m.previewScroll = scrolledOffset(m.previewScroll, 1, contentLines, bodyHeight)
+	case "k", "up":
+		m.previewScroll = scrolledOffset(m.previewScroll, -1, contentLines, bodyHeight)
+	case "pgdown":
+		m.previewScroll = scrolledOffset(m.previewScroll, max(1, bodyHeight-2), contentLines, bodyHeight)
+	case "pgup":
+		m.previewScroll = scrolledOffset(m.previewScroll, -max(1, bodyHeight-2), contentLines, bodyHeight)
+	case "home":
+		m.previewScroll = 0
+	case "end":
+		m.previewScroll = clampScrollOffset(contentLines, bodyHeight, contentLines)
+	}
+	return m
+}
+
 func (m Model) startPreview() (tea.Model, tea.Cmd) {
 	tags := m.SelectedTags()
 	m.nextRequest++
@@ -331,6 +404,9 @@ func (m Model) startPreview() (tea.Model, tea.Cmd) {
 	m.accepted = Preview{}
 	m.previewTags = nil
 	m.previewError = ""
+	m.clearInput = ""
+	m.clearError = ""
+	m.acknowledged = false
 	m.previewScroll = 0
 	m.screen = screenLoading
 	provider := m.previewFunc
@@ -339,7 +415,7 @@ func (m Model) startPreview() (tea.Model, tea.Cmd) {
 			return previewResponse{id: request.id, fingerprint: request.fingerprint, err: errors.New("preview is unavailable")}
 		}
 		input := append([]string(nil), request.tags...)
-		preview, err := provider(input)
+		preview, err := provider(request.id, input)
 		return previewResponse{id: request.id, fingerprint: request.fingerprint, preview: preview, err: err}
 	}
 }
@@ -363,10 +439,38 @@ func (m Model) acceptPreview(response previewResponse) Model {
 	return m
 }
 
+func (m Model) confirmation() Confirmation {
+	if len(m.previewTags) == 0 {
+		return ConfirmationClear
+	}
+	return m.accepted.Confirmation
+}
+
+func (m Model) finishAcknowledged() Model {
+	m.acknowledged = true
+	m.finished = true
+	m.quitting = true
+	return m
+}
+
+func (m Model) abandonPreview() Model {
+	m.accepted = Preview{}
+	m.previewTags = nil
+	m.previewScroll = 0
+	m.clearInput = ""
+	m.clearError = ""
+	m.acknowledged = false
+	m.screen = screenList
+	return m
+}
+
 func (m Model) cancel() Model {
 	m.pending = nil
 	m.accepted = Preview{}
 	m.previewTags = nil
+	m.clearInput = ""
+	m.clearError = ""
+	m.acknowledged = false
 	m.canceled = true
 	m.finished = false
 	m.quitting = true
@@ -442,7 +546,7 @@ func (m Model) Result() Result {
 	if m.canceled || !m.finished {
 		return Result{}
 	}
-	return Result{Tags: cloneStrings(m.previewTags), Preview: m.accepted}
+	return Result{Tags: cloneStrings(m.previewTags), Preview: m.accepted, AcknowledgementAccepted: m.acknowledged}
 }
 
 // Canceled reports whether the session ended without usable intent.
@@ -458,6 +562,12 @@ func (m Model) View() string {
 	}
 	if m.screen == screenPreview {
 		return m.viewPreview()
+	}
+	if m.screen == screenReductionConfirmation {
+		return m.viewReductionConfirmation()
+	}
+	if m.screen == screenClearConfirmation {
+		return m.viewClearConfirmation()
 	}
 	if m.screen == screenProfiles {
 		return m.viewProfiles()
@@ -541,6 +651,23 @@ func (m Model) viewPreview() string {
 	header := []string{"dots · selection preview", ""}
 	footer := []string{"", "j/k scroll · pgup/pgdown · enter confirm · esc back · q/ctrl+c cancel"}
 	body := scrollPage(m.previewContentLines(), m.previewScroll, m.previewBodyHeight())
+	return renderLines(append(append(header, body...), footer...))
+}
+
+func (m Model) viewReductionConfirmation() string {
+	header := []string{"dots · confirm selection reduction", ""}
+	footer := []string{"", "y/enter acknowledge · n/esc back · q/ctrl+c cancel"}
+	body := scrollPage(m.previewContentLines(), m.previewScroll, availableBodyHeight(m.height, len(header)+len(footer)))
+	return renderLines(append(append(header, body...), footer...))
+}
+
+func (m Model) viewClearConfirmation() string {
+	header := []string{"dots · confirm clear selection", ""}
+	body := append(m.previewContentLines(), "", `Type "clear" to remove every selected Managed Entry from dots management: `+m.clearInput)
+	if m.clearError != "" {
+		body = append(body, m.clearError)
+	}
+	footer := []string{"", "enter acknowledge · esc back · q/ctrl+c cancel"}
 	return renderLines(append(append(header, body...), footer...))
 }
 

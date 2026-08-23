@@ -82,6 +82,24 @@ Profiles are ordered convenience presets over atomic Tags, so the catalog also
 shows each independently meaningful capability. Select one directly with
 `dots install --tag <tag>`.
 
+In an interactive terminal, plain `dots install` opens the Tag selector from
+the current initialized Installed Repository. Profile presets can populate the
+draft, but the reviewed result is applied and recorded as an explicit list of
+current Tags. The preview covers Dependencies, the Install Plan, Selection
+Reconciliation, and Provisioners. Confirming the preview applies that exact
+candidate; `--dry-run` stops after the preview. Run `dots update` first when you
+want to refresh the Source of Truth, because opening the selector does not
+refresh its checkout.
+
+Removing selected Tags requires a second acknowledgement after the preview,
+separate from Conflict Resolution. Clearing every Tag requires typing the
+literal word `clear`. Declining either prompt, canceling the selector or
+Conflict Resolution, or encountering an apply failure leaves the prior
+Installed Selection authoritative. Dependencies and Provisioners that are no
+longer selected are reported as Retained External State; dots does not uninstall
+or reverse them. After terminal success, selection-aware status commands reuse
+the newly recorded explicit Tags.
+
 Explore the portable catalog before choosing, or compare two Profiles to see
 the exact declarative surface added and removed without inspecting machine
 state:
@@ -204,6 +222,13 @@ dots install --profile workstation --yes --backup-and-replace
 When replacing an existing Installed Selection and removing a recorded Profile
 or explicit extra Tag, add `--acknowledge-selection-change` after reviewing the
 reported delta. This acknowledgement is separate from Conflict Resolution.
+
+For the interactive equivalent, run `dots install` without selection flags,
+edit the Tag draft, and confirm its preview. Reductions receive their own
+acknowledgement, while an empty draft requires typing `clear`; cancellation or a
+mismatched phrase performs no mutation. Scripts and JSON consumers must keep
+using explicit `--profile`, `--tag`, or `--clear-selection` flags because the
+Tag selector is intentionally human-only.
 
 That mode creates Backup Sets before replacement, reports them in JSON as `data.backup_sets`, and still runs selected Provisioners after Managed Configuration is applied.
 

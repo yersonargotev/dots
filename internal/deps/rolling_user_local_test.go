@@ -372,6 +372,47 @@ func TestPlanSkipsRollingResolutionWhenCodexIsPresent(t *testing.T) {
 	}
 }
 
+func TestInstallPreparedKeepsResolvedRollingUserLocalArtifact(t *testing.T) {
+	server := rollingReleaseServer(t, []githubRelease{{TagName: "rust-v0.147.0", Assets: releaseAssets("SERVER")}})
+	defer server.Close()
+	present := false
+	look := func(command string) bool { return command == "codex" && present }
+	prepareOpts := Options{Profile: "default", OS: "linux", Arch: "amd64", Home: "/tmp/home", HTTPClient: server.Client(), RollingReleaseURL: server.URL + "/releases"}
+	prepared, err := PrepareInstall(rollingCodexManifest(), prepareOpts, look, func(string) bool { return false }, TierDebian)
+	if err != nil {
+		t.Fatalf("PrepareInstall() error = %v", err)
+	}
+
+	runner := &preparedUserLocalRunner{afterRun: func() { present = true }}
+	executionOpts := prepareOpts
+	executionOpts.ResolvedUserLocal = map[string]UserLocalArtifact{"codex": {Version: "rust-v9.999.0", Artifact: "different.tar.gz"}}
+	if _, err := InstallPrepared(prepared, executionOpts, look, func(string) bool { return false }, runner); err != nil {
+		t.Fatalf("InstallPrepared() error = %v", err)
+	}
+	if len(runner.actions) != 1 || runner.actions[0].UserLocal == nil {
+		t.Fatalf("user-local actions = %#v, want one prepared artifact", runner.actions)
+	}
+	artifact := runner.actions[0].UserLocal
+	if artifact.Version != "rust-v0.147.0" || artifact.Artifact != "codex-package-x86_64-unknown-linux-musl.tar.gz" {
+		t.Fatalf("executed artifact = %#v, want originally prepared rolling artifact", artifact)
+	}
+}
+
+type preparedUserLocalRunner struct {
+	actions  []InstallAction
+	afterRun func()
+}
+
+func (r *preparedUserLocalRunner) Run(string, []string) error { return nil }
+
+func (r *preparedUserLocalRunner) RunUserLocal(action InstallAction) error {
+	r.actions = append(r.actions, action)
+	r.afterRun()
+	return nil
+}
+
+func (r *preparedUserLocalRunner) RecordUserLocal(InstallAction) error { return nil }
+
 func TestPlanSkipsRollingResolutionWhenClaudeIsPresent(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

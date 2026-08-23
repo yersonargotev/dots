@@ -43,6 +43,14 @@ type InstallDryRunReport struct {
 	Items    []InstallPreview `json:"items"`
 }
 
+// PreparedInstall binds the exact dependency actions accepted during preview
+// to their public dry-run representation. InstallPrepared executes Plan as-is;
+// it never resolves providers or artifacts again.
+type PreparedInstall struct {
+	Plan   PlanReport
+	Report InstallDryRunReport
+}
+
 // Runner executes one argv-shaped install action.
 type Runner interface {
 	Run(executable string, args []string) error
@@ -102,9 +110,19 @@ type InstallReport struct {
 // InstallDryRun computes the install preview for missing Dependencies without
 // executing package managers.
 func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, tier Tier) (InstallDryRunReport, error) {
-	plan, err := Plan(m, opts, look, fontLook, tier)
+	prepared, err := PrepareInstall(m, opts, look, fontLook, tier)
 	if err != nil {
 		return InstallDryRunReport{}, err
+	}
+	return prepared.Report, nil
+}
+
+// PrepareInstall computes the dependency Plan once and derives the public
+// preview from those exact actions.
+func PrepareInstall(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, tier Tier) (PreparedInstall, error) {
+	plan, err := Plan(m, opts, look, fontLook, tier)
+	if err != nil {
+		return PreparedInstall{}, err
 	}
 
 	report := InstallDryRunReport{Profile: plan.Profile, Profiles: plan.Profiles, Tags: plan.Tags, Tier: plan.Tier}
@@ -128,17 +146,24 @@ func InstallDryRun(m manifest.Manifest, opts Options, look Lookup, fontLook Font
 			UserLocal:    action.UserLocal,
 		})
 	}
-	return report, nil
+	return PreparedInstall{Plan: plan, Report: report}, nil
 }
 
 // Install executes missing executable install actions and re-probes each
 // dependency after a successful package-manager command.
 func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, tier Tier, runner Runner) (InstallReport, error) {
-	plan, err := Plan(m, opts, look, fontLook, tier)
+	prepared, err := PrepareInstall(m, opts, look, fontLook, tier)
 	if err != nil {
 		return InstallReport{}, err
 	}
+	return InstallPrepared(prepared, opts, look, fontLook, runner)
+}
 
+// InstallPrepared executes the exact actions selected by PrepareInstall. It
+// may re-probe presence to avoid redundant work, but does not re-resolve an
+// action's provider, package, artifact, or command.
+func InstallPrepared(prepared PreparedInstall, opts Options, look Lookup, fontLook FontLookup, runner Runner) (InstallReport, error) {
+	plan := prepared.Plan
 	report := InstallReport{Profile: plan.Profile, Profiles: plan.Profiles, Tags: plan.Tags, Tier: plan.Tier}
 	requiredUnresolved := false
 	executionLook := look
@@ -146,12 +171,11 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 	if hasToolchainEnvironment {
 		executionLook = toolchainEnvironment.Lookup
 	}
-	environmentActivated := false
 	for _, action := range plan.Actions {
-		// Toolchain activation can satisfy a later action that was missing when
-		// the Install Plan was built (for example npx after fnm activates Node).
-		// Re-probe before honoring that stale plan status.
-		if environmentActivated && actionPresent(action, opts, executionLook, fontLook) {
+		// A dependency can become present between preview and execution (or after
+		// an earlier toolchain action). It is safe to skip, but never to replace,
+		// the reviewed action.
+		if actionPresent(action, opts, executionLook, fontLook) {
 			continue
 		}
 		if !actionExecutable(action) {
@@ -206,7 +230,6 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			if pathRunner, ok := runner.(HomebrewFormulaPATHRunner); ok {
 				if err := pathRunner.AddHomebrewFormulaToPATH(action.Package); err == nil {
 					executionLook = pathRunner.Lookup
-					environmentActivated = true
 				}
 			}
 		}
@@ -256,7 +279,7 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 			// Activation failure is represented as unresolved below: a successful
 			// bootstrap is not proof that the selected runtime is executable.
 			if err := toolchainEnvironment.ActivateToolchain(action.Toolchain); err == nil {
-				environmentActivated = true
+				executionLook = toolchainEnvironment.Lookup
 			}
 		}
 		if !actionPresent(action, opts, executionLook, fontLook) {

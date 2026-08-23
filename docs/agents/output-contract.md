@@ -210,6 +210,21 @@ prose the text surface prints:
   `--acknowledge-selection-change`. Successful reports keep the ordinary
   `data.selection` shape with empty `profiles`, `extra_tags`, and
   `effective_tags`; omitted selection flags never imply these empty arrays.
+- In a human interactive terminal, `install` with no selection flags opens the
+  Tag selector against the current initialized Installed Repository. Profile
+  presets edit the draft only; terminal success records the accepted current
+  Tags as explicit `extra_tags`, with empty `profiles`, and identical
+  `effective_tags`. The selector previews Dependencies, the Install Plan,
+  Selection Reconciliation, and Provisioners. An accepted reduction then uses
+  the ordinary Installed Selection change acknowledgement, independently from
+  Conflict Resolution; an empty accepted draft requires typing `clear`.
+  Cancellation, a mismatched clear phrase, or failure before terminal commit
+  preserves the prior authoritative Installed Selection.
+- The interactive Tag selector is not a JSON surface and does not refresh the
+  Source of Truth. `--output json`, `--yes`, `--no-tui`, and non-terminal input
+  continue to require explicit `--profile`, `--tag`, or `--clear-selection`
+  intent. Their existing JSON schemas are the machine-readable semantic
+  equivalent of the selector's reviewed plan and terminal result.
 - After a successful `install`, `update`, or `upgrade` finds sufficiently
   specific historical Installation Metadata evidence for retired Gentle AI or
   Codex delegation capabilities, `data.retirement` records portable `removed`
