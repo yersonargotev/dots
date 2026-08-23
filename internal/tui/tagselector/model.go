@@ -202,36 +202,37 @@ func NewWithTheme(browseData BrowseData, initial []string, preview PreviewFunc, 
 	spinnerModel := spinner.New(spinner.WithSpinner(spinner.Line))
 	visualTheme.ApplySpinner(&spinnerModel)
 
+	canonicalKeys := newKeyMap()
 	model := Model{
 		data:        browseData,
 		selected:    selected,
 		initial:     append([]bool(nil), selected...),
 		previewFunc: preview,
 		theme:       visualTheme,
-		keys:        newKeyMap(),
+		keys:        canonicalKeys,
 		help:        helpModel,
 		searchInput: searchInput,
 		clearEntry:  clearEntry,
 		spinner:     spinnerModel,
-		browse:      newViewport(visualTheme),
-		profiles:    newViewport(visualTheme),
-		detailView:  newViewport(visualTheme),
-		previewView: newViewport(visualTheme),
-		confirmView: newViewport(visualTheme),
+		browse:      newViewport(visualTheme, canonicalKeys),
+		profiles:    newViewport(visualTheme, canonicalKeys),
+		detailView:  newViewport(visualTheme, canonicalKeys),
+		previewView: newViewport(visualTheme, canonicalKeys),
+		confirmView: newViewport(visualTheme, canonicalKeys),
 	}
 	model.syncComponents()
 	return model
 }
 
-func newViewport(visualTheme theme.Theme) viewport.Model {
+func newViewport(visualTheme theme.Theme, canonicalKeys keyMap) viewport.Model {
 	model := viewport.New(0, 0)
 	model.MouseWheelEnabled = true
 	model.Style = visualTheme.Body
 	model.KeyMap = viewport.KeyMap{
-		PageDown: key.NewBinding(key.WithKeys("pgdown")),
-		PageUp:   key.NewBinding(key.WithKeys("pgup")),
-		Down:     key.NewBinding(key.WithKeys("down", "j")),
-		Up:       key.NewBinding(key.WithKeys("up", "k")),
+		PageDown: canonicalKeys.PageDown,
+		PageUp:   canonicalKeys.PageUp,
+		Down:     canonicalKeys.Down,
+		Up:       canonicalKeys.Up,
 	}
 	return model
 }
@@ -758,15 +759,21 @@ func (m Model) viewList() string {
 	title := "dots · select Tags"
 	if m.compact() {
 		title = "dots · Tags"
+		if m.searchInput.Value() != "" {
+			title = "dots · Tags*"
+		}
 	}
 	summary := m.selectionSummary()
 	if m.compact() {
 		summary = fmt.Sprintf("%d/%d shown", len(m.visibleTags()), len(m.data.Tags))
 	}
-	lines := []string{m.theme.Title.Render(title), m.theme.Secondary.Render(summary)}
+	lines := []string{m.theme.Title.Render(title)}
+	if !m.compact() {
+		lines = append(lines, m.theme.Secondary.Render(summary))
+	}
 	if m.screen == screenSearch {
 		lines = append(lines, m.searchInput.View())
-	} else if m.searchInput.Value() != "" {
+	} else if m.searchInput.Value() != "" && !m.compact() {
 		lines = append(lines, m.theme.FocusAlt.Render("Filter: "+m.searchInput.Value()))
 	}
 
@@ -780,7 +787,11 @@ func (m Model) viewList() string {
 	} else if status := viewportStatus(m.browse); status != "" {
 		lines = append(lines, m.theme.Secondary.Render(status))
 	}
-	lines = append(lines, m.help.View(m.activeHelp()))
+	if m.compact() && m.screen != screenSearch {
+		lines = append(lines, m.help.ShortHelpView([]key.Binding{m.keys.Toggle}))
+	} else if !m.compact() {
+		lines = append(lines, m.help.View(m.activeHelp()))
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -790,7 +801,7 @@ func (m Model) listContent(width int) (string, int) {
 	lastGroup := ""
 	for position, i := range m.visibleTags() {
 		tag := m.data.Tags[i]
-		if tag.Group != lastGroup {
+		if !m.compact() && tag.Group != lastGroup {
 			if len(lines) > 0 {
 				lines = append(lines, "")
 			}
@@ -807,10 +818,10 @@ func (m Model) listContent(width int) (string, int) {
 			checkbox = m.theme.Glyphs.Checked
 		}
 		row := fmt.Sprintf("%s %s %s", cursor, checkbox, tag.Name)
-		if tag.Description != "" {
+		if !m.compact() && tag.Description != "" {
 			row += " — " + tag.Description
 		}
-		if tag.State != "" {
+		if !m.compact() && tag.State != "" {
 			row += fmt.Sprintf(" (%s)", tag.State)
 		}
 		style := m.theme.Body
@@ -822,6 +833,9 @@ func (m Model) listContent(width int) (string, int) {
 			wrapped = []string{""}
 		}
 		lines = append(lines, wrapped...)
+		if m.compact() {
+			lines = append(lines, m.theme.Secondary.Render("state: "+valueOrNone(string(tag.State))))
+		}
 	}
 	if len(lines) == 0 {
 		return m.theme.Secondary.Render("No matching Tags."), 0
@@ -1106,6 +1120,9 @@ func (m *Model) syncComponents() {
 		queryLine = 1
 	}
 	browseHeight := theme.Clamp(height - 4 - queryLine)
+	if m.compact() {
+		browseHeight = theme.Clamp(height - 2)
+	}
 	browseWidth := width
 	detailWidth := width
 	if width >= wideBreakpoint && m.screen != screenSearch {

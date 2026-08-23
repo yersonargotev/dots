@@ -115,6 +115,43 @@ func TestNoColorRenderingRetainsSemanticLabelsWithoutANSI(t *testing.T) {
 	}
 }
 
+func TestTinyBrowseKeepsFocusSelectionObservedStateAndActionVisible(t *testing.T) {
+	model := tagselector.NewWithTheme(detailedBrowseData(), []string{"zsh"}, nil, theme.NoColor())
+	model = update(t, model, tea.WindowSizeMsg{Width: 12, Height: 4})
+	view := model.View()
+	assertBoundedView(t, view, 12, 4)
+	for _, want := range []string{"dots · Tags", "> [x] zsh", "state: drift", "space toggle"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("tiny browse hid %q:\n%s", want, view)
+		}
+	}
+
+	model = update(t, model, key(' '))
+	view = model.View()
+	assertBoundedView(t, view, 12, 4)
+	if !strings.Contains(view, "> [ ] zsh") || !strings.Contains(view, "state: drift") {
+		t.Fatalf("tiny toggle lost focus or observed state:\n%s", view)
+	}
+}
+
+func TestGeneratedBrowseHelpIncludesEverySupportedViewportNavigationKey(t *testing.T) {
+	model := tagselector.NewWithTheme(detailedBrowseData(), []string{"zsh"}, nil, theme.NoColor())
+	model = update(t, model, tea.WindowSizeMsg{Width: 240, Height: 24})
+	view := model.View()
+	for _, want := range []string{
+		"up/k up",
+		"down/j down",
+		"pgup page up",
+		"pgdown page down",
+		"home first",
+		"end last",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("generated browse help missing %q:\n%s", want, view)
+		}
+	}
+}
+
 func TestEveryScreenSurvivesZeroTinyStandardAndWideResizes(t *testing.T) {
 	preview := tagselector.Preview{Text: strings.Repeat("plan line\n", 20), Confirmation: tagselector.ConfirmationReduction}
 	preparations := map[string]func(t *testing.T) tagselector.Model{

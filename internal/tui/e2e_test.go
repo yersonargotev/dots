@@ -36,7 +36,7 @@ func TestE2EResolveConflictsFlow(t *testing.T) {
 	}, teatest.WithDuration(2*time.Second))
 
 	// Close the diff, replace the first conflict, move down, adopt the second, apply.
-	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Send(key('d'))
 	tm.Send(key('r'))
 	tm.Send(key('j'))
 	tm.Send(key('a'))
@@ -47,6 +47,9 @@ func TestE2EResolveConflictsFlow(t *testing.T) {
 	final := tm.FinalModel(t).(Model)
 	if final.Canceled() {
 		t.Fatalf("flow ended canceled, want applied")
+	}
+	if !final.confirmed {
+		t.Fatalf("successful flow ended without explicit list confirmation")
 	}
 	decisions := final.Decisions()
 	if got := decisions["/home/u/.gitconfig"]; got != install.DecisionReplace {

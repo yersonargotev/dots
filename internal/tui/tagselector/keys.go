@@ -65,7 +65,7 @@ func (m Model) activeHelp() screenHelp {
 	case screenSearch:
 		return screenHelp{k.Accept, k.Up, k.Down, k.Back, k.Cancel}
 	case screenProfiles:
-		return screenHelp{k.ProfileToggle, k.Up, k.Down, k.Back, k.Quit, k.Cancel}
+		return screenHelp{k.ProfileToggle, k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End, k.Back, k.Quit, k.Cancel}
 	case screenDetail:
 		return screenHelp{k.Return, k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End, k.Quit, k.Cancel}
 	case screenLoading:
@@ -77,6 +77,6 @@ func (m Model) activeHelp() screenHelp {
 	case screenClearConfirmation:
 		return screenHelp{k.Confirm, k.Back, k.PageUp, k.PageDown, k.Quit, k.Cancel}
 	default:
-		return screenHelp{k.Toggle, k.Preview, k.Up, k.Down, k.Search, k.Profiles, k.Details, k.Quit, k.Cancel}
+		return screenHelp{k.Toggle, k.Preview, k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End, k.Search, k.Profiles, k.Details, k.Quit, k.Cancel}
 	}
 }

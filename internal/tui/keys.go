@@ -45,17 +45,18 @@ type diffKeyMap struct {
 	first     bubbleskey.Binding
 	last      bubbleskey.Binding
 	close     bubbleskey.Binding
+	cancel    bubbleskey.Binding
 	cancelAll bubbleskey.Binding
 }
 
 func (k diffKeyMap) ShortHelp() []bubbleskey.Binding {
-	return []bubbleskey.Binding{k.up, k.down, k.pageUp, k.pageDown, k.first, k.last, k.close, k.cancelAll}
+	return []bubbleskey.Binding{k.up, k.down, k.pageUp, k.pageDown, k.first, k.last, k.close, k.cancel, k.cancelAll}
 }
 
 func (k diffKeyMap) FullHelp() [][]bubbleskey.Binding {
 	return [][]bubbleskey.Binding{
 		{k.up, k.down, k.pageUp, k.pageDown},
-		{k.first, k.last, k.close, k.cancelAll},
+		{k.first, k.last, k.close, k.cancel, k.cancelAll},
 	}
 }
 
@@ -91,7 +92,8 @@ func newConflictKeyMap(diffEnabled bool) conflictKeyMap {
 			pageDown:  binding([]string{"pgdown", "f", " "}, "pgdn/f", "page down"),
 			first:     binding([]string{"home", "g"}, "home/g", "top"),
 			last:      binding([]string{"end", "G"}, "end/G", "bottom"),
-			close:     binding([]string{"q", "esc", "d"}, "q/esc/d", "close"),
+			close:     binding([]string{"d"}, "d", "close"),
+			cancel:    binding([]string{"q", "esc"}, "q/esc", "cancel"),
 			cancelAll: globalCancel,
 		},
 	}

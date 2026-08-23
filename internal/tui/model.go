@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/yersonargotev/dots/internal/install"
 	uitheme "github.com/yersonargotev/dots/internal/tui/theme"
 )
@@ -47,8 +48,9 @@ type Model struct {
 	diffText string
 	showDiff bool
 
-	canceled bool
-	quitting bool
+	canceled  bool
+	confirmed bool
+	quitting  bool
 
 	width        int
 	height       int
@@ -135,10 +137,10 @@ func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveCursor(-1)
 		case bubbleskey.Matches(keyMsg, m.keys.list.first):
 			m.cursor = 0
-			m.syncListContent()
+			m.resizeViewports()
 		case bubbleskey.Matches(keyMsg, m.keys.list.last):
 			m.cursor = len(m.conflicts) - 1
-			m.syncListContent()
+			m.resizeViewports()
 		case bubbleskey.Matches(keyMsg, m.keys.list.skip):
 			m.setDecision(install.DecisionSkip)
 		case bubbleskey.Matches(keyMsg, m.keys.list.replace):
@@ -149,6 +151,7 @@ func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openDiff()
 			return m, nil
 		case bubbleskey.Matches(keyMsg, m.keys.list.apply):
+			m.confirmed = true
 			m.quitting = true
 			return m, tea.Quit
 		case bubbleskey.Matches(keyMsg, m.keys.list.cancel):
@@ -170,6 +173,10 @@ func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) updateDiff(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch {
+		case bubbleskey.Matches(keyMsg, m.keys.diff.cancel):
+			m.canceled = true
+			m.quitting = true
+			return m, tea.Quit
 		case bubbleskey.Matches(keyMsg, m.keys.diff.close):
 			m.closeDiff()
 			return m, nil
@@ -212,7 +219,7 @@ func (m *Model) moveCursor(delta int) {
 	if last := len(m.conflicts) - 1; m.cursor > last {
 		m.cursor = last
 	}
-	m.syncListContent()
+	m.resizeViewports()
 }
 
 func (m *Model) setDecision(d install.ConflictDecision) {
@@ -220,7 +227,7 @@ func (m *Model) setDecision(d install.ConflictDecision) {
 		return
 	}
 	m.decisions[m.cursor] = d
-	m.syncListContent()
+	m.resizeViewports()
 }
 
 func (m *Model) openDiff() {
@@ -242,9 +249,10 @@ func (m *Model) closeDiff() {
 	m.resizeViewports()
 }
 
-// Decisions returns the resolved per-target decisions. Skip is omitted so the
-// install layer treats any missing target as skip, matching the text-prompt
-// path's map convention.
+// Decisions returns the current per-target decision draft. Skip is omitted so
+// the install layer treats any missing target as skip, matching the text-prompt
+// path's map convention. ResolveConflicts separately requires explicit list
+// confirmation before this draft can become installation authority.
 func (m Model) Decisions() map[string]install.ConflictDecision {
 	out := map[string]install.ConflictDecision{}
 	if m.canceled {
@@ -350,10 +358,28 @@ func (m Model) diffStatus() string {
 
 func (m Model) consequences() string {
 	return strings.Join([]string{
-		m.wrap(m.styles.Theme.Secondary.Render("skip keeps the local file untouched")),
-		m.wrap(m.styles.Theme.Warning.Render("replace backs up then installs the Source of Truth")),
-		m.wrap(m.styles.Theme.Caution.Render("adopt copies supported regular-file local content into the Source of Truth")),
+		m.consequence(install.DecisionSkip),
+		m.consequence(install.DecisionReplace),
+		m.consequence(install.DecisionAdopt),
 	}, "\n")
+}
+
+func (m Model) activeConsequence() string {
+	if m.cursor < 0 || m.cursor >= len(m.decisions) {
+		return ""
+	}
+	return m.consequence(m.decisions[m.cursor])
+}
+
+func (m Model) consequence(decision install.ConflictDecision) string {
+	switch decision {
+	case install.DecisionReplace:
+		return m.wrapConsequence(m.styles.Theme.Warning.Render("replace backs it up and installs the Source of Truth"))
+	case install.DecisionAdopt:
+		return m.wrapConsequence(m.styles.Theme.Caution.Render("adopt copies supported local regular-file content into the Source of Truth"))
+	default:
+		return m.wrapConsequence(m.styles.Theme.Secondary.Render("skip leaves the local target untouched"))
+	}
 }
 
 func (m Model) decisionCounts() (skip, replace, adopt int) {
@@ -396,8 +422,8 @@ func (m *Model) resizeViewports() {
 
 	m.listViewport.Width, m.listViewport.Height = uitheme.InnerSize(m.width, m.height, 0, listReserved)
 	m.diffViewport.Width, m.diffViewport.Height = uitheme.InnerSize(m.width, m.height, 0, diffReserved)
-	if listReserved >= m.height && m.height >= 2 {
-		m.listViewport.Height = max(1, m.height-m.compactFixedHeight(m.keys.list))
+	if listReserved >= m.height && m.height >= 1 {
+		m.listViewport.Height = m.compactListPlan().viewportHeight
 	}
 	if diffReserved >= m.height && m.height >= 2 {
 		m.diffViewport.Height = max(1, m.height-m.compactFixedHeight(m.keys.diff))
@@ -426,11 +452,67 @@ func (m Model) compactDiffLayout() bool {
 }
 
 func (m Model) compactListView() string {
-	return m.compactView(m.listHeader(), m.listViewport.View(), m.listStatus(), m.help.View(m.keys.list))
+	plan := m.compactListPlan()
+	sections := make([]string, 0, 5)
+	if plan.showHeader {
+		sections = append(sections, oneLine(m.listHeader()))
+	}
+	sections = append(sections, m.listViewport.View())
+	if plan.showStatus {
+		sections = append(sections, oneLine(m.listStatus()))
+	}
+	if plan.showConsequence {
+		sections = append(sections, m.activeConsequence())
+	}
+	if plan.showFooter {
+		sections = append(sections, m.help.View(m.keys.list))
+	}
+	return strings.Join(sections, "\n")
 }
 
 func (m Model) compactDiffView() string {
 	return m.compactView(m.diffHeader(), m.diffViewport.View(), m.diffStatus(), m.help.View(m.keys.diff))
+}
+
+type compactListLayoutPlan struct {
+	viewportHeight  int
+	showHeader      bool
+	showStatus      bool
+	showConsequence bool
+	showFooter      bool
+}
+
+func (m Model) compactListPlan() compactListLayoutPlan {
+	plan := compactListLayoutPlan{viewportHeight: min(1, m.height)}
+	if m.height <= 1 {
+		return plan
+	}
+
+	consequenceHeight := sectionHeight(m.activeConsequence())
+	if consequenceHeight > m.height-1 {
+		// At physically smaller sizes, keep the selected conflict usable and
+		// let the bounded canvas show as much consequence text as can fit.
+		plan.showConsequence = true
+		return plan
+	}
+
+	plan.showConsequence = true
+	used := plan.viewportHeight + consequenceHeight
+	helpHeight := sectionHeight(m.help.View(m.keys.list))
+	if helpHeight > 0 && used+helpHeight <= m.height {
+		plan.showFooter = true
+		used += helpHeight
+	}
+	if used < m.height {
+		plan.showStatus = true
+		used++
+	}
+	if used < m.height {
+		plan.showHeader = true
+		used++
+	}
+	plan.viewportHeight += m.height - used
+	return plan
 }
 
 func (m Model) compactView(header, primary, status, footer string) string {
@@ -467,6 +549,13 @@ func (m Model) compactFixedHeight(keys help.KeyMap) int {
 
 func (m Model) wrap(value string) string {
 	return uitheme.Wrap(value, m.width)
+}
+
+func (m Model) wrapConsequence(value string) string {
+	if m.width <= 0 {
+		return ""
+	}
+	return ansi.Wrap(value, m.width, "")
 }
 
 func oneLine(value string) string {

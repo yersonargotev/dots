@@ -119,9 +119,9 @@ func TestListViewExplainsDecisionTradeoffs(t *testing.T) {
 	m := New(sampleConflicts(), nil)
 	view := m.View()
 	for _, want := range []string{
-		"skip keeps the local file untouched",
-		"replace backs up then installs the Source of Truth",
-		"adopt copies supported regular-file local content into the Source of Truth",
+		"skip leaves the local target untouched",
+		"replace backs it up and installs the Source of Truth",
+		"adopt copies supported local regular-file content into the Source of Truth",
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q\nview:\n%s", want, view)
@@ -171,10 +171,10 @@ func TestDiffViewToggles(t *testing.T) {
 	if m.diffText != "DIFF for /home/u/.gitconfig" {
 		t.Fatalf("diffText = %q, want diff for highlighted conflict", m.diffText)
 	}
-	// esc closes the diff and returns to the list.
-	m = update(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	// d closes the diff and returns to the list without canceling.
+	m = update(t, m, key('d'))
 	if m.showDiff {
-		t.Fatalf("showDiff = true after esc, want false")
+		t.Fatalf("showDiff = true after closing d, want false")
 	}
 }
 
@@ -188,8 +188,27 @@ func TestEnterConfirmsAndQuits(t *testing.T) {
 	if m.Canceled() {
 		t.Fatalf("enter should confirm, not cancel")
 	}
+	if !m.confirmed {
+		t.Fatalf("enter in list should record explicit confirmation")
+	}
 	if cmd == nil {
 		t.Fatalf("enter should return a quit command")
+	}
+}
+
+func TestOnlyEnterFromListConfirms(t *testing.T) {
+	m := New(sampleConflicts(), func(Conflict) string { return "diff" })
+	m = update(t, m, key('r'), key('d'), tea.KeyMsg{Type: tea.KeyEnter})
+	if m.confirmed {
+		t.Fatalf("enter while diff is active must not confirm decisions")
+	}
+	m = update(t, m, key('d'))
+	if m.confirmed {
+		t.Fatalf("closing diff must not confirm decisions")
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.confirmed {
+		t.Fatalf("enter from list should be the confirmation authority")
 	}
 }
 
@@ -253,8 +272,45 @@ func TestWindowSizeBoundsEveryRenderAndKeepsHelpAtTheFooter(t *testing.T) {
 			if tt.width >= 18 && (!strings.Contains(view, "up/k") || strings.TrimSpace(lines[len(lines)-1]) == "") {
 				t.Fatalf("footer help not kept at the bottom at %dx%d:\n%s", tt.width, tt.height, view)
 			}
-			if tt.width == 80 && tt.height == 24 && !strings.Contains(view, "adopt copies supported regular-file local content into the Source of Truth") {
+			if tt.width == 80 && tt.height == 24 && !strings.Contains(view, "adopt copies supported local regular-file content into the Source of Truth") {
 				t.Fatalf("80x24 view lost consequence copy:\n%s", view)
+			}
+		})
+	}
+}
+
+func TestTinyListShowsCompleteActiveConsequenceOutsideHelp(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      rune
+		decision install.ConflictDecision
+		want     string
+	}{
+		{name: "skip", key: 's', decision: install.DecisionSkip, want: "skip leaves the local target untouched"},
+		{name: "replace", key: 'r', decision: install.DecisionReplace, want: "replace backs it up and installs the Source of Truth"},
+		{name: "adopt", key: 'a', decision: install.DecisionAdopt, want: "adopt copies supported local regular-file content into the Source of Truth"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewWithTheme(sampleConflicts(), nil, uitheme.NoColor())
+			m = update(t, m, tea.WindowSizeMsg{Width: 18, Height: 6}, key(tt.key))
+			view := m.View()
+			normalized := strings.Join(strings.Fields(view), " ")
+			if !strings.Contains(normalized, tt.want) {
+				t.Fatalf("tiny view missing complete active consequence %q:\n%s", tt.want, view)
+			}
+			if !strings.Contains(view, fmt.Sprintf("> [%s]", tt.decision)) {
+				t.Fatalf("tiny view lost selected conflict and decision %q:\n%s", tt.decision, view)
+			}
+			lines := strings.Split(view, "\n")
+			if len(lines) != 6 {
+				t.Fatalf("tiny rendered height = %d, want 6\n%s", len(lines), view)
+			}
+			for i, line := range lines {
+				if got := uitheme.Width(line); got != 18 {
+					t.Fatalf("tiny line %d width = %d, want 18: %q", i, got, line)
+				}
 			}
 		})
 	}
@@ -326,7 +382,8 @@ func TestGeneratedHelpShowsActiveAliases(t *testing.T) {
 		"pgdn/f page down",
 		"home/g top",
 		"end/G bottom",
-		"q/esc/d close",
+		"d close",
+		"q/esc cancel",
 		"ctrl+c cancel",
 	} {
 		if !strings.Contains(diffHelp, want) {
@@ -346,7 +403,7 @@ func TestNoColorViewKeepsMeaningWithoutANSIOrUnicodeOnlyCues(t *testing.T) {
 			t.Fatalf("no-color view contains non-ASCII cue %q", r)
 		}
 	}
-	for _, want := range []string{"> [skip]", "[skip]", "skip keeps", "replace backs up", "adopt copies"} {
+	for _, want := range []string{"> [skip]", "[skip]", "skip leaves", "replace backs", "adopt copies"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("no-color view missing textual/glyph meaning %q:\n%s", want, view)
 		}
@@ -405,9 +462,9 @@ func TestDiffViewportUsesInjectedProviderOnceAndSupportsNavigation(t *testing.T)
 		t.Fatalf("home did not return to top: offset=%d\n%s", m.diffViewport.YOffset, m.View())
 	}
 
-	m = update(t, m, key('q'))
+	m = update(t, m, key('d'))
 	if m.showDiff || m.Canceled() {
-		t.Fatalf("q should close diff without canceling the list")
+		t.Fatalf("d should close diff without canceling the list")
 	}
 	if called != 1 {
 		t.Fatalf("closing or navigating called provider again: %d", called)
@@ -464,15 +521,13 @@ func TestCtrlCCancelsBeforeActiveDiffHandlesTheKey(t *testing.T) {
 	}
 }
 
-func TestDiffCloseAliasesReturnToList(t *testing.T) {
-	closeKeys := []tea.KeyMsg{{Type: tea.KeyEsc}, key('q'), key('d')}
-	for _, closeKey := range closeKeys {
-		t.Run(closeKey.String(), func(t *testing.T) {
-			m := New(sampleConflicts(), func(Conflict) string { return "diff" })
-			m = update(t, m, key('d'), closeKey)
-			if m.showDiff || m.Canceled() {
-				t.Fatalf("%s should close diff without canceling", closeKey.String())
-			}
-		})
+func TestDClosesDiffWithoutCanceling(t *testing.T) {
+	m := New(sampleConflicts(), func(Conflict) string { return "diff" })
+	m = update(t, m, key('r'), key('d'), key('d'))
+	if m.showDiff || m.Canceled() || m.confirmed {
+		t.Fatalf("d should return to the list without canceling or confirming")
+	}
+	if got := m.Decisions()["/home/u/.gitconfig"]; got != install.DecisionReplace {
+		t.Fatalf("d should preserve tentative draft, got %q", got)
 	}
 }
