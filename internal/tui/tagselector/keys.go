@@ -79,6 +79,9 @@ func (m Model) activeHelp() screenHelp {
 	case screenClearConfirmation:
 		return screenHelp{k.Confirm, k.Back, k.PageUp, k.PageDown, k.Quit, k.Cancel}
 	default:
+		if m.previewError != "" {
+			return screenHelp{k.Retry, k.Toggle, k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End, k.Search, k.Profiles, k.Details, k.Quit, k.Cancel}
+		}
 		return screenHelp{k.Toggle, m.previewAction(), k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End, k.Search, k.Profiles, k.Details, k.Quit, k.Cancel}
 	}
 }

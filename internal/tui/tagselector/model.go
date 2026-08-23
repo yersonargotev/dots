@@ -763,17 +763,13 @@ func (m Model) viewList() string {
 			title = "dots · Tags*"
 		}
 	}
-	summary := m.selectionSummary()
-	if m.compact() {
-		summary = fmt.Sprintf("%d/%d shown", len(m.visibleTags()), len(m.data.Tags))
-	}
 	compactError := m.compact() && m.previewError != ""
 	lines := []string{}
 	if !compactError {
 		lines = append(lines, m.theme.Title.Render(title))
 	}
 	if !m.compact() {
-		lines = append(lines, m.theme.Secondary.Render(summary))
+		lines = append(lines, m.theme.Secondary.Render(m.selectionSummary()))
 	}
 	if m.screen == screenSearch {
 		lines = append(lines, m.searchInput.View())
@@ -790,7 +786,7 @@ func (m Model) viewList() string {
 		if compactError {
 			lines = append(lines, m.theme.Error.Render(m.compactPreviewError()))
 		} else {
-			lines = append(lines, m.theme.Error.Render(m.theme.Glyphs.Error+" Preview error: "+m.previewError))
+			lines = append(lines, m.theme.Error.Render(m.previewErrorText()))
 		}
 	} else if status := viewportStatus(m.browse); status != "" {
 		lines = append(lines, m.theme.Secondary.Render(status))
@@ -805,6 +801,10 @@ func (m Model) viewList() string {
 		lines = append(lines, m.help.View(m.activeHelp()))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) previewErrorText() string {
+	return m.theme.Glyphs.Error + " Preview error: " + strings.TrimSpace(m.previewError)
 }
 
 func (m Model) compactPreviewError() string {
@@ -1144,7 +1144,12 @@ func (m *Model) syncComponents() {
 	if m.screen == screenSearch || m.searchInput.Value() != "" {
 		queryLine = 1
 	}
-	browseHeight := theme.Clamp(height - 4 - queryLine)
+	browseReserved := 4
+	if m.previewError != "" && !m.compact() {
+		wrappedError := theme.Wrap(m.previewErrorText(), width)
+		browseReserved += strings.Count(wrappedError, "\n")
+	}
+	browseHeight := theme.Clamp(height - browseReserved - queryLine)
 	if m.compact() {
 		browseHeight = theme.Clamp(height - 2)
 	}

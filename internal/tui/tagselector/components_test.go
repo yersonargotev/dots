@@ -157,6 +157,23 @@ func TestTinyPreviewErrorKeepsCauseRetryFocusAndStateVisible(t *testing.T) {
 	}
 }
 
+func TestNarrowPreviewErrorPrioritizesRetryHelp(t *testing.T) {
+	model := tagselector.NewWithTheme(detailedBrowseData(), []string{"zsh"}, func(uint64, []string) (tagselector.Preview, error) {
+		return tagselector.Preview{}, errors.New("network unavailable")
+	}, theme.NoColor())
+	model = update(t, model, tea.WindowSizeMsg{Width: 25, Height: 8})
+	next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = update(t, next.(tagselector.Model), previewCommand(t, command)())
+
+	view := model.View()
+	assertBoundedView(t, view, 25, 8)
+	for _, want := range []string{"Preview error:", "network", "unavailable", "enter retry"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("narrow preview error hid %q:\n%s", want, view)
+		}
+	}
+}
+
 func TestGeneratedBrowseHelpIncludesEverySupportedViewportNavigationKey(t *testing.T) {
 	model := tagselector.NewWithTheme(detailedBrowseData(), []string{"zsh"}, nil, theme.NoColor())
 	model = update(t, model, tea.WindowSizeMsg{Width: 240, Height: 24})
