@@ -218,19 +218,16 @@ Repeat this loop until it produces a reviewable candidate:
    - `go vet ./...`
    - `go build ./...`
    - `go test ./...`
-5. Fix every failure and restart the loop.
+5. Fix every failure or resolve every checkpoint result through the reference's
+   routing, then restart the loop.
 
-Actionable local implementation findings return to focused implementation.
-After each fix, repeat focused checks and repeat the implementation-conformance
-checkpoint without rebuilding the safety case unless the reference returns
-`mutation-model-changed`. That result invalidates the approved safety case and
-must repeat the complete pre-implementation Mutation safety gate before further
-implementation.
+Follow the reference's result routing. After resolving the routed work, restart
+at the earliest invalidated gate and repeat every later step.
 
 Any later code or artifact change invalidates earlier automated, manual, and
-review evidence and restarts the complete gates. Any later mutation-boundary
-code change invalidates the implementation-conformance result and must repeat
-focused checks and the checkpoint before expensive gates continue. This
+review evidence and restarts the complete gates. The reference determines
+whether the implementation-conformance result remains valid, the checkpoint
+must repeat, or the complete Mutation safety gate is invalidated. This
 checkpoint does not replace the final independent review.
 
 The implementing agent may decide local, reversible matters within scope. If
@@ -316,7 +313,8 @@ Update that block in place after every fix or push. It records:
 - current head commit reviewed;
 - mutation-safety result or its `not applicable` evidence; for
   `required-mutation`, this includes the early independent design challenge
-  result and the implementation-conformance challenge result tied to the final
+  result and the implementation-conformance challenge result, base commit,
+  mutation-boundary diff digest, and its verified correspondence to the final
   reviewed head;
 - acceptance-criterion coverage;
 - automated validation commands/results;

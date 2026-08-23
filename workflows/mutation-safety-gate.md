@@ -103,12 +103,12 @@ result to the parent workflow's completion gate.
 For `required-mutation` only, run a second independent challenge after the
 implementation passes focused checks and before complete CI-equivalent or manual
 verification. Give an independent context the Delivery Contract snapshot by
-reference, base commit, approved safety case, exact candidate commit, current
-implementation diff, and focused-test evidence. The approved safety case
-includes its compatibility map, transaction boundary, threat and failure
-matrix, fault seams and acceptance evidence, and operation invariant. Do not
-duplicate the Delivery Contract in the challenge input. `not-applicable`
-Delivery Units skip this challenge.
+reference, base commit, approved safety case, current implementation diff, its
+SHA-256 mutation-boundary diff digest against that base, and focused-test
+evidence. The approved safety case includes its compatibility map, transaction
+boundary, threat and failure matrix, fault seams and acceptance evidence, and
+operation invariant. Do not duplicate the Delivery Contract in the challenge
+input. `not-applicable` Delivery Units skip this challenge.
 
 Compare the implemented mutation boundary with the approved safety case and
 explicitly challenge:
@@ -133,11 +133,15 @@ complete pre-implementation safety gate, including the independent design
 challenge. Continue to use the existing `unauthorized-decision` and
 `missing-capability` results when their matrix scenarios apply.
 
-Bind the result to the exact candidate commit. A later mutation-boundary code
-change invalidates the implementation-conformance result and requires another
-challenge before expensive gates continue. Documentation or unrelated artifact
-changes follow the parent workflow's general evidence invalidation rule and do
-not by themselves change the approved mutation model.
+Bind the result to the base commit and mutation-boundary diff digest. A later
+mutation-boundary code change invalidates the implementation-conformance result
+and requires another challenge before expensive gates continue. Documentation
+or unrelated artifact changes do not invalidate the implementation-conformance
+result when comparison with the final reviewed head proves that digest is
+unchanged. They still invalidate automated, manual, and final review evidence
+under the parent workflow's general rule and do not by themselves change the
+approved mutation model. If the unchanged mutation boundary cannot be proved,
+fail closed and repeat the implementation-conformance challenge.
 
 ## Gate results and invalidation
 
@@ -160,9 +164,11 @@ Record the result in the PR's `Delivery Evidence` block. For a completed safety
 case, include the base commit and Delivery Contract digest, the operation
 invariant, compatibility and matrix coverage, planned fault seams and acceptance
 evidence, and the early independent design challenge result. For a completed
-implementation-conformance challenge, include the exact candidate commit, its
-input references and focused-test evidence, the questions covered, every
-finding and resolution, and the implementation-conformance challenge result.
-These records preserve both independent challenges for the final reviewed head.
+implementation-conformance challenge, include the base commit and
+mutation-boundary diff digest, input references and focused-test evidence, the
+questions covered, every finding and resolution, and the
+implementation-conformance challenge result. Record the final reviewed head and
+the comparison proving its mutation-boundary digest matches. These records
+preserve both independent challenges for the final reviewed head.
 For `not applicable`, include the direct evidence that no mutation boundary
 exists.

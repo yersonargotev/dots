@@ -705,12 +705,11 @@ func TestDeliveryWorkflowRunsMutationImplementationConformanceBeforeExpensiveGat
 	assertDocumentContainsAllNormalized(t, path, []string{
 		"For a `required-mutation` result",
 		"zero actionable findings",
-		"Actionable local implementation findings return to focused implementation",
-		"repeat the implementation-conformance checkpoint",
-		"`mutation-model-changed`",
-		"repeat the complete pre-implementation Mutation safety gate",
+		"Follow the reference's result routing",
+		"restart at the earliest invalidated gate",
 		"A `not-applicable` Delivery Unit does not enter this checkpoint",
-		"Any later mutation-boundary code change invalidates",
+		"Any later code or artifact change invalidates earlier automated, manual, and review evidence",
+		"The reference determines whether the implementation-conformance result remains valid",
 		"does not replace the final independent review",
 	})
 }
@@ -770,6 +769,7 @@ func TestMutationSafetyGateDefinesImplementationConformanceChallenge(t *testing.
 		"base commit",
 		"approved safety case",
 		"current implementation diff",
+		"mutation-boundary diff digest",
 		"focused-test evidence",
 		"compatibility map",
 		"transaction boundary",
@@ -788,8 +788,10 @@ func TestMutationSafetyGateDefinesImplementationConformanceChallenge(t *testing.
 		"`mutation-model-changed`",
 		"repeat the complete pre-implementation safety gate",
 		"A later mutation-boundary code change invalidates",
+		"Documentation or unrelated artifact changes do not invalidate the implementation-conformance result",
+		"still invalidate automated, manual, and final review evidence",
 		"`not-applicable` Delivery Units skip this challenge",
-		"candidate commit",
+		"base commit and mutation-boundary diff digest",
 		"challenge result",
 	})
 }
