@@ -178,6 +178,23 @@ dots install --profile workstation --tag adaptive-theme
 
 ```
 
+Plain `dots install` in an interactive terminal provides the human workflow for
+editing the same complete selection. It starts from the authoritative Installed
+Selection, and Profile presets select their ordered current Tags in the draft.
+After the operator reviews and confirms the candidate, terminal success stores
+those current Tags explicitly rather than preserving Profile names. Removing
+Tags requires a separate Installed Selection reduction acknowledgement before
+Conflict Resolution. An empty draft additionally requires the literal `clear`;
+canceling or entering any other phrase leaves Managed Entries and the previous
+Installed Selection unchanged.
+
+The selector uses the current initialized Installed Repository and never
+refreshes the Source of Truth. Use `dots update` first when a refreshed checkout
+is intended. It remains a human-only surface: non-interactive and JSON commands
+must express the complete selection with `--profile`, `--tag`, or
+`--clear-selection`. Deselected Dependencies and Provisioners are Retained
+External State, not uninstall or rollback instructions.
+
 Tags are declarative selection only: they select Managed Entries, Dependencies,
 Provisioners, and source overrides, but never authorize hidden built-in cleanup
 or historical migration behavior. Historical retirement uses sufficiently

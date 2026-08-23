@@ -1,0 +1,18 @@
+Dependency provisioning skipped (--skip-deps).
+
+Plan for tags only (tags: base, next) [selection: explicit]
+
+  update          copy      config/base.json -> /home/test/.shared.json
+  create          symlink   config/next -> /home/test/.next
+
+Summary: 1 create, 1 update, 0 migrate, 0 conflict, 0 unchanged, 0 missing-source
+
+Selection reconciliation:
+  remove                   selection      retired
+  create                   selection      next
+  reconcile                managed-entry  /home/test/.shared.json
+  create                   managed-entry  /home/test/.next
+  remove                   managed-entry  /home/test/.retired
+  retained-external-state  dependency     retired-tool
+  retained-external-state  dependency     claude
+  retained-external-state  provisioner    claude [sha256:5ad1ba026bb241cda935498a093942a764ade70f9f396b81cae8f709cf5fffeb]

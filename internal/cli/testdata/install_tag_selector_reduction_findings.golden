@@ -1,0 +1,13 @@
+Plan for profile "tags only" (tags: kept)
+
+  unchanged       symlink   config/kept -> /home/test/.kept
+
+Summary: 0 create, 0 conflict, 1 unchanged, 0 missing-source
+
+Selection reconciliation:
+  remove                   selection      removed
+  remove                   managed-entry  /home/test/.removed
+  retain                   managed-entry  /home/test/.retained [reason=whole-target-drift]
+  blocked                  managed-entry  /home/test/.shared.json [reason=ambiguous-partial-ownership]
+  retained-external-state  dependency     removed-tool
+  retained-external-state  provisioner    claude [sha256:example]

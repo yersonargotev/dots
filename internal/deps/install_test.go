@@ -219,8 +219,8 @@ func TestInstallYesReprobesAfterSuccessAndErrorsWhenStillMissing(t *testing.T) {
 	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusUnresolved {
 		t.Fatalf("report items = %#v, want one unresolved item", report.Items)
 	}
-	if !reflect.DeepEqual(probes, []string{"starship", "brew", "tmux", "starship"}) {
-		t.Fatalf("probes = %#v, want initial plan probes then starship re-probe", probes)
+	if !reflect.DeepEqual(probes, []string{"starship", "brew", "tmux", "starship", "starship"}) {
+		t.Fatalf("probes = %#v, want initial plan, pre-execution, then post-install starship probes", probes)
 	}
 }
 

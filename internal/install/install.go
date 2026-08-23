@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/yersonargotev/dots/internal/backups"
@@ -17,6 +20,7 @@ import (
 	"github.com/yersonargotev/dots/internal/state"
 	"github.com/yersonargotev/dots/internal/textblock"
 	"github.com/yersonargotev/dots/internal/version"
+	"golang.org/x/sys/unix"
 )
 
 // ConflictDecision describes the explicit per-target action selected for a
@@ -40,6 +44,158 @@ type Options struct {
 	// ConflictDecisions contains explicit per-target decisions. Missing conflict
 	// targets default to skip; there is deliberately no global adopt policy.
 	ConflictDecisions map[string]ConflictDecision
+	// CapturedSources binds selector-driven actions to the exact confined Source
+	// of Truth objects reviewed before dependency and provisioner effects.
+	// Explicit installs may leave this nil to retain their historical behavior.
+	CapturedSources map[SourceCaptureKey]CapturedSource
+	// AdoptSnapshots binds explicit adopt decisions to post-conflict snapshots.
+	AdoptSnapshots map[string]AdoptSnapshot
+}
+
+// SourceCaptureKey identifies one Source of Truth input for one target. Target
+// is included because the same source can legitimately participate in actions
+// with different selector authority.
+type SourceCaptureKey struct {
+	Target string
+	Source string
+}
+
+// CapturedSource is an immutable snapshot produced by CaptureManagedSources.
+// Explicit presence flags preserve empty content and zero-valued metadata.
+type CapturedSource struct {
+	Content             []byte
+	ContentPresent      bool
+	Mode                os.FileMode
+	ModePresent         bool
+	IdentityFingerprint string
+	IdentityPresent     bool
+	identity            *capturedFileIdentity
+}
+
+type capturedFileIdentity struct {
+	mu   sync.Mutex
+	file *os.File
+}
+
+func (i *capturedFileIdentity) stat() (os.FileInfo, error) {
+	if i == nil {
+		return nil, fmt.Errorf("captured identity is unavailable")
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.file == nil {
+		return nil, fmt.Errorf("captured identity was released")
+	}
+	info, err := i.file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat captured identity: %w", err)
+	}
+	return info, nil
+}
+
+func (i *capturedFileIdentity) release() error {
+	if i == nil {
+		return nil
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.file == nil {
+		return nil
+	}
+	file := i.file
+	i.file = nil
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close captured identity: %w", err)
+	}
+	return nil
+}
+
+// SourceCaptureAuthority is the stable, serializable projection of one opaque
+// captured Source of Truth input. It is suitable for semantic digests; apply
+// authority remains the process-local CapturedSource identity.
+type SourceCaptureAuthority struct {
+	Target              string `json:"target"`
+	Source              string `json:"source"`
+	Content             []byte `json:"content"`
+	ContentPresent      bool   `json:"content_present"`
+	Mode                uint32 `json:"mode"`
+	ModePresent         bool   `json:"mode_present"`
+	IdentityFingerprint string `json:"identity_fingerprint"`
+	IdentityPresent     bool   `json:"identity_present"`
+}
+
+// SourceCaptureAuthorities returns a detached, deterministic projection of
+// captures without exposing their opaque filesystem identities.
+func SourceCaptureAuthorities(captures map[SourceCaptureKey]CapturedSource) []SourceCaptureAuthority {
+	keys := make([]SourceCaptureKey, 0, len(captures))
+	for key := range captures {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].Target != keys[j].Target {
+			return keys[i].Target < keys[j].Target
+		}
+		return keys[i].Source < keys[j].Source
+	})
+	result := make([]SourceCaptureAuthority, 0, len(keys))
+	for _, key := range keys {
+		capture := captures[key]
+		result = append(result, SourceCaptureAuthority{
+			Target: key.Target, Source: key.Source, Content: append([]byte(nil), capture.Content...), ContentPresent: capture.ContentPresent,
+			Mode: uint32(capture.Mode), ModePresent: capture.ModePresent,
+			IdentityFingerprint: capture.IdentityFingerprint, IdentityPresent: capture.IdentityPresent,
+		})
+	}
+	return result
+}
+
+// ReleaseCapturedSources releases the process-local descriptors that pin
+// reviewed Source of Truth identities. It is safe to call more than once and
+// must be deferred immediately after a successful CaptureManagedSources call.
+func ReleaseCapturedSources(captures map[SourceCaptureKey]CapturedSource) error {
+	identities := make(map[*capturedFileIdentity]struct{}, len(captures))
+	for _, capture := range captures {
+		if capture.identity != nil {
+			identities[capture.identity] = struct{}{}
+		}
+	}
+	var errs []error
+	for identity := range identities {
+		if err := identity.release(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// AdoptSnapshot is an immutable post-conflict snapshot produced by
+// CaptureAdoptSnapshots. Its fields are opaque so only confined capture can
+// grant authority to overwrite the Source of Truth.
+type AdoptSnapshot struct {
+	target CapturedSource
+	source CapturedSource
+}
+
+// ReleaseAdoptSnapshots releases the descriptors that pin reviewed adopt
+// target and Source of Truth identities. It is safe to call more than once and
+// must be deferred immediately after CaptureAdoptSnapshots succeeds.
+func ReleaseAdoptSnapshots(snapshots map[string]AdoptSnapshot) error {
+	identities := make(map[*capturedFileIdentity]struct{}, len(snapshots)*2)
+	for _, snapshot := range snapshots {
+		if snapshot.target.identity != nil {
+			identities[snapshot.target.identity] = struct{}{}
+		}
+		if snapshot.source.identity != nil {
+			identities[snapshot.source.identity] = struct{}{}
+		}
+	}
+	var errs []error
+	for identity := range identities {
+		if err := identity.release(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // MetadataCommit finalizes exact contribution evidence after every terminal
@@ -96,6 +252,10 @@ func applyManagedEntriesWithApply(p plan.Plan, opts Options, applyAction managed
 	appliedActions := append([]plan.Action(nil), p.Actions...)
 	appliedReceipts := make([]*state.ReconciliationReceipt, len(p.Actions))
 	for i, action := range p.Actions {
+		action, err = prepareCapturedAction(action, resolvedSources[i], opts)
+		if err != nil {
+			return MetadataCommit{}, err
+		}
 		source := resolvedSources[i][0]
 		prepared, receipt, err := applyActionWithReconciliationReceipt(action, source, resolvedSources[i], opts, applyAction)
 		if err != nil {
@@ -126,7 +286,7 @@ func applyManagedAction(action plan.Action, source string, opts Options) (manage
 	case plan.StatusUnchanged:
 		return managedActionResult{}, nil
 	case plan.StatusCreate:
-		return managedActionResult{}, applyCreate(action, source)
+		return managedActionResult{}, applyCreate(action, source, opts)
 	case plan.StatusUpdate:
 		return applyUpdate(action, source, opts)
 	case plan.StatusMigrate:
@@ -232,47 +392,244 @@ func snapshotReconciliationSources(action plan.Action, resolvedSources []string,
 }
 
 func readConfinedRegularFile(path, rootPath string) ([]byte, error) {
+	captured, err := captureConfinedSource(path, rootPath, true)
+	if err != nil {
+		return nil, err
+	}
+	data := append([]byte(nil), captured.Content...)
+	return data, captured.identity.release()
+}
+
+// CaptureManagedSources snapshots selector-driven Source of Truth inputs under
+// os.Root confinement. Callers pass the result back in Options for both early
+// validation and per-action apply revalidation.
+func CaptureManagedSources(p plan.Plan, opts Options) (result map[SourceCaptureKey]CapturedSource, resultErr error) {
+	captureOpts := opts
+	captureOpts.CapturedSources = nil
+	resolvedSources, err := validatePlan(p, captureOpts)
+	if err != nil {
+		return nil, err
+	}
+	captures := make(map[SourceCaptureKey]CapturedSource)
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, ReleaseCapturedSources(captures))
+		}
+	}()
+	for i, action := range p.Actions {
+		decision := conflictDecision(action, opts)
+		if !recordsMetadata(action, decision) || decision == DecisionAdopt {
+			continue
+		}
+		sourceNames := actionSourceList(action)
+		for j, source := range resolvedSources[i] {
+			captured, err := captureConfinedSource(source, opts.SourceRoot, action.Strategy == "copy")
+			if err != nil {
+				return nil, fmt.Errorf("capture source %s for %s: %w", sourceNames[j], action.Target, err)
+			}
+			key := SourceCaptureKey{Target: action.Target, Source: sourceNames[j]}
+			if previous, ok := captures[key]; ok {
+				if err := previous.identity.release(); err != nil {
+					return nil, errors.Join(err, captured.identity.release())
+				}
+			}
+			captures[key] = captured
+		}
+	}
+	return captures, nil
+}
+
+// CaptureAdoptSnapshots captures the post-conflict target and Source of Truth
+// authority for every explicit adopt decision. It must run after conflict
+// selection and before any unrelated external effects.
+func CaptureAdoptSnapshots(p plan.Plan, opts Options) (result map[string]AdoptSnapshot, resultErr error) {
+	captureOpts := opts
+	captureOpts.AdoptSnapshots = nil
+	resolvedSources, err := validatePlan(p, captureOpts)
+	if err != nil {
+		return nil, err
+	}
+	snapshots := make(map[string]AdoptSnapshot)
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, ReleaseAdoptSnapshots(snapshots))
+		}
+	}()
+	for i, action := range p.Actions {
+		if action.Status != plan.StatusConflict || conflictDecision(action, opts) != DecisionAdopt {
+			continue
+		}
+		target, err := captureConfinedSource(action.Target, opts.Home, true)
+		if err != nil {
+			return nil, fmt.Errorf("capture adopt target %s: %w", action.Target, err)
+		}
+		source, err := captureConfinedSource(resolvedSources[i][0], opts.SourceRoot, true)
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("capture adopt source %s: %w", action.Source, err), target.identity.release())
+		}
+		if previous, ok := snapshots[action.Target]; ok {
+			if err := errors.Join(previous.target.identity.release(), previous.source.identity.release()); err != nil {
+				return nil, errors.Join(err, target.identity.release(), source.identity.release())
+			}
+		}
+		snapshots[action.Target] = AdoptSnapshot{target: target, source: source}
+	}
+	return snapshots, nil
+}
+
+func captureConfinedSource(path, rootPath string, contentRequired bool) (CapturedSource, error) {
 	rootAbs, err := cleanAbs(rootPath)
 	if err != nil {
-		return nil, fmt.Errorf("resolve source root %s: %w", rootPath, err)
+		return CapturedSource{}, fmt.Errorf("resolve source root %s: %w", rootPath, err)
 	}
 	pathAbs, err := cleanAbs(path)
 	if err != nil {
-		return nil, fmt.Errorf("resolve source %s: %w", path, err)
+		return CapturedSource{}, fmt.Errorf("resolve source %s: %w", path, err)
 	}
 	relative, err := filepath.Rel(rootAbs, pathAbs)
 	if err != nil || !filepath.IsLocal(relative) || relative == "." {
-		return nil, fmt.Errorf("confine source %s beneath source root %s", path, rootAbs)
+		return CapturedSource{}, fmt.Errorf("confine source %s beneath source root %s", path, rootAbs)
 	}
 	root, err := os.OpenRoot(rootAbs)
 	if err != nil {
-		return nil, fmt.Errorf("open source root %s: %w", rootAbs, err)
+		return CapturedSource{}, fmt.Errorf("open source root %s: %w", rootAbs, err)
 	}
 	defer root.Close()
 	observed, err := root.Stat(relative)
 	if err != nil {
-		return nil, fmt.Errorf("inspect confined source %s: %w", path, err)
+		return CapturedSource{}, fmt.Errorf("inspect confined source %s: %w", path, err)
 	}
-	if !observed.Mode().IsRegular() {
-		return nil, fmt.Errorf("confined source %s does not resolve to a regular file", path)
+	if contentRequired && !observed.Mode().IsRegular() {
+		return CapturedSource{}, fmt.Errorf("confined source %s does not resolve to a regular file", path)
 	}
 	file, err := root.OpenFile(relative, os.O_RDONLY, 0)
 	if err != nil {
-		return nil, fmt.Errorf("open confined source %s: %w", path, err)
+		return CapturedSource{}, fmt.Errorf("open confined source %s: %w", path, err)
 	}
-	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("stat confined source %s: %w", path, err)
+		return CapturedSource{}, errors.Join(fmt.Errorf("stat confined source %s: %w", path, err), file.Close())
 	}
-	if !info.Mode().IsRegular() || !os.SameFile(observed, info) {
-		return nil, fmt.Errorf("install plan is stale: source %s changed identity before snapshot", path)
+	if (contentRequired && !info.Mode().IsRegular()) || !os.SameFile(observed, info) {
+		return CapturedSource{}, errors.Join(fmt.Errorf("install plan is stale: source %s changed identity before snapshot", path), file.Close())
 	}
-	data, err := io.ReadAll(file)
+	captured := CapturedSource{
+		Mode:                info.Mode(),
+		ModePresent:         true,
+		IdentityFingerprint: fmt.Sprintf("%s:%d:%d:%d", info.Name(), info.Size(), info.Mode(), info.ModTime().UnixNano()),
+		IdentityPresent:     true,
+		identity:            &capturedFileIdentity{file: file},
+	}
+	if contentRequired {
+		data, err := io.ReadAll(file)
+		if err != nil {
+			return CapturedSource{}, errors.Join(fmt.Errorf("read confined source %s: %w", path, err), captured.identity.release())
+		}
+		captured.Content = append([]byte{}, data...)
+		captured.ContentPresent = true
+	}
+	return captured, nil
+}
+
+func prepareCapturedAction(action plan.Action, resolvedSources []string, opts Options) (plan.Action, error) {
+	if len(opts.CapturedSources) == 0 {
+		return action, nil
+	}
+	sourceNames := actionSourceList(action)
+	hasTargetCapture := false
+	for key := range opts.CapturedSources {
+		if key.Target == action.Target {
+			hasTargetCapture = true
+			break
+		}
+	}
+	if !hasTargetCapture {
+		return action, nil
+	}
+	contents := make([][]byte, len(sourceNames))
+	for i, sourceName := range sourceNames {
+		captured, ok := opts.CapturedSources[SourceCaptureKey{Target: action.Target, Source: sourceName}]
+		if !ok {
+			return action, fmt.Errorf("captured source %q is missing for %s", sourceName, action.Target)
+		}
+		current, err := captureConfinedSource(resolvedSources[i], opts.SourceRoot, captured.ContentPresent)
+		if err != nil {
+			return action, fmt.Errorf("revalidate captured source %s for %s: %w", sourceName, action.Target, err)
+		}
+		label := fmt.Sprintf("captured source %s for %s", sourceName, action.Target)
+		if err := validateCapturedSource(captured, current, label, func(component string) error {
+			return fmt.Errorf("install plan is stale: captured source %s changed %s for %s", sourceName, component, action.Target)
+		}); err != nil {
+			return action, err
+		}
+		if captured.ContentPresent {
+			contents[i] = append([]byte{}, captured.Content...)
+		}
+	}
+	if action.Strategy != "copy" {
+		return action, nil
+	}
+	prepared := action
+	if len(contents) == 1 {
+		prepared.Content = contents[0]
+		return prepared, nil
+	}
+	composed := append([]byte{}, contents[0]...)
+	for i := 1; i < len(contents); i++ {
+		merged, err := configsubset.MergeJSON(composed, contents[i])
+		if err != nil {
+			return action, fmt.Errorf("compose captured source %s for %s: %w", sourceNames[i], action.Target, err)
+		}
+		composed = merged
+	}
+	prepared.Content = composed
+	return prepared, nil
+}
+
+func validateCapturedFile(path, rootPath, label string, expected CapturedSource) error {
+	current, err := captureConfinedSource(path, rootPath, true)
 	if err != nil {
-		return nil, fmt.Errorf("read confined source %s: %w", path, err)
+		return fmt.Errorf("validate %s: %w", label, err)
 	}
-	return data, nil
+	return validateCapturedSource(expected, current, label, func(component string) error {
+		return fmt.Errorf("%s changed %s", label, component)
+	})
+}
+
+func validateCapturedSource(expected, current CapturedSource, label string, changed func(string) error) (resultErr error) {
+	defer func() {
+		if err := current.identity.release(); err != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("release current %s identity: %w", label, err))
+		}
+	}()
+	if expected.IdentityPresent {
+		same, err := sameCapturedIdentity(expected, current)
+		if err != nil {
+			return fmt.Errorf("%s identity authority: %w", label, err)
+		}
+		if !same {
+			return changed("identity")
+		}
+	}
+	if expected.ModePresent && current.Mode.Perm() != expected.Mode.Perm() {
+		return changed("mode")
+	}
+	if expected.ContentPresent && (!current.ContentPresent || !bytes.Equal(current.Content, expected.Content)) {
+		return changed("content")
+	}
+	return nil
+}
+
+func sameCapturedIdentity(expected, current CapturedSource) (bool, error) {
+	expectedInfo, err := expected.identity.stat()
+	if err != nil {
+		return false, err
+	}
+	currentInfo, err := current.identity.stat()
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(expectedInfo, currentInfo), nil
 }
 
 func actionSourceList(action plan.Action) []string {
@@ -294,11 +651,25 @@ func ValidateManagedEntries(p plan.Plan, opts Options) error {
 // Commit revalidates sources and live targets, then atomically records exact
 // contribution evidence and, when supplied, the authoritative selection.
 func (c MetadataCommit) Commit(installed *state.InstalledSelection) error {
+	return c.commitSelection(nil, installed, false)
+}
+
+// CommitTransition atomically records terminal evidence and replaces the
+// Installed Selection only when its exact prior value still matches expected.
+// In particular, nil authority is distinct from an explicitly empty selection.
+func (c MetadataCommit) CommitTransition(expected, installed *state.InstalledSelection) error {
+	return c.commitSelection(expected, installed, true)
+}
+
+func (c MetadataCommit) commitSelection(expected, installed *state.InstalledSelection, transition bool) error {
 	if c.opts.StateRoot == "" {
 		return nil
 	}
 	path := state.Path(c.opts.StateRoot)
 	return state.Update(path, func(meta *state.Metadata) error {
+		if transition && !reflect.DeepEqual(meta.InstalledSelection, expected) {
+			return fmt.Errorf("installed selection changed concurrently")
+		}
 		if err := c.validateTerminalPaths(); err != nil {
 			return err
 		}
@@ -344,12 +715,24 @@ func (c MetadataCommit) Commit(installed *state.InstalledSelection) error {
 		for target := range legacyTargets {
 			*meta = meta.Remove(target)
 		}
-		if installed != nil {
-			selection := *installed
-			meta.InstalledSelection = &selection
+		if transition {
+			meta.InstalledSelection = cloneInstalledSelection(installed)
+		} else if installed != nil {
+			meta.InstalledSelection = cloneInstalledSelection(installed)
 		}
 		return nil
 	})
+}
+
+func cloneInstalledSelection(installed *state.InstalledSelection) *state.InstalledSelection {
+	if installed == nil {
+		return nil
+	}
+	cloned := *installed
+	cloned.Profiles = append([]string(nil), installed.Profiles...)
+	cloned.ExtraTags = append([]string(nil), installed.ExtraTags...)
+	cloned.ResolvedTags = append([]string(nil), installed.ResolvedTags...)
+	return &cloned
 }
 
 func (c *MetadataCommit) captureStagedEvidence() error {
@@ -613,6 +996,21 @@ func cloneOptions(opts Options) Options {
 			cloned.ConflictDecisions[target] = decision
 		}
 	}
+	if opts.CapturedSources != nil {
+		cloned.CapturedSources = make(map[SourceCaptureKey]CapturedSource, len(opts.CapturedSources))
+		for key, capture := range opts.CapturedSources {
+			capture.Content = append([]byte(nil), capture.Content...)
+			cloned.CapturedSources[key] = capture
+		}
+	}
+	if opts.AdoptSnapshots != nil {
+		cloned.AdoptSnapshots = make(map[string]AdoptSnapshot, len(opts.AdoptSnapshots))
+		for target, snapshot := range opts.AdoptSnapshots {
+			snapshot.target.Content = append([]byte(nil), snapshot.target.Content...)
+			snapshot.source.Content = append([]byte(nil), snapshot.source.Content...)
+			cloned.AdoptSnapshots[target] = snapshot
+		}
+	}
 	return cloned
 }
 
@@ -726,6 +1124,9 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 		seenTargets[targetKey] = struct{}{}
 		resolvedSources[i], err = validateActionSources(action, sourceRoot, nil)
 		if err != nil {
+			return nil, err
+		}
+		if _, err := prepareCapturedAction(action, resolvedSources[i], opts); err != nil {
 			return nil, err
 		}
 		source := resolvedSources[i][0]
@@ -855,6 +1256,14 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 				}
 				if err := validateAdoptableSource(source, sourceRoot); err != nil {
 					return nil, err
+				}
+				if snapshot, ok := opts.AdoptSnapshots[action.Target]; ok {
+					if err := validateCapturedFile(action.Target, home, "adopt target", snapshot.target); err != nil {
+						return nil, fmt.Errorf("install plan is stale: %w", err)
+					}
+					if err := validateCapturedFile(source, sourceRoot, "adopt source", snapshot.source); err != nil {
+						return nil, fmt.Errorf("install plan is stale: %w", err)
+					}
 				}
 				if action.Strategy == "symlink" {
 					if opts.StateRoot == "" {
@@ -1055,19 +1464,26 @@ func supportedStrategy(strategy string) bool {
 	}
 }
 
-func applyCreate(action plan.Action, source string) error {
-	if err := os.MkdirAll(filepath.Dir(action.Target), 0o755); err != nil {
+func applyCreate(action plan.Action, source string, opts Options) error {
+	if err := createConfinedParent(opts.Home, action.Target); err != nil {
 		return fmt.Errorf("create parent directory for %s: %w", action.Target, err)
 	}
 
 	switch action.Strategy {
 	case "symlink":
-		if err := os.Symlink(source, action.Target); err != nil {
+		if err := createCapturedSymlink(action, source, opts); err != nil {
 			return fmt.Errorf("create symlink %s: %w", action.Target, err)
 		}
 		return nil
 	case "copy":
-		if len(action.Content) > 0 {
+		firstSource := actionSourceList(action)[0]
+		if captured, ok := opts.CapturedSources[SourceCaptureKey{Target: action.Target, Source: firstSource}]; ok && captured.ContentPresent {
+			if err := writeNewFileWithMode(opts.Home, action.Target, action.Content, captured.Mode.Perm()); err != nil {
+				return fmt.Errorf("write captured source to %s: %w", action.Target, err)
+			}
+			return nil
+		}
+		if action.Content != nil {
 			if err := writeNewFileFromSourceMode(source, action.Target, action.Content); err != nil {
 				return fmt.Errorf("write composed JSON to %s: %w", action.Target, err)
 			}
@@ -1082,6 +1498,180 @@ func applyCreate(action plan.Action, source string) error {
 	}
 }
 
+func createCapturedSymlink(action plan.Action, source string, opts Options) error {
+	return createCapturedSymlinkWithHook(action, source, opts, nil)
+}
+
+func createCapturedSymlinkWithHook(action plan.Action, source string, opts Options, afterCreate func() error) error {
+	sourceName := actionSourceList(action)[0]
+	captured, hasCapture := opts.CapturedSources[SourceCaptureKey{Target: action.Target, Source: sourceName}]
+	if hasCapture {
+		if _, err := prepareCapturedAction(action, []string{source}, opts); err != nil {
+			return err
+		}
+	}
+	homeAbs, err := cleanAbs(opts.Home)
+	if err != nil {
+		return fmt.Errorf("resolve home: %w", err)
+	}
+	targetAbs, err := cleanAbs(action.Target)
+	if err != nil {
+		return fmt.Errorf("resolve target %s: %w", action.Target, err)
+	}
+	relative, err := filepath.Rel(homeAbs, targetAbs)
+	if err != nil || !filepath.IsLocal(relative) || relative == "." {
+		return fmt.Errorf("confine target %s beneath home %s", action.Target, homeAbs)
+	}
+	root, err := os.OpenRoot(homeAbs)
+	if err != nil {
+		return fmt.Errorf("open home root %s: %w", homeAbs, err)
+	}
+	defer root.Close()
+	if err := symlinkAtRoot(root, relative, source); err != nil {
+		return err
+	}
+	created, err := root.Lstat(relative)
+	if err != nil {
+		return fmt.Errorf("inspect created symlink: %w", err)
+	}
+	if afterCreate != nil {
+		if err := afterCreate(); err != nil {
+			return errors.Join(fmt.Errorf("after symlink creation: %w", err), removeCreatedSymlinkIfMatching(root, relative, source, created))
+		}
+	}
+	if !hasCapture {
+		return nil
+	}
+	resolved, resolveErr := statSymlinkTargetAtRoot(root, relative)
+	capturedInfo, capturedInfoErr := captured.identity.stat()
+	if resolveErr == nil && capturedInfoErr == nil && os.SameFile(resolved, capturedInfo) {
+		// After terminal commit, a managed symlink intentionally follows later
+		// Source of Truth checkout changes. This identity check only closes the
+		// selector review-to-creation window.
+		return nil
+	}
+	cleanupErr := removeCreatedSymlinkIfMatching(root, relative, source, created)
+	if capturedInfoErr != nil {
+		return errors.Join(fmt.Errorf("resolve captured source identity: %w", capturedInfoErr), cleanupErr)
+	}
+	if resolveErr != nil {
+		return errors.Join(fmt.Errorf("resolve created symlink: %w", resolveErr), cleanupErr)
+	}
+	return errors.Join(fmt.Errorf("created symlink resolved to a different source identity"), cleanupErr)
+}
+
+func createConfinedParent(rootPath, target string) error {
+	root, relative, err := openConfinedRoot(rootPath, target)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	parent := filepath.Dir(relative)
+	if parent == "." {
+		return nil
+	}
+	current := ""
+	for _, component := range strings.Split(parent, string(os.PathSeparator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		if err := root.Mkdir(current, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		info, err := root.Stat(current)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("parent %s is not a directory", current)
+		}
+	}
+	return nil
+}
+
+func symlinkAtRoot(root *os.Root, relative, destination string) (resultErr error) {
+	parent, base, err := openRootParent(root, relative)
+	if err != nil {
+		return fmt.Errorf("open symlink parent: %w", err)
+	}
+	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	if err := unix.Symlinkat(destination, int(parent.Fd()), base); err != nil {
+		return fmt.Errorf("create confined symlink: %w", err)
+	}
+	return nil
+}
+
+func openRootParent(root *os.Root, relative string) (*os.File, string, error) {
+	parent, err := root.OpenFile(filepath.Dir(relative), os.O_RDONLY, 0)
+	if err != nil {
+		return nil, "", err
+	}
+	return parent, filepath.Base(relative), nil
+}
+
+func statSymlinkTargetAtRoot(root *os.Root, relative string) (result os.FileInfo, resultErr error) {
+	parent, base, err := openRootParent(root, relative)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	fd, err := unix.Openat(int(parent.Fd()), base, unix.O_RDONLY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	resolved := os.NewFile(uintptr(fd), relative)
+	if resolved == nil {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("open resolved symlink descriptor")
+	}
+	defer func() { resultErr = errors.Join(resultErr, resolved.Close()) }()
+	return resolved.Stat()
+}
+
+func readlinkAtRoot(root *os.Root, relative string) (result string, resultErr error) {
+	parent, base, err := openRootParent(root, relative)
+	if err != nil {
+		return "", err
+	}
+	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	for size := 256; size <= 1<<20; size *= 2 {
+		buffer := make([]byte, size)
+		n, err := unix.Readlinkat(int(parent.Fd()), base, buffer)
+		if err != nil {
+			return "", err
+		}
+		if n < len(buffer) {
+			return string(buffer[:n]), nil
+		}
+	}
+	return "", fmt.Errorf("symlink destination exceeds supported length")
+}
+
+func removeCreatedSymlinkIfMatching(root *os.Root, relative, destination string, created os.FileInfo) error {
+	current, err := root.Lstat(relative)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("inspect created symlink for compensation: %w", err)
+	}
+	if current.Mode()&os.ModeSymlink == 0 || !os.SameFile(current, created) {
+		return fmt.Errorf("created symlink changed before compensation; refusing removal")
+	}
+	currentDestination, err := readlinkAtRoot(root, relative)
+	if err != nil {
+		return fmt.Errorf("read created symlink for compensation: %w", err)
+	}
+	if currentDestination != destination {
+		return fmt.Errorf("created symlink destination changed before compensation; refusing removal")
+	}
+	if err := root.Remove(relative); err != nil {
+		return fmt.Errorf("remove created symlink during compensation: %w", err)
+	}
+	return nil
+}
+
 func applyReplace(action plan.Action, source string, opts Options) error {
 	if err := createBackupSet(opts, action.Target); err != nil {
 		return err
@@ -1089,7 +1679,7 @@ func applyReplace(action plan.Action, source string, opts Options) error {
 	if err := removeConflictingTarget(action.Target); err != nil {
 		return fmt.Errorf("remove conflicting target %s: %w", action.Target, err)
 	}
-	if err := applyCreate(action, source); err != nil {
+	if err := applyCreate(action, source, opts); err != nil {
 		return err
 	}
 	return nil
@@ -1452,6 +2042,9 @@ func removeConflictingTarget(target string) error {
 }
 
 func applyAdopt(action plan.Action, source string, opts Options) error {
+	if snapshot, ok := opts.AdoptSnapshots[action.Target]; ok {
+		return applyCapturedAdopt(action, source, opts, snapshot)
+	}
 	if err := copyAdoptedTargetToSource(action.Target, source); err != nil {
 		return err
 	}
@@ -1464,10 +2057,162 @@ func applyAdopt(action plan.Action, source string, opts Options) error {
 	if err := os.Remove(action.Target); err != nil {
 		return fmt.Errorf("remove adopted target %s: %w", action.Target, err)
 	}
-	if err := applyCreate(action, source); err != nil {
+	if err := applyCreate(action, source, opts); err != nil {
 		return err
 	}
 	return nil
+}
+
+func applyCapturedAdopt(action plan.Action, source string, opts Options, snapshot AdoptSnapshot) (resultErr error) {
+	if err := validateCapturedFile(action.Target, opts.Home, "adopt target", snapshot.target); err != nil {
+		return fmt.Errorf("install plan is stale: %w", err)
+	}
+	if err := validateCapturedFile(source, opts.SourceRoot, "adopt source", snapshot.source); err != nil {
+		return fmt.Errorf("install plan is stale: %w", err)
+	}
+
+	sourceRoot, sourceRelative, err := openConfinedRoot(opts.SourceRoot, source)
+	if err != nil {
+		return fmt.Errorf("open adopt source root: %w", err)
+	}
+	defer func() { resultErr = errors.Join(resultErr, sourceRoot.Close()) }()
+	sourceFile, err := sourceRoot.OpenFile(sourceRelative, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("open adopt source %s: %w", source, err)
+	}
+	defer func() { resultErr = errors.Join(resultErr, sourceFile.Close()) }()
+	sourceInfo, sourceData, err := readCapturedDescriptor(sourceFile, "adopt source", snapshot.source)
+	if err != nil {
+		return err
+	}
+
+	homeRoot, targetRelative, err := openConfinedRoot(opts.Home, action.Target)
+	if err != nil {
+		return fmt.Errorf("open adopt target root: %w", err)
+	}
+	defer func() { resultErr = errors.Join(resultErr, homeRoot.Close()) }()
+	targetFile, err := homeRoot.OpenFile(targetRelative, os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("open adopt target %s: %w", action.Target, err)
+	}
+	_, targetData, targetReadErr := readCapturedDescriptor(targetFile, "adopt target", snapshot.target)
+	targetCloseErr := targetFile.Close()
+	if err := errors.Join(targetReadErr, targetCloseErr); err != nil {
+		return err
+	}
+
+	if err := rewriteOpenedRegularFile(sourceFile, source, targetData, sourceData); err != nil {
+		return fmt.Errorf("write captured adopt source %s: %w", source, err)
+	}
+	if action.Strategy != "symlink" {
+		return nil
+	}
+	rollbackSource := func() error {
+		if _, err := sourceFile.Seek(0, io.SeekStart); err != nil {
+			return fmt.Errorf("seek adopt source for rollback: %w", err)
+		}
+		current, err := io.ReadAll(sourceFile)
+		if err != nil {
+			return fmt.Errorf("read adopt source for rollback: %w", err)
+		}
+		if !bytes.Equal(current, targetData) {
+			return fmt.Errorf("adopt source changed after write; refusing rollback")
+		}
+		return rewriteOpenedRegularFile(sourceFile, source, sourceData, targetData)
+	}
+	if _, err := backups.CreateContentSet(opts.StateRoot, action.Target, targetData, snapshot.target.Mode, backups.CreateOptions{
+		Reason: "pre-install conflict protection", Machine: backups.MachineName(), Repo: opts.SourceRoot,
+	}); err != nil {
+		return errors.Join(err, rollbackSource())
+	}
+	if err := validateCapturedFile(action.Target, opts.Home, "adopt target", snapshot.target); err != nil {
+		return errors.Join(fmt.Errorf("install plan is stale: %w", err), rollbackSource())
+	}
+	if err := homeRoot.Remove(targetRelative); err != nil {
+		return errors.Join(fmt.Errorf("remove adopted target %s: %w", action.Target, err), rollbackSource())
+	}
+
+	adoptedSource := CapturedSource{
+		Content: append([]byte{}, targetData...), ContentPresent: true,
+		Mode: sourceInfo.Mode(), ModePresent: true,
+		IdentityFingerprint: snapshot.source.IdentityFingerprint, IdentityPresent: true, identity: snapshot.source.identity,
+	}
+	createOpts := opts
+	createOpts.CapturedSources = map[SourceCaptureKey]CapturedSource{
+		{Target: action.Target, Source: action.Source}: adoptedSource,
+	}
+	if err := applyCreate(action, source, createOpts); err != nil {
+		restoreErr := restoreCapturedTargetIfAbsent(homeRoot, targetRelative, snapshot.target)
+		return errors.Join(err, restoreErr, rollbackSource())
+	}
+	return nil
+}
+
+func openConfinedRoot(rootPath, path string) (*os.Root, string, error) {
+	rootAbs, err := cleanAbs(rootPath)
+	if err != nil {
+		return nil, "", err
+	}
+	pathAbs, err := cleanAbs(path)
+	if err != nil {
+		return nil, "", err
+	}
+	relative, err := filepath.Rel(rootAbs, pathAbs)
+	if err != nil || !filepath.IsLocal(relative) || relative == "." {
+		return nil, "", fmt.Errorf("confine %s beneath %s", path, rootAbs)
+	}
+	root, err := os.OpenRoot(rootAbs)
+	if err != nil {
+		return nil, "", err
+	}
+	return root, relative, nil
+}
+
+func readCapturedDescriptor(file *os.File, label string, expected CapturedSource) (os.FileInfo, []byte, error) {
+	info, err := file.Stat()
+	if err != nil {
+		return nil, nil, fmt.Errorf("stat %s descriptor: %w", label, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("%s descriptor is not a regular file", label)
+	}
+	if expected.IdentityPresent {
+		expectedInfo, err := expected.identity.stat()
+		if err != nil {
+			return nil, nil, fmt.Errorf("install plan is stale: %s identity authority: %w", label, err)
+		}
+		if !os.SameFile(info, expectedInfo) {
+			return nil, nil, fmt.Errorf("install plan is stale: %s changed identity", label)
+		}
+	}
+	if expected.ModePresent && info.Mode().Perm() != expected.Mode.Perm() {
+		return nil, nil, fmt.Errorf("install plan is stale: %s changed mode", label)
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, nil, fmt.Errorf("seek %s descriptor: %w", label, err)
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read %s descriptor: %w", label, err)
+	}
+	if expected.ContentPresent && !bytes.Equal(data, expected.Content) {
+		return nil, nil, fmt.Errorf("install plan is stale: %s changed content", label)
+	}
+	return info, data, nil
+}
+
+func restoreCapturedTargetIfAbsent(root *os.Root, relative string, snapshot CapturedSource) error {
+	file, err := root.OpenFile(relative, os.O_WRONLY|os.O_CREATE|os.O_EXCL, snapshot.Mode.Perm())
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("adopt target was replaced after removal; refusing compensation")
+		}
+		return fmt.Errorf("restore adopted target: %w", err)
+	}
+	writeErr := writeAll(file, snapshot.Content)
+	chmodErr := file.Chmod(snapshot.Mode.Perm())
+	closeErr := file.Close()
+	return errors.Join(writeErr, chmodErr, closeErr)
 }
 
 func validateAdoptableTarget(target, home string) error {
@@ -1573,6 +2318,58 @@ func writeNewFileFromSourceMode(source, target string, data []byte) error {
 	if err := file.Close(); err != nil {
 		_ = os.Remove(target)
 		return err
+	}
+	return nil
+}
+
+func writeNewFileWithMode(rootPath, target string, data []byte, mode os.FileMode) error {
+	return writeNewFileWithModeAtRoot(rootPath, target, data, mode, nil)
+}
+
+func writeNewFileWithModeAtRoot(rootPath, target string, data []byte, mode os.FileMode, beforeOpen func() error) (resultErr error) {
+	root, relative, err := openConfinedRoot(rootPath, target)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
+	if beforeOpen != nil {
+		if err := beforeOpen(); err != nil {
+			return fmt.Errorf("before confined target create: %w", err)
+		}
+	}
+	file, err := root.OpenFile(relative, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode.Perm())
+	if err != nil {
+		return err
+	}
+	created, err := file.Stat()
+	if err != nil {
+		return errors.Join(fmt.Errorf("stat created target: %w", err), file.Close())
+	}
+	if err := writeAll(file, data); err != nil {
+		return errors.Join(err, file.Close(), removeCreatedFileIfMatching(root, relative, created))
+	}
+	if err := file.Chmod(mode.Perm()); err != nil {
+		return errors.Join(err, file.Close(), removeCreatedFileIfMatching(root, relative, created))
+	}
+	if err := file.Close(); err != nil {
+		return errors.Join(err, removeCreatedFileIfMatching(root, relative, created))
+	}
+	return nil
+}
+
+func removeCreatedFileIfMatching(root *os.Root, relative string, created os.FileInfo) error {
+	current, err := root.Lstat(relative)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("inspect created target for compensation: %w", err)
+	}
+	if !current.Mode().IsRegular() || !os.SameFile(current, created) {
+		return fmt.Errorf("created target changed before compensation; refusing removal")
+	}
+	if err := root.Remove(relative); err != nil {
+		return fmt.Errorf("remove created target during compensation: %w", err)
 	}
 	return nil
 }

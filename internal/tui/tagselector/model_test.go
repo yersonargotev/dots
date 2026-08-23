@@ -20,9 +20,11 @@ func key(r rune) tea.KeyMsg {
 }
 
 func TestPreviewReceivesCanonicalSnapshotAndFinishesWithExactOpaqueValue(t *testing.T) {
-	wantPreview := tagselector.Preview{Text: "install zsh\nretain fzf", SemanticDigest: "sha256:opaque", ForwardOnly: true}
+	wantPreview := tagselector.Preview{Text: "install zsh\nretain fzf", SemanticDigest: "sha256:opaque", CandidateToken: "selector-preview-1", ForwardOnly: true}
 	var received []string
-	model := tagselector.New(testBrowseData(), []string{"nvim", "zsh"}, func(tags []string) (tagselector.Preview, error) {
+	var receivedRequestID uint64
+	model := tagselector.New(testBrowseData(), []string{"nvim", "zsh"}, func(requestID uint64, tags []string) (tagselector.Preview, error) {
+		receivedRequestID = requestID
 		received = append([]string(nil), tags...)
 		tags[0] = "mutated-by-provider"
 		return wantPreview, nil
@@ -38,6 +40,9 @@ func TestPreviewReceivesCanonicalSnapshotAndFinishesWithExactOpaqueValue(t *test
 	model = next.(tagselector.Model)
 	if got, want := received, []string{"zsh", "nvim"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("preview input = %v, want canonical snapshot %v", got, want)
+	}
+	if receivedRequestID != 1 {
+		t.Fatalf("preview request ID = %d, want 1", receivedRequestID)
 	}
 	if got := model.Preview(); got != wantPreview {
 		t.Fatalf("Preview() = %#v, want exact opaque %#v", got, wantPreview)
@@ -56,7 +61,7 @@ func TestPreviewReceivesCanonicalSnapshotAndFinishesWithExactOpaqueValue(t *test
 		t.Fatal("enter in preview should finish with a quit command")
 	}
 	result := model.Result()
-	if !reflect.DeepEqual(result.Tags, []string{"zsh", "nvim"}) || result.Preview != wantPreview {
+	if !reflect.DeepEqual(result.Tags, []string{"zsh", "nvim"}) || result.Preview != wantPreview || result.AcknowledgementAccepted {
 		t.Fatalf("Result() = %#v, want detached Tags and exact preview", result)
 	}
 	result.Tags[0] = "changed"
@@ -65,9 +70,167 @@ func TestPreviewReceivesCanonicalSnapshotAndFinishesWithExactOpaqueValue(t *test
 	}
 }
 
+func TestReductionPreviewTransitionsToDistinctConfirmationBeforeFinishing(t *testing.T) {
+	wantPreview := tagselector.Preview{
+		Text:         "Removed:\n  nvim\nRetained External State:\n  neovim",
+		Confirmation: tagselector.ConfirmationReduction,
+	}
+	model := tagselector.New(testBrowseData(), []string{"zsh", "nvim"}, func(uint64, []string) (tagselector.Preview, error) {
+		return wantPreview, nil
+	})
+	model = update(t, model, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, key(' '))
+
+	next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = update(t, next.(tagselector.Model), command())
+	model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	view := model.View()
+	for _, want := range []string{"dots · confirm selection reduction", "Removed:", "nvim", "Retained External State:"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("reduction confirmation missing %q:\n%s", want, view)
+		}
+	}
+	if got := model.Result(); got.Tags != nil || got.Preview != (tagselector.Preview{}) || got.AcknowledgementAccepted {
+		t.Fatalf("reduction was usable before dedicated acknowledgement: %#v", got)
+	}
+}
+
+func TestReductionAcknowledgementAcceptsReviewedPreview(t *testing.T) {
+	for name, accept := range map[string]tea.KeyMsg{
+		"yes":   key('y'),
+		"enter": {Type: tea.KeyEnter},
+	} {
+		t.Run(name, func(t *testing.T) {
+			wantPreview := tagselector.Preview{Text: "remove nvim", SemanticDigest: "sha256:reduction", Confirmation: tagselector.ConfirmationReduction}
+			model := reviewedPreview(t, []string{"zsh", "nvim"}, []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyDown}, key(' ')}, wantPreview)
+			model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+			next, quit := model.Update(accept)
+			model = next.(tagselector.Model)
+			if quit == nil {
+				t.Fatal("accepted reduction should quit")
+			}
+			if got := model.Result(); !reflect.DeepEqual(got.Tags, []string{"zsh"}) || got.Preview != wantPreview || !got.AcknowledgementAccepted {
+				t.Fatalf("accepted reduction Result() = %#v", got)
+			}
+		})
+	}
+}
+
+func TestReductionAcknowledgementDeclineReturnsToDraftWithoutUsableResult(t *testing.T) {
+	for name, decline := range map[string]tea.KeyMsg{
+		"no":  key('n'),
+		"esc": {Type: tea.KeyEsc},
+	} {
+		t.Run(name, func(t *testing.T) {
+			preview := tagselector.Preview{Text: "remove nvim", Confirmation: tagselector.ConfirmationReduction}
+			model := reviewedPreview(t, []string{"zsh", "nvim"}, []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyDown}, key(' ')}, preview)
+			model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter}, decline)
+
+			if view := model.View(); !strings.Contains(view, "dots · select Tags") || !strings.Contains(view, "[ ] nvim") {
+				t.Fatalf("declined reduction should return to unchanged draft:\n%s", view)
+			}
+			if got := model.Preview(); got != (tagselector.Preview{}) {
+				t.Fatalf("declined reduction exposed accepted Preview: %#v", got)
+			}
+			if got := model.Result(); !reflect.DeepEqual(got, tagselector.Result{}) {
+				t.Fatalf("declined reduction exposed Result: %#v", got)
+			}
+		})
+	}
+}
+
+func TestReductionAcknowledgementCancelClearsReviewedPreview(t *testing.T) {
+	preview := tagselector.Preview{Text: "remove nvim", Confirmation: tagselector.ConfirmationReduction}
+	model := reviewedPreview(t, []string{"zsh", "nvim"}, []tea.KeyMsg{{Type: tea.KeyDown}, {Type: tea.KeyDown}, key(' ')}, preview)
+	model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	next, quit := model.Update(key('q'))
+	model = next.(tagselector.Model)
+	if quit == nil || !model.Canceled() {
+		t.Fatal("q should cancel from reduction acknowledgement")
+	}
+	if got := model.Result(); !reflect.DeepEqual(got, tagselector.Result{}) {
+		t.Fatalf("canceled reduction exposed Result: %#v", got)
+	}
+}
+
+func TestEmptySelectionRequiresLiteralClearAndSupportsBackspace(t *testing.T) {
+	wantPreview := tagselector.Preview{Text: "Removed:\n  zsh", SemanticDigest: "sha256:clear", Confirmation: tagselector.ConfirmationClear}
+	model := reviewedPreview(t, []string{"zsh"}, []tea.KeyMsg{key(' ')}, wantPreview)
+	model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if view := model.View(); !strings.Contains(view, "dots · confirm clear selection") || !strings.Contains(view, `Type "clear"`) {
+		t.Fatalf("empty preview did not enter strong clear confirmation:\n%s", view)
+	}
+	if got := model.Result(); !reflect.DeepEqual(got, tagselector.Result{}) {
+		t.Fatalf("empty selection was usable before typing clear: %#v", got)
+	}
+
+	model = update(t, model,
+		key('c'), key('l'), key('e'), key('a'), key('r'), key('r'),
+		tea.KeyMsg{Type: tea.KeyBackspace},
+	)
+	if view := model.View(); !strings.Contains(view, `management: clear`) || strings.Contains(view, `management: clearr`) {
+		t.Fatalf("clear confirmation did not reflect typed phrase and backspace:\n%s", view)
+	}
+	next, quit := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = next.(tagselector.Model)
+	if quit == nil {
+		t.Fatal("literal clear should finish and quit")
+	}
+	if got := model.Result(); got.Tags == nil || len(got.Tags) != 0 || got.Preview != wantPreview || !got.AcknowledgementAccepted {
+		t.Fatalf("clear Result() = %#v, want accepted explicit empty Tags", got)
+	}
+}
+
+func TestClearConfirmationMismatchShowsErrorWithoutUsableResult(t *testing.T) {
+	preview := tagselector.Preview{Text: "remove everything", Confirmation: tagselector.ConfirmationClear}
+	model := reviewedPreview(t, []string{"zsh"}, []tea.KeyMsg{key(' ')}, preview)
+	model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter}, key('C'), key('L'), key('E'), key('A'), key('R'), tea.KeyMsg{Type: tea.KeyEnter})
+
+	view := model.View()
+	if !strings.Contains(view, `Confirmation did not match; type exactly "clear".`) || !strings.Contains(view, "management: CLEAR") {
+		t.Fatalf("mismatched clear phrase should remain visible with an error:\n%s", view)
+	}
+	if got := model.Result(); !reflect.DeepEqual(got, tagselector.Result{}) {
+		t.Fatalf("mismatched clear phrase exposed Result: %#v", got)
+	}
+}
+
+func TestClearConfirmationDeclineReturnsToDraftAndCancelClearsIntent(t *testing.T) {
+	preview := tagselector.Preview{Text: "remove everything", Confirmation: tagselector.ConfirmationClear}
+
+	t.Run("decline", func(t *testing.T) {
+		model := reviewedPreview(t, []string{"zsh"}, []tea.KeyMsg{key(' ')}, preview)
+		model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter}, key('c'), tea.KeyMsg{Type: tea.KeyEsc})
+		if view := model.View(); !strings.Contains(view, "dots · select Tags") || !strings.Contains(view, "[ ] zsh") {
+			t.Fatalf("declined clear should return to unchanged draft:\n%s", view)
+		}
+		if got := model.Preview(); got != (tagselector.Preview{}) {
+			t.Fatalf("declined clear exposed Preview: %#v", got)
+		}
+		if got := model.Result(); !reflect.DeepEqual(got, tagselector.Result{}) {
+			t.Fatalf("declined clear exposed Result: %#v", got)
+		}
+	})
+
+	t.Run("cancel", func(t *testing.T) {
+		model := reviewedPreview(t, []string{"zsh"}, []tea.KeyMsg{key(' ')}, preview)
+		model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter}, key('c'))
+		next, quit := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+		model = next.(tagselector.Model)
+		if quit == nil || !model.Canceled() {
+			t.Fatal("ctrl+c should cancel clear confirmation")
+		}
+		if got := model.Result(); !reflect.DeepEqual(got, tagselector.Result{}) {
+			t.Fatalf("canceled clear exposed Result: %#v", got)
+		}
+	})
+}
+
 func TestLoadingIgnoresRepeatedEnterSoEachRequestCallsPreviewOnce(t *testing.T) {
 	var calls atomic.Int32
-	model := tagselector.New(testBrowseData(), nil, func([]string) (tagselector.Preview, error) {
+	model := tagselector.New(testBrowseData(), nil, func(uint64, []string) (tagselector.Preview, error) {
 		calls.Add(1)
 		return tagselector.Preview{Text: "ok"}, nil
 	})
@@ -87,7 +250,7 @@ func TestLoadingIgnoresRepeatedEnterSoEachRequestCallsPreviewOnce(t *testing.T) 
 
 func TestPreviewErrorReturnsToDraftAndAllowsRetry(t *testing.T) {
 	var calls atomic.Int32
-	model := tagselector.New(testBrowseData(), []string{"zsh"}, func([]string) (tagselector.Preview, error) {
+	model := tagselector.New(testBrowseData(), []string{"zsh"}, func(uint64, []string) (tagselector.Preview, error) {
 		if calls.Add(1) == 1 {
 			return tagselector.Preview{}, errors.New("preview failed")
 		}
@@ -114,7 +277,9 @@ func TestPreviewErrorReturnsToDraftAndAllowsRetry(t *testing.T) {
 func TestNewerPreviewWinsWhenBCompletesBeforeA(t *testing.T) {
 	aStarted := make(chan struct{})
 	aRelease := make(chan struct{})
-	preview := func(tags []string) (tagselector.Preview, error) {
+	requestIDs := make(chan uint64, 2)
+	preview := func(requestID uint64, tags []string) (tagselector.Preview, error) {
+		requestIDs <- requestID
 		if reflect.DeepEqual(tags, []string{"zsh"}) {
 			close(aStarted)
 			<-aRelease
@@ -142,12 +307,15 @@ func TestNewerPreviewWinsWhenBCompletesBeforeA(t *testing.T) {
 	if got := model.Preview().Text; got != "B" {
 		t.Fatalf("stale A replaced accepted B, got %q", got)
 	}
+	if first, second := <-requestIDs, <-requestIDs; first != 1 || second != 2 {
+		t.Fatalf("preview request IDs = %d, %d, want UI order 1, 2", first, second)
+	}
 }
 
 func TestStalePreviewErrorAfterCancelCannotProduceUsableResult(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
-	model := tagselector.New(testBrowseData(), []string{"zsh"}, func([]string) (tagselector.Preview, error) {
+	model := tagselector.New(testBrowseData(), []string{"zsh"}, func(uint64, []string) (tagselector.Preview, error) {
 		close(started)
 		<-release
 		return tagselector.Preview{}, errors.New("late failure")
@@ -186,14 +354,14 @@ func TestCtrlCCancelsFromEveryScreenAndClearsUsableValues(t *testing.T) {
 			return update(t, tagselector.New(detailedBrowseData(), nil, nil), tea.WindowSizeMsg{Width: 80}, key('d'))
 		},
 		"loading": func(t *testing.T) tagselector.Model {
-			model := tagselector.New(detailedBrowseData(), nil, func([]string) (tagselector.Preview, error) {
+			model := tagselector.New(detailedBrowseData(), nil, func(uint64, []string) (tagselector.Preview, error) {
 				return tagselector.Preview{Text: "preview"}, nil
 			})
 			next, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 			return next.(tagselector.Model)
 		},
 		"preview": func(t *testing.T) tagselector.Model {
-			model := tagselector.New(detailedBrowseData(), []string{"zsh"}, func([]string) (tagselector.Preview, error) {
+			model := tagselector.New(detailedBrowseData(), []string{"zsh"}, func(uint64, []string) (tagselector.Preview, error) {
 				return tagselector.Preview{Text: "preview"}, nil
 			})
 			next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -238,7 +406,7 @@ func TestRunCtrlCDoesNotWaitForInFlightPreview(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		result, err := tagselector.Run(input, io.Discard, testBrowseData(), []string{"zsh"}, func([]string) (tagselector.Preview, error) {
+		result, err := tagselector.Run(input, io.Discard, testBrowseData(), []string{"zsh"}, func(uint64, []string) (tagselector.Preview, error) {
 			close(started)
 			<-release
 			return tagselector.Preview{Text: "too late"}, nil
@@ -303,6 +471,18 @@ func update(t *testing.T, model tagselector.Model, messages ...tea.Msg) tagselec
 		model = next.(tagselector.Model)
 	}
 	return model
+}
+
+func reviewedPreview(t *testing.T, initial []string, draftKeys []tea.KeyMsg, preview tagselector.Preview) tagselector.Model {
+	t.Helper()
+	model := tagselector.New(testBrowseData(), initial, func(uint64, []string) (tagselector.Preview, error) {
+		return preview, nil
+	})
+	for _, draftKey := range draftKeys {
+		model = update(t, model, draftKey)
+	}
+	next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	return update(t, next.(tagselector.Model), command())
 }
 
 func testBrowseData() tagselector.BrowseData {
@@ -472,7 +652,7 @@ func TestLongPreviewScrollsWithinTerminalHeight(t *testing.T) {
 	for i := 1; i <= 24; i++ {
 		fmt.Fprintf(&previewText, "plan line %02d\n", i)
 	}
-	model := tagselector.New(testBrowseData(), nil, func([]string) (tagselector.Preview, error) {
+	model := tagselector.New(testBrowseData(), nil, func(uint64, []string) (tagselector.Preview, error) {
 		return tagselector.Preview{Text: previewText.String(), SemanticDigest: "sha256:long"}, nil
 	})
 	model = update(t, model, tea.WindowSizeMsg{Width: 80, Height: 8})

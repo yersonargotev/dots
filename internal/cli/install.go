@@ -37,6 +37,9 @@ var (
 	commitInstallationMetadata               = func(commit install.MetadataCommit, installed state.InstalledSelection) error {
 		return commit.Commit(&installed)
 	}
+	commitSelectorInstallationMetadata = func(commit install.MetadataCommit, expected *state.InstalledSelection, installed state.InstalledSelection) error {
+		return commit.CommitTransition(expected, &installed)
+	}
 )
 
 func newInstallCommand() *cobra.Command {
@@ -59,7 +62,8 @@ func newInstallCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install repository-managed dotfiles",
-		Long:  "install computes and shows an Install Plan, then applies safe create actions unless --dry-run is set.",
+		Long: "install computes and shows an Install Plan, then applies safe actions unless --dry-run is set. " +
+			"Without selection flags, an interactive terminal opens the Tag selector; scripts and non-interactive runs must pass --profile, --tag, or --clear-selection explicitly.",
 		// Domain installation failures are user-facing conflicts, not command misuse.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -104,7 +108,14 @@ func newInstallCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return runInstallTagSelectorPreview(cmd, *m, meta, paths, prep.SourceReadRoot, prep.LegacyMigrations)
+				return runInstallTagSelector(cmd, *m, meta, paths, prep.SourceReadRoot, prep.LegacyMigrations, installTagSelectorOptions{
+					ManifestPath:       resolveManifestPath(cmd, file, paths.SourceRoot),
+					RequestedStateRoot: stateRoot,
+					DryRun:             dryRun,
+					SkipDependencies:   skipDeps,
+					NoTUI:              noTUI,
+					BackupAndReplace:   backupAndReplace,
+				})
 			}
 
 			var effective selection.Effective
