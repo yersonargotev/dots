@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/yersonargotev/dots/internal/install"
+	uitheme "github.com/yersonargotev/dots/internal/tui/theme"
 )
 
 func key(r rune) tea.KeyMsg {
@@ -117,9 +119,9 @@ func TestListViewExplainsDecisionTradeoffs(t *testing.T) {
 	m := New(sampleConflicts(), nil)
 	view := m.View()
 	for _, want := range []string{
-		"skip keeps the local file untouched",
-		"replace backs up then installs the Source of Truth",
-		"adopt copies supported regular-file local content into the Source of Truth",
+		"skip leaves the local target untouched",
+		"replace backs it up and installs the Source of Truth",
+		"adopt copies supported local regular-file content into the Source of Truth",
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q\nview:\n%s", want, view)
@@ -169,10 +171,10 @@ func TestDiffViewToggles(t *testing.T) {
 	if m.diffText != "DIFF for /home/u/.gitconfig" {
 		t.Fatalf("diffText = %q, want diff for highlighted conflict", m.diffText)
 	}
-	// esc closes the diff and returns to the list.
-	m = update(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	// d closes the diff and returns to the list without canceling.
+	m = update(t, m, key('d'))
 	if m.showDiff {
-		t.Fatalf("showDiff = true after esc, want false")
+		t.Fatalf("showDiff = true after closing d, want false")
 	}
 }
 
@@ -186,8 +188,27 @@ func TestEnterConfirmsAndQuits(t *testing.T) {
 	if m.Canceled() {
 		t.Fatalf("enter should confirm, not cancel")
 	}
+	if !m.confirmed {
+		t.Fatalf("enter in list should record explicit confirmation")
+	}
 	if cmd == nil {
 		t.Fatalf("enter should return a quit command")
+	}
+}
+
+func TestOnlyEnterFromListConfirms(t *testing.T) {
+	m := New(sampleConflicts(), func(Conflict) string { return "diff" })
+	m = update(t, m, key('r'), key('d'), tea.KeyMsg{Type: tea.KeyEnter})
+	if m.confirmed {
+		t.Fatalf("enter while diff is active must not confirm decisions")
+	}
+	m = update(t, m, key('d'))
+	if m.confirmed {
+		t.Fatalf("closing diff must not confirm decisions")
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.confirmed {
+		t.Fatalf("enter from list should be the confirmation authority")
 	}
 }
 
@@ -211,5 +232,302 @@ func TestNoConflictsModelQuitsImmediately(t *testing.T) {
 	m := New(nil, nil)
 	if cmd := m.Init(); cmd == nil {
 		t.Fatalf("empty model Init should request quit")
+	}
+}
+
+func TestWindowSizeBoundsEveryRenderAndKeepsHelpAtTheFooter(t *testing.T) {
+	tests := []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{name: "zero", width: 0, height: 0},
+		{name: "single_cell", width: 1, height: 1},
+		{name: "tiny", width: 18, height: 6},
+		{name: "standard", width: 80, height: 24},
+		{name: "wide", width: 180, height: 30},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewWithTheme(sampleConflicts(), nil, uitheme.NoColor())
+			m = update(t, m, tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
+			view := m.View()
+			if tt.width == 0 || tt.height == 0 {
+				if view != "" {
+					t.Fatalf("View() = %q at zero size, want empty", view)
+				}
+				return
+			}
+
+			lines := strings.Split(view, "\n")
+			if len(lines) != tt.height {
+				t.Fatalf("rendered height = %d, want %d\n%s", len(lines), tt.height, view)
+			}
+			for i, line := range lines {
+				if got := uitheme.Width(line); got != tt.width {
+					t.Fatalf("line %d width = %d, want %d: %q", i, got, tt.width, line)
+				}
+			}
+			if tt.width >= 18 && (!strings.Contains(view, "up/k") || strings.TrimSpace(lines[len(lines)-1]) == "") {
+				t.Fatalf("footer help not kept at the bottom at %dx%d:\n%s", tt.width, tt.height, view)
+			}
+			if tt.width == 80 && tt.height == 24 && !strings.Contains(view, "adopt copies supported local regular-file content into the Source of Truth") {
+				t.Fatalf("80x24 view lost consequence copy:\n%s", view)
+			}
+		})
+	}
+}
+
+func TestTinyListShowsCompleteActiveConsequenceOutsideHelp(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      rune
+		decision install.ConflictDecision
+		want     string
+	}{
+		{name: "skip", key: 's', decision: install.DecisionSkip, want: "skip leaves the local target untouched"},
+		{name: "replace", key: 'r', decision: install.DecisionReplace, want: "replace backs it up and installs the Source of Truth"},
+		{name: "adopt", key: 'a', decision: install.DecisionAdopt, want: "adopt copies supported local regular-file content into the Source of Truth"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewWithTheme(sampleConflicts(), nil, uitheme.NoColor())
+			m = update(t, m, tea.WindowSizeMsg{Width: 18, Height: 6}, key(tt.key))
+			view := m.View()
+			normalized := strings.Join(strings.Fields(view), " ")
+			if !strings.Contains(normalized, tt.want) {
+				t.Fatalf("tiny view missing complete active consequence %q:\n%s", tt.want, view)
+			}
+			if !strings.Contains(view, fmt.Sprintf("> [%s]", tt.decision)) {
+				t.Fatalf("tiny view lost selected conflict and decision %q:\n%s", tt.decision, view)
+			}
+			lines := strings.Split(view, "\n")
+			if len(lines) != 6 {
+				t.Fatalf("tiny rendered height = %d, want 6\n%s", len(lines), view)
+			}
+			for i, line := range lines {
+				if got := uitheme.Width(line); got != 18 {
+					t.Fatalf("tiny line %d width = %d, want 18: %q", i, got, line)
+				}
+			}
+		})
+	}
+}
+
+func TestListViewportScrollsToKeepSelectedConflictVisible(t *testing.T) {
+	conflicts := make([]Conflict, 12)
+	for i := range conflicts {
+		conflicts[i] = Conflict{
+			Target:   fmt.Sprintf("/home/u/item-%02d", i),
+			Source:   fmt.Sprintf("source/item-%02d", i),
+			Strategy: "copy",
+		}
+	}
+	m := NewWithTheme(conflicts, nil, uitheme.NoColor())
+	m = update(t, m, tea.WindowSizeMsg{Width: 60, Height: 12}, key('G'))
+	if m.cursor != len(conflicts)-1 {
+		t.Fatalf("cursor = %d, want last row", m.cursor)
+	}
+	if m.listViewport.YOffset == 0 {
+		t.Fatalf("list viewport did not scroll to the last selected row")
+	}
+	if !strings.Contains(m.listViewport.View(), "/home/u/item-11") {
+		t.Fatalf("selected row is not visible:\n%s", m.listViewport.View())
+	}
+
+	m = update(t, m, key('g'))
+	if m.listViewport.YOffset != 0 || !strings.Contains(m.listViewport.View(), "/home/u/item-00") {
+		t.Fatalf("first row is not visible after g: offset=%d\n%s", m.listViewport.YOffset, m.listViewport.View())
+	}
+}
+
+func TestListStatusReportsPositionAndTentativeDecisionCounts(t *testing.T) {
+	conflicts := append(sampleConflicts(), Conflict{Target: "/home/u/.tmux.conf", Source: "configs/tmux/tmux.conf", Strategy: "copy"})
+	m := NewWithTheme(conflicts, nil, uitheme.NoColor())
+	m = update(t, m, key('r'), key('j'), key('a'))
+	view := m.View()
+	if want := "Conflict 2/3 | tentative: skip 1 | replace 1 | adopt 1"; !strings.Contains(view, want) {
+		t.Fatalf("view missing %q:\n%s", want, view)
+	}
+}
+
+func TestGeneratedHelpShowsActiveAliases(t *testing.T) {
+	m := NewWithTheme(sampleConflicts(), func(Conflict) string { return "diff" }, uitheme.NoColor())
+	m = update(t, m, tea.WindowSizeMsg{Width: 320, Height: 24})
+	listView := m.View()
+	listHelp := strings.Join(strings.Fields(listView), " ")
+	for _, want := range []string{
+		"up/k up",
+		"down/j down",
+		"home/g first",
+		"end/G last",
+		"enter apply",
+		"q/esc cancel",
+		"ctrl+c cancel",
+	} {
+		if !strings.Contains(listHelp, want) {
+			t.Fatalf("list help missing %q:\n%s", want, listView)
+		}
+	}
+
+	m = update(t, m, key('d'))
+	diffView := m.View()
+	diffHelp := strings.Join(strings.Fields(diffView), " ")
+	for _, want := range []string{
+		"up/k line up",
+		"down/j line down",
+		"pgup/b page up",
+		"pgdn/f page down",
+		"home/g top",
+		"end/G bottom",
+		"d close",
+		"q/esc cancel",
+		"ctrl+c cancel",
+	} {
+		if !strings.Contains(diffHelp, want) {
+			t.Fatalf("diff help missing %q:\n%s", want, diffView)
+		}
+	}
+}
+
+func TestNoColorViewKeepsMeaningWithoutANSIOrUnicodeOnlyCues(t *testing.T) {
+	m := NewWithTheme(sampleConflicts(), nil, uitheme.NoColor())
+	view := m.View()
+	if strings.Contains(view, "\x1b[") {
+		t.Fatalf("no-color view contains ANSI escapes: %q", view)
+	}
+	for _, r := range view {
+		if r > 127 {
+			t.Fatalf("no-color view contains non-ASCII cue %q", r)
+		}
+	}
+	for _, want := range []string{"> [skip]", "[skip]", "skip leaves", "replace backs", "adopt copies"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("no-color view missing textual/glyph meaning %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestDiffViewportUsesInjectedProviderOnceAndSupportsNavigation(t *testing.T) {
+	called := 0
+	lines := make([]string, 40)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("diff line %02d", i+1)
+	}
+	m := NewWithTheme(sampleConflicts(), func(c Conflict) string {
+		called++
+		return strings.Join(lines, "\n")
+	}, uitheme.NoColor())
+	m = update(t, m, tea.WindowSizeMsg{Width: 50, Height: 12})
+
+	// Resizing and rendering must never request diff content.
+	_ = m.View()
+	if called != 0 {
+		t.Fatalf("diff provider called before d: %d", called)
+	}
+	m = update(t, m, key('d'))
+	if called != 1 {
+		t.Fatalf("diff provider calls after d = %d, want 1", called)
+	}
+	if m.diffViewport.YOffset != 0 {
+		t.Fatalf("new diff offset = %d, want top", m.diffViewport.YOffset)
+	}
+
+	m = update(t, m, key('j'))
+	if m.diffViewport.YOffset != 1 {
+		t.Fatalf("offset after line down = %d, want 1", m.diffViewport.YOffset)
+	}
+	m = update(t, m, key('k'))
+	if m.diffViewport.YOffset != 0 {
+		t.Fatalf("offset after line up = %d, want 0", m.diffViewport.YOffset)
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyDown})
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyPgDown})
+	if m.diffViewport.YOffset <= 1 {
+		t.Fatalf("page down did not advance diff: offset=%d", m.diffViewport.YOffset)
+	}
+	afterPageDown := m.diffViewport.YOffset
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyPgUp})
+	if m.diffViewport.YOffset >= afterPageDown {
+		t.Fatalf("page up did not move toward top: before=%d after=%d", afterPageDown, m.diffViewport.YOffset)
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyEnd})
+	if !m.diffViewport.AtBottom() || !strings.Contains(m.View(), "100%") {
+		t.Fatalf("end did not reach bottom: offset=%d\n%s", m.diffViewport.YOffset, m.View())
+	}
+	m = update(t, m, tea.KeyMsg{Type: tea.KeyHome})
+	if !m.diffViewport.AtTop() || !strings.Contains(m.View(), "Diff lines 1-") {
+		t.Fatalf("home did not return to top: offset=%d\n%s", m.diffViewport.YOffset, m.View())
+	}
+
+	m = update(t, m, key('d'))
+	if m.showDiff || m.Canceled() {
+		t.Fatalf("d should close diff without canceling the list")
+	}
+	if called != 1 {
+		t.Fatalf("closing or navigating called provider again: %d", called)
+	}
+}
+
+func TestDiffWindowSizeBoundsEveryRenderWithoutCallingProviderAgain(t *testing.T) {
+	called := 0
+	m := NewWithTheme(sampleConflicts(), func(Conflict) string {
+		called++
+		return strings.Repeat("long diff line\n", 30)
+	}, uitheme.NoColor())
+	m = update(t, m, key('d'))
+
+	for _, size := range []tea.WindowSizeMsg{
+		{Width: 0, Height: 0},
+		{Width: 18, Height: 6},
+		{Width: 80, Height: 24},
+		{Width: 180, Height: 30},
+	} {
+		m = update(t, m, size)
+		view := m.View()
+		if size.Width == 0 || size.Height == 0 {
+			if view != "" {
+				t.Fatalf("zero-sized diff view = %q, want empty", view)
+			}
+			continue
+		}
+		lines := strings.Split(view, "\n")
+		if len(lines) != size.Height {
+			t.Fatalf("diff height at %dx%d = %d, want %d", size.Width, size.Height, len(lines), size.Height)
+		}
+		for i, line := range lines {
+			if got := uitheme.Width(line); got != size.Width {
+				t.Fatalf("diff line %d width at %dx%d = %d", i, size.Width, size.Height, got)
+			}
+		}
+	}
+	if called != 1 {
+		t.Fatalf("provider calls after diff resizes = %d, want 1", called)
+	}
+}
+
+func TestCtrlCCancelsBeforeActiveDiffHandlesTheKey(t *testing.T) {
+	m := New(sampleConflicts(), func(Conflict) string { return "diff" })
+	m = update(t, m, key('r'), key('d'))
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = next.(Model)
+	if cmd == nil || !m.Canceled() || !m.quitting {
+		t.Fatalf("ctrl+c in diff must globally cancel and quit")
+	}
+	if decisions := m.Decisions(); len(decisions) != 0 {
+		t.Fatalf("ctrl+c in diff leaked tentative decisions: %v", decisions)
+	}
+}
+
+func TestDClosesDiffWithoutCanceling(t *testing.T) {
+	m := New(sampleConflicts(), func(Conflict) string { return "diff" })
+	m = update(t, m, key('r'), key('d'), key('d'))
+	if m.showDiff || m.Canceled() || m.confirmed {
+		t.Fatalf("d should return to the list without canceling or confirming")
+	}
+	if got := m.Decisions()["/home/u/.gitconfig"]; got != install.DecisionReplace {
+		t.Fatalf("d should preserve tentative draft, got %q", got)
 	}
 }

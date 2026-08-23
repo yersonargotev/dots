@@ -9,7 +9,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/yersonargotev/dots/internal/tui/theme"
 )
 
 // State is an observed selector component state.
@@ -111,19 +118,28 @@ const (
 
 // Model is the Bubble Tea model for selecting Tags.
 type Model struct {
-	data          BrowseData
-	selected      []bool
-	initial       []bool
-	cursor        int
-	previewFunc   PreviewFunc
-	screen        screen
-	query         string
-	profile       int
-	detail        int
-	width         int
-	height        int
-	detailScroll  int
-	previewScroll int
+	data        BrowseData
+	selected    []bool
+	initial     []bool
+	cursor      int
+	previewFunc PreviewFunc
+	screen      screen
+	profile     int
+	detail      int
+	width       int
+	height      int
+	sized       bool
+	theme       theme.Theme
+	keys        keyMap
+	help        help.Model
+	searchInput textinput.Model
+	clearEntry  textinput.Model
+	spinner     spinner.Model
+	browse      viewport.Model
+	profiles    viewport.Model
+	detailView  viewport.Model
+	previewView viewport.Model
+	confirmView viewport.Model
 
 	nextRequest  uint64
 	pending      *previewRequest
@@ -153,6 +169,13 @@ type previewResponse struct {
 
 // New builds a model with detached browse data and desired checkbox state.
 func New(browseData BrowseData, initial []string, preview PreviewFunc) Model {
+	return NewWithTheme(browseData, initial, preview, theme.Default())
+}
+
+// NewWithTheme builds a model using an explicit semantic theme. It exists so
+// callers and tests can select the shared no-color rendering path without
+// changing any selection behavior.
+func NewWithTheme(browseData BrowseData, initial []string, preview PreviewFunc, visualTheme theme.Theme) Model {
 	browseData = cloneBrowseData(browseData)
 	initialSet := make(map[string]bool, len(initial))
 	for _, name := range initial {
@@ -162,7 +185,56 @@ func New(browseData BrowseData, initial []string, preview PreviewFunc) Model {
 	for i, tag := range browseData.Tags {
 		selected[i] = initialSet[tag.Name]
 	}
-	return Model{data: browseData, selected: selected, initial: append([]bool(nil), selected...), previewFunc: preview}
+	searchInput := textinput.New()
+	searchInput.Prompt = "Search: "
+	searchInput.Placeholder = "Tag name or description"
+	visualTheme.ApplyTextInput(&searchInput)
+
+	clearEntry := textinput.New()
+	clearEntry.Prompt = "management: "
+	clearEntry.Placeholder = "exact lowercase ASCII"
+	visualTheme.ApplyTextInput(&clearEntry)
+
+	helpModel := help.New()
+	helpModel.ShortSeparator = " · "
+	visualTheme.ApplyHelp(&helpModel)
+
+	spinnerModel := spinner.New(spinner.WithSpinner(spinner.Line))
+	visualTheme.ApplySpinner(&spinnerModel)
+
+	canonicalKeys := newKeyMap()
+	model := Model{
+		data:        browseData,
+		selected:    selected,
+		initial:     append([]bool(nil), selected...),
+		previewFunc: preview,
+		theme:       visualTheme,
+		keys:        canonicalKeys,
+		help:        helpModel,
+		searchInput: searchInput,
+		clearEntry:  clearEntry,
+		spinner:     spinnerModel,
+		browse:      newViewport(visualTheme, canonicalKeys),
+		profiles:    newViewport(visualTheme, canonicalKeys),
+		detailView:  newViewport(visualTheme, canonicalKeys),
+		previewView: newViewport(visualTheme, canonicalKeys),
+		confirmView: newViewport(visualTheme, canonicalKeys),
+	}
+	model.syncComponents()
+	return model
+}
+
+func newViewport(visualTheme theme.Theme, canonicalKeys keyMap) viewport.Model {
+	model := viewport.New(0, 0)
+	model.MouseWheelEnabled = true
+	model.Style = visualTheme.Body
+	model.KeyMap = viewport.KeyMap{
+		PageDown: canonicalKeys.PageDown,
+		PageUp:   canonicalKeys.PageUp,
+		Down:     canonicalKeys.Down,
+		Up:       canonicalKeys.Up,
+	}
+	return model
 }
 
 func cloneBrowseData(c BrowseData) BrowseData {
@@ -188,208 +260,303 @@ func cloneBrowseData(c BrowseData) BrowseData {
 // Init starts the model without side effects.
 func (m Model) Init() tea.Cmd { return nil }
 
-// Update applies navigation and draft checkbox changes.
+// Update applies navigation and draft checkbox changes while routing messages
+// only to the Bubbles component active on the current screen.
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
-	if response, ok := message.(previewResponse); ok {
-		return m.acceptPreview(response), nil
-	}
-	if size, ok := message.(tea.WindowSizeMsg); ok {
-		m.width = size.Width
-		m.height = size.Height
-		return m, nil
-	}
-	key, ok := message.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	if key.Type == tea.KeyCtrlC || (m.screen != screenSearch && key.String() == "q") {
+	if pressed, ok := message.(tea.KeyMsg); ok && key.Matches(pressed, m.keys.Cancel) {
 		return m.cancel(), tea.Quit
 	}
-	if m.screen == screenSearch {
-		switch key.Type {
-		case tea.KeyEsc:
-			m.screen = screenList
-			m.query = ""
-			m.cursor = 0
-		case tea.KeyEnter:
-			m.screen = screenList
-		case tea.KeyDown:
-			if m.cursor+1 < len(m.visibleTags()) {
-				m.cursor++
-			}
-		case tea.KeyUp:
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case tea.KeyBackspace, tea.KeyDelete:
-			if len(m.query) > 0 {
-				runes := []rune(m.query)
-				m.query = string(runes[:len(runes)-1])
-				m.cursor = 0
-			}
-		case tea.KeyRunes:
-			m.query += string(key.Runes)
-			m.cursor = 0
-		}
+	if response, ok := message.(previewResponse); ok {
+		m = m.acceptPreview(response)
+		m.syncComponents()
 		return m, nil
 	}
-	if m.screen == screenLoading {
-		if key.Type == tea.KeyEsc {
-			m.pending = nil
-			m.screen = screenList
-		}
+	if size, ok := message.(tea.WindowSizeMsg); ok {
+		m.width = theme.Clamp(size.Width)
+		m.height = theme.Clamp(size.Height)
+		m.sized = true
+		m.syncComponents()
 		return m, nil
 	}
-	if m.screen == screenPreview {
-		switch key.Type {
-		case tea.KeyEsc:
-			m.accepted = Preview{}
-			m.previewTags = nil
-			m.previewScroll = 0
+
+	if pressed, ok := message.(tea.KeyMsg); ok && m.screen != screenSearch && key.Matches(pressed, m.keys.Quit) {
+		return m.cancel(), tea.Quit
+	}
+
+	switch m.screen {
+	case screenSearch:
+		return m.updateSearch(message)
+	case screenProfiles:
+		return m.updateProfiles(message)
+	case screenDetail:
+		return m.updateDetail(message)
+	case screenLoading:
+		return m.updateLoading(message)
+	case screenPreview:
+		return m.updatePreview(message)
+	case screenReductionConfirmation:
+		return m.updateReduction(message)
+	case screenClearConfirmation:
+		return m.updateClear(message)
+	default:
+		return m.updateBrowse(message)
+	}
+}
+
+func (m Model) updateSearch(message tea.Msg) (tea.Model, tea.Cmd) {
+	if pressed, ok := message.(tea.KeyMsg); ok {
+		switch {
+		case key.Matches(pressed, m.keys.Down):
+			m.cursor = min(max(0, len(m.visibleTags())-1), m.cursor+1)
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.Up):
+			m.cursor = max(0, m.cursor-1)
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.Back):
+			m.searchInput.Reset()
+			m.searchInput.Blur()
+			m.cursor = 0
 			m.screen = screenList
-		case tea.KeyEnter:
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.Accept):
+			m.searchInput.Blur()
+			m.screen = screenList
+			m.syncComponents()
+			return m, nil
+		}
+	}
+	before := m.searchInput.Value()
+	var cmd tea.Cmd
+	m.searchInput, cmd = m.searchInput.Update(message)
+	if m.searchInput.Value() != before {
+		m.cursor = 0
+		m.syncComponents()
+	}
+	return m, batch(cmd)
+}
+
+func (m Model) updateBrowse(message tea.Msg) (tea.Model, tea.Cmd) {
+	pressed, isKey := message.(tea.KeyMsg)
+	if isKey {
+		visible := m.visibleTags()
+		switch {
+		case key.Matches(pressed, m.keys.Down):
+			m.cursor = min(max(0, len(visible)-1), m.cursor+1)
+		case key.Matches(pressed, m.keys.Up):
+			m.cursor = max(0, m.cursor-1)
+		case key.Matches(pressed, m.keys.PageDown):
+			m.cursor = min(max(0, len(visible)-1), m.cursor+max(1, m.browse.Height-1))
+		case key.Matches(pressed, m.keys.PageUp):
+			m.cursor = max(0, m.cursor-max(1, m.browse.Height-1))
+		case key.Matches(pressed, m.keys.Home):
+			m.cursor = 0
+		case key.Matches(pressed, m.keys.End):
+			m.cursor = max(0, len(visible)-1)
+		case key.Matches(pressed, m.keys.Toggle):
+			if m.cursor >= 0 && m.cursor < len(visible) {
+				index := visible[m.cursor]
+				m.selected[index] = !m.selected[index]
+			}
+		case key.Matches(pressed, m.keys.Search):
+			m.screen = screenSearch
+			m.cursor = 0
+			cmd := m.searchInput.Focus()
+			m.syncComponents()
+			return m, batch(cmd)
+		case key.Matches(pressed, m.keys.Profiles):
+			m.screen = screenProfiles
+			m.profile = 0
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.Details):
+			if m.cursor >= 0 && m.cursor < len(visible) {
+				m.detail = visible[m.cursor]
+				m.detailView.GotoTop()
+				m.screen = screenDetail
+				m.syncComponents()
+			}
+			return m, nil
+		case key.Matches(pressed, m.previewAction()):
+			return m.startPreview()
+		case key.Matches(pressed, m.keys.Back):
+			return m.cancel(), tea.Quit
+		}
+		m.syncComponents()
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.browse, cmd = m.browse.Update(message)
+	return m, batch(cmd)
+}
+
+func (m Model) updateProfiles(message tea.Msg) (tea.Model, tea.Cmd) {
+	if pressed, ok := message.(tea.KeyMsg); ok {
+		switch {
+		case key.Matches(pressed, m.keys.Down):
+			m.profile = min(max(0, len(m.data.Profiles)-1), m.profile+1)
+		case key.Matches(pressed, m.keys.Up):
+			m.profile = max(0, m.profile-1)
+		case key.Matches(pressed, m.keys.PageDown):
+			m.profile = min(max(0, len(m.data.Profiles)-1), m.profile+max(1, m.profiles.Height/2))
+		case key.Matches(pressed, m.keys.PageUp):
+			m.profile = max(0, m.profile-max(1, m.profiles.Height/2))
+		case key.Matches(pressed, m.keys.Home):
+			m.profile = 0
+		case key.Matches(pressed, m.keys.End):
+			m.profile = max(0, len(m.data.Profiles)-1)
+		case key.Matches(pressed, m.keys.ProfileToggle):
+			m.toggleProfile()
+		case key.Matches(pressed, m.keys.Back), key.Matches(pressed, m.keys.Profiles):
+			m.screen = screenList
+			m.syncComponents()
+			return m, nil
+		}
+		m.syncComponents()
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.profiles, cmd = m.profiles.Update(message)
+	return m, batch(cmd)
+}
+
+func (m Model) updateDetail(message tea.Msg) (tea.Model, tea.Cmd) {
+	if pressed, ok := message.(tea.KeyMsg); ok {
+		switch {
+		case key.Matches(pressed, m.keys.Return):
+			m.detailView.GotoTop()
+			m.screen = screenList
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.Home):
+			m.detailView.GotoTop()
+			return m, nil
+		case key.Matches(pressed, m.keys.End):
+			m.detailView.GotoBottom()
+			return m, nil
+		}
+	}
+	var cmd tea.Cmd
+	m.detailView, cmd = m.detailView.Update(message)
+	return m, batch(cmd)
+}
+
+func (m Model) updateLoading(message tea.Msg) (tea.Model, tea.Cmd) {
+	if pressed, ok := message.(tea.KeyMsg); ok && key.Matches(pressed, m.keys.Back) {
+		m.pending = nil
+		m.screen = screenList
+		m.syncComponents()
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.spinner, cmd = m.spinner.Update(message)
+	return m, batch(cmd)
+}
+
+func (m Model) updatePreview(message tea.Msg) (tea.Model, tea.Cmd) {
+	if pressed, ok := message.(tea.KeyMsg); ok {
+		switch {
+		case key.Matches(pressed, m.keys.Back):
+			m = m.abandonPreview()
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.Preview):
 			switch m.confirmation() {
 			case ConfirmationReduction:
 				m.screen = screenReductionConfirmation
+				m.confirmView.GotoTop()
+				m.syncComponents()
 				return m, nil
 			case ConfirmationClear:
 				m.screen = screenClearConfirmation
-				return m, nil
+				m.clearEntry.Reset()
+				cmd := m.clearEntry.Focus()
+				m.confirmView.GotoTop()
+				m.syncComponents()
+				return m, batch(cmd)
 			}
 			m.finished = true
 			m.quitting = true
 			return m, tea.Quit
+		case key.Matches(pressed, m.keys.Home):
+			m.previewView.GotoTop()
+			return m, nil
+		case key.Matches(pressed, m.keys.End):
+			m.previewView.GotoBottom()
+			return m, nil
 		}
-		return m.scrollPreview(key), nil
 	}
-	if m.screen == screenReductionConfirmation {
-		switch key.Type {
-		case tea.KeyEnter:
+	var cmd tea.Cmd
+	m.previewView, cmd = m.previewView.Update(message)
+	return m, batch(cmd)
+}
+
+func (m Model) updateReduction(message tea.Msg) (tea.Model, tea.Cmd) {
+	if pressed, ok := message.(tea.KeyMsg); ok {
+		switch {
+		case key.Matches(pressed, m.keys.Acknowledge):
 			return m.finishAcknowledged(), tea.Quit
-		case tea.KeyEsc:
-			return m.abandonPreview(), nil
+		case key.Matches(pressed, m.keys.Decline):
+			m = m.abandonPreview()
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.Home):
+			m.confirmView.GotoTop()
+			return m, nil
+		case key.Matches(pressed, m.keys.End):
+			m.confirmView.GotoBottom()
+			return m, nil
 		}
-		switch key.String() {
-		case "y":
-			return m.finishAcknowledged(), tea.Quit
-		case "n":
-			return m.abandonPreview(), nil
-		}
-		return m.scrollPreview(key), nil
 	}
-	if m.screen == screenClearConfirmation {
-		switch key.Type {
-		case tea.KeyEsc:
-			return m.abandonPreview(), nil
-		case tea.KeyEnter:
-			if m.clearInput == string(ConfirmationClear) {
+	var cmd tea.Cmd
+	m.confirmView, cmd = m.confirmView.Update(message)
+	return m, batch(cmd)
+}
+
+func (m Model) updateClear(message tea.Msg) (tea.Model, tea.Cmd) {
+	if pressed, ok := message.(tea.KeyMsg); ok {
+		switch {
+		case key.Matches(pressed, m.keys.Back):
+			m = m.abandonPreview()
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.Preview):
+			if m.clearEntry.Value() == string(ConfirmationClear) {
 				return m.finishAcknowledged(), tea.Quit
 			}
 			m.clearError = `Confirmation did not match; type exactly "clear".`
-		case tea.KeyBackspace, tea.KeyDelete:
-			if len(m.clearInput) > 0 {
-				runes := []rune(m.clearInput)
-				m.clearInput = string(runes[:len(runes)-1])
-			}
-			m.clearError = ""
-		case tea.KeyRunes:
-			m.clearInput += string(key.Runes)
-			m.clearError = ""
+			m.syncComponents()
+			return m, nil
+		case key.Matches(pressed, m.keys.PageUp), key.Matches(pressed, m.keys.PageDown):
+			var cmd tea.Cmd
+			m.confirmView, cmd = m.confirmView.Update(message)
+			return m, batch(cmd)
 		}
-		return m, nil
 	}
-	if m.screen == screenProfiles {
-		switch key.String() {
-		case "j", "down":
-			if m.profile+1 < len(m.data.Profiles) {
-				m.profile++
-			}
-		case "k", "up":
-			if m.profile > 0 {
-				m.profile--
-			}
-		case " ", "enter":
-			m.toggleProfile()
-		case "esc", "p":
-			m.screen = screenList
-		}
-		return m, nil
+	before := m.clearEntry.Value()
+	var cmd tea.Cmd
+	m.clearEntry, cmd = m.clearEntry.Update(message)
+	m.clearInput = m.clearEntry.Value()
+	if before != m.clearInput {
+		m.clearError = ""
+		m.syncComponents()
 	}
-	if m.screen == screenDetail {
-		switch key.String() {
-		case "esc", "left", "d":
-			m.detailScroll = 0
-			m.screen = screenList
-		case "j", "down":
-			m.detailScroll = scrolledOffset(m.detailScroll, 1, len(m.detailContentLines()), m.detailBodyHeight())
-		case "k", "up":
-			m.detailScroll = scrolledOffset(m.detailScroll, -1, len(m.detailContentLines()), m.detailBodyHeight())
-		case "pgdown":
-			m.detailScroll = scrolledOffset(m.detailScroll, max(1, m.detailBodyHeight()-2), len(m.detailContentLines()), m.detailBodyHeight())
-		case "pgup":
-			m.detailScroll = scrolledOffset(m.detailScroll, -max(1, m.detailBodyHeight()-2), len(m.detailContentLines()), m.detailBodyHeight())
-		case "home":
-			m.detailScroll = 0
-		case "end":
-			m.detailScroll = clampScrollOffset(len(m.detailContentLines()), m.detailBodyHeight(), len(m.detailContentLines()))
-		}
-		return m, nil
-	}
-	switch key.String() {
-	case "j", "down":
-		if m.cursor+1 < len(m.visibleTags()) {
-			m.cursor++
-		}
-	case "k", "up":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case " ":
-		visible := m.visibleTags()
-		if m.cursor >= 0 && m.cursor < len(visible) {
-			i := visible[m.cursor]
-			m.selected[i] = !m.selected[i]
-		}
-	case "/":
-		m.screen = screenSearch
-		m.query = ""
-		m.cursor = 0
-	case "p":
-		m.screen = screenProfiles
-		m.profile = 0
-	case "d", "right":
-		visible := m.visibleTags()
-		if m.cursor >= 0 && m.cursor < len(visible) {
-			m.detail = visible[m.cursor]
-			m.detailScroll = 0
-			m.screen = screenDetail
-		}
-	case "enter":
-		return m.startPreview()
-	case "esc":
-		return m.cancel(), tea.Quit
-	}
-	return m, nil
+	return m, batch(cmd)
 }
 
-func (m Model) scrollPreview(key tea.KeyMsg) Model {
-	bodyHeight := m.previewBodyHeight()
-	contentLines := len(m.previewContentLines())
-	switch key.String() {
-	case "j", "down":
-		m.previewScroll = scrolledOffset(m.previewScroll, 1, contentLines, bodyHeight)
-	case "k", "up":
-		m.previewScroll = scrolledOffset(m.previewScroll, -1, contentLines, bodyHeight)
-	case "pgdown":
-		m.previewScroll = scrolledOffset(m.previewScroll, max(1, bodyHeight-2), contentLines, bodyHeight)
-	case "pgup":
-		m.previewScroll = scrolledOffset(m.previewScroll, -max(1, bodyHeight-2), contentLines, bodyHeight)
-	case "home":
-		m.previewScroll = 0
-	case "end":
-		m.previewScroll = clampScrollOffset(contentLines, bodyHeight, contentLines)
+func batch(commands ...tea.Cmd) tea.Cmd {
+	nonNil := commands[:0]
+	for _, command := range commands {
+		if command != nil {
+			nonNil = append(nonNil, command)
+		}
 	}
-	return m
+	if len(nonNil) == 0 {
+		return nil
+	}
+	return tea.Batch(nonNil...)
 }
 
 func (m Model) startPreview() (tea.Model, tea.Cmd) {
@@ -405,12 +572,15 @@ func (m Model) startPreview() (tea.Model, tea.Cmd) {
 	m.previewTags = nil
 	m.previewError = ""
 	m.clearInput = ""
+	m.clearEntry.Reset()
+	m.clearEntry.Blur()
 	m.clearError = ""
 	m.acknowledged = false
-	m.previewScroll = 0
+	m.previewView.GotoTop()
+	m.confirmView.GotoTop()
 	m.screen = screenLoading
 	provider := m.previewFunc
-	return m, func() tea.Msg {
+	previewCommand := func() tea.Msg {
 		if provider == nil {
 			return previewResponse{id: request.id, fingerprint: request.fingerprint, err: errors.New("preview is unavailable")}
 		}
@@ -418,6 +588,7 @@ func (m Model) startPreview() (tea.Model, tea.Cmd) {
 		preview, err := provider(request.id, input)
 		return previewResponse{id: request.id, fingerprint: request.fingerprint, preview: preview, err: err}
 	}
+	return m, batch(m.spinner.Tick, previewCommand)
 }
 
 func (m Model) acceptPreview(response previewResponse) Model {
@@ -434,7 +605,7 @@ func (m Model) acceptPreview(response previewResponse) Model {
 	m.accepted = response.preview
 	m.previewTags = cloneStrings(request.tags)
 	m.previewError = ""
-	m.previewScroll = 0
+	m.previewView.GotoTop()
 	m.screen = screenPreview
 	return m
 }
@@ -456,8 +627,9 @@ func (m Model) finishAcknowledged() Model {
 func (m Model) abandonPreview() Model {
 	m.accepted = Preview{}
 	m.previewTags = nil
-	m.previewScroll = 0
 	m.clearInput = ""
+	m.clearEntry.Reset()
+	m.clearEntry.Blur()
 	m.clearError = ""
 	m.acknowledged = false
 	m.screen = screenList
@@ -469,6 +641,9 @@ func (m Model) cancel() Model {
 	m.accepted = Preview{}
 	m.previewTags = nil
 	m.clearInput = ""
+	m.searchInput.Blur()
+	m.clearEntry.Reset()
+	m.clearEntry.Blur()
 	m.clearError = ""
 	m.acknowledged = false
 	m.canceled = true
@@ -511,7 +686,7 @@ func (m *Model) toggleProfile() {
 }
 
 func (m Model) visibleTags() []int {
-	query := strings.ToLower(m.query)
+	query := strings.ToLower(m.searchInput.Value())
 	visible := make([]int, 0, len(m.data.Tags))
 	for i, tag := range m.data.Tags {
 		if query == "" || strings.Contains(strings.ToLower(tag.Name), query) || strings.Contains(strings.ToLower(tag.Description), query) {
@@ -557,141 +732,240 @@ func (m Model) View() string {
 	if m.quitting {
 		return ""
 	}
-	if m.screen == screenLoading {
-		return "dots · Loading preview…\n\nEsc returns to selection · q/ctrl+c cancel\n"
+	var content string
+	switch m.screen {
+	case screenProfiles:
+		content = m.viewProfiles()
+	case screenDetail:
+		content = m.viewDetail()
+	case screenLoading:
+		content = m.viewLoading()
+	case screenPreview:
+		content = m.viewPreview()
+	case screenReductionConfirmation:
+		content = m.viewReductionConfirmation()
+	case screenClearConfirmation:
+		content = m.viewClearConfirmation()
+	default:
+		content = m.viewList()
 	}
-	if m.screen == screenPreview {
-		return m.viewPreview()
+	if m.sized {
+		return m.theme.Paint(content, m.width, m.height)
 	}
-	if m.screen == screenReductionConfirmation {
-		return m.viewReductionConfirmation()
-	}
-	if m.screen == screenClearConfirmation {
-		return m.viewClearConfirmation()
-	}
-	if m.screen == screenProfiles {
-		return m.viewProfiles()
-	}
-	if m.screen == screenDetail {
-		return m.viewDetail()
-	}
-	return m.viewList()
+	return strings.TrimSuffix(content, "\n") + "\n"
 }
 
 func (m Model) viewList() string {
-	header := []string{"dots · select Tags"}
-	if m.screen == screenSearch {
-		header = append(header, "Search: "+m.query)
-	} else if m.query != "" {
-		header = append(header, "Filter: "+m.query)
-	}
-	if m.previewError != "" {
-		header = append(header, "Preview error: "+m.previewError)
-	}
-
-	help := "/ search · space toggle · p profiles · d details · enter preview · q cancel"
-	if m.screen == screenSearch {
-		help = "type to search · enter accept · esc clear · ctrl+c cancel"
-	}
-	footer := []string{"", help}
-	lines, cursorLine := m.listLines()
-
-	var detail []string
-	visible := m.visibleTags()
-	if m.width >= 100 && m.cursor >= 0 && m.cursor < len(visible) {
-		detail = append([]string{""}, splitRendered(m.viewDetailFor(visible[m.cursor]))...)
-		if m.height > 0 && len(detail) > m.height/2 {
-			detail = scrollPage(detail, 0, max(1, m.height/2))
+	title := "dots · select Tags"
+	if m.compact() {
+		title = "dots · Tags"
+		if m.searchInput.Value() != "" {
+			title = "dots · Tags*"
 		}
 	}
-	bodyHeight := availableBodyHeight(m.height, len(header)+len(footer)+len(detail))
-	if bodyHeight < 3 && len(detail) > 0 {
-		detail = nil
-		bodyHeight = availableBodyHeight(m.height, len(header)+len(footer))
+	compactError := m.compact() && m.previewError != ""
+	lines := []string{}
+	if !compactError {
+		lines = append(lines, m.theme.Title.Render(title))
 	}
-	body := cursorPage(lines, cursorLine, bodyHeight)
-	return renderLines(append(append(append(header, body...), footer...), detail...))
+	if !m.compact() {
+		lines = append(lines, m.theme.Secondary.Render(m.selectionSummary()))
+	}
+	if m.screen == screenSearch {
+		lines = append(lines, m.searchInput.View())
+	} else if m.searchInput.Value() != "" && !m.compact() {
+		lines = append(lines, m.theme.FocusAlt.Render("Filter: "+m.searchInput.Value()))
+	}
+
+	body := m.viewportBody(m.browse)
+	if m.width >= wideBreakpoint && m.screen != screenSearch {
+		body = lipgloss.JoinHorizontal(lipgloss.Top, body, "  ", m.viewportBody(m.detailView))
+	}
+	lines = appendIfVisible(lines, body)
+	if m.previewError != "" {
+		if compactError {
+			lines = append(lines, m.theme.Error.Render(m.compactPreviewError()))
+		} else {
+			lines = append(lines, m.theme.Error.Render(m.previewErrorText()))
+		}
+	} else if status := viewportStatus(m.browse); status != "" {
+		lines = append(lines, m.theme.Secondary.Render(status))
+	}
+	if m.compact() && m.screen != screenSearch {
+		action := m.keys.Toggle
+		if compactError {
+			action = m.keys.Retry
+		}
+		lines = append(lines, m.help.ShortHelpView([]key.Binding{action}))
+	} else if !m.compact() {
+		lines = append(lines, m.help.View(m.activeHelp()))
+	}
+	return strings.Join(lines, "\n")
 }
 
-func (m Model) listLines() ([]string, int) {
-	lines := []string{}
+func (m Model) previewErrorText() string {
+	return m.theme.Glyphs.Error + " Preview error: " + strings.TrimSpace(m.previewError)
+}
+
+func (m Model) compactPreviewError() string {
+	prefix := "error:"
+	cause := strings.TrimSpace(m.previewError)
+	if cause == "" {
+		cause = "unknown"
+	}
+	wrapped := theme.Wrap(cause, max(1, m.width-theme.Width(prefix)))
+	if first, _, ok := strings.Cut(wrapped, "\n"); ok {
+		wrapped = first
+	}
+	return prefix + wrapped
+}
+
+func (m Model) listContent(width int) (string, int) {
+	var lines []string
 	cursorLine := 0
 	lastGroup := ""
 	for position, i := range m.visibleTags() {
 		tag := m.data.Tags[i]
-		if tag.Group != lastGroup {
-			lines = append(lines, "", tag.Group)
+		if !m.compact() && tag.Group != lastGroup {
+			if len(lines) > 0 {
+				lines = append(lines, "")
+			}
+			lines = append(lines, m.theme.Secondary.Render(tag.Group))
 			lastGroup = tag.Group
 		}
-		cursor := "  "
+		cursor := " "
 		if position == m.cursor {
-			cursor = "> "
+			cursor = m.theme.Glyphs.Cursor
 			cursorLine = len(lines)
 		}
-		checkbox := " "
+		checkbox := m.theme.Glyphs.Unchecked
 		if m.selected[i] {
-			checkbox = "x"
+			checkbox = m.theme.Glyphs.Checked
 		}
-		row := fmt.Sprintf("%s[%s] %s", cursor, checkbox, tag.Name)
-		if tag.Description != "" {
+		row := fmt.Sprintf("%s %s %s", cursor, checkbox, tag.Name)
+		if !m.compact() && tag.Description != "" {
 			row += " — " + tag.Description
 		}
-		if tag.State != "" {
+		if !m.compact() && tag.State != "" {
 			row += fmt.Sprintf(" (%s)", tag.State)
 		}
-		lines = append(lines, row)
+		style := m.theme.Body
+		if position == m.cursor {
+			style = m.theme.Selected
+		}
+		wrapped := splitLines(theme.Wrap(style.Render(row), width))
+		if len(wrapped) == 0 {
+			wrapped = []string{""}
+		}
+		lines = append(lines, wrapped...)
+		if m.compact() {
+			lines = append(lines, m.theme.Secondary.Render("state: "+valueOrNone(string(tag.State))))
+		}
 	}
 	if len(lines) == 0 {
-		return []string{"", "No matching Tags."}, 1
+		return m.theme.Secondary.Render("No matching Tags."), 0
 	}
-	return lines, cursorLine
+	return strings.Join(lines, "\n"), cursorLine
 }
 
 func (m Model) viewPreview() string {
-	header := []string{"dots · selection preview", ""}
-	footer := []string{"", "j/k scroll · pgup/pgdown · enter confirm · esc back · q/ctrl+c cancel"}
-	body := scrollPage(m.previewContentLines(), m.previewScroll, m.previewBodyHeight())
-	return renderLines(append(append(header, body...), footer...))
+	title := "dots · selection preview"
+	if m.compact() {
+		title = "dots · preview"
+	}
+	summary := "Selection Reconciliation Plan · " + valueOrReady(viewportStatus(m.previewView))
+	if m.compact() {
+		summary = "plan"
+	}
+	lines := []string{m.theme.Title.Render(title), m.theme.Secondary.Render(summary)}
+	lines = appendIfVisible(lines, m.viewportBody(m.previewView))
+	lines = append(lines, m.help.View(m.activeHelp()))
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) viewReductionConfirmation() string {
-	header := []string{"dots · confirm selection reduction", ""}
-	footer := []string{"", "y/enter acknowledge · n/esc back · q/ctrl+c cancel"}
-	body := scrollPage(m.previewContentLines(), m.previewScroll, availableBodyHeight(m.height, len(header)+len(footer)))
-	return renderLines(append(append(header, body...), footer...))
+	title := "dots · confirm selection reduction"
+	warning := m.theme.Glyphs.Warning + " This removes selected Tags from dots management; retained external state is shown below."
+	if m.compact() {
+		title = "REDUCTION"
+		warning = "destructive"
+	}
+	lines := []string{m.theme.Title.Render(title), m.theme.Warning.Render(warning)}
+	lines = appendIfVisible(lines, m.viewportBody(m.confirmView))
+	if status := viewportStatus(m.confirmView); status != "" {
+		lines = append(lines, m.theme.Secondary.Render(status))
+	}
+	lines = append(lines, m.help.View(m.activeHelp()))
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) viewClearConfirmation() string {
-	header := []string{"dots · confirm clear selection", ""}
-	body := append(m.previewContentLines(), "", `Type "clear" to remove every selected Managed Entry from dots management: `+m.clearInput)
-	if m.clearError != "" {
-		body = append(body, m.clearError)
+	title := "dots · confirm clear selection"
+	warning := m.theme.Glyphs.Warning + ` Type "clear" to remove every selected Managed Entry from dots management.`
+	if m.sized && m.width < 100 {
+		warning = m.theme.Glyphs.Warning + ` DESTRUCTIVE: clear all Managed Entries.`
 	}
-	footer := []string{"", "enter acknowledge · esc back · q/ctrl+c cancel"}
-	return renderLines(append(append(header, body...), footer...))
+	if m.compact() {
+		title = "CLEAR ALL"
+		warning = "destructive"
+		if m.clearError != "" {
+			warning = "x error"
+		}
+	}
+	lines := []string{m.theme.Title.Render(title), m.theme.Caution.Render(warning)}
+	if m.compact() {
+		lines = append(lines, m.help.ShortHelpView([]key.Binding{m.keys.Confirm}))
+	}
+	lines = append(lines, m.clearEntry.View())
+	if m.clearError != "" && !m.compact() {
+		lines = append(lines, m.theme.Error.Render(m.theme.Glyphs.Error+" error: "+m.clearError))
+	}
+	lines = appendIfVisible(lines, m.viewportBody(m.confirmView))
+	if status := viewportStatus(m.confirmView); status != "" {
+		lines = append(lines, m.theme.Secondary.Render(status))
+	}
+	if !m.compact() {
+		lines = append(lines, m.help.View(m.activeHelp()))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) viewProfiles() string {
-	header := []string{"dots · Profile presets", ""}
-	lines := []string{}
+	title := "dots · Profile presets"
+	if m.compact() {
+		title = "dots · presets"
+	}
+	summary := fmt.Sprintf("%d presets · %d Tags selected", len(m.data.Profiles), len(m.SelectedTags()))
+	if m.compact() {
+		summary = fmt.Sprintf("%d presets", len(m.data.Profiles))
+	}
+	lines := []string{m.theme.Title.Render(title), m.theme.Secondary.Render(summary)}
+	lines = appendIfVisible(lines, m.viewportBody(m.profiles))
+	lines = append(lines, m.help.View(m.activeHelp()))
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) profileContent(width int) (string, int) {
+	var lines []string
 	cursorLine := 0
 	for i, profile := range m.data.Profiles {
-		cursor := "  "
+		cursor := " "
 		if i == m.profile {
-			cursor = "> "
+			cursor = m.theme.Glyphs.Cursor
 			cursorLine = len(lines)
 		}
-		lines = append(lines,
-			fmt.Sprintf("%s[%s] %s — %s", cursor, m.profileMark(profile), profile.Name, profile.Description),
-			"    Tags: "+strings.Join(profile.Tags, ", "),
-		)
+		row := fmt.Sprintf("%s %s %s — %s", cursor, m.profileMark(profile), profile.Name, profile.Description)
+		style := m.theme.Body
+		if i == m.profile {
+			style = m.theme.Selected
+		}
+		lines = append(lines, splitLines(theme.Wrap(style.Render(row), width))...)
+		lines = append(lines, splitLines(theme.Wrap(m.theme.Secondary.Render("    Tags: "+strings.Join(profile.Tags, ", ")), width))...)
 	}
 	if len(lines) == 0 {
-		lines = []string{"No Profile presets available."}
+		return m.theme.Secondary.Render("No Profile presets available."), 0
 	}
-	footer := []string{"", "space/enter apply preset · esc return · ctrl+c cancel"}
-	body := cursorPage(lines, cursorLine, availableBodyHeight(m.height, len(header)+len(footer)))
-	return renderLines(append(append(header, body...), footer...))
+	return strings.Join(lines, "\n"), cursorLine
 }
 
 func (m Model) profileMark(profile Profile) string {
@@ -708,36 +982,98 @@ func (m Model) profileMark(profile Profile) string {
 		}
 	}
 	if valid > 0 && selected == valid {
-		return "x"
+		return m.theme.Glyphs.Checked
 	}
 	if selected > 0 {
-		return "-"
+		return m.theme.Glyphs.Partial
 	}
-	return " "
+	return m.theme.Glyphs.Unchecked
 }
 
 func (m Model) viewDetail() string {
-	header := []string{"dots · Tag details", ""}
-	footer := []string{"", "j/k scroll · pgup/pgdown · esc/left/d return · ctrl+c cancel"}
-	body := scrollPage(m.detailContentLines(), m.detailScroll, m.detailBodyHeight())
-	return renderLines(append(append(header, body...), footer...))
-}
-
-func (m Model) previewContentLines() []string {
-	lines := splitRendered(m.accepted.Text)
-	if m.accepted.ForwardOnly {
-		lines = append(lines, "", "[Forward-only]")
+	title := "dots · Tag details"
+	if m.compact() {
+		title = "dots · details"
 	}
-	return lines
+	lines := []string{
+		m.theme.Title.Render(title),
+		m.theme.Secondary.Render(valueOrReady(viewportStatus(m.detailView))),
+	}
+	lines = appendIfVisible(lines, m.viewportBody(m.detailView))
+	lines = append(lines, m.help.View(m.activeHelp()))
+	return strings.Join(lines, "\n")
 }
 
-func (m Model) detailContentLines() []string {
-	return splitRendered(m.viewDetailFor(m.detail))
+func (m Model) viewLoading() string {
+	title := "dots · Loading preview…"
+	if m.compact() {
+		title = "dots · preview"
+	}
+	loading := m.spinner.View() + " Building the pending Selection Reconciliation Plan."
+	if m.compact() {
+		loading = m.spinner.View() + " loading"
+	}
+	return strings.Join([]string{
+		m.theme.Title.Render(title),
+		m.theme.Action.Render(loading),
+		m.help.View(m.activeHelp()),
+	}, "\n")
 }
 
-func (m Model) previewBodyHeight() int { return availableBodyHeight(m.height, 4) }
+func (m Model) previewContent() string {
+	text := m.accepted.Text
+	if m.accepted.ForwardOnly {
+		text += "\n\n[Forward-only]"
+	}
+	return text
+}
 
-func (m Model) detailBodyHeight() int { return availableBodyHeight(m.height, 4) }
+func (m Model) viewportBody(model viewport.Model) string {
+	if model.Width <= 0 || model.Height <= 0 {
+		return ""
+	}
+	return model.View()
+}
+
+func (m Model) compact() bool {
+	return m.sized && m.width < 25
+}
+
+func appendIfVisible(lines []string, value string) []string {
+	if value == "" {
+		return lines
+	}
+	return append(lines, value)
+}
+
+func viewportStatus(model viewport.Model) string {
+	switch {
+	case !model.AtTop() && !model.AtBottom():
+		return "↑ more · ↓ more"
+	case !model.AtTop():
+		return "↑ more"
+	case !model.AtBottom():
+		return "↓ more"
+	default:
+		return ""
+	}
+}
+
+func valueOrReady(value string) string {
+	if value == "" {
+		return "ready"
+	}
+	return value
+}
+
+func (m Model) selectionSummary() string {
+	visible := len(m.visibleTags())
+	summary := fmt.Sprintf("%d selected · %d of %d shown", len(m.SelectedTags()), visible, len(m.data.Tags))
+	if query := m.searchInput.Value(); query != "" {
+		summary += fmt.Sprintf(" · filter %q", query)
+	}
+	return summary
+}
 
 func (m Model) viewDetailFor(i int) string {
 	if i < 0 || i >= len(m.data.Tags) {
@@ -780,65 +1116,129 @@ func (m Model) viewDetailFor(i int) string {
 	return b.String()
 }
 
-func availableBodyHeight(height, fixedLines int) int {
-	if height <= 0 {
-		return 0
+const wideBreakpoint = 100
+
+func (m *Model) syncComponents() {
+	width, height := m.width, m.height
+	if !m.sized {
+		width, height = 80, 24
 	}
-	return max(1, height-fixedLines)
+	width, height = theme.Clamp(width), theme.Clamp(height)
+	m.help.Width = width
+	if m.sized && width < 25 {
+		m.searchInput.Prompt = "/ "
+		m.searchInput.Placeholder = ""
+		m.clearEntry.Prompt = "clear: "
+		m.clearEntry.Placeholder = ""
+	} else {
+		m.searchInput.Prompt = "Search: "
+		m.searchInput.Placeholder = "Tag name or description"
+		m.clearEntry.Prompt = "management: "
+		m.clearEntry.Placeholder = "exact lowercase ASCII"
+	}
+	m.searchInput.Width = max(1, theme.Clamp(width-theme.Width(m.searchInput.Prompt)))
+	m.clearEntry.Width = max(1, theme.Clamp(width-theme.Width(m.clearEntry.Prompt)))
+	m.clearInput = m.clearEntry.Value()
+
+	queryLine := 0
+	if m.screen == screenSearch || m.searchInput.Value() != "" {
+		queryLine = 1
+	}
+	browseReserved := 4
+	if m.previewError != "" && !m.compact() {
+		wrappedError := theme.Wrap(m.previewErrorText(), width)
+		browseReserved += strings.Count(wrappedError, "\n")
+	}
+	browseHeight := theme.Clamp(height - browseReserved - queryLine)
+	if m.compact() {
+		browseHeight = theme.Clamp(height - 2)
+	}
+	browseWidth := width
+	detailWidth := width
+	if width >= wideBreakpoint && m.screen != screenSearch {
+		browseWidth = theme.Clamp((width - 2) / 3)
+		detailWidth = theme.Clamp(width - browseWidth - 2)
+	}
+	m.resizeViewport(&m.browse, browseWidth, browseHeight)
+	content, cursorLine := m.listContent(browseWidth)
+	m.browse.SetContent(content)
+	ensureVisible(&m.browse, cursorLine)
+
+	m.resizeViewport(&m.profiles, width, theme.Clamp(height-3))
+	profileContent, profileLine := m.profileContent(width)
+	m.profiles.SetContent(profileContent)
+	ensureVisible(&m.profiles, profileLine)
+
+	visible := m.visibleTags()
+	if (m.screen == screenList || m.screen == screenSearch) && m.cursor >= 0 && m.cursor < len(visible) {
+		m.detail = visible[m.cursor]
+	}
+	detailHeight := theme.Clamp(height - 3)
+	if width >= wideBreakpoint && m.screen != screenSearch {
+		detailHeight = browseHeight
+	}
+	m.resizeViewport(&m.detailView, detailWidth, detailHeight)
+	m.detailView.SetContent(styleAndWrap(m.viewDetailFor(m.detail), detailWidth, m.theme.Body))
+
+	m.resizeViewport(&m.previewView, width, theme.Clamp(height-3))
+	m.previewView.SetContent(styleAndWrap(m.previewContent(), width, m.theme.Body))
+
+	confirmationReserved := 4
+	if m.screen == screenClearConfirmation {
+		confirmationReserved = 5
+		if m.clearError != "" {
+			confirmationReserved++
+		}
+	}
+	m.resizeViewport(&m.confirmView, width, theme.Clamp(height-confirmationReserved))
+	m.confirmView.SetContent(styleAndWrap(m.previewContent(), width, m.theme.Body))
 }
 
-func cursorPage(lines []string, cursorLine, height int) []string {
-	if height <= 0 || len(lines) <= height {
-		return append([]string(nil), lines...)
-	}
-	start := cursorLine - height/2
-	start = max(0, min(start, len(lines)-height))
-	page := append([]string(nil), lines[start:start+height]...)
-	if start > 0 {
-		page[0] = "↑ more"
-	}
-	if start+height < len(lines) {
-		page[len(page)-1] = "↓ more"
-	}
-	return page
+func (m Model) resizeViewport(model *viewport.Model, width, height int) {
+	model.Width = theme.Clamp(width)
+	model.Height = theme.Clamp(height)
+	model.Style = m.theme.Body
+	model.SetYOffset(model.YOffset)
 }
 
-func scrollPage(lines []string, offset, height int) []string {
-	if height <= 0 || len(lines) <= height {
-		return append([]string(nil), lines...)
+func ensureVisible(model *viewport.Model, line int) {
+	if model.Height <= 0 {
+		model.SetYOffset(0)
+		return
 	}
-	offset = clampScrollOffset(offset, height, len(lines))
-	page := append([]string(nil), lines[offset:offset+height]...)
-	if offset > 0 {
-		page[0] = "↑ more"
+	if line < model.YOffset {
+		model.SetYOffset(line)
+		return
 	}
-	if offset+height < len(lines) {
-		page[len(page)-1] = "↓ more"
+	if line >= model.YOffset+model.Height {
+		model.SetYOffset(line - model.Height + 1)
 	}
-	return page
 }
 
-func scrolledOffset(current, delta, total, height int) int {
-	return clampScrollOffset(current+delta, height, total)
-}
-
-func clampScrollOffset(offset, height, total int) int {
-	if height <= 0 || total <= height {
-		return 0
+func styleAndWrap(value string, width int, style lipgloss.Style) string {
+	if width <= 0 || value == "" {
+		return ""
 	}
-	return max(0, min(offset, total-height))
+	var rendered []string
+	for _, line := range strings.Split(strings.TrimSuffix(value, "\n"), "\n") {
+		wrapped := theme.Wrap(line, width)
+		if wrapped == "" {
+			rendered = append(rendered, style.Render(""))
+			continue
+		}
+		for _, part := range strings.Split(wrapped, "\n") {
+			rendered = append(rendered, style.Render(part))
+		}
+	}
+	return strings.Join(rendered, "\n")
 }
 
-func splitRendered(value string) []string {
+func splitLines(value string) []string {
 	value = strings.TrimSuffix(value, "\n")
 	if value == "" {
 		return []string{}
 	}
 	return strings.Split(value, "\n")
-}
-
-func renderLines(lines []string) string {
-	return strings.Join(lines, "\n") + "\n"
 }
 
 func listOrNone(values []string) string {

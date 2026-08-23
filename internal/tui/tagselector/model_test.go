@@ -35,7 +35,7 @@ func TestPreviewReceivesCanonicalSnapshotAndFinishesWithExactOpaqueValue(t *test
 	if command == nil || !strings.Contains(model.View(), "Loading preview") {
 		t.Fatalf("enter should start asynchronous preview, view:\n%s", model.View())
 	}
-	message := command()
+	message := previewCommand(t, command)()
 	next, _ = model.Update(message)
 	model = next.(tagselector.Model)
 	if got, want := received, []string{"zsh", "nvim"}; !reflect.DeepEqual(got, want) {
@@ -48,7 +48,7 @@ func TestPreviewReceivesCanonicalSnapshotAndFinishesWithExactOpaqueValue(t *test
 		t.Fatalf("Preview() = %#v, want exact opaque %#v", got, wantPreview)
 	}
 	view := model.View()
-	if !strings.Contains(view, wantPreview.Text) || !strings.Contains(view, "Forward-only") {
+	if !strings.Contains(view, "install zsh") || !strings.Contains(view, "retain fzf") || !strings.Contains(view, "Forward-only") {
 		t.Fatalf("preview view missing opaque text or forward-only label:\n%s", view)
 	}
 	if got, want := model.SelectedTags(), []string{"zsh", "nvim"}; !reflect.DeepEqual(got, want) {
@@ -81,7 +81,7 @@ func TestReductionPreviewTransitionsToDistinctConfirmationBeforeFinishing(t *tes
 	model = update(t, model, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, key(' '))
 
 	next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	model = update(t, next.(tagselector.Model), command())
+	model = update(t, next.(tagselector.Model), previewCommand(t, command)())
 	model = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	view := model.View()
@@ -241,7 +241,7 @@ func TestLoadingIgnoresRepeatedEnterSoEachRequestCallsPreviewOnce(t *testing.T) 
 	if repeated != nil {
 		t.Fatal("enter while loading must not create another command for the same request")
 	}
-	message := command()
+	message := previewCommand(t, command)()
 	model = update(t, model, message)
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("preview calls = %d, want one for one request ID", got)
@@ -259,8 +259,8 @@ func TestPreviewErrorReturnsToDraftAndAllowsRetry(t *testing.T) {
 
 	next, first := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = next.(tagselector.Model)
-	model = update(t, model, first())
-	if view := model.View(); !strings.Contains(view, "Preview error: preview failed") || !strings.Contains(view, "[x] zsh") {
+	model = update(t, model, previewCommand(t, first)())
+	if view := model.View(); !strings.Contains(view, "Preview error: preview failed") || !strings.Contains(view, "enter retry") || !strings.Contains(view, "[x] zsh") {
 		t.Fatalf("preview error should return to the unchanged draft:\n%s", view)
 	}
 	if got := model.Preview(); got != (tagselector.Preview{}) {
@@ -268,7 +268,7 @@ func TestPreviewErrorReturnsToDraftAndAllowsRetry(t *testing.T) {
 	}
 
 	next, retry := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	model = update(t, next.(tagselector.Model), retry())
+	model = update(t, next.(tagselector.Model), previewCommand(t, retry)())
 	if got := model.Preview(); got.Text != "retry succeeded" || got.SemanticDigest != "sha256:retry" {
 		t.Fatalf("retry Preview() = %#v, want successful opaque preview", got)
 	}
@@ -291,13 +291,13 @@ func TestNewerPreviewWinsWhenBCompletesBeforeA(t *testing.T) {
 	next, commandA := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = next.(tagselector.Model)
 	messagesA := make(chan tea.Msg, 1)
-	go func() { messagesA <- commandA() }()
+	go func() { messagesA <- previewCommand(t, commandA)() }()
 	<-aStarted
 
 	model = update(t, model, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyDown}, key(' '))
 	next, commandB := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = next.(tagselector.Model)
-	model = update(t, model, commandB())
+	model = update(t, model, previewCommand(t, commandB)())
 	if got := model.Preview().Text; got != "B" {
 		t.Fatalf("accepted Preview = %q, want B", got)
 	}
@@ -323,7 +323,7 @@ func TestStalePreviewErrorAfterCancelCannotProduceUsableResult(t *testing.T) {
 	next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = next.(tagselector.Model)
 	messages := make(chan tea.Msg, 1)
-	go func() { messages <- command() }()
+	go func() { messages <- previewCommand(t, command)() }()
 	<-started
 	next, quit := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	model = next.(tagselector.Model)
@@ -365,7 +365,7 @@ func TestCtrlCCancelsFromEveryScreenAndClearsUsableValues(t *testing.T) {
 				return tagselector.Preview{Text: "preview"}, nil
 			})
 			next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-			return update(t, next.(tagselector.Model), command())
+			return update(t, next.(tagselector.Model), previewCommand(t, command)())
 		},
 	}
 	for name, prepare := range preparations {
@@ -473,6 +473,24 @@ func update(t *testing.T, model tagselector.Model, messages ...tea.Msg) tagselec
 	return model
 }
 
+// previewCommand unwraps the provider command from the production batch that
+// also starts the pending-only spinner.
+func previewCommand(t *testing.T, command tea.Cmd) tea.Cmd {
+	t.Helper()
+	if command == nil {
+		t.Fatal("preview command is nil")
+	}
+	message := command()
+	commands, ok := message.(tea.BatchMsg)
+	if !ok {
+		return func() tea.Msg { return message }
+	}
+	if len(commands) < 2 {
+		t.Fatalf("preview command batch has %d commands, want spinner and provider", len(commands))
+	}
+	return commands[len(commands)-1]
+}
+
 func reviewedPreview(t *testing.T, initial []string, draftKeys []tea.KeyMsg, preview tagselector.Preview) tagselector.Model {
 	t.Helper()
 	model := tagselector.New(testBrowseData(), initial, func(uint64, []string) (tagselector.Preview, error) {
@@ -482,7 +500,7 @@ func reviewedPreview(t *testing.T, initial []string, draftKeys []tea.KeyMsg, pre
 		model = update(t, model, draftKey)
 	}
 	next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	return update(t, next.(tagselector.Model), command())
+	return update(t, next.(tagselector.Model), previewCommand(t, command)())
 }
 
 func testBrowseData() tagselector.BrowseData {
@@ -657,7 +675,7 @@ func TestLongPreviewScrollsWithinTerminalHeight(t *testing.T) {
 	})
 	model = update(t, model, tea.WindowSizeMsg{Width: 80, Height: 8})
 	next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	model = update(t, next.(tagselector.Model), command())
+	model = update(t, next.(tagselector.Model), previewCommand(t, command)())
 	if view := model.View(); !strings.Contains(view, "plan line 01") || strings.Contains(view, "plan line 24") || !strings.Contains(view, "↓ more") {
 		t.Fatalf("preview should start at the first bounded page:\n%s", view)
 	}
