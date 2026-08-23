@@ -16,6 +16,7 @@ type keyMap struct {
 	Profiles      key.Binding
 	Details       key.Binding
 	Preview       key.Binding
+	Retry         key.Binding
 	Confirm       key.Binding
 	Accept        key.Binding
 	Back          key.Binding
@@ -40,6 +41,7 @@ func newKeyMap() keyMap {
 		Profiles:      binding([]string{"p"}, "p", "profiles"),
 		Details:       binding([]string{"d", "right"}, "d/right", "details"),
 		Preview:       binding([]string{"enter"}, "enter", "preview"),
+		Retry:         binding([]string{"enter"}, "enter", "retry"),
 		Accept:        binding([]string{"enter"}, "enter", "filter"),
 		Back:          binding([]string{"esc"}, "esc", "clear/back"),
 		Acknowledge:   binding([]string{"y", "enter"}, "y/enter", "ok"),
@@ -77,6 +79,13 @@ func (m Model) activeHelp() screenHelp {
 	case screenClearConfirmation:
 		return screenHelp{k.Confirm, k.Back, k.PageUp, k.PageDown, k.Quit, k.Cancel}
 	default:
-		return screenHelp{k.Toggle, k.Preview, k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End, k.Search, k.Profiles, k.Details, k.Quit, k.Cancel}
+		return screenHelp{k.Toggle, m.previewAction(), k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End, k.Search, k.Profiles, k.Details, k.Quit, k.Cancel}
 	}
+}
+
+func (m Model) previewAction() key.Binding {
+	if m.previewError != "" {
+		return m.keys.Retry
+	}
+	return m.keys.Preview
 }

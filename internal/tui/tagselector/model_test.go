@@ -260,7 +260,7 @@ func TestPreviewErrorReturnsToDraftAndAllowsRetry(t *testing.T) {
 	next, first := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = next.(tagselector.Model)
 	model = update(t, model, previewCommand(t, first)())
-	if view := model.View(); !strings.Contains(view, "Preview error: preview failed") || !strings.Contains(view, "[x] zsh") {
+	if view := model.View(); !strings.Contains(view, "Preview error: preview failed") || !strings.Contains(view, "enter retry") || !strings.Contains(view, "[x] zsh") {
 		t.Fatalf("preview error should return to the unchanged draft:\n%s", view)
 	}
 	if got := model.Preview(); got != (tagselector.Preview{}) {

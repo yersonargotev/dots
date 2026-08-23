@@ -1,6 +1,7 @@
 package tagselector_test
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -131,6 +132,28 @@ func TestTinyBrowseKeepsFocusSelectionObservedStateAndActionVisible(t *testing.T
 	assertBoundedView(t, view, 12, 4)
 	if !strings.Contains(view, "> [ ] zsh") || !strings.Contains(view, "state: drift") {
 		t.Fatalf("tiny toggle lost focus or observed state:\n%s", view)
+	}
+}
+
+func TestTinyPreviewErrorKeepsCauseRetryFocusAndStateVisible(t *testing.T) {
+	model := tagselector.NewWithTheme(detailedBrowseData(), []string{"zsh"}, func(uint64, []string) (tagselector.Preview, error) {
+		return tagselector.Preview{}, errors.New("network unavailable")
+	}, theme.NoColor())
+	model = update(t, model, tea.WindowSizeMsg{Width: 12, Height: 4})
+	next, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = update(t, next.(tagselector.Model), previewCommand(t, command)())
+
+	view := model.View()
+	assertBoundedView(t, view, 12, 4)
+	for _, want := range []string{"> [x] zsh", "state: drift", "error:networ", "enter retry"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("tiny preview error hid %q:\n%s", want, view)
+		}
+	}
+
+	_, retry := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if retry == nil {
+		t.Fatal("Enter advertised by retry binding did not start a new preview")
 	}
 }
 

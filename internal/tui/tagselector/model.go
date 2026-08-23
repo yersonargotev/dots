@@ -379,7 +379,7 @@ func (m Model) updateBrowse(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.syncComponents()
 			}
 			return m, nil
-		case key.Matches(pressed, m.keys.Preview):
+		case key.Matches(pressed, m.previewAction()):
 			return m.startPreview()
 		case key.Matches(pressed, m.keys.Back):
 			return m.cancel(), tea.Quit
@@ -767,7 +767,11 @@ func (m Model) viewList() string {
 	if m.compact() {
 		summary = fmt.Sprintf("%d/%d shown", len(m.visibleTags()), len(m.data.Tags))
 	}
-	lines := []string{m.theme.Title.Render(title)}
+	compactError := m.compact() && m.previewError != ""
+	lines := []string{}
+	if !compactError {
+		lines = append(lines, m.theme.Title.Render(title))
+	}
 	if !m.compact() {
 		lines = append(lines, m.theme.Secondary.Render(summary))
 	}
@@ -783,16 +787,37 @@ func (m Model) viewList() string {
 	}
 	lines = appendIfVisible(lines, body)
 	if m.previewError != "" {
-		lines = append(lines, m.theme.Error.Render(m.theme.Glyphs.Error+" Preview error: "+m.previewError+" · Enter retries preview"))
+		if compactError {
+			lines = append(lines, m.theme.Error.Render(m.compactPreviewError()))
+		} else {
+			lines = append(lines, m.theme.Error.Render(m.theme.Glyphs.Error+" Preview error: "+m.previewError))
+		}
 	} else if status := viewportStatus(m.browse); status != "" {
 		lines = append(lines, m.theme.Secondary.Render(status))
 	}
 	if m.compact() && m.screen != screenSearch {
-		lines = append(lines, m.help.ShortHelpView([]key.Binding{m.keys.Toggle}))
+		action := m.keys.Toggle
+		if compactError {
+			action = m.keys.Retry
+		}
+		lines = append(lines, m.help.ShortHelpView([]key.Binding{action}))
 	} else if !m.compact() {
 		lines = append(lines, m.help.View(m.activeHelp()))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) compactPreviewError() string {
+	prefix := "error:"
+	cause := strings.TrimSpace(m.previewError)
+	if cause == "" {
+		cause = "unknown"
+	}
+	wrapped := theme.Wrap(cause, max(1, m.width-theme.Width(prefix)))
+	if first, _, ok := strings.Cut(wrapped, "\n"); ok {
+		wrapped = first
+	}
+	return prefix + wrapped
 }
 
 func (m Model) listContent(width int) (string, int) {
