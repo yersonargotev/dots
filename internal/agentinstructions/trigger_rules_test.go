@@ -688,6 +688,67 @@ func TestDeliveryWorkflowInvokesMutationSafetyGate(t *testing.T) {
 	}
 }
 
+func TestDeliveryWorkflowRunsMutationImplementationConformanceBeforeExpensiveGates(t *testing.T) {
+	root := filepath.Join("..", "..")
+	path := filepath.Join(root, "workflows", "delivery-issue.md")
+	workflow := readContractDocument(t, path)
+	normalized := strings.Join(strings.Fields(workflow), " ")
+
+	focused := strings.Index(normalized, "Run focused checks while iterating.")
+	conformance := strings.Index(normalized, "run the independent implementation-conformance checkpoint")
+	completeCI := strings.Index(normalized, "Run the complete CI-equivalent suite:")
+	manual := strings.Index(normalized, "## Manual verification")
+	if focused < 0 || conformance < 0 || completeCI < 0 || manual < 0 || !(focused < conformance && conformance < completeCI && completeCI < manual) {
+		t.Fatalf("mutation implementation-conformance order is focused=%d conformance=%d complete-ci=%d manual=%d", focused, conformance, completeCI, manual)
+	}
+
+	assertDocumentContainsAllNormalized(t, path, []string{
+		"For a `required-mutation` result",
+		"zero actionable findings",
+		"Follow the reference's result routing",
+		"restart at the earliest invalidated gate",
+		"A `not-applicable` Delivery Unit does not enter this checkpoint",
+		"Any later code or artifact change invalidates earlier automated, manual, and review evidence",
+		"The reference determines whether the implementation-conformance result remains valid",
+		"does not replace the final independent review",
+	})
+}
+
+func TestDeliveryWorkflowRecordsBothMutationChallenges(t *testing.T) {
+	root := filepath.Join("..", "..")
+	workflowPath := filepath.Join(root, "workflows", "delivery-issue.md")
+	gatePath := filepath.Join(root, "workflows", "mutation-safety-gate.md")
+
+	for _, path := range []string{workflowPath, gatePath} {
+		assertDocumentContainsAllNormalized(t, path, []string{
+			"early independent design challenge result",
+			"implementation-conformance challenge result",
+			"final reviewed head",
+		})
+	}
+
+	gate := readContractDocument(t, gatePath)
+	evidenceStart := strings.Index(gate, "## Delivery evidence")
+	if evidenceStart < 0 {
+		t.Fatal("mutation safety gate is missing its Delivery evidence section")
+	}
+	evidence := strings.Join(strings.Fields(gate[evidenceStart:]), " ")
+	for _, want := range []string{
+		"early independent design challenge result",
+		"base commit and mutation-boundary diff digest",
+		"input references and focused-test evidence",
+		"questions covered",
+		"every finding and resolution",
+		"implementation-conformance challenge result",
+		"final reviewed head",
+		"comparison proving its mutation-boundary digest matches",
+	} {
+		if !strings.Contains(strings.ToLower(evidence), strings.ToLower(want)) {
+			t.Errorf("mutation safety Delivery evidence section missing %q", want)
+		}
+	}
+}
+
 func TestMutationSafetyGateContract(t *testing.T) {
 	root := filepath.Join("..", "..")
 	path := filepath.Join(root, "workflows", "mutation-safety-gate.md")
@@ -717,6 +778,43 @@ func TestMutationSafetyGateContract(t *testing.T) {
 		"mutation-model-changed": {"Implementation changes the approved mutation model", "Invalidate the result and repeat the gate before further implementation"},
 	}
 	assertScenarioMatrix(t, path, wants)
+}
+
+func TestMutationSafetyGateDefinesImplementationConformanceChallenge(t *testing.T) {
+	root := filepath.Join("..", "..")
+	path := filepath.Join(root, "workflows", "mutation-safety-gate.md")
+
+	assertDocumentContainsAllNormalized(t, path, []string{
+		"Independent implementation-conformance challenge",
+		"Delivery Contract snapshot",
+		"base commit",
+		"approved safety case",
+		"current implementation diff",
+		"mutation-boundary diff digest",
+		"focused-test evidence",
+		"compatibility map",
+		"transaction boundary",
+		"threat and failure matrix",
+		"fault seams",
+		"operation invariant",
+		"authority and resource lifecycle",
+		"temporal ordering",
+		"cancellation",
+		"bounded concurrency",
+		"exact identity consumption",
+		"cleanup-error handling",
+		"recovery or compensation",
+		"zero actionable findings",
+		"Actionable local implementation gaps return to focused implementation",
+		"`mutation-model-changed`",
+		"repeat the complete pre-implementation safety gate",
+		"A later mutation-boundary code change invalidates",
+		"Documentation or unrelated artifact changes do not invalidate the implementation-conformance result",
+		"still invalidate automated, manual, and final review evidence",
+		"`not-applicable` Delivery Units skip this challenge",
+		"base commit and mutation-boundary diff digest",
+		"challenge result",
+	})
 }
 
 func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t *testing.T) {
