@@ -207,15 +207,31 @@ Repeat this loop until it produces a reviewable candidate:
 
 1. Implement the smallest complete change authorized by the Delivery Contract.
 2. Run focused checks while iterating.
-3. Run the complete CI-equivalent suite:
+3. For a `required-mutation` result, run the independent
+   implementation-conformance checkpoint defined by
+   [mutation-safety-gate.md](mutation-safety-gate.md) against the current
+   candidate. It must have zero actionable findings before the Delivery Run may
+   enter the complete CI-equivalent suite or manual verification. A
+   `not-applicable` Delivery Unit does not enter this checkpoint.
+4. Run the complete CI-equivalent suite:
    - `gofmt -l .`
    - `go vet ./...`
    - `go build ./...`
    - `go test ./...`
-4. Fix every failure and restart the loop.
+5. Fix every failure and restart the loop.
+
+Actionable local implementation findings return to focused implementation.
+After each fix, repeat focused checks and repeat the implementation-conformance
+checkpoint without rebuilding the safety case unless the reference returns
+`mutation-model-changed`. That result invalidates the approved safety case and
+must repeat the complete pre-implementation Mutation safety gate before further
+implementation.
 
 Any later code or artifact change invalidates earlier automated, manual, and
-review evidence and restarts the complete gates.
+review evidence and restarts the complete gates. Any later mutation-boundary
+code change invalidates the implementation-conformance result and must repeat
+focused checks and the checkpoint before expensive gates continue. This
+checkpoint does not replace the final independent review.
 
 The implementing agent may decide local, reversible matters within scope. If
 implementation reveals a contradiction, public-contract change, material scope
@@ -298,7 +314,10 @@ Update that block in place after every fix or push. It records:
   `updatedAt`, and SHA-256 digest;
 - snapshotted category, readiness, and native relationships;
 - current head commit reviewed;
-- mutation-safety result or its `not applicable` evidence;
+- mutation-safety result or its `not applicable` evidence; for
+  `required-mutation`, this includes the early independent design challenge
+  result and the implementation-conformance challenge result tied to the final
+  reviewed head;
 - acceptance-criterion coverage;
 - automated validation commands/results;
 - manual verification commands/results or not-applicable reason;

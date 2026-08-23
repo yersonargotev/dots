@@ -98,6 +98,47 @@ map, transaction boundary, matrix, and evidence plan. Require it to challenge:
 Resolve every actionable finding inside the safety case and return the challenge
 result to the parent workflow's completion gate.
 
+## Independent implementation-conformance challenge
+
+For `required-mutation` only, run a second independent challenge after the
+implementation passes focused checks and before complete CI-equivalent or manual
+verification. Give an independent context the Delivery Contract snapshot by
+reference, base commit, approved safety case, exact candidate commit, current
+implementation diff, and focused-test evidence. The approved safety case
+includes its compatibility map, transaction boundary, threat and failure
+matrix, fault seams and acceptance evidence, and operation invariant. Do not
+duplicate the Delivery Contract in the challenge input. `not-applicable`
+Delivery Units skip this challenge.
+
+Compare the implemented mutation boundary with the approved safety case and
+explicitly challenge:
+
+- whether public and persisted behavior still matches the compatibility map;
+- whether every transition preserves the transaction boundary and operation
+  invariant from validated authority through durable evidence;
+- code-level authority and resource lifecycle behavior, including temporal
+  ordering, cancellation, bounded concurrency and resource lifetime, exact
+  identity consumption at the operation that uses it, observable cleanup-error
+  handling, and safe recovery or compensation;
+- whether the implemented failure paths and tests cover the approved threat and
+  failure matrix and use the planned fault seams; and
+- whether the implementation remains within the approved mutation model.
+
+The challenge completes only with zero actionable findings. Actionable local
+implementation gaps return to focused implementation in the parent workflow;
+after a fix, repeat focused tests and this challenge without rebuilding the
+safety case. An actual change to the approved mutation model returns
+`mutation-model-changed`, invalidates the safety case, and must repeat the
+complete pre-implementation safety gate, including the independent design
+challenge. Continue to use the existing `unauthorized-decision` and
+`missing-capability` results when their matrix scenarios apply.
+
+Bind the result to the exact candidate commit. A later mutation-boundary code
+change invalidates the implementation-conformance result and requires another
+challenge before expensive gates continue. Documentation or unrelated artifact
+changes follow the parent workflow's general evidence invalidation rule and do
+not by themselves change the approved mutation model.
+
 ## Gate results and invalidation
 
 Use exactly one result from this matrix:
@@ -118,5 +159,10 @@ before the PR exists repeats the gate because the workflow has no private state.
 Record the result in the PR's `Delivery Evidence` block. For a completed safety
 case, include the base commit and Delivery Contract digest, the operation
 invariant, compatibility and matrix coverage, planned fault seams and acceptance
-evidence, and the independent challenge result. For `not applicable`, include
-the direct evidence that no mutation boundary exists.
+evidence, and the early independent design challenge result. For a completed
+implementation-conformance challenge, include the exact candidate commit, its
+input references and focused-test evidence, the questions covered, every
+finding and resolution, and the implementation-conformance challenge result.
+These records preserve both independent challenges for the final reviewed head.
+For `not applicable`, include the direct evidence that no mutation boundary
+exists.
