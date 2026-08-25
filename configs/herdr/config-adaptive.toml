@@ -63,6 +63,9 @@ prefix = "ctrl+a"
 # Keep Herdr's default detach plus dots' tmux/Zellij capital-D muscle memory.
 detach = ["prefix+q", "prefix+shift+d"]
 workspace_picker = "prefix+w"
+# Keep the workspace picker usable with both arrow keys and Vim movement.
+navigate_workspace_up = ["up", "k"]
+navigate_workspace_down = ["down", "j"]
 goto = "prefix+g"
 new_workspace = "prefix+shift+n"
 rename_workspace = "prefix+shift+w"

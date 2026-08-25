@@ -3939,6 +3939,8 @@ rows = [
 		}
 	}
 	for _, want := range []string{
+		`navigate_workspace_up = ["up", "k"]`,
+		`navigate_workspace_down = ["down", "j"]`,
 		`previous_workspace = "prefix+alt+k"`,
 		`next_workspace = "prefix+alt+j"`,
 		`previous_agent = "prefix+alt+h"`,
