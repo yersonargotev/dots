@@ -1,0 +1,7 @@
+version = 1
+
+[commands]
+additional_significant = ["pi"]
+
+[labels]
+command_format = "command_and_directory"

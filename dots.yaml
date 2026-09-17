@@ -831,6 +831,14 @@ entries:
       - name: herdr
         command: herdr
         brew: herdr
+  - source: configs/herdr/plugins/tabby.toml
+    target: ~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml
+    strategy: copy
+    ownership: toml-subset
+    tags:
+      - herdr
+    os:
+      - darwin
   - source: configs/zellij/config.kdl
     source_overrides:
       adaptive-theme: configs/zellij/config-adaptive.kdl
