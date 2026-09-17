@@ -526,12 +526,12 @@ func selectedSurfaces(m manifest.Manifest, tags []string, osName string) (select
 	if osName == "all" {
 		return selectedsurface.EvaluateAll(m, tags), selectedsurface.Surface{}
 	}
-	selected := selectedsurface.Evaluate(m, tags, osName)
+	selected := selectedsurface.EvaluateForOS(m, tags, osName)
 	otherOS := "darwin"
 	if osName == "darwin" {
 		otherOS = "linux"
 	}
-	other := selectedsurface.Evaluate(m, tags, otherOS)
+	other := selectedsurface.EvaluateForOS(m, tags, otherOS)
 	return selected, subtractSurface(other, selected)
 }
 

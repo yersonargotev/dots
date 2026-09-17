@@ -79,6 +79,14 @@ func EvaluateForPlatform(m manifest.Manifest, effectiveTags []string, osName, ar
 	})
 }
 
+// EvaluateForOS describes one operating system across all supported
+// architectures, preserving a portable catalog view independently of its host.
+func EvaluateForOS(m manifest.Manifest, effectiveTags []string, osName string) Surface {
+	return evaluate(m, effectiveTags, func(itemOS []string) bool {
+		return manifest.MatchesOS(itemOS, osName)
+	}, func([]string) bool { return true })
+}
+
 // EvaluateEntries returns the diagnostic Managed Entry scope for effective
 // tags and an operating system. It uses the same selection implementation as
 // Evaluate while retaining OS-excluded entries as non-applicable.
