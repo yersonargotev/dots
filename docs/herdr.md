@@ -32,6 +32,18 @@ commit pin, and `--yes`. Herdr runs the plugin's declared build step and registe
 it enabled. Repeating installation refreshes the managed checkout and may repeat
 download/build work; it is not a network-free no-op.
 
+## Tabby configuration
+
+The `herdr` Tag manages
+`~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml` on macOS using
+TOML Subset Ownership. The baseline sets configuration `version = 1`, adds `pi`
+to `commands.additional_significant`, and sets `labels.command_format` to
+`command_and_directory`. Once managed, target-only settings remain intact. An
+existing unmanaged file that differs from the baseline uses the normal Conflict
+handling; review its contents and backup before choosing replacement. Changes to
+owned values also use normal Conflict handling. Intel Macs receive the baseline
+but still do not install Tabby through its Apple Silicon-only Provisioner.
+
 ## Existing sessions
 
 A fresh Herdr session runs plugin startup hooks. Installing or reloading config
@@ -75,7 +87,8 @@ also has no Git line. Long names may still be truncated by the sidebar width.
 ## Ownership and rollback
 
 The Install Manifest owns configuration as a TOML Subset. Plugin checkouts,
-registry, runtime state, and private plugin configuration remain Herdr-owned.
+registry, runtime state, and plugin configuration outside the Tabby baseline
+remain Herdr-owned.
 Checkouts and plugin configuration live under `~/.config/herdr/plugins`; the registry
 and its lock live beside that directory under `~/.config/herdr`, and plugin state
 lives under `~/.local/state/herdr/plugins`. Possible build cache/data and Rust roots
