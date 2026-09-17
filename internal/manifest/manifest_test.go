@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
@@ -3919,6 +3921,36 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 		}
 	}
 
+	for _, tc := range []struct {
+		name   string
+		config []byte
+		want   map[string]any
+	}{
+		{"default", defaultConfig, map[string]any{
+			"name":   "catppuccin",
+			"custom": map[string]any{"active_row_bg": "#313244", "selection_bg": "#45475a"},
+		}},
+		{"adaptive", adaptiveConfig, map[string]any{
+			"name": "catppuccin", "auto_switch": true,
+			"dark_name": "catppuccin", "light_name": "catppuccin-latte",
+			"custom": map[string]any{
+				"active_row_bg": "#313244", "selection_bg": "#45475a",
+				"dark":  map[string]any{"active_row_bg": "#313244", "selection_bg": "#45475a"},
+				"light": map[string]any{"active_row_bg": "#ccd0da", "selection_bg": "#bcc0cc"},
+			},
+		}},
+	} {
+		t.Run(tc.name+" theme", func(t *testing.T) {
+			var config map[string]any
+			if err := toml.Unmarshal(tc.config, &config); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(config["theme"], tc.want) {
+				t.Fatalf("theme = %#v, want %#v", config["theme"], tc.want)
+			}
+		})
+	}
+
 	defaultText := string(defaultConfig)
 	for section, want := range map[string]string{
 		"spaces": `[ui.sidebar.spaces]
@@ -3965,29 +3997,52 @@ rows = [
 	if strings.Contains(adaptiveText, `cmd+`) {
 		t.Fatalf("adaptive Herdr config contains unreliable Command shortcut:\n%s", adaptiveText)
 	}
-	if got, want := herdrConfigWithoutTheme(t, adaptiveText), herdrConfigWithoutTheme(t, defaultText); got != want {
-		t.Fatalf("adaptive Herdr config non-theme sections drifted from default; got:\n%s\nwant:\n%s", got, want)
+	if got, want := herdrConfigWithoutTheme(t, adaptiveText), herdrConfigWithoutTheme(t, defaultText); !reflect.DeepEqual(got, want) {
+		t.Fatalf("adaptive Herdr config non-theme sections drifted from default; got:\n%#v\nwant:\n%#v", got, want)
 	}
 }
 
-func herdrConfigWithoutTheme(t *testing.T, config string) string {
+func TestHerdrConfigWithoutThemePreservesNonThemeDifferences(t *testing.T) {
+	const baseline = `onboarding = false
+[theme]
+name = "catppuccin"
+[theme.custom]
+active_row_bg = "#313244"
+[theme.custom.light]
+active_row_bg = "#ccd0da"
+[ui]
+confirm_close = true
+[theme_extra]
+enabled = true
+`
+	for _, tc := range []struct {
+		name, old, replacement string
+		equal                  bool
+	}{
+		{"shared theme", "#313244", "#45475a", true},
+		{"nested theme", "#ccd0da", "#bcc0cc", true},
+		{"root setting", "onboarding = false", "onboarding = true", false},
+		{"adjacent section", "confirm_close = true", "confirm_close = false", false},
+		{"similar section name", "enabled = true", "enabled = false", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := strings.Replace(baseline, tc.old, tc.replacement, 1)
+			equal := reflect.DeepEqual(herdrConfigWithoutTheme(t, baseline), herdrConfigWithoutTheme(t, changed))
+			if equal != tc.equal {
+				t.Fatalf("non-theme comparison equal = %v, want %v", equal, tc.equal)
+			}
+		})
+	}
+}
+
+func herdrConfigWithoutTheme(t *testing.T, config string) map[string]any {
 	t.Helper()
-	start := strings.Index(config, "onboarding =")
-	if start == -1 {
-		t.Fatalf("Herdr config missing onboarding setting:\n%s", config)
+	var parsed map[string]any
+	if err := toml.Unmarshal([]byte(config), &parsed); err != nil {
+		t.Fatalf("parse Herdr config: %v", err)
 	}
-	body := config[start:]
-	themeStart := strings.Index(body, "[theme]")
-	if themeStart == -1 {
-		t.Fatalf("Herdr config missing [theme] section:\n%s", config)
-	}
-	afterThemeHeader := body[themeStart+len("[theme]"):]
-	nextSection := strings.Index(afterThemeHeader, "\n[")
-	if nextSection == -1 {
-		t.Fatalf("Herdr config missing non-theme section after [theme]:\n%s", config)
-	}
-	themeEnd := themeStart + len("[theme]") + nextSection + 1
-	return body[:themeStart] + body[themeEnd:]
+	delete(parsed, "theme")
+	return parsed
 }
 
 func herdrConfigSection(t *testing.T, config, header string) string {

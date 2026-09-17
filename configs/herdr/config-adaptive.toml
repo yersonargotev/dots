@@ -21,6 +21,18 @@ auto_switch = true
 dark_name = "catppuccin"
 light_name = "catppuccin-latte"
 
+[theme.custom]
+active_row_bg = "#313244"
+selection_bg = "#45475a"
+
+[theme.custom.dark]
+active_row_bg = "#313244"
+selection_bg = "#45475a"
+
+[theme.custom.light]
+active_row_bg = "#ccd0da"
+selection_bg = "#bcc0cc"
+
 [ui]
 confirm_close = true
 prompt_new_tab_name = true
