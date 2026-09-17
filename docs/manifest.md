@@ -503,6 +503,7 @@ reuse user-local tools without requiring sudo in non-interactive runs.
 | `tool` | Yes | `claude`, `codex`, `codegraph`, `herdr`, `skills`, or `zimfw`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
+| `arch` | No | Provisioner architectures: `amd64`, `arm64`; empty means either. |
 | `spec` | Yes | Tool-specific declaration. Each spec must speak exactly one tool dialect. |
 | `dependencies` | No | Dependencies required before running the Provisioner. |
 
@@ -563,15 +564,16 @@ Provisioner renders exactly one direct invocation:
 herdr plugin install OWNER/REPO --ref COMMIT --yes
 ```
 
-`ref` is exclusive to Herdr. The Install Plan lists `~/.config/herdr/plugins`
-as the affected root. Readiness only probes declared Dependencies; plan and
+`ref` is exclusive to Herdr. The Install Plan discloses Herdr configuration/registry, state, data/cache,
+and Rust build roots affected by the command. Readiness only probes declared Dependencies; plan and
 doctor never install or contact plugins. Apply uses Herdr's native installer,
 including its reviewed build commands. Repeated installs may download and rebuild
 the same revision; Herdr retains plugin configuration outside the managed checkout.
 The child environment is rooted at the selected home, with inherited Herdr session
 and path overrides removed to avoid contacting another home's live server.
 
-The existing `herdr` Tag selects the three pinned workspace plugins on macOS;
+The existing `herdr` Tag selects the two Spaces plugins on macOS and adds Tabby
+on Apple Silicon through `arch: [arm64]`;
 core and workstation already include it. See [Herdr setup](herdr.md) for runtime
 requirements, live-session activation, ownership, and known limitations.
 

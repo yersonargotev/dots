@@ -2,6 +2,7 @@ package provision
 
 import (
 	"reflect"
+	"runtime"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/deps"
@@ -17,6 +18,7 @@ type Options struct {
 	ExtraTags []string
 	Selection *manifest.Selection
 	OS        string
+	Arch      string
 	AppLookup deps.AppLookup
 }
 
@@ -47,7 +49,7 @@ func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
 	if err != nil {
 		return nil, err
 	}
-	selected := selectedProvisioners(m, selection.Tags, opts.OS)
+	selected := selectedProvisioners(m, selection.Tags, opts.OS, effectiveArch(opts.Arch))
 	if len(selected) == 0 {
 		return nil, nil
 	}
@@ -61,17 +63,17 @@ func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
 // selectedIndices maps the Selected Surface back to manifest positions so the
 // skipped-surface hint can compare Provisioner identity across Profiles without
 // repeating Tag or OS selection.
-func selectedIndices(m manifest.Manifest, profileNames []string, os string, extraTags []string) (map[int]bool, error) {
+func selectedIndices(m manifest.Manifest, profileNames []string, os, arch string, extraTags []string) (map[int]bool, error) {
 	selection, err := manifest.ResolveSelection(m, profileNames, extraTags)
 	if err != nil {
 		return nil, err
 	}
-	return selectedIndicesForSelection(m, selection, os), nil
+	return selectedIndicesForSelection(m, selection, os, arch), nil
 }
 
-func selectedIndicesForSelection(m manifest.Manifest, selection manifest.Selection, os string) map[int]bool {
+func selectedIndicesForSelection(m manifest.Manifest, selection manifest.Selection, os, arch string) map[int]bool {
 	indices := make(map[int]bool)
-	for _, selected := range selectedProvisioners(m, selection.Tags, os) {
+	for _, selected := range selectedProvisioners(m, selection.Tags, os, arch) {
 		indices[selected.Index] = true
 	}
 	return indices
@@ -85,8 +87,8 @@ type selectedManifestProvisioner struct {
 // selectedProvisioners projects the Selected Surface back onto manifest
 // positions. The projection preserves declaration multiplicity while keeping
 // Tag, OS, and ordering rules in the Selected Surface module.
-func selectedProvisioners(m manifest.Manifest, tags []string, osName string) []selectedManifestProvisioner {
-	surface := selectedsurface.Evaluate(m, tags, osName)
+func selectedProvisioners(m manifest.Manifest, tags []string, osName, arch string) []selectedManifestProvisioner {
+	surface := selectedsurface.EvaluateForPlatform(m, tags, osName, arch)
 	selected := make([]selectedManifestProvisioner, 0, len(surface.Provisioners))
 	for index, provisioner := range m.Provisioners {
 		for _, surfaceProvisioner := range surface.Provisioners {
@@ -106,14 +108,22 @@ func selectedProvisioners(m manifest.Manifest, tags []string, osName string) []s
 // shared math. It is PURE: no I/O and safe in a dry-run.
 func SkippedProvisioners(m manifest.Manifest, opts Options) (profilesel.Hint, bool, error) {
 	active := selectionLabel(opts.Profile, opts.Profiles)
+	arch := effectiveArch(opts.Arch)
 	if len(opts.Profiles) > 1 {
 		return profilesel.SkippedSelection(m.Profiles, opts.Profiles, opts.OS, func(name, os string) (map[int]bool, error) {
-			return selectedIndices(m, []string{name}, os, nil)
+			return selectedIndices(m, []string{name}, os, arch, nil)
 		})
 	}
 	return profilesel.Skipped(m.Profiles, active, opts.OS, func(name, os string) (map[int]bool, error) {
-		return selectedIndices(m, []string{name}, os, nil)
+		return selectedIndices(m, []string{name}, os, arch, nil)
 	})
+}
+
+func effectiveArch(arch string) string {
+	if strings.TrimSpace(arch) == "" {
+		return runtime.GOARCH
+	}
+	return arch
 }
 
 // Build resolves every selected Provisioner into its exact command and the
@@ -151,7 +161,8 @@ func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Select
 // manages, used as the advisory blast radius in the plan. claude writes marketplace and plugin state under
 // ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
 // servers in ~/.codex/config.toml, under ~/.codex. herdr installs plugin
-// checkouts, registry data, and plugin-owned config under ~/.config/herdr/plugins.
+// checkouts, registry data, and plugin-owned config/state under its XDG roots;
+// plugin builds may also populate XDG caches and the selected Rust toolchain.
 // codegraph writes its own
 // installed versions and shim under ~/.codegraph and ~/.local/bin, plus MCP
 // config and instructions for the selected agents. skills.sh installs global
@@ -169,7 +180,14 @@ func managedRoots(prov manifest.Provisioner) []string {
 	case "codegraph":
 		return codeGraphRoots(prov.Spec.Agents)
 	case "herdr":
-		return []string{"~/.config/herdr/plugins"}
+		return []string{
+			"~/.config/herdr",
+			"~/.local/state/herdr",
+			"~/.local/share",
+			"~/.cache",
+			"~/.cargo",
+			"~/.rustup",
+		}
 	case "skills":
 		return skillsRoots(prov.Spec.Agents)
 	case "zimfw":

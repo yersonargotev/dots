@@ -193,12 +193,12 @@ func newInstallCommand() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout())
 			}
 
-			p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, effective.Selection, hostOS, paths, prep.SourceReadRoot, prep.LegacyMigrations)
+			p, provPlan, err := buildInstallPlanAndProvisioners(*m, meta, effective.Selection, hostOS, hostArch, paths, prep.SourceReadRoot, prep.LegacyMigrations)
 			if err != nil {
 				return err
 			}
 			p.Selection = &effective.Report
-			p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, hostOS, paths, prep.SourceReadRoot, len(profiles) > 0 || len(extraTags) > 0 || clearSelection)
+			p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, hostOS, hostArch, paths, prep.SourceReadRoot, len(profiles) > 0 || len(extraTags) > 0 || clearSelection)
 			if err != nil {
 				return err
 			}
@@ -314,7 +314,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			provResult, err := runProvisionersWithOptionsAndEnvironment(cmd, *m, provision.Options{Selection: &effective.Selection, OS: hostOS}, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
+			provResult, err := runProvisionersWithOptionsAndEnvironment(cmd, *m, provision.Options{Selection: &effective.Selection, OS: hostOS, Arch: hostArch}, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
 			if err != nil {
 				if wantsJSON(cmd) {
 					return installProvisionerError{err: err, report: installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
@@ -381,10 +381,10 @@ func renderInstallPlanAndProvisioners(cmd *cobra.Command, m manifest.Manifest, p
 	if len(profiles) == 0 {
 		return nil
 	}
-	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS)
+	return renderSkippedProvisionerHint(cmd.OutOrStdout(), m, profiles, runtime.GOOS, runtime.GOARCH)
 }
 
-func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, selected manifest.Selection, hostOS string, paths resolvedPaths, sourceReadRoot string, legacyMigrations map[string]plan.LegacyMigration) (plan.Plan, provision.Plan, error) {
+func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, selected manifest.Selection, hostOS, hostArch string, paths resolvedPaths, sourceReadRoot string, legacyMigrations map[string]plan.LegacyMigration) (plan.Plan, provision.Plan, error) {
 	p, err := plan.Build(m, plan.Options{
 		Selection:        &selected,
 		OS:               hostOS,
@@ -399,7 +399,7 @@ func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, s
 		return plan.Plan{}, provision.Plan{}, err
 	}
 
-	provPlan, err := provision.Build(m, provision.Options{Selection: &selected, OS: hostOS})
+	provPlan, err := provision.Build(m, provision.Options{Selection: &selected, OS: hostOS, Arch: hostArch})
 	if err != nil {
 		return plan.Plan{}, provision.Plan{}, err
 	}
@@ -552,7 +552,7 @@ func runProvisioners(cmd *cobra.Command, m manifest.Manifest, profiles []string,
 }
 
 func runProvisionersWithEnvironment(cmd *cobra.Command, m manifest.Manifest, profiles []string, extraTags []string, home string, stateRoot string, sourceRoot string, baseEnv []string) (provision.Report, error) {
-	return runProvisionersWithOptionsAndEnvironment(cmd, m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS}, home, stateRoot, sourceRoot, baseEnv)
+	return runProvisionersWithOptionsAndEnvironment(cmd, m, provision.Options{Profiles: profiles, ExtraTags: extraTags, OS: runtime.GOOS, Arch: runtime.GOARCH}, home, stateRoot, sourceRoot, baseEnv)
 }
 
 func runProvisionersWithOptions(cmd *cobra.Command, m manifest.Manifest, provisionOpts provision.Options, home string, stateRoot string, sourceRoot string) (provision.Report, error) {

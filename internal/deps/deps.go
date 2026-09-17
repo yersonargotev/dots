@@ -6,6 +6,7 @@ package deps
 
 import (
 	"net/http"
+	"runtime"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -252,7 +253,11 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 		return nil, err
 	}
 
-	return selectedsurface.Evaluate(m, selection.Tags, opts.OS).Dependencies, nil
+	arch := opts.Arch
+	if strings.TrimSpace(arch) == "" {
+		arch = runtime.GOARCH
+	}
+	return selectedsurface.EvaluateForPlatform(m, selection.Tags, opts.OS, arch).Dependencies, nil
 }
 
 func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Selection, error) {

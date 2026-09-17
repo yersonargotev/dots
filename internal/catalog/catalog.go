@@ -177,6 +177,7 @@ type Provisioner struct {
 	EnvironmentNames []string     `json:"environment_names"`
 	Tags             []string     `json:"tags"`
 	OS               []string     `json:"os"`
+	Arch             []string     `json:"arch,omitempty"`
 	Dependencies     []Dependency `json:"dependencies"`
 }
 
@@ -674,7 +675,7 @@ func sourceOverrideKey(value SourceOverride) string {
 }
 
 func provisionerKey(value Provisioner) string {
-	return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v", value.Tool, value.Operation, value.Identity, value.Scope, value.Agents, value.Skills, value.Command, value.EnvironmentNames, value.Tags, value.OS)
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v", value.Tool, value.Operation, value.Identity, value.Scope, value.Agents, value.Skills, value.Command, value.EnvironmentNames, value.Tags, value.OS, value.Arch)
 }
 
 func behaviorKey(value Behavior) string {
@@ -683,8 +684,10 @@ func behaviorKey(value Behavior) string {
 
 func provisioner(p manifest.Provisioner) Provisioner {
 	s := p.Spec
-	result := Provisioner{Tool: p.Tool, Scope: s.Scope, Agents: clone(s.Agents), Skills: clone(s.Skills), Tags: clone(p.Tags), OS: declaredOS(p.OS), Dependencies: []Dependency{}, EnvironmentNames: []string{}}
+	result := Provisioner{Tool: p.Tool, Scope: s.Scope, Agents: clone(s.Agents), Skills: clone(s.Skills), Tags: clone(p.Tags), OS: declaredOS(p.OS), Arch: clone(p.Arch), Dependencies: []Dependency{}, EnvironmentNames: []string{}}
 	switch {
+	case p.Tool == "herdr":
+		result.Operation, result.Identity = "plugin", s.Plugin+"@"+s.Ref
 	case s.Marketplace != "":
 		result.Operation, result.Identity = "marketplace", s.Marketplace
 	case s.Plugin != "":

@@ -113,6 +113,7 @@ type Provisioner struct {
 	Tool         string          `yaml:"tool"`
 	Tags         []string        `yaml:"tags"`
 	OS           []string        `yaml:"os,omitempty"`
+	Arch         []string        `yaml:"arch,omitempty"`
 	Spec         ProvisionerSpec `yaml:"spec"`
 	Dependencies []Dependency    `yaml:"dependencies,omitempty"`
 }
@@ -522,6 +523,11 @@ func (m Manifest) validateEvolutionInventory() error {
 				return fmt.Errorf("provisioners[%d].os[%d] must be one of darwin, linux", i, j)
 			}
 		}
+		for j, arch := range provisioner.Arch {
+			if !allowedArch(arch) {
+				return fmt.Errorf("provisioners[%d].arch[%d] must be one of amd64, arm64", i, j)
+			}
+		}
 		for j, dependency := range provisioner.Dependencies {
 			if err := validateDependency(dependency, fmt.Sprintf("provisioners[%d].dependencies[%d]", i, j)); err != nil {
 				return err
@@ -681,6 +687,11 @@ func (m Manifest) Validate() error {
 		for j, osName := range prov.OS {
 			if !allowedOS(osName) {
 				return fmt.Errorf("provisioners[%d].os[%d] must be one of darwin, linux", i, j)
+			}
+		}
+		for j, arch := range prov.Arch {
+			if !allowedArch(arch) {
+				return fmt.Errorf("provisioners[%d].arch[%d] must be one of amd64, arm64", i, j)
 			}
 		}
 		if prov.Spec.IsEmpty() {
@@ -1279,6 +1290,20 @@ func MatchesOS(itemOS []string, currentOS string) bool {
 	return false
 }
 
+// MatchesArch reports whether an optional Provisioner architecture filter
+// admits the requested host architecture. Empty filters remain portable.
+func MatchesArch(itemArch []string, currentArch string) bool {
+	if len(itemArch) == 0 {
+		return true
+	}
+	for _, arch := range itemArch {
+		if strings.EqualFold(arch, currentArch) {
+			return true
+		}
+	}
+	return false
+}
+
 func indexOfEmptyTag(tags []string) (int, bool) {
 	return indexOfEmptyString(tags)
 }
@@ -1326,6 +1351,15 @@ func allowedTargetRoot(root string) bool {
 func allowedOS(osName string) bool {
 	switch osName {
 	case "darwin", "linux":
+		return true
+	default:
+		return false
+	}
+}
+
+func allowedArch(arch string) bool {
+	switch arch {
+	case "amd64", "arm64":
 		return true
 	default:
 		return false

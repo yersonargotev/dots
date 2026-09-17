@@ -1,6 +1,8 @@
 package manifest_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,6 +41,7 @@ provisioners:
   - tool: herdr
     tags: [herdr]
     os: [darwin]
+    arch: [arm64]
     spec:
       plugin: szrenwei/herdr-space-tab-metadata
       ref: c696c36256eddc6ee1983ab9f202848b84460e06
@@ -48,8 +51,70 @@ provisioners:
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if len(got.Provisioners) != 1 || got.Provisioners[0].Spec.Ref != herdrTestCommit {
+	if len(got.Provisioners) != 1 || got.Provisioners[0].Spec.Ref != herdrTestCommit || len(got.Provisioners[0].Arch) != 1 || got.Provisioners[0].Arch[0] != "arm64" {
 		t.Fatalf("parsed Herdr provisioner = %#v", got.Provisioners)
+	}
+}
+
+func TestProvisionerArchitectureFilterValidation(t *testing.T) {
+	for _, arch := range []string{"amd64", "arm64"} {
+		t.Run("accepts "+arch, func(t *testing.T) {
+			m := manifestWithHerdrSpec(manifest.ProvisionerSpec{Plugin: "owner/repo", Ref: herdrTestCommit})
+			m.Provisioners[0].Arch = []string{arch}
+			if err := m.Validate(); err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+		})
+	}
+	for _, arch := range []string{"x86_64", "aarch64", "ARM64", ""} {
+		t.Run("rejects "+arch, func(t *testing.T) {
+			m := manifestWithHerdrSpec(manifest.ProvisionerSpec{Plugin: "owner/repo", Ref: herdrTestCommit})
+			m.Provisioners[0].Arch = []string{arch}
+			err := m.Validate()
+			if err == nil || !strings.Contains(err.Error(), ".arch[0] must be one of amd64, arm64") {
+				t.Fatalf("Validate() error = %v, want architecture rejection", err)
+			}
+		})
+	}
+}
+
+func TestLoadPreviousFilePreservesAndValidatesProvisionerArchitecture(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "dots.yaml")
+	data := []byte(`version: 1
+profiles:
+  default:
+    tags: [herdr]
+entries:
+  - source: configs/herdr/config.toml
+    target: ~/.config/herdr/config.toml
+    strategy: copy
+    tags: [herdr]
+provisioners:
+  - tool: retired-tool
+    tags: [herdr]
+    os: [darwin]
+    arch: [arm64]
+    spec:
+      retired_field: ignored
+`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write previous manifest: %v", err)
+	}
+
+	previous, err := manifest.LoadPreviousFile(path)
+	if err != nil {
+		t.Fatalf("LoadPreviousFile() error = %v", err)
+	}
+	if len(previous.Provisioners) != 1 || !manifest.MatchesArch(previous.Provisioners[0].Arch, "arm64") || manifest.MatchesArch(previous.Provisioners[0].Arch, "amd64") {
+		t.Fatalf("previous Provisioners = %#v, want preserved arm64 filter", previous.Provisioners)
+	}
+
+	invalid := strings.Replace(string(data), "arch: [arm64]", "arch: [x86_64]", 1)
+	if err := os.WriteFile(path, []byte(invalid), 0o600); err != nil {
+		t.Fatalf("rewrite previous manifest: %v", err)
+	}
+	if _, err := manifest.LoadPreviousFile(path); err == nil || !strings.Contains(err.Error(), ".arch[0] must be one of amd64, arm64") {
+		t.Fatalf("LoadPreviousFile() error = %v, want architecture rejection", err)
 	}
 }
 

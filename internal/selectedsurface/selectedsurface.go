@@ -5,6 +5,7 @@ package selectedsurface
 
 import (
 	"reflect"
+	"runtime"
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -64,8 +65,17 @@ type SourceOverride struct {
 // Evaluate returns the pure selected surface. Effective tags are normalized to
 // their first occurrence. All remaining collections retain manifest order.
 func Evaluate(m manifest.Manifest, effectiveTags []string, osName string) Surface {
+	return EvaluateForPlatform(m, effectiveTags, osName, runtime.GOARCH)
+}
+
+// EvaluateForPlatform returns the pure selected surface for an explicit OS and
+// architecture, applying architecture filters only to Provisioners and the
+// Dependencies contributed by those Provisioners.
+func EvaluateForPlatform(m manifest.Manifest, effectiveTags []string, osName, arch string) Surface {
 	return evaluate(m, effectiveTags, func(itemOS []string) bool {
 		return manifest.MatchesOS(itemOS, osName)
+	}, func(itemArch []string) bool {
+		return manifest.MatchesArch(itemArch, arch)
 	})
 }
 
@@ -78,16 +88,17 @@ func EvaluateEntries(m manifest.Manifest, effectiveTags []string, osName string)
 	})
 }
 
-// EvaluateAll returns the portable selected surface across Darwin and Linux.
+// EvaluateAll returns the portable selected surface across Darwin, Linux, and
+// every supported architecture.
 // It evaluates each declaration once, preserving manifest order without
 // introducing an all-platform sentinel into the selected surface.
 func EvaluateAll(m manifest.Manifest, effectiveTags []string) Surface {
 	return evaluate(m, effectiveTags, func(itemOS []string) bool {
 		return manifest.MatchesOS(itemOS, "darwin") || manifest.MatchesOS(itemOS, "linux")
-	})
+	}, func([]string) bool { return true })
 }
 
-func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS func([]string) bool) Surface {
+func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS, matchesArch func([]string) bool) Surface {
 	tags := uniqueTags(effectiveTags)
 	result := Surface{
 		Tags:              tags,
@@ -158,7 +169,7 @@ func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS func([]stri
 	}
 
 	for _, provisioner := range m.Provisioners {
-		if !sharesTag(provisioner.Tags, tags) || !matchesOS(provisioner.OS) || containsExact(seenProvisioners, provisioner) {
+		if !sharesTag(provisioner.Tags, tags) || !matchesOS(provisioner.OS) || !matchesArch(provisioner.Arch) || containsExact(seenProvisioners, provisioner) {
 			continue
 		}
 		seenProvisioners = append(seenProvisioners, provisioner)
@@ -279,6 +290,7 @@ func cloneEntry(entry manifest.Entry) manifest.Entry {
 func cloneProvisioner(provisioner manifest.Provisioner) manifest.Provisioner {
 	provisioner.Tags = cloneStrings(provisioner.Tags)
 	provisioner.OS = cloneStrings(provisioner.OS)
+	provisioner.Arch = cloneStrings(provisioner.Arch)
 	provisioner.Dependencies = cloneDependencies(provisioner.Dependencies)
 	provisioner.Spec.Agents = cloneStrings(provisioner.Spec.Agents)
 	provisioner.Spec.Skills = cloneStrings(provisioner.Spec.Skills)

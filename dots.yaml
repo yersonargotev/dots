@@ -1213,6 +1213,7 @@ provisioners:
   - tool: herdr
     tags: [herdr]
     os: [darwin]
+    arch: [arm64]
     spec:
       plugin: yersonargotev/tabby
       ref: 34c01f9791dd3228acae7ca378adb38e09d9fb6c

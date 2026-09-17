@@ -47,14 +47,16 @@ func TestRenderHerdrPluginInstallCommand(t *testing.T) {
 }
 
 func TestHerdrPlanSelectsThreeDarwinPluginsAndNoLinuxPlugins(t *testing.T) {
+	tabby := herdrProvisioner("yersonargotev/tabby", herdrTabbyCommit)
+	tabby.Arch = []string{"arm64"}
 	plugins := []manifest.Provisioner{
 		herdrProvisioner("szrenwei/herdr-space-tab-metadata", herdrMetadataCommit),
 		herdrProvisioner("hasuwini77/herdr-tab-git", herdrGitCommit),
-		herdrProvisioner("yersonargotev/tabby", herdrTabbyCommit),
+		tabby,
 	}
 	m := manifestWithProvisioners(plugins...)
 
-	darwin, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin"})
+	darwin, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin", Arch: "arm64"})
 	if err != nil {
 		t.Fatalf("Build(darwin) error = %v", err)
 	}
@@ -65,12 +67,26 @@ func TestHerdrPlanSelectsThreeDarwinPluginsAndNoLinuxPlugins(t *testing.T) {
 		if step.Tool != "herdr" || step.Executable != "herdr" {
 			t.Fatalf("darwin.Steps[%d] tool/executable = %q/%q, want herdr/herdr", i, step.Tool, step.Executable)
 		}
-		if !reflect.DeepEqual(step.Targets, []string{"~/.config/herdr/plugins"}) {
+		wantTargets := []string{"~/.config/herdr", "~/.local/state/herdr", "~/.local/share", "~/.cache", "~/.cargo", "~/.rustup"}
+		if !reflect.DeepEqual(step.Targets, wantTargets) {
 			t.Fatalf("darwin.Steps[%d].Targets = %#v", i, step.Targets)
 		}
 	}
 
-	linux, err := provision.Build(m, provision.Options{Profile: "default", OS: "linux"})
+	intel, err := provision.Build(m, provision.Options{Profile: "default", OS: "darwin", Arch: "amd64"})
+	if err != nil {
+		t.Fatalf("Build(darwin/amd64) error = %v", err)
+	}
+	if len(intel.Steps) != 2 {
+		t.Fatalf("len(Build(darwin/amd64).Steps) = %d, want 2", len(intel.Steps))
+	}
+	for _, step := range intel.Steps {
+		if reflect.DeepEqual(step.Args, []string{"plugin", "install", "yersonargotev/tabby", "--ref", herdrTabbyCommit, "--yes"}) {
+			t.Fatalf("Intel plan included arm64-only Tabby: %#v", intel.Steps)
+		}
+	}
+
+	linux, err := provision.Build(m, provision.Options{Profile: "default", OS: "linux", Arch: "arm64"})
 	if err != nil {
 		t.Fatalf("Build(linux) error = %v", err)
 	}
@@ -124,12 +140,14 @@ func TestHerdrApplyUsesOneCommandPerEntryAndPropagatesFailure(t *testing.T) {
 }
 
 func TestHerdrApplyRepeatsPinnedInstallForRefresh(t *testing.T) {
-	m := manifestWithProvisioners(herdrProvisioner("yersonargotev/tabby", herdrTabbyCommit))
+	tabby := herdrProvisioner("yersonargotev/tabby", herdrTabbyCommit)
+	tabby.Arch = []string{"arm64"}
+	m := manifestWithProvisioners(tabby)
 	runner := &fakeRunner{}
 	look := lookupWith("herdr", "git", "python3", "node")
 
 	for run := 0; run < 2; run++ {
-		if _, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin"}, look, fontLookupWith(), runner); err != nil {
+		if _, err := provision.Apply(m, provision.Options{Profile: "default", OS: "darwin", Arch: "arm64"}, look, fontLookupWith(), runner); err != nil {
 			t.Fatalf("Apply() run %d error = %v", run+1, err)
 		}
 	}

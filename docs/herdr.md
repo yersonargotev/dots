@@ -1,6 +1,7 @@
 # Herdr workspace setup
 
-The `herdr` Tag installs Herdr configuration and three pinned plugins on macOS.
+The `herdr` Tag installs Herdr configuration and compatible pinned plugins on
+macOS: all three on Apple Silicon, and the two Spaces plugins on Intel.
 It is already part of the `core` and `workstation` Profiles. Select it explicitly
 with `dots install --tag herdr` on a new installation, or include it in the
 selection you intend to retain. Review selection reconciliation before changing
@@ -20,7 +21,9 @@ Dependencies. Python 3.9+ is needed by Space Tab Metadata; Node runs Tab Git
 Status. Tabby's pinned installer downloads a checksum-verified Apple Silicon
 binary and falls back to `cargo build --release --locked` if that artifact is
 missing, so its build toolchain is declared as well. The pinned Tabby installer
-rejects Intel Macs; the complete bundle currently requires Apple Silicon.
+rejects Intel Macs, so its Provisioner and Rust fallback Dependency are filtered
+to `arm64`. Intel Macs receive both Spaces plugins and retain their normal tab
+labels. Tabby is not needed to read the active tab's label.
 The `herdr` Tag still selects no surface on Linux.
 
 `dots plan --tag herdr --output json` previews exact Provisioner commands without
@@ -33,7 +36,8 @@ download/build work; it is not a network-free no-op.
 
 A fresh Herdr session runs plugin startup hooks. Installing or reloading config
 in a running session does not itself run those startup hooks. After installing,
-select the intended session explicitly (replace `work` below):
+select the intended session explicitly (replace `work` below; omit the Tabby
+action on Intel):
 
 ```sh
 herdr --session work server reload-config
@@ -71,9 +75,12 @@ also has no Git line. Long names may still be truncated by the sidebar width.
 ## Ownership and rollback
 
 The Install Manifest owns configuration as a TOML Subset. Plugin checkouts,
-registry, runtime state, and private plugin configuration remain Herdr-owned under
-`~/.config/herdr/plugins`; they are not vendored or copied into the Installed
-Repository. Herdr retains plugin configuration when replacing a managed plugin
+registry, runtime state, and private plugin configuration remain Herdr-owned.
+Checkouts and plugin configuration live under `~/.config/herdr/plugins`; the registry
+and its lock live beside that directory under `~/.config/herdr`, and plugin state
+lives under `~/.local/state/herdr/plugins`. Possible build cache/data and Rust roots
+are also disclosed in the Install Plan. These files are not vendored or copied into
+the Installed Repository. Herdr retains plugin configuration when replacing a managed plugin
 checkout. Deselection or dots uninstall does not reverse Provisioner effects or
 uninstall these external plugins.
 

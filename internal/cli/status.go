@@ -74,7 +74,7 @@ func newStatusCommand() *cobra.Command {
 			}
 			report.Selection = &effective.Report
 
-			provPlan, err := provision.Build(*m, provision.Options{Profiles: effective.Profiles, ExtraTags: effective.ExtraTags, Selection: &effective.Selection, OS: runtime.GOOS})
+			provPlan, err := provision.Build(*m, provision.Options{Profiles: effective.Profiles, ExtraTags: effective.ExtraTags, Selection: &effective.Selection, OS: runtime.GOOS, Arch: runtime.GOARCH})
 			if err != nil {
 				return err
 			}

@@ -42,6 +42,47 @@ func TestEvaluateFiltersByTagAndOSInManifestOrder(t *testing.T) {
 	}
 }
 
+func TestEvaluateForPlatformFiltersProvisionersAndTheirDependenciesByArchitecture(t *testing.T) {
+	portable := manifest.Provisioner{
+		Tool: "portable", Tags: []string{"core"}, OS: []string{"darwin"},
+		Dependencies: []manifest.Dependency{{Name: "portable-dependency"}},
+	}
+	arm64Only := manifest.Provisioner{
+		Tool: "arm64-only", Tags: []string{"core"}, OS: []string{"darwin"}, Arch: []string{"arm64"},
+		Dependencies: []manifest.Dependency{{Name: "arm64-dependency"}},
+	}
+	m := manifest.Manifest{Provisioners: []manifest.Provisioner{portable, arm64Only}}
+
+	arm64 := selectedsurface.EvaluateForPlatform(m, []string{"core"}, "darwin", "arm64")
+	if got := provisionerTools(arm64.Provisioners); !reflect.DeepEqual(got, []string{"portable", "arm64-only"}) {
+		t.Fatalf("arm64 Provisioners = %#v", got)
+	}
+	if got := dependencyNames(arm64.Dependencies); !reflect.DeepEqual(got, []string{"portable-dependency", "arm64-dependency"}) {
+		t.Fatalf("arm64 Dependencies = %#v", got)
+	}
+
+	amd64 := selectedsurface.EvaluateForPlatform(m, []string{"core"}, "darwin", "amd64")
+	if got := provisionerTools(amd64.Provisioners); !reflect.DeepEqual(got, []string{"portable"}) {
+		t.Fatalf("amd64 Provisioners = %#v", got)
+	}
+	if got := dependencyNames(amd64.Dependencies); !reflect.DeepEqual(got, []string{"portable-dependency"}) {
+		t.Fatalf("amd64 Dependencies = %#v", got)
+	}
+
+	all := selectedsurface.EvaluateAll(m, []string{"core"})
+	if got := provisionerTools(all.Provisioners); !reflect.DeepEqual(got, []string{"portable", "arm64-only"}) {
+		t.Fatalf("all-platform Provisioners = %#v", got)
+	}
+	if got := dependencyNames(all.Dependencies); !reflect.DeepEqual(got, []string{"portable-dependency", "arm64-dependency"}) {
+		t.Fatalf("all-platform Dependencies = %#v", got)
+	}
+
+	arm64.Provisioners[1].Arch[0] = "changed"
+	if m.Provisioners[1].Arch[0] != "arm64" {
+		t.Fatalf("EvaluateForPlatform result mutated manifest architecture filter: %#v", m.Provisioners[1].Arch)
+	}
+}
+
 func TestEvaluateDeduplicatesOnlyExactSelectedDeclarations(t *testing.T) {
 	set := manifest.DependencySet{Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "set"}}}
 	entry := manifest.Entry{Source: "a", Target: "shared", Strategy: "copy", Tags: []string{"core"}}
@@ -215,7 +256,11 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.tag+"/"+tt.osName, func(t *testing.T) {
-			surface := selectedsurface.Evaluate(*m, []string{tt.tag}, tt.osName)
+			architecture := "amd64"
+			if tt.tag == "herdr" && tt.osName == "darwin" {
+				architecture = "arm64"
+			}
+			surface := selectedsurface.EvaluateForPlatform(*m, []string{tt.tag}, tt.osName, architecture)
 			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, nonNil(tt.entries)) {
 				t.Errorf("Managed Entries = %#v, want %#v", got, nonNil(tt.entries))
 			}
@@ -385,7 +430,7 @@ func TestRepositoryCoreProfilePreservesPreAtomizationSurface(t *testing.T) {
 
 	for _, osName := range []string{"darwin", "linux"} {
 		t.Run(osName, func(t *testing.T) {
-			surface := selectedsurface.Evaluate(*m, selection.Tags, osName)
+			surface := selectedsurface.EvaluateForPlatform(*m, selection.Tags, osName, "arm64")
 			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, wantEntries[osName]) {
 				t.Errorf("Managed Entries changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, wantEntries[osName])
 			}

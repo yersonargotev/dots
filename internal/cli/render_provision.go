@@ -48,8 +48,8 @@ func renderProvisionPlan(w io.Writer, p provision.Plan) {
 // SuggestedProfile is rendered with %s, not %q: it is a copy-pasteable shell
 // argument the user types as `--profile desktop`, so it is intentionally
 // unquoted while the descriptive active profile uses %q.
-func renderSkippedProvisionerHint(w io.Writer, m manifest.Manifest, profiles []string, os string) error {
-	hint, ok, err := provision.SkippedProvisioners(m, provision.Options{Profiles: profiles, OS: os})
+func renderSkippedProvisionerHint(w io.Writer, m manifest.Manifest, profiles []string, os, arch string) error {
+	hint, ok, err := provision.SkippedProvisioners(m, provision.Options{Profiles: profiles, OS: os, Arch: arch})
 	if err != nil {
 		return err
 	}
