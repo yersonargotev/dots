@@ -36,6 +36,38 @@ func TestRepositoryProfilesMatchEquivalentExplicitTagsAcrossSupportedOS(t *testi
 	}
 }
 
+func TestCheckFiltersProvisionerDependenciesByArchitecture(t *testing.T) {
+	m := manifest.Manifest{
+		Version: 1,
+		Profiles: map[string]manifest.Profile{
+			"default": {Tags: []string{"core"}},
+		},
+		Entries: []manifest.Entry{{
+			Source: "config", Target: "~/.config/example", Strategy: "copy", Tags: []string{"core"},
+		}},
+		Provisioners: []manifest.Provisioner{
+			{Tool: "portable", Tags: []string{"core"}, Dependencies: []manifest.Dependency{{Name: "portable-dependency"}}},
+			{Tool: "arm64-only", Tags: []string{"core"}, Arch: []string{"arm64"}, Dependencies: []manifest.Dependency{{Name: "arm64-dependency"}}},
+		},
+	}
+
+	arm64, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin", Arch: "arm64"}, lookupSet(), fontLookupSet())
+	if err != nil {
+		t.Fatalf("Check(arm64) error = %v", err)
+	}
+	if got := dependencyNames(arm64.Results); !reflect.DeepEqual(got, []string{"portable-dependency", "arm64-dependency"}) {
+		t.Fatalf("Check(arm64) dependencies = %#v", got)
+	}
+
+	amd64, err := deps.Check(m, deps.Options{Profile: "default", OS: "darwin", Arch: "amd64"}, lookupSet(), fontLookupSet())
+	if err != nil {
+		t.Fatalf("Check(amd64) error = %v", err)
+	}
+	if got := dependencyNames(amd64.Results); !reflect.DeepEqual(got, []string{"portable-dependency"}) {
+		t.Fatalf("Check(amd64) dependencies = %#v", got)
+	}
+}
+
 func dependencyNames(results []deps.Result) []string {
 	names := make([]string, 0, len(results))
 	for _, result := range results {

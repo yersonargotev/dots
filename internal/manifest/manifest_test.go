@@ -2082,7 +2082,7 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be one of claude, codegraph, codex, skills, zimfw",
+			want: "provisioners[0].tool must be one of claude, codegraph, codex, herdr, skills, zimfw",
 		},
 		{
 			name: "retired gentle-ai tool",
@@ -2092,7 +2092,7 @@ provisioners:
       scope: global
       agents: [codex]
 `,
-			want: "provisioners[0].tool must be one of claude, codegraph, codex, skills, zimfw",
+			want: "provisioners[0].tool must be one of claude, codegraph, codex, herdr, skills, zimfw",
 		},
 		{
 			name: "claude spec sets neither marketplace nor plugin",
@@ -3956,8 +3956,9 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 		"spaces": `[ui.sidebar.spaces]
 row_gap = 1
 rows = [
-  ["state_icon", "workspace"],
-  ["branch", "git_status"],
+  ["state_icon", { token = "workspace", fg = "#cdd6f4", bold = true, dim = false }],
+  [{ token = "$active_tab", fg = "#cba6f7", dim = false }],
+  [{ token = "$gitbranch", fg = "#89b4fa", dim = false }, { token = "$gitstatus", fg = "#f9e2af", dim = false, rules = [{ equals = "clean", fg = "#a6e3a1" }] }],
 ]`,
 		"agents": `[ui.sidebar.agents]
 row_gap = 1

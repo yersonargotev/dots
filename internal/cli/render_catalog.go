@@ -346,7 +346,11 @@ func renderCatalogProvisioners(w io.Writer, provisioners []catalog.Provisioner) 
 		if provisioner.Identity != "" {
 			fmt.Fprintf(w, ": %s", provisioner.Identity)
 		}
-		fmt.Fprintf(w, "; tags: %s; OS: %s)\n", catalogList(provisioner.Tags), catalogList(provisioner.OS))
+		fmt.Fprintf(w, "; tags: %s; OS: %s", catalogList(provisioner.Tags), catalogList(provisioner.OS))
+		if len(provisioner.Arch) > 0 {
+			fmt.Fprintf(w, "; arch: %s", catalogList(provisioner.Arch))
+		}
+		fmt.Fprintln(w, ")")
 		if provisioner.Scope != "" {
 			fmt.Fprintf(w, "    scope: %s\n", provisioner.Scope)
 		}

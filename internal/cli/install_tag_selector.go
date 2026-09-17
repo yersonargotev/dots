@@ -494,7 +494,7 @@ func buildInstallTagSelectorTag(m manifest.Manifest, meta state.Metadata, summar
 	if err != nil {
 		return tagselectortui.Tag{}, fmt.Errorf("inspect Tag selector Dependencies for %q: %w", summary.Name, err)
 	}
-	provisionPlan, err := provision.Build(m, provision.Options{Selection: &effective.Selection, OS: opts.OS, AppLookup: opts.AppLookup})
+	provisionPlan, err := provision.Build(m, provision.Options{Selection: &effective.Selection, OS: opts.OS, Arch: opts.Arch, AppLookup: opts.AppLookup})
 	if err != nil {
 		return tagselectortui.Tag{}, fmt.Errorf("inspect Tag selector Provisioners for %q: %w", summary.Name, err)
 	}
@@ -804,12 +804,12 @@ func buildInstallTagSelectorCandidate(m manifest.Manifest, meta state.Metadata, 
 		preparedDependencies = &prepared
 	}
 
-	p, provisionPlan, err := buildInstallPlanAndProvisioners(m, meta, effective.Selection, hostOS, paths, sourceReadRoot, legacyMigrations)
+	p, provisionPlan, err := buildInstallPlanAndProvisioners(m, meta, effective.Selection, hostOS, depOptions.Arch, paths, sourceReadRoot, legacyMigrations)
 	if err != nil {
 		return installTagSelectorCandidate{}, fmt.Errorf("build Tag selector preview: %w", err)
 	}
 	p.Selection = &effective.Report
-	p.SelectionReconciliation, err = buildSelectionReconciliation(m, meta, effective, p, hostOS, paths, sourceReadRoot, true)
+	p.SelectionReconciliation, err = buildSelectionReconciliation(m, meta, effective, p, hostOS, depOptions.Arch, paths, sourceReadRoot, true)
 	if err != nil {
 		return installTagSelectorCandidate{}, fmt.Errorf("build Tag selector reconciliation preview: %w", err)
 	}
@@ -1211,7 +1211,7 @@ func applyAcceptedTagSelectorProvisioners(cmd *cobra.Command, candidate installT
 		Profile: candidate.Provisioners.Profile, Profiles: append([]string(nil), candidate.Provisioners.Profiles...),
 		Tags: append([]string(nil), candidate.Provisioners.Tags...), Items: []provision.RunItem{},
 	}
-	selected, err := provision.Select(candidate.Manifest, provision.Options{Selection: &candidate.Effective.Selection, OS: candidate.DependencyOptions.OS})
+	selected, err := provision.Select(candidate.Manifest, provision.Options{Selection: &candidate.Effective.Selection, OS: candidate.DependencyOptions.OS, Arch: candidate.DependencyOptions.Arch})
 	if err != nil {
 		return report, err
 	}

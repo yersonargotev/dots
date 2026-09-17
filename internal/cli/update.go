@@ -279,7 +279,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		return updateReport{}, err
 	}
 	p.Selection = &effective.Report
-	provisionOpts := provision.Options{Selection: &effective.Selection, OS: runtime.GOOS}
+	provisionOpts := provision.Options{Selection: &effective.Selection, OS: runtime.GOOS, Arch: runtime.GOARCH}
 	provPlan, err := provision.Build(*m, provisionOpts)
 	if err != nil {
 		return updateReport{}, err
@@ -299,7 +299,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		}
 		renderProvisionPlan(out, provPlan)
 		if len(effective.Profiles) > 0 {
-			if err := renderSkippedProvisionerHint(out, *m, effective.Profiles, runtime.GOOS); err != nil {
+			if err := renderSkippedProvisionerHint(out, *m, effective.Profiles, runtime.GOOS, runtime.GOARCH); err != nil {
 				return updateReport{}, err
 			}
 		}

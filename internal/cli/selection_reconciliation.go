@@ -17,7 +17,7 @@ import (
 	"github.com/yersonargotev/dots/internal/state"
 )
 
-func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effective selection.Effective, installPlan plan.Plan, hostOS string, paths resolvedPaths, sourceReadRoot string, explicitIntent bool) (*selectionreconciliation.Report, error) {
+func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effective selection.Effective, installPlan plan.Plan, hostOS, hostArch string, paths resolvedPaths, sourceReadRoot string, explicitIntent bool) (*selectionreconciliation.Report, error) {
 	installed := meta.InstalledSelection
 	if installed == nil {
 		return nil, nil
@@ -26,8 +26,8 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 		sourceReadRoot = paths.SourceRoot
 	}
 
-	previousSurface := selectedsurface.Evaluate(m, installed.ResolvedTags, hostOS)
-	currentSurface := selectedsurface.Evaluate(m, effective.Selection.Tags, hostOS)
+	previousSurface := selectedsurface.EvaluateForPlatform(m, installed.ResolvedTags, hostOS, hostArch)
+	currentSurface := selectedsurface.EvaluateForPlatform(m, effective.Selection.Tags, hostOS, hostArch)
 	previousSurface, manifestEvolutionTargets := supplementRecordedSurface(previousSurface, currentSurface, meta, *installed, paths)
 	evidence, err := inspectSelectionReconciliation(previousSurface, currentSurface, installPlan, paths, sourceReadRoot)
 	if err != nil {

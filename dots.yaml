@@ -21,7 +21,7 @@ tags:
     kind: surface
     status: current
   herdr:
-    description: Herdr terminal theme configuration on macOS.
+    description: Herdr terminal configuration and pinned workspace plugins on macOS.
     kind: surface
     status: current
   zellij:
@@ -1174,6 +1174,63 @@ entries:
       - name: opencode
         command: opencode
 provisioners:
+  - tool: herdr
+    tags: [herdr]
+    os: [darwin]
+    spec:
+      plugin: szrenwei/herdr-space-tab-metadata
+      ref: c696c36256eddc6ee1983ab9f202848b84460e06
+    dependencies:
+      - name: herdr
+        command: herdr
+        brew: herdr
+      - name: git
+        command: git
+        brew: git
+      - name: python3
+        command: python3
+        brew: python
+  - tool: herdr
+    tags: [herdr]
+    os: [darwin]
+    spec:
+      plugin: hasuwini77/herdr-tab-git
+      ref: 83ce41a11c5cc3ab2de1452ab303f6dfb976a937
+    dependencies:
+      - name: herdr
+        command: herdr
+        brew: herdr
+      - name: git
+        command: git
+        brew: git
+      - name: python3
+        command: python3
+        brew: python
+      - name: Node LTS (fnm)
+        commands: [fnm, node]
+        brew: fnm
+        toolchain: node-lts-fnm
+  - tool: herdr
+    tags: [herdr]
+    os: [darwin]
+    arch: [arm64]
+    spec:
+      plugin: yersonargotev/tabby
+      ref: 34c01f9791dd3228acae7ca378adb38e09d9fb6c
+    dependencies:
+      - name: herdr
+        command: herdr
+        brew: herdr
+      - name: git
+        command: git
+        brew: git
+      - name: python3
+        command: python3
+        brew: python
+      - name: Rust stable (rustup)
+        commands: [rustup, rustc, cargo]
+        brew: rustup
+        toolchain: rust-stable-rustup
   - tool: zimfw
     tags:
       - zimfw

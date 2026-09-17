@@ -25,7 +25,8 @@ type provisionExecRunner struct {
 }
 
 func (r provisionExecRunner) Run(executable string, args []string) error {
-	if resolved, ok := lookPathInEnvironment(executable, r.environment()); ok {
+	env := r.environmentFor(executable)
+	if resolved, ok := lookPathInEnvironment(executable, env); ok {
 		executable = resolved
 	}
 	cmd := exec.CommandContext(r.ctx, executable, args...)
@@ -33,7 +34,7 @@ func (r provisionExecRunner) Run(executable string, args []string) error {
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
 
-	cmd.Env = r.environment()
+	cmd.Env = env
 	return cmd.Run()
 }
 
@@ -48,6 +49,14 @@ func (r provisionExecRunner) environment() []string {
 		base = os.Environ()
 	}
 	return envForProvisioner(base, r.home)
+}
+
+func (r provisionExecRunner) environmentFor(executable string) []string {
+	env := r.environment()
+	if executable == "herdr" {
+		return envForHerdrProvisioner(env, r.home)
+	}
+	return env
 }
 
 // envForProvisioner returns base with a sandboxed HOME, a user-local npm prefix,
@@ -76,4 +85,34 @@ func envForProvisioner(base []string, home string) []string {
 		path = localBin + string(os.PathListSeparator) + path
 	}
 	return append(out, "HOME="+home, "NPM_CONFIG_PREFIX="+home+"/.local", "PATH="+path)
+}
+
+// envForHerdrProvisioner confines Herdr's plugin checkout, registry, config,
+// state, build caches, session, and socket discovery to the selected home. Removing every
+// inherited HERDR_* value prevents a command launched inside a live Herdr pane
+// from mutating that pane's server through its exported session or socket.
+func envForHerdrProvisioner(base []string, home string) []string {
+	out := make([]string, 0, len(base)+8)
+	for _, kv := range base {
+		switch {
+		case strings.HasPrefix(kv, "XDG_CONFIG_HOME="),
+			strings.HasPrefix(kv, "XDG_STATE_HOME="),
+			strings.HasPrefix(kv, "XDG_DATA_HOME="),
+			strings.HasPrefix(kv, "XDG_CACHE_HOME="),
+			strings.HasPrefix(kv, "CARGO_HOME="),
+			strings.HasPrefix(kv, "RUSTUP_HOME="),
+			strings.HasPrefix(kv, "HERDR_"):
+			continue
+		default:
+			out = append(out, kv)
+		}
+	}
+	return append(out,
+		"XDG_CONFIG_HOME="+home+"/.config",
+		"XDG_STATE_HOME="+home+"/.local/state",
+		"XDG_DATA_HOME="+home+"/.local/share",
+		"XDG_CACHE_HOME="+home+"/.cache",
+		"CARGO_HOME="+home+"/.cargo",
+		"RUSTUP_HOME="+home+"/.rustup",
+	)
 }

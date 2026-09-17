@@ -99,7 +99,10 @@ func TestRepositoryReportsAgreeWithSelectedSurface(t *testing.T) {
 					t.Fatal("doctor differs for Profile and equivalent explicit Tags")
 				}
 
-				assertCatalogSurface(t, *m, profileName, osName, profileSurface)
+				// OS catalog views describe all architectures; installation reports
+				// above intentionally describe only the executing architecture.
+				catalogSurface := selectedsurface.EvaluateForOS(*m, profileSelection.Tags, osName)
+				assertCatalogSurface(t, *m, profileName, osName, catalogSurface)
 				assertInstalledCoverage(t, *m, profileName, profile.Tags, osName, repositoryRoot, home, xdgStateHome, profileSurface)
 			})
 		}

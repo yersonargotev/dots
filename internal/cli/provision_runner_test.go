@@ -118,6 +118,86 @@ printf 'ok' > "$HOME/npm-prefix-ok"
 	}
 }
 
+func TestProvisionExecRunnerIsolatesHerdrPathsAndLiveSessionContext(t *testing.T) {
+	sandboxHome := t.TempDir()
+	fakeRealHome := t.TempDir()
+	stubDir := t.TempDir()
+
+	script := `#!/bin/sh
+if [ "$*" != "plugin install owner/repo --ref c696c36256eddc6ee1983ab9f202848b84460e06 --yes" ]; then
+  exit 7
+fi
+if [ "$XDG_CONFIG_HOME" != "$HOME/.config" ] ||
+   [ "$XDG_STATE_HOME" != "$HOME/.local/state" ] ||
+   [ "$XDG_DATA_HOME" != "$HOME/.local/share" ] ||
+   [ "$XDG_CACHE_HOME" != "$HOME/.cache" ] ||
+   [ "$CARGO_HOME" != "$HOME/.cargo" ] ||
+   [ "$RUSTUP_HOME" != "$HOME/.rustup" ]; then
+  exit 8
+fi
+if [ -n "$HERDR_CONFIG_PATH" ] || [ -n "$HERDR_SOCKET_PATH" ] ||
+   [ -n "$HERDR_CLIENT_SOCKET_PATH" ] || [ -n "$HERDR_SESSION" ] ||
+   [ -n "$HERDR_ENV" ]; then
+  exit 9
+fi
+printf isolated > "$HOME/herdr-env-ok"
+`
+	stub := filepath.Join(stubDir, "herdr")
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatalf("write herdr stub: %v", err)
+	}
+
+	runner := provisionExecRunner{
+		ctx:    context.Background(),
+		home:   sandboxHome,
+		stdout: io.Discard,
+		stderr: io.Discard,
+		baseEnv: []string{
+			"HOME=" + fakeRealHome,
+			"PATH=" + stubDir + string(os.PathListSeparator) + os.Getenv("PATH"),
+			"XDG_CONFIG_HOME=" + fakeRealHome + "/config",
+			"XDG_STATE_HOME=" + fakeRealHome + "/state",
+			"XDG_DATA_HOME=" + fakeRealHome + "/data",
+			"XDG_CACHE_HOME=" + fakeRealHome + "/cache",
+			"CARGO_HOME=" + fakeRealHome + "/cargo",
+			"RUSTUP_HOME=" + fakeRealHome + "/rustup",
+			"HERDR_CONFIG_PATH=" + fakeRealHome + "/config.toml",
+			"HERDR_SOCKET_PATH=" + fakeRealHome + "/herdr.sock",
+			"HERDR_CLIENT_SOCKET_PATH=" + fakeRealHome + "/herdr-client.sock",
+			"HERDR_SESSION=live-session",
+			"HERDR_ENV=1",
+		},
+	}
+
+	args := []string{"plugin", "install", "owner/repo", "--ref", "c696c36256eddc6ee1983ab9f202848b84460e06", "--yes"}
+	if err := runner.Run("herdr", args); err != nil {
+		t.Fatalf("Run(herdr) error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sandboxHome, "herdr-env-ok")); err != nil {
+		t.Fatalf("expected Herdr marker in sandbox home: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(fakeRealHome, "herdr-env-ok")); !os.IsNotExist(err) {
+		t.Fatalf("Herdr wrote marker under inherited home: %v", err)
+	}
+}
+
+func TestProvisionExecRunnerKeepsHerdrContextForOtherTools(t *testing.T) {
+	runner := provisionExecRunner{
+		home: "/sandbox/home",
+		baseEnv: []string{
+			"HOME=/real/home",
+			"PATH=/usr/bin",
+			"XDG_CONFIG_HOME=/operator/config",
+			"HERDR_SESSION=live-session",
+		},
+	}
+
+	got := runner.environmentFor("claude")
+	if !containsEnv(got, "XDG_CONFIG_HOME=/operator/config") || !containsEnv(got, "HERDR_SESSION=live-session") {
+		t.Fatalf("non-Herdr environment unexpectedly removed Herdr context: %#v", got)
+	}
+}
+
 func TestRunProvisionersRendersPartialReportOnFailure(t *testing.T) {
 	home := t.TempDir()
 	stubDir := t.TempDir()
