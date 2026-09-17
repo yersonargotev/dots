@@ -44,6 +44,12 @@ func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 		return "sh", renderCodeGraphArgs(p.Spec)
 	case "codex":
 		return p.Tool, renderCodexArgs(p.Spec)
+	case "herdr":
+		return p.Tool, []string{
+			"plugin", "install", strings.TrimSpace(p.Spec.Plugin),
+			"--ref", strings.TrimSpace(p.Spec.Ref),
+			"--yes",
+		}
 	case "skills":
 		return "npx", renderSkillsArgs(p.Spec)
 	case "zimfw":

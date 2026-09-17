@@ -137,7 +137,7 @@ from compact discovery unless `--all` is supplied.
 | `ghostty` | surface | current | Ghostty terminal configuration and application requirement. |  |
 | `git` | surface | current | Portable Git configuration and native Git entrypoint. |  |
 | `go` | surface | current | Go language toolchain. |  |
-| `herdr` | surface | current | Herdr terminal theme configuration on macOS. |  |
+| `herdr` | surface | current | Herdr terminal configuration and pinned workspace plugins on macOS. |  |
 | `jq` | surface | current | jq command-line JSON processor. |  |
 | `lazygit` | surface | current | Lazygit terminal interface for Git. |  |
 | `mobile` | compatibility | legacy | Legacy Mobile workbench alias; use the atomic mobile capability Tags. | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `antigravity-dart-mcp`, `vscode-mobile` |
@@ -500,7 +500,7 @@ reuse user-local tools without requiring sudo in non-interactive runs.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
-| `tool` | Yes | `claude`, `codex`, `codegraph`, `skills`, or `zimfw`. |
+| `tool` | Yes | `claude`, `codex`, `codegraph`, `herdr`, `skills`, or `zimfw`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `spec` | Yes | Tool-specific declaration. Each spec must speak exactly one tool dialect. |
@@ -552,6 +552,28 @@ Constraints:
   `--yes` flag.
 - CodeGraph specs must not mix skill names, Claude plugin fields, MCP fields, or
   skills.sh-specific fields.
+
+### `herdr` spec
+
+Supported fields: `plugin` (a GitHub `OWNER/REPO`) and `ref` (a full
+40-character hexadecimal commit). Other dialect fields are rejected. A Herdr
+Provisioner renders exactly one direct invocation:
+
+```sh
+herdr plugin install OWNER/REPO --ref COMMIT --yes
+```
+
+`ref` is exclusive to Herdr. The Install Plan lists `~/.config/herdr/plugins`
+as the affected root. Readiness only probes declared Dependencies; plan and
+doctor never install or contact plugins. Apply uses Herdr's native installer,
+including its reviewed build commands. Repeated installs may download and rebuild
+the same revision; Herdr retains plugin configuration outside the managed checkout.
+The child environment is rooted at the selected home, with inherited Herdr session
+and path overrides removed to avoid contacting another home's live server.
+
+The existing `herdr` Tag selects the three pinned workspace plugins on macOS;
+core and workstation already include it. See [Herdr setup](herdr.md) for runtime
+requirements, live-session activation, ownership, and known limitations.
 
 ### `skills` spec
 

@@ -41,12 +41,14 @@ func TestApplicationWritableTargetsKeepInstalledRepositoryCleanAcrossLifecycle(t
 	t.Setenv("XDG_STATE_HOME", xdgStateHome)
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
 
-	// The real core Manifest selects zimfw. Stub only its executable surfaces so
-	// the lifecycle remains local; keep the real git executable for repository
+	// The real core and desktop Manifest selections include external
+	// provisioners. Stub every selected dependency and provisioner surface so the
+	// lifecycle remains local; keep the real git executable for repository
 	// cleanliness and update verification.
 	stubDir := t.TempDir()
-	writeExecStub(t, filepath.Join(stubDir, "zsh"), "#!/bin/sh\nexit 0\n")
-	writeExecStub(t, filepath.Join(stubDir, "curl"), "#!/bin/sh\nexit 0\n")
+	for _, command := range []string{"zsh", "curl", "herdr", "python3", "fnm", "node", "rustup", "rustc", "cargo"} {
+		writeExecStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
+	}
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	manifestPath := filepath.Join(sourceRoot, "dots.yaml")

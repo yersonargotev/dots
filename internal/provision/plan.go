@@ -150,7 +150,9 @@ func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Select
 // managedRoots returns the well-known HOME-relative roots an allowlisted tool
 // manages, used as the advisory blast radius in the plan. claude writes marketplace and plugin state under
 // ~/.claude and the user MCP/plugin registry in ~/.claude.json. codex records MCP
-// servers in ~/.codex/config.toml, under ~/.codex. codegraph writes its own
+// servers in ~/.codex/config.toml, under ~/.codex. herdr installs plugin
+// checkouts, registry data, and plugin-owned config under ~/.config/herdr/plugins.
+// codegraph writes its own
 // installed versions and shim under ~/.codegraph and ~/.local/bin, plus MCP
 // config and instructions for the selected agents. skills.sh installs global
 // skills under the user-level agent skill directories selected by its --agent
@@ -166,6 +168,8 @@ func managedRoots(prov manifest.Provisioner) []string {
 		return []string{"~/.codex"}
 	case "codegraph":
 		return codeGraphRoots(prov.Spec.Agents)
+	case "herdr":
+		return []string{"~/.config/herdr/plugins"}
 	case "skills":
 		return skillsRoots(prov.Spec.Agents)
 	case "zimfw":

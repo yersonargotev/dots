@@ -17,6 +17,8 @@ import (
 var (
 	skillsPackageRefPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*(@[A-Za-z0-9][A-Za-z0-9._./-]*)?$`)
 	skillsDataValuePattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	herdrPluginPattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	herdrCommitPattern      = regexp.MustCompile(`^[0-9A-Fa-f]{40}$`)
 )
 
 type Manifest struct {
@@ -120,8 +122,9 @@ type Provisioner struct {
 // (Marketplace, Plugin, From) describe a single idempotent `claude` invocation, the MCP fields
 // (MCP, Command, Env) a single MCP-server add invocation, Package drives
 // one `npx --yes skills@1.5.12 add` invocation, and the codegraph dialect reuses
-// Agents, Scope, and Yes to render a fixed bootstrap-and-install script. The
-// dialects are mutually exclusive: a spec speaks exactly one of them.
+// Agents, Scope, and Yes to render a fixed bootstrap-and-install script. Herdr
+// uses Plugin and Ref to install one GitHub plugin at an immutable commit. The dialects
+// are mutually exclusive: a spec speaks exactly one of them.
 type ProvisionerSpec struct {
 	Scope  string   `yaml:"scope,omitempty"`
 	Agents []string `yaml:"agents,omitempty"`
@@ -131,9 +134,13 @@ type ProvisionerSpec struct {
 	// (GitHub repo, URL, or path), rendering `claude plugin marketplace add
 	// <source>`. The marketplace name is derived by Claude from the source.
 	Marketplace string `yaml:"marketplace,omitempty"`
-	// Plugin installs a plugin from an already-registered marketplace, rendering
-	// `claude plugin install <plugin>@<from> --scope user`. It requires From.
+	// Plugin installs either a Claude plugin from an already-registered
+	// marketplace or a Herdr plugin from a GitHub owner/repo. Claude requires
+	// From; Herdr requires Ref.
 	Plugin string `yaml:"plugin,omitempty"`
+	// Ref pins a Herdr GitHub plugin to one full commit hash. It is only valid for
+	// the Herdr provisioner alongside Plugin.
+	Ref string `yaml:"ref,omitempty"`
 	// From names the marketplace a Plugin is installed from. It is only valid
 	// alongside Plugin.
 	From string `yaml:"from,omitempty"`
@@ -660,7 +667,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of claude, codegraph, codex, skills, zimfw", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of claude, codegraph, codex, herdr, skills, zimfw", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -690,6 +697,10 @@ func (m Manifest) Validate() error {
 			}
 		case "codegraph":
 			if err := validateCodeGraphSpec(prov.Spec, i); err != nil {
+				return err
+			}
+		case "herdr":
+			if err := validateHerdrSpec(prov.Spec, i); err != nil {
 				return err
 			}
 		case "skills":
@@ -826,6 +837,7 @@ func (s ProvisionerSpec) IsEmpty() bool {
 		!hasNonEmptyString(s.Agents) &&
 		!hasNonEmptyString(s.Skills) &&
 		!s.Yes &&
+		strings.TrimSpace(s.Ref) == "" &&
 		!s.usesClaudeFields() &&
 		!s.usesMCPFields() &&
 		!s.usesSkillsFields()
@@ -858,6 +870,9 @@ func (s ProvisionerSpec) usesSkillsFields() bool {
 // one idempotent invocation — a marketplace registration, a plugin install
 // (which needs a From marketplace), or a stdio MCP server registration.
 func validateClaudeSpec(s ProvisionerSpec, i int) error {
+	if strings.TrimSpace(s.Ref) != "" {
+		return fmt.Errorf("provisioners[%d].spec.ref is only valid for the herdr tool", i)
+	}
 	if strings.TrimSpace(s.Scope) != "" || hasNonEmptyString(s.Agents) || hasNonEmptyString(s.Skills) || s.Yes {
 		return fmt.Errorf("provisioners[%d].spec must not set scope, agents, skills, or yes for the claude tool", i)
 	}
@@ -905,6 +920,9 @@ func validateClaudeSpec(s ProvisionerSpec, i int) error {
 // one idempotent `codex mcp add` invocation — an MCP server name plus its launch
 // command — and never mixes in the Claude or skills dialects.
 func validateCodexSpec(s ProvisionerSpec, i int) error {
+	if strings.TrimSpace(s.Ref) != "" {
+		return fmt.Errorf("provisioners[%d].spec.ref is only valid for the herdr tool", i)
+	}
 	if strings.TrimSpace(s.Scope) != "" || hasNonEmptyString(s.Agents) || hasNonEmptyString(s.Skills) || s.Yes {
 		return fmt.Errorf("provisioners[%d].spec must not set scope, agents, skills, or yes for the codex tool", i)
 	}
@@ -933,6 +951,9 @@ func validateCodexSpec(s ProvisionerSpec, i int) error {
 // codegraph binary when it is absent, then wire the selected agents to
 // `codegraph serve --mcp`.
 func validateCodeGraphSpec(s ProvisionerSpec, i int) error {
+	if strings.TrimSpace(s.Ref) != "" {
+		return fmt.Errorf("provisioners[%d].spec.ref is only valid for the herdr tool", i)
+	}
 	if s.usesClaudeFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the codegraph tool", i)
 	}
@@ -969,6 +990,36 @@ func validateCodeGraphSpec(s ProvisionerSpec, i int) error {
 	return nil
 }
 
+// validateHerdrSpec constrains plugin installation to one GitHub owner/repo
+// and one immutable commit. The renderer passes both values as separate argv;
+// no manifest-controlled shell is involved.
+func validateHerdrSpec(s ProvisionerSpec, i int) error {
+	if strings.TrimSpace(s.Scope) != "" || hasNonEmptyString(s.Agents) || hasNonEmptyString(s.Skills) || s.Yes {
+		return fmt.Errorf("provisioners[%d].spec must not set scope, agents, skills, or yes for the herdr tool", i)
+	}
+	if strings.TrimSpace(s.Marketplace) != "" || strings.TrimSpace(s.From) != "" {
+		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, from) for the herdr tool", i)
+	}
+	if s.usesMCPFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set MCP fields (mcp, command, env) for the herdr tool", i)
+	}
+	if s.usesSkillsFields() {
+		return fmt.Errorf("provisioners[%d].spec must not set skills.sh fields (package, global, copy) for the herdr tool", i)
+	}
+	plugin := strings.TrimSpace(s.Plugin)
+	if plugin == "" {
+		return fmt.Errorf("provisioners[%d].spec.plugin is required for the herdr tool", i)
+	}
+	if containsControl(plugin) || strings.ContainsAny(plugin, " \t") || !herdrPluginPattern.MatchString(plugin) {
+		return fmt.Errorf("provisioners[%d].spec.plugin must be an owner/repo reference for the herdr tool", i)
+	}
+	ref := strings.TrimSpace(s.Ref)
+	if !herdrCommitPattern.MatchString(ref) {
+		return fmt.Errorf("provisioners[%d].spec.ref must be a full 40-character hexadecimal commit for the herdr tool", i)
+	}
+	return nil
+}
+
 func allowedCodeGraphAgent(agent string) bool {
 	switch agent {
 	case "antigravity", "claude", "codex", "opencode":
@@ -982,6 +1033,9 @@ func allowedCodeGraphAgent(agent string) bool {
 // exact `npx --yes skills@1.5.12 add <package>` invocation with optional target agents and
 // selected skill names. It does not accept unrelated scalar, Claude, or MCP fields.
 func validateSkillsSpec(s ProvisionerSpec, i int) error {
+	if strings.TrimSpace(s.Ref) != "" {
+		return fmt.Errorf("provisioners[%d].spec.ref is only valid for the herdr tool", i)
+	}
 	if s.usesClaudeFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the skills tool", i)
 	}
@@ -1019,6 +1073,9 @@ func validateSkillsSpec(s ProvisionerSpec, i int) error {
 // single non-interactive install/init invocation for ~/.zim and accepts no
 // user-shaped command fields.
 func validateZimFWSpec(s ProvisionerSpec, i int) error {
+	if strings.TrimSpace(s.Ref) != "" {
+		return fmt.Errorf("provisioners[%d].spec.ref is only valid for the herdr tool", i)
+	}
 	if s.usesClaudeFields() {
 		return fmt.Errorf("provisioners[%d].spec must not set claude fields (marketplace, plugin, from) for the zimfw tool", i)
 	}
@@ -1276,12 +1333,12 @@ func allowedOS(osName string) bool {
 }
 
 // allowedProvisionerTool enforces the provisioner allowlist. dots is never a
-// generic command runner: claude, codex, codegraph, skills, and zimfw
+// generic command runner: claude, codex, codegraph, herdr, skills, and zimfw
 // are the only accepted provisioner tools, each driven through a fixed set of
 // subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "claude", "codex", "codegraph", "skills", "zimfw":
+	case "claude", "codex", "codegraph", "herdr", "skills", "zimfw":
 		return true
 	default:
 		return false

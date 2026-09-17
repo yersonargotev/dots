@@ -168,7 +168,7 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		{tag: "git", osName: "linux", entries: []string{"~/.gitconfig", "~/.config/dots/git/gitconfig"}, dependencies: []string{"git"}},
 		{tag: "starship", osName: "linux", entries: []string{"~/.config/starship.toml"}, dependencies: []string{"starship"}},
 		{tag: "tmux", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "~/.tmux.conf"}, dependencies: []string{"tmux"}},
-		{tag: "herdr", osName: "darwin", entries: []string{"~/.config/herdr/config.toml"}, dependencies: []string{"herdr"}},
+		{tag: "herdr", osName: "darwin", entries: []string{"~/.config/herdr/config.toml"}, dependencies: []string{"herdr", "git", "python3", "Node LTS (fnm)", "Rust stable (rustup)"}, provisioners: []string{"herdr", "herdr", "herdr"}},
 		{tag: "herdr", osName: "linux"},
 		{tag: "zellij", osName: "linux", entries: []string{"~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl"}, dependencies: []string{"zellij"}},
 		{tag: "atuin", osName: "linux", entries: []string{"~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml"}, dependencies: []string{"atuin"}},
@@ -379,7 +379,7 @@ func TestRepositoryCoreProfilePreservesPreAtomizationSurface(t *testing.T) {
 		"linux":  {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim"},
 	}
 	wantDependencies := map[string][]string{
-		"darwin": {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "GitHub CLI", "jq", "zsh", "git", "tuicr", "starship", "tmux", "herdr", "zellij", "atuin", "bat", "neovim", "curl"},
+		"darwin": {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "GitHub CLI", "jq", "zsh", "git", "tuicr", "starship", "tmux", "herdr", "zellij", "atuin", "bat", "neovim", "python3", "curl"},
 		"linux":  {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "GitHub CLI", "jq", "zsh", "git", "tuicr", "starship", "tmux", "zellij", "atuin", "bat", "neovim", "curl"},
 	}
 
@@ -392,8 +392,12 @@ func TestRepositoryCoreProfilePreservesPreAtomizationSurface(t *testing.T) {
 			if got := dependencyNames(surface.Dependencies); !reflect.DeepEqual(got, wantDependencies[osName]) {
 				t.Errorf("Dependencies changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, wantDependencies[osName])
 			}
-			if got := provisionerTools(surface.Provisioners); !reflect.DeepEqual(got, []string{"zimfw"}) {
-				t.Errorf("Provisioners = %#v, want zimfw", got)
+			wantProvisioners := []string{"zimfw"}
+			if osName == "darwin" {
+				wantProvisioners = []string{"herdr", "herdr", "herdr", "zimfw"}
+			}
+			if got := provisionerTools(surface.Provisioners); !reflect.DeepEqual(got, wantProvisioners) {
+				t.Errorf("Provisioners = %#v, want %#v", got, wantProvisioners)
 			}
 		})
 	}
