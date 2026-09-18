@@ -18,6 +18,8 @@ name = "catppuccin"
 [theme.custom]
 active_row_bg = "#313244"
 selection_bg = "#45475a"
+sidebar_bg = "#181825"
+surface_dim = "#45475a"
 
 [ui]
 confirm_close = true
