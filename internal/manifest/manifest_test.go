@@ -3927,16 +3927,26 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 		want   map[string]any
 	}{
 		{"default", defaultConfig, map[string]any{
-			"name":   "catppuccin",
-			"custom": map[string]any{"active_row_bg": "#313244", "selection_bg": "#45475a"},
+			"name": "catppuccin",
+			"custom": map[string]any{
+				"active_row_bg": "#313244", "selection_bg": "#45475a",
+				"sidebar_bg": "#181825", "surface_dim": "#45475a",
+			},
 		}},
 		{"adaptive", adaptiveConfig, map[string]any{
 			"name": "catppuccin", "auto_switch": true,
 			"dark_name": "catppuccin", "light_name": "catppuccin-latte",
 			"custom": map[string]any{
 				"active_row_bg": "#313244", "selection_bg": "#45475a",
-				"dark":  map[string]any{"active_row_bg": "#313244", "selection_bg": "#45475a"},
-				"light": map[string]any{"active_row_bg": "#ccd0da", "selection_bg": "#bcc0cc"},
+				"sidebar_bg": "#181825", "surface_dim": "#45475a",
+				"dark": map[string]any{
+					"active_row_bg": "#313244", "selection_bg": "#45475a",
+					"sidebar_bg": "#181825", "surface_dim": "#45475a",
+				},
+				"light": map[string]any{
+					"active_row_bg": "#ccd0da", "selection_bg": "#bcc0cc",
+					"sidebar_bg": "#e6e9ef", "surface_dim": "#bcc0cc",
+				},
 			},
 		}},
 	} {

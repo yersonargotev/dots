@@ -24,14 +24,20 @@ light_name = "catppuccin-latte"
 [theme.custom]
 active_row_bg = "#313244"
 selection_bg = "#45475a"
+sidebar_bg = "#181825"
+surface_dim = "#45475a"
 
 [theme.custom.dark]
 active_row_bg = "#313244"
 selection_bg = "#45475a"
+sidebar_bg = "#181825"
+surface_dim = "#45475a"
 
 [theme.custom.light]
 active_row_bg = "#ccd0da"
 selection_bg = "#bcc0cc"
+sidebar_bg = "#e6e9ef"
+surface_dim = "#bcc0cc"
 
 [ui]
 confirm_close = true
