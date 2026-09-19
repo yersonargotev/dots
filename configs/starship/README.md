@@ -17,8 +17,8 @@ Starship config.
 
 ## Prerequisite: a Nerd Font
 
-The prompt uses Nerd Font glyphs for module icons, directory substitutions, and
-the `character`/vim-mode symbols. A [Nerd Font](https://www.nerdfonts.com/) must
+The prompt uses Nerd Font glyphs for module icons and the `character`/vim-mode
+symbols. A [Nerd Font](https://www.nerdfonts.com/) must
 be installed and selected in your terminal for the prompt to render correctly.
 This is a documented expectation, not a machine-specific path — the config makes
 no assumption about which font or where it lives.
@@ -30,12 +30,23 @@ segment was bucketed as portable, machine-specific, or private:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| Portable | `palette` + `[palettes.catppuccin_mocha]`, `format`, language/runtime modules (`nodejs`, `rust`, `golang`, `php`, `bun`, `java`, `c`, `zig`, `python`), `[character]` + vim symbols, `[fill]`, `[cmd_duration]`, `[time]`, `[directory]` substitutions, `add_newline`, `command_timeout` | Managed in `configs/starship/starship.toml`. |
+| Portable | `palette` + `[palettes.catppuccin_mocha]`, `format`, language/runtime modules (`nodejs`, `rust`, `golang`, `php`, `bun`, `java`, `c`, `zig`, `python`), `[character]` + vim symbols, `[fill]`, `[cmd_duration]`, `[time]`, Fish-style directory abbreviation, `add_newline`, `command_timeout` | Managed in `configs/starship/starship.toml`. |
 | Machine-specific | absolute paths, hostnames, per-host module wiring, `[custom]` modules calling local-only binaries | None found in the live config. Nothing to gate. |
 | Private | usernames, secrets, tokens, `env_var` modules surfacing private values | None found in the live config. The `[username]` module renders Starship's own `$user` variable at runtime — no name is committed. |
 
 The live config contained no machine-specific or private segments, so the fully
 portable config is adopted as the single source of truth with nothing excluded.
+
+## Directory display
+
+The directory module keeps the final two path components complete and shortens
+each earlier component to one character. Repository-root truncation is disabled
+so the workspace context remains visible inside Git repositories. A path such as
+`~/Documents/dev/yersonargotev/dots-projects/dots` therefore renders as
+`~/D/d/y/dots-projects/dots`.
+
+Directory substitutions are intentionally absent because they interfere with
+Starship's Fish-style path abbreviation.
 
 ## Personal overrides — Starship has no native include
 
