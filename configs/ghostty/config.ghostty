@@ -22,6 +22,9 @@ config-file = ?adaptive-theme.ghostty
 config-file = ?config.local.ghostty
 
 # Portable keyboard behavior for the terminal workflow.
+# Keep right Option available for macOS character composition while ensuring
+# Herdr and shell Alt bindings receive chords from left Option.
+macos-option-as-alt = left
 keybind = alt+left=unbind
 keybind = alt+right=unbind
 keybind = super+shift+h=esc:H

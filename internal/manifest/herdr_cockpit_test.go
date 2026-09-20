@@ -60,7 +60,7 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 			if config.UI.PaneBorders != "auto" || config.UI.PaneOuterBorders || config.UI.PaneScrollbars || config.UI.PaneGaps {
 				t.Fatalf("pane chrome = borders %q, outer %t, scrollbars %t, gaps %t", config.UI.PaneBorders, config.UI.PaneOuterBorders, config.UI.PaneScrollbars, config.UI.PaneGaps)
 			}
-			if !config.UI.HideTabBarWhenSingleTab || config.UI.TabBarPosition != "bottom" {
+			if !config.UI.HideTabBarWhenSingleTab || config.UI.TabBarPosition != "top" {
 				t.Fatalf("tab row = hide-single %t, position %q", config.UI.HideTabBarWhenSingleTab, config.UI.TabBarPosition)
 			}
 			wantStatus := []herdrTabBarRight{{Type: "zoom"}, {Type: "hostname"}, {Type: "datetime", Format: "%H:%M"}}
