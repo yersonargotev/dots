@@ -28,6 +28,7 @@ printf 'base\n' >"$repo/tracked"
 git -C "$repo" add tracked
 git -C "$repo" commit -qm base
 git -C "$repo" push -qu origin main
+git --git-dir="$remote" symbolic-ref HEAD refs/heads/main
 
 render_prompt() {
   local status="$1"
