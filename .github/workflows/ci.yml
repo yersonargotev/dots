@@ -47,6 +47,7 @@ jobs:
       - name: Install pinned Starship acceptance binary
         run: |
           acceptance_home="$RUNNER_TEMP/dots-starship-home"
+          export PATH="$acceptance_home/.local/bin:$PATH"
           go run ./cmd/dots deps install \
             --file dots.yaml \
             --tag starship \
