@@ -34,7 +34,7 @@ func TestRepositoryHerdrTagPlansAndExecutesPinnedPluginsInSandbox(t *testing.T) 
 	writeHerdrIntegrationStub(t, filepath.Join(stubDir, "herdr"), `#!/bin/sh
 printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 `)
-	for _, command := range []string{"git", "python3", "fnm", "node", "rustup", "rustc", "cargo"} {
+	for _, command := range []string{"git", "python3", "fnm", "node", "rustup", "rustc", "cargo", "lazygit", "fzf", "fd", "bat"} {
 		writeHerdrIntegrationStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
 	}
 
@@ -121,7 +121,7 @@ func TestRepositoryHerdrTagOnIntelExcludesArmOnlyTabbyAndRust(t *testing.T) {
 	writeHerdrIntegrationStub(t, filepath.Join(stubDir, "herdr"), `#!/bin/sh
 printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 `)
-	for _, command := range []string{"git", "python3", "fnm", "node"} {
+	for _, command := range []string{"git", "python3", "fnm", "node", "lazygit", "fzf", "fd", "bat"} {
 		writeHerdrIntegrationStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
 	}
 	// If architecture filtering regresses, the missing Rust toolchain must fail

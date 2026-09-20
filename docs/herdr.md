@@ -16,14 +16,17 @@ an existing installation's Tags.
 | Tabby | `yersonargotev/tabby` | `34c01f9791dd3228acae7ca378adb38e09d9fb6c` |
 
 The bundle was verified with Herdr 0.9.1 on Apple Silicon macOS. Herdr, Git,
-Python 3, Node LTS through fnm, and Rust stable through rustup are declared
-Dependencies. Python 3.9+ is needed by Space Tab Metadata; Node runs Tab Git
-Status. Tabby's pinned installer downloads a checksum-verified Apple Silicon
-binary and falls back to `cargo build --release --locked` if that artifact is
-missing, so its build toolchain is declared as well. The pinned Tabby installer
-rejects Intel Macs, so its Provisioner and Rust fallback Dependency are filtered
-to `arm64`. Intel Macs receive both Spaces plugins and retain their normal tab
-labels. Tabby is not needed to read the active tab's label.
+LazyGit, fzf, fd, bat, Python 3, Node LTS through fnm, and Rust stable through
+rustup are declared Dependencies. The popup tools belong directly to the
+`herdr` Tag, so selecting that atomic surface does not rely on `core` or another
+Profile to make its keybindings work. Python 3.9+ is needed by Space Tab
+Metadata; Node runs Tab Git Status. Tabby's pinned installer downloads a
+checksum-verified Apple Silicon binary and falls back to
+`cargo build --release --locked` if that artifact is missing, so its build
+toolchain is declared as well. The pinned Tabby installer rejects Intel Macs,
+so its Provisioner and Rust fallback Dependency are filtered to `arm64`. Intel
+Macs receive both Spaces plugins and retain their normal tab labels. Tabby is
+not needed to read the active tab's label.
 The `herdr` Tag still selects no surface on Linux.
 
 `dots plan --tag herdr --output json` previews exact Provisioner commands without
@@ -80,9 +83,41 @@ sidebar layout. Token foregrounds are fixed Mocha hex values: Herdr theme switch
 does not translate these inline colors to Latte. The approved visual target is
 dark Catppuccin; light-mode token contrast remains a limitation.
 
+The expanded sidebar prefers 26 columns and adapts between 18 and 36 columns.
+Herdr uses distinct semantic symbols for blocked, working, done, idle, and
+unknown agent state. The tab row is at the bottom, disappears for a single tab,
+and shows zoom state, server hostname, and 24-hour server-local time on its
+right edge. Panes have no gaps, outer frame, or scrollbar. Herdr's automatic
+split borders remain enabled, so a real split still has one divider while a
+single pane has no frame. The default and adaptive variants own the same layout;
+only their palette behavior differs.
+
 Without plugin metadata, the corresponding tokens and empty lines disappear;
 native first-tab Git values are not silently substituted. A non-Git active pane
 also has no Git line. Long names may still be truncated by the sidebar width.
+
+## Popup workflows
+
+Herdr's native session-modal popups keep the tiled tab and pane layout intact.
+Each command opens at 80 percent from the focused pane's working directory and
+closes when its process exits:
+
+| Binding | Workflow |
+|---|---|
+| `prefix+alt+g` | LazyGit in the focused directory |
+| `prefix+alt+t` | A scratch `$SHELL`, falling back to `/bin/sh` |
+| `prefix+alt+f` | Repository file finder with bat preview |
+
+The file finder resolves the current Git root and falls back to the focused
+directory outside a repository. fd includes hidden files while excluding
+`.git`, `node_modules`, and `target`; fzf previews with bat. An accepted path is
+opened through `VISUAL`, then `EDITOR`, then `vi`, in that order. Cancelling fzf
+exits without opening an editor or changing the underlying layout.
+
+Every workflow checks its commands before starting. A missing command prints a
+short error inside the popup and waits for Enter; it does not install software
+or access the network. `dots deps check --tag herdr` reports missing declared
+tools before launch, while the runtime checks keep `--skip-deps` behavior safe.
 
 ## Ownership and rollback
 
