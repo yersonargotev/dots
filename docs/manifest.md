@@ -238,6 +238,11 @@ is missing. The `desktop` Profile includes this independently selectable Tag;
 the legacy `desktop` alias expands only to `ghostty`, `warp`, and `zed`.
 Linux selections remain valid and omit the CodexBar Dependency.
 
+The `zsh` Selected Surface also selects `fzf`, `bat`, and `eza`, because its
+managed fuzzy widgets consume those commands directly. The `zimfw` surface
+selects `fzf` for the fzf-tab module as well. Their standalone Tags remain
+available, and dependency de-duplication keeps composite Profiles unchanged.
+
 On Linux, when `fnm` is absent, no executable package provider is available, and
 `curl`, `bash`, and `unzip` are present, Node may use the constrained official
 fnm installer flow (`curl -fsSL https://fnm.vercel.app/install | bash -s --
@@ -370,7 +375,7 @@ Current Managed Entries:
 | `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `warp` | `linux` | `Warp` |
 | `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `copy` | `atuin` | `darwin`, `linux` | `atuin`; owns TOML subset |
 | `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `atuin` | `darwin`, `linux` | `atuin` |
-| `configs/bat/config` | `~/.config/bat/config` | `copy` | `bat` | `darwin`, `linux` | `bat`; whole-target ownership |
+| `configs/bat/config` | `~/.config/bat/config` | `copy` | `bat`, `zsh` | `darwin`, `linux` | `bat`; whole-target ownership |
 | `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `neovim` | `darwin`, `linux` | None |
 | `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `neovim` | `darwin`, `linux` | `neovim` |
 | `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `neovim` | `darwin`, `linux` | None |
@@ -573,7 +578,7 @@ The child environment is rooted at the selected home, with inherited Herdr sessi
 and path overrides removed to avoid contacting another home's live server.
 
 The existing `herdr` Tag selects the two Spaces plugins on macOS and adds Tabby
-on Apple Silicon through `arch: [arm64]`;
+plus Pluck on Apple Silicon through `arch: [arm64]`;
 core and workstation already include it. See [Herdr setup](herdr.md) for runtime
 requirements, live-session activation, ownership, and known limitations.
 

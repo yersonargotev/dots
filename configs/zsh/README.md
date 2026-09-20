@@ -34,7 +34,7 @@ configs/zsh/
 │   │   └── 20-modules.zsh # module tuning read at load time
 │   └── post/              # sourced AFTER Zim initializes
 │       ├── 30-path.zsh    # portable PATH additions (guarded)
-│       ├── 40-tools.zsh   # zoxide/starship/atuin/fnm (guarded)
+│       ├── 40-tools.zsh   # fzf/editor/zoxide/starship/atuin/fnm (guarded)
 │       ├── 50-aliases.zsh # eza listings (guarded)
 │       └── 60-ai.zsh      # Claude/Copilot knobs (no secrets)
 └── zshrc.local.example    # template for machine-specific values + secrets
@@ -42,6 +42,23 @@ configs/zsh/
 
 Drop a new `*.zsh` file into `rc.d/pre/` or `rc.d/post/` to extend the config;
 the numeric prefix controls load order.
+
+## Interactive navigation
+
+The managed widget ownership is intentionally non-overlapping:
+
+- Tab presents grouped completion candidates through fzf-tab.
+- Ctrl+T inserts a file or directory through fzf, with bat file previews.
+- Alt+C changes directory through fzf, with eza directory previews.
+- Ctrl+R and Up belong to Atuin; Ctrl+R begins in Git-workspace scope when
+  available, while Up remains scoped to the current shell session.
+- Ctrl+X Ctrl+E opens the current command with Zsh's standard
+  `edit-command-line` widget. zoxide continues to provide `z` and `zi`.
+
+fzf uses a bounded lower-screen Catppuccin presentation. All integrations are
+guarded: if an explicitly skipped Dependency is absent, shell startup remains
+usable and reports the unavailable feature without installing or downloading
+anything.
 
 ## Local overrides and secrets
 

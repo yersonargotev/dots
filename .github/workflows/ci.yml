@@ -44,5 +44,21 @@ jobs:
       - name: Build CLI
         run: go build ./...
 
+      - name: Install pinned Starship acceptance binary
+        run: |
+          acceptance_home="$RUNNER_TEMP/dots-starship-home"
+          export PATH="$acceptance_home/.local/bin:$PATH"
+          go run ./cmd/dots deps install \
+            --file dots.yaml \
+            --tag starship \
+            --tier generic \
+            --home "$acceptance_home" \
+            --state-root "$RUNNER_TEMP/dots-starship-state" \
+            --yes
+          echo "$acceptance_home/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Validate rendered Starship prompt
+        run: ./configs/starship/test-prompt.sh
+
       - name: Test
         run: go test ./...

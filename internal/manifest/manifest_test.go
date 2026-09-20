@@ -2869,12 +2869,45 @@ func TestRepositoryStarshipConfigClassifiesPortablePromptSafely(t *testing.T) {
 		`palette = "catppuccin_mocha"`,
 		"[palettes.catppuccin_mocha]",
 		"format = ",
+		"add_newline = false",
 		"[character]",
 		"[cmd_duration]",
+		"show_milliseconds = true",
 		"[time]",
+		`success_symbol = "[❯](bold fg:green)"`,
+		`error_symbol = "[❯](bold fg:red)"`,
+		"$git_status",
+		`symbol = " "`,
+		`staged = "+${count}"`,
+		`modified = "!${count}"`,
+		`untracked = "?${count}"`,
+		`ahead = "⇡${count}"`,
+		`behind = "⇣${count}"`,
 	} {
 		if !strings.Contains(managed, want) {
 			t.Fatalf("managed starship config missing portable prompt segment %q:\n%s", want, managed)
+		}
+	}
+
+	zimrcPath := filepath.Join(root, "configs/zsh/zimrc")
+	zimrcBytes, err := os.ReadFile(zimrcPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", zimrcPath, err)
+	}
+	zimrc := string(zimrcBytes)
+	for _, removed := range []string{"zmodule asciiship", "zmodule git-info", "zmodule duration-info"} {
+		if strings.Contains(zimrc, removed) {
+			t.Fatalf("Zim config still initializes redundant prompt module %q:\n%s", removed, zimrc)
+		}
+	}
+	for _, retained := range []string{
+		"zmodule completion",
+		"zmodule zsh-users/zsh-syntax-highlighting",
+		"zmodule zsh-users/zsh-history-substring-search",
+		"zmodule zsh-users/zsh-autosuggestions",
+	} {
+		if !strings.Contains(zimrc, retained) {
+			t.Fatalf("Zim config lost required interactive module %q:\n%s", retained, zimrc)
 		}
 	}
 
@@ -3749,6 +3782,32 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 				t.Fatalf("%s dependency = %#v, want command %q, commands %#v, brew %q, apt %q, dnf %q, pacman %q, toolchain %q, linux_homebrew %v", name, *dep, wantDep.command, wantDep.commands, wantDep.brew, wantDep.apt, wantDep.dnf, wantDep.pacman, wantDep.toolchain, wantDep.linuxBrew)
 			}
 		}
+	}
+}
+
+func TestRepositoryZshSurfacesDeclareFuzzyNavigationDependencies(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, osName := range []string{"darwin", "linux"} {
+		t.Run("zsh/"+osName, func(t *testing.T) {
+			surface := selectedsurface.Evaluate(*got, []string{"zsh"}, osName)
+			for _, dependency := range []string{"fzf", "bat", "eza"} {
+				if findDependency(surface.Dependencies, dependency) == nil {
+					t.Errorf("zsh Selected Surface missing %q Dependency: %#v", dependency, surface.Dependencies)
+				}
+			}
+		})
+
+		t.Run("zimfw/"+osName, func(t *testing.T) {
+			surface := selectedsurface.Evaluate(*got, []string{"zimfw"}, osName)
+			if findDependency(surface.Dependencies, "fzf") == nil {
+				t.Errorf("zimfw Selected Surface missing fzf Dependency: %#v", surface.Dependencies)
+			}
+		})
 	}
 }
 

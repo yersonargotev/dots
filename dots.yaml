@@ -498,6 +498,8 @@ dependencies:
             linux_arm64: a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b
   - tags:
       - fzf
+      - zsh
+      - zimfw
     os:
       - darwin
       - linux
@@ -534,6 +536,7 @@ dependencies:
         pacman: lazygit
   - tags:
       - eza
+      - zsh
     os:
       - darwin
       - linux
@@ -592,6 +595,41 @@ dependencies:
         linux_homebrew: true
         dnf: fd-find
         pacman: fd
+  - tags:
+      - herdr
+    os:
+      - darwin
+    dependencies:
+      - name: lazygit
+        command: lazygit
+        brew: lazygit
+        linux_homebrew: true
+        dnf: lazygit
+        pacman: lazygit
+      - name: fzf
+        command: fzf
+        brew: fzf
+        apt: fzf
+        dnf: fzf
+        pacman: fzf
+      - name: fd
+        command: fd
+        brew: fd
+        linux_homebrew: true
+        dnf: fd-find
+        pacman: fd
+      - name: bat
+        command: bat
+        brew: bat
+        linux_homebrew: true
+        dnf: bat
+        pacman: bat
+        user_local:
+          recipe: bat
+          version: v0.26.1
+          checksums:
+            linux_amd64: 726f04c8f576a7fd18b7634f1bbf2f915c43494c1c0f013baa3287edb0d5a2a3
+            linux_arm64: 422eb73e11c854fddd99f5ca8461c2f1d6e6dce0a2a8c3d5daade5ffcb6564aa
   - tags:
       - gh
     os:
@@ -986,6 +1024,7 @@ entries:
     strategy: copy
     tags:
       - bat
+      - zsh
     os:
       - darwin
       - linux
@@ -1235,6 +1274,36 @@ provisioners:
       - name: python3
         command: python3
         brew: python
+      - name: Rust stable (rustup)
+        commands: [rustup, rustc, cargo]
+        brew: rustup
+        toolchain: rust-stable-rustup
+  - tool: herdr
+    tags: [herdr]
+    os: [darwin]
+    arch: [arm64]
+    spec:
+      plugin: rmarganti/herdr-pluck
+      ref: d1eacb80956c3a23ab6f7428a9e83961fb86ba28
+    dependencies:
+      - name: herdr
+        command: herdr
+        brew: herdr
+      - name: git
+        command: git
+        brew: git
+      - name: curl
+        command: curl
+        brew: curl
+      - name: tar
+        command: tar
+        manual: Restore the macOS tar system utility, then rerun dots deps check.
+      - name: pbcopy
+        command: pbcopy
+        manual: Restore the macOS pbcopy system utility, then rerun dots deps check.
+      - name: open
+        command: open
+        manual: Restore the macOS open system utility, then rerun dots deps check.
       - name: Rust stable (rustup)
         commands: [rustup, rustc, cargo]
         brew: rustup

@@ -13,7 +13,22 @@ command -v starship >/dev/null 2>&1 && eval "$(starship init zsh)"
 ```
 
 No prompt configuration lives in shell rc files — all of it is owned by this
-Starship config.
+Starship config. Zim intentionally omits its `asciiship`, `git-info`, and
+`duration-info` modules so Starship is the sole prompt owner.
+
+## Prompt layout
+
+The first line shows the Fish-style abbreviated directory, a `` branch label,
+and compact Git state (`+` staged, `!` modified, `?` untracked, `⇡` ahead, and
+`⇣` behind). Relevant project runtimes use short labels on the right side;
+unmatched runtimes remain hidden. Commands taking at least 500 ms display their
+duration with millisecond precision below one second, followed by 24-hour time.
+Git state uses foreground color only, with no filled status block.
+
+The second line contains one `❯` input marker. It is green after a successful
+command and red after a failed command. Vim command modes continue to use their
+distinct `N`, `R`, and `V` markers. Starship does not prepend an additional
+blank line; the newline declared by `format` is the prompt's only line break.
 
 ## Prerequisite: a Nerd Font
 
@@ -104,3 +119,16 @@ go run ./cmd/dots status \
 The expected result is that `~/.config/starship.toml` is installed/aligned inside
 `$sandbox_home` as a symlink to the repository source. The maintainer's real home
 directory must not be touched.
+
+For literal prompt-state coverage, run the focused sandbox check (requires
+`starship` and `git`):
+
+```bash
+configs/starship/test-prompt.sh
+```
+
+It creates isolated clean and dirty repositories under a temporary directory,
+renders successful and failed prompts at representative widths, strips ANSI
+styling, and checks the literal branch, Git-state, and input-marker text. It also
+verifies that Zim retains completion, highlighting, history search, and
+autosuggestions without initializing a second prompt stack.

@@ -13,8 +13,16 @@
 # Immediately run the highlighted command on Enter; press Tab to edit it first.
 enter_accept = true
 
+# Begin Ctrl+R in the current Git repository when one is available. Ctrl+R in
+# the Atuin UI still cycles through the remaining configured scopes.
+workspaces = true
+filter_mode = "workspace"
+
 # Up-arrow scopes history to the current shell session instead of global history.
 filter_mode_shell_up_key_binding = "session"
+
+# Use the full interface when space permits and compact it on shorter terminals.
+style = "auto"
 
 [sync]
 # Use record-based sync (v2). Enabling sync and the server/account itself are
