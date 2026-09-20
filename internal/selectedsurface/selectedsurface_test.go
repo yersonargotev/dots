@@ -204,8 +204,8 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		dependencies []string
 		provisioners []string
 	}{
-		{tag: "zsh", osName: "linux", entries: []string{"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zshenv"}, dependencies: []string{"zsh"}},
-		{tag: "zimfw", osName: "linux", entries: []string{"~/.zimrc"}, dependencies: []string{"zsh", "git", "curl"}, provisioners: []string{"zimfw"}},
+		{tag: "zsh", osName: "linux", entries: []string{"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zshenv", "~/.config/bat/config"}, dependencies: []string{"fzf", "eza", "zsh", "bat"}},
+		{tag: "zimfw", osName: "linux", entries: []string{"~/.zimrc"}, dependencies: []string{"fzf", "zsh", "git", "curl"}, provisioners: []string{"zimfw"}},
 		{tag: "git", osName: "linux", entries: []string{"~/.gitconfig", "~/.config/dots/git/gitconfig"}, dependencies: []string{"git"}},
 		{tag: "starship", osName: "linux", entries: []string{"~/.config/starship.toml"}, dependencies: []string{"starship"}},
 		{tag: "tmux", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "~/.tmux.conf"}, dependencies: []string{"tmux"}},

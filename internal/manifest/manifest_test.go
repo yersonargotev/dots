@@ -3783,6 +3783,32 @@ func TestRepositoryManifestIncludesCoreDevelopmentBaselineDependencies(t *testin
 	}
 }
 
+func TestRepositoryZshSurfacesDeclareFuzzyNavigationDependencies(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, osName := range []string{"darwin", "linux"} {
+		t.Run("zsh/"+osName, func(t *testing.T) {
+			surface := selectedsurface.Evaluate(*got, []string{"zsh"}, osName)
+			for _, dependency := range []string{"fzf", "bat", "eza"} {
+				if findDependency(surface.Dependencies, dependency) == nil {
+					t.Errorf("zsh Selected Surface missing %q Dependency: %#v", dependency, surface.Dependencies)
+				}
+			}
+		})
+
+		t.Run("zimfw/"+osName, func(t *testing.T) {
+			surface := selectedsurface.Evaluate(*got, []string{"zimfw"}, osName)
+			if findDependency(surface.Dependencies, "fzf") == nil {
+				t.Errorf("zimfw Selected Surface missing fzf Dependency: %#v", surface.Dependencies)
+			}
+		})
+	}
+}
+
 func TestRepositoryManifestDeclaresAtomicCoreCapabilitySelection(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))

@@ -498,6 +498,8 @@ dependencies:
             linux_arm64: a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b
   - tags:
       - fzf
+      - zsh
+      - zimfw
     os:
       - darwin
       - linux
@@ -534,6 +536,7 @@ dependencies:
         pacman: lazygit
   - tags:
       - eza
+      - zsh
     os:
       - darwin
       - linux
@@ -986,6 +989,7 @@ entries:
     strategy: copy
     tags:
       - bat
+      - zsh
     os:
       - darwin
       - linux

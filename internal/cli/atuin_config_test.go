@@ -80,6 +80,17 @@ func TestAtuinDefaultProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read Atuin Source of Truth: %v", err)
 	}
+	for _, want := range []string{
+		"enter_accept = true",
+		"workspaces = true",
+		`filter_mode = "workspace"`,
+		`filter_mode_shell_up_key_binding = "session"`,
+		`style = "auto"`,
+	} {
+		if !bytes.Contains(sourceBefore, []byte(want)) {
+			t.Errorf("Atuin Source of Truth missing %q", want)
+		}
+	}
 	target, err := os.OpenFile(managed[0].target, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatalf("open live Atuin config: %v", err)
