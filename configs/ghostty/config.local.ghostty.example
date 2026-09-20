@@ -20,9 +20,11 @@
 # window-height = 100
 # window-width = 100
 
-# Platform or integration settings must be reviewed before promotion to the
-# shared Source of Truth.
-# macos-option-as-alt = left
+# The shared config maps left Option to Alt so terminal bindings work while
+# right Option remains available for macOS character composition. Override that
+# portable default here only when this machine deliberately needs otherwise.
+# macos-option-as-alt = false
+# Other platform or integration settings remain machine-specific by default.
 # gtk-tabs-location = hidden
 # command = /path/to/local/shell-or-multiplexer
 # working-directory = ~/projects

@@ -31,7 +31,7 @@ The live `~/.config/ghostty/config` file was classified before adoption:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| **Portable** | font family, font size, Catppuccin Mocha fallback theme, optional `adaptive-theme` native light/dark include, intentional keybindings for terminal workflow and Zellij/tmux/Herdr forwarding | Managed in `configs/ghostty/config.ghostty`. |
+| **Portable** | font family, font size, Catppuccin Mocha fallback theme, optional `adaptive-theme` native light/dark include, left-Option-as-Alt behavior for managed terminal bindings, intentional keybindings for terminal workflow and Zellij/tmux/Herdr forwarding | Managed in `configs/ghostty/config.ghostty`. |
 | **Machine-specific** | window dimensions, opacity/blur, window padding ergonomics, explicit shell/command paths, initial working directories, OS integrations, display/GPU/host-dependent behavior | Excluded from the shared file; document deliberate host-specific exceptions in `configs/ghostty/config.local.ghostty.example`. |
 | **Generated** | logs, caches, sessions, backups, temporary files, generated state, local shaders | Never committed. |
 | **Private** | secrets, authenticated state, private paths, hostnames, machine IDs | Excluded. |
@@ -90,6 +90,11 @@ If you are working from a development checkout instead of the default installed
 repository, replace `~/.local/share/dots` with that checkout path. Then edit
 `~/.config/ghostty/config.local.ghostty` locally. Do not commit that file unless
 the setting has been reviewed and reclassified as portable.
+
+The shared `macos-option-as-alt = left` preference is part of the managed
+terminal input contract: Herdr and shell shortcuts receive left-Option chords as
+Alt, while right Option retains macOS character composition. A host that needs a
+different tradeoff may override this value in the local file loaded last.
 
 ## Sandbox validation
 

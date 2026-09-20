@@ -69,6 +69,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 		"font-size = 20",
 		"theme = Catppuccin Mocha",
 		"config-file = ?adaptive-theme.ghostty",
+		"macos-option-as-alt = left",
 	} {
 		if !strings.Contains(string(managedConfig), want) {
 			t.Fatalf("managed ghostty config missing %q", want)
