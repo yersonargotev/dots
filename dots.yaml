@@ -1278,6 +1278,36 @@ provisioners:
         commands: [rustup, rustc, cargo]
         brew: rustup
         toolchain: rust-stable-rustup
+  - tool: herdr
+    tags: [herdr]
+    os: [darwin]
+    arch: [arm64]
+    spec:
+      plugin: rmarganti/herdr-pluck
+      ref: d1eacb80956c3a23ab6f7428a9e83961fb86ba28
+    dependencies:
+      - name: herdr
+        command: herdr
+        brew: herdr
+      - name: git
+        command: git
+        brew: git
+      - name: curl
+        command: curl
+        brew: curl
+      - name: tar
+        command: tar
+        manual: Restore the macOS tar system utility, then rerun dots deps check.
+      - name: pbcopy
+        command: pbcopy
+        manual: Restore the macOS pbcopy system utility, then rerun dots deps check.
+      - name: open
+        command: open
+        manual: Restore the macOS open system utility, then rerun dots deps check.
+      - name: Rust stable (rustup)
+        commands: [rustup, rustc, cargo]
+        brew: rustup
+        toolchain: rust-stable-rustup
   - tool: zimfw
     tags:
       - zimfw

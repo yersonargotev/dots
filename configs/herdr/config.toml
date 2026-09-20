@@ -117,9 +117,11 @@ zoom = "prefix+z"
 resize_mode = "prefix+r"
 copy_mode = "prefix+["
 
-# Temporary workflows. Herdr runs popup commands from the focused pane's
-# working directory and restores the tiled layout when the command exits.
+# Pluck actions and temporary workflows. Herdr runs popup commands from the
+# focused pane's working directory and restores the tiled layout when they exit.
 command = [
+  { key = "prefix+t", type = "plugin_action", command = "rmarganti.herdr-pluck.pluck", description = "pluck visible token" },
+  { key = "prefix+o", type = "plugin_action", command = "rmarganti.herdr-pluck.open-url", description = "open visible URL" },
   { key = "prefix+alt+g", type = "popup", command = '''
 if ! command -v lazygit >/dev/null 2>&1; then
   printf 'dots: lazygit is required\nPress Enter to close.\n' >&2

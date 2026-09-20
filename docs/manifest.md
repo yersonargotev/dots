@@ -578,7 +578,7 @@ The child environment is rooted at the selected home, with inherited Herdr sessi
 and path overrides removed to avoid contacting another home's live server.
 
 The existing `herdr` Tag selects the two Spaces plugins on macOS and adds Tabby
-on Apple Silicon through `arch: [arm64]`;
+plus Pluck on Apple Silicon through `arch: [arm64]`;
 core and workstation already include it. See [Herdr setup](herdr.md) for runtime
 requirements, live-session activation, ownership, and known limitations.
 

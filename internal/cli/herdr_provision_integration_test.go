@@ -34,7 +34,7 @@ func TestRepositoryHerdrTagPlansAndExecutesPinnedPluginsInSandbox(t *testing.T) 
 	writeHerdrIntegrationStub(t, filepath.Join(stubDir, "herdr"), `#!/bin/sh
 printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 `)
-	for _, command := range []string{"git", "python3", "fnm", "node", "rustup", "rustc", "cargo", "lazygit", "fzf", "fd", "bat"} {
+	for _, command := range []string{"git", "python3", "fnm", "node", "rustup", "rustc", "cargo", "curl", "tar", "pbcopy", "open", "lazygit", "fzf", "fd", "bat"} {
 		writeHerdrIntegrationStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
 	}
 
@@ -56,6 +56,8 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		"83ce41a11c5cc3ab2de1452ab303f6dfb976a937",
 		"yersonargotev/tabby",
 		"34c01f9791dd3228acae7ca378adb38e09d9fb6c",
+		"rmarganti/herdr-pluck",
+		"d1eacb80956c3a23ab6f7428a9e83961fb86ba28",
 	} {
 		if !strings.Contains(dryRunOutput.String(), want) {
 			t.Fatalf("Herdr dry-run omitted pinned value %q:\n%s", want, dryRunOutput.String())
@@ -63,6 +65,20 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
 		t.Fatalf("Herdr dry-run executed a plugin installer: %v", err)
+	}
+	repeatedDryRun := NewRootCommand()
+	var repeatedDryRunOutput bytes.Buffer
+	repeatedDryRun.SetOut(&repeatedDryRunOutput)
+	repeatedDryRun.SetErr(&repeatedDryRunOutput)
+	repeatedDryRun.SetArgs([]string{
+		"install", "--dry-run", "--tag", "herdr",
+		"--file", manifestPath, "--home", home, "--source-root", repositoryRoot, "--state-root", stateRoot,
+	})
+	if err := repeatedDryRun.Execute(); err != nil {
+		t.Fatalf("repeated Herdr dry-run failed: %v\noutput:\n%s", err, repeatedDryRunOutput.String())
+	}
+	if repeatedDryRunOutput.String() != dryRunOutput.String() {
+		t.Fatalf("repeated Herdr dry-run changed its plan\nfirst:\n%s\nsecond:\n%s", dryRunOutput.String(), repeatedDryRunOutput.String())
 	}
 
 	install := NewRootCommand()
@@ -86,15 +102,86 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		"plugin install szrenwei/herdr-space-tab-metadata --ref c696c36256eddc6ee1983ab9f202848b84460e06 --yes",
 		"plugin install hasuwini77/herdr-tab-git --ref 83ce41a11c5cc3ab2de1452ab303f6dfb976a937 --yes",
 		"plugin install yersonargotev/tabby --ref 34c01f9791dd3228acae7ca378adb38e09d9fb6c --yes",
+		"plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Herdr invocations = %#v, want only the three pinned plugins %#v\noutput:\n%s", got, want, installOutput.String())
+		t.Fatalf("Herdr invocations = %#v, want only the four pinned plugins %#v\noutput:\n%s", got, want, installOutput.String())
+	}
+	metadata, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatalf("load Apple Silicon Installation Metadata: %v", err)
+	}
+	if len(metadata.Provisioners) != 4 {
+		t.Fatalf("Apple Silicon Provisioner inventory = %#v, want four pinned plugins", metadata.Provisioners)
+	}
+	pluckRecorded := false
+	for _, record := range metadata.Provisioners {
+		args := strings.Join(record.Args, " ")
+		if strings.Contains(args, "rmarganti/herdr-pluck") {
+			pluckRecorded = strings.Contains(args, "d1eacb80956c3a23ab6f7428a9e83961fb86ba28")
+		}
+	}
+	if !pluckRecorded {
+		t.Fatalf("Installation Metadata omitted pinned Pluck contribution: %#v", metadata.Provisioners)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".config", "herdr", "config.toml")); err != nil {
 		t.Fatalf("Herdr Tag did not install its Managed Entry: %v", err)
 	}
 	if entries, err := os.ReadDir(fakeRealHome); err != nil || len(entries) != 0 {
 		t.Fatalf("Herdr install touched inherited HOME %q: entries=%v err=%v", fakeRealHome, entries, err)
+	}
+}
+
+func TestRepositoryHerdrAppleSiliconDryRunDisclosesMissingPluckDependencies(t *testing.T) {
+	repositoryRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	stateRoot := t.TempDir()
+	stubDir := t.TempDir()
+	commandLog := filepath.Join(home, "external-command.log")
+
+	oldOS, oldArch := installHostOS, installHostArch
+	installHostOS, installHostArch = "darwin", "arm64"
+	t.Cleanup(func() {
+		installHostOS, installHostArch = oldOS, oldArch
+	})
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", stubDir)
+
+	for _, command := range []string{"herdr", "git", "python3", "fnm", "node", "lazygit", "fzf", "fd", "bat"} {
+		writeHerdrIntegrationStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
+	}
+	writeHerdrIntegrationStub(t, filepath.Join(stubDir, "brew"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$COMMAND_LOG\"\nexit 99\n")
+	t.Setenv("COMMAND_LOG", commandLog)
+
+	dryRun := NewRootCommand()
+	var output bytes.Buffer
+	dryRun.SetOut(&output)
+	dryRun.SetErr(&output)
+	dryRun.SetArgs([]string{
+		"install", "--dry-run", "--tag", "herdr",
+		"--file", filepath.Join(repositoryRoot, "dots.yaml"), "--home", home,
+		"--source-root", repositoryRoot, "--state-root", stateRoot,
+	})
+	if err := dryRun.Execute(); err != nil {
+		t.Fatalf("Herdr missing-dependency dry-run failed: %v\noutput:\n%s", err, output.String())
+	}
+	for _, want := range []string{
+		"brew install rustup",
+		"brew install curl",
+		"Restore the macOS tar system utility",
+		"Restore the macOS pbcopy system utility",
+		"Restore the macOS open system utility",
+		"herdr plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Errorf("Apple Silicon dry-run omitted external action %q:\n%s", want, output.String())
+		}
+	}
+	if _, err := os.Stat(commandLog); !os.IsNotExist(err) {
+		t.Fatalf("dry-run executed an external command: %v", err)
 	}
 }
 
@@ -139,7 +226,14 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	if err := dryRun.Execute(); err != nil {
 		t.Fatalf("Intel Herdr dry-run failed: %v\noutput:\n%s", err, dryRunOutput.String())
 	}
-	for _, excluded := range []string{"yersonargotev/tabby", "34c01f9791dd3228acae7ca378adb38e09d9fb6c", "Rust stable (rustup)"} {
+	for _, excluded := range []string{
+		"yersonargotev/tabby",
+		"34c01f9791dd3228acae7ca378adb38e09d9fb6c",
+		"rmarganti/herdr-pluck",
+		"d1eacb80956c3a23ab6f7428a9e83961fb86ba28",
+		"Rust stable (rustup)",
+		"tar", "pbcopy", "open",
+	} {
 		if strings.Contains(dryRunOutput.String(), excluded) {
 			t.Fatalf("Intel Herdr dry-run included arm64-only value %q:\n%s", excluded, dryRunOutput.String())
 		}

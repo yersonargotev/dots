@@ -71,13 +71,36 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 				t.Fatalf("status indicators = %q, want symbols", config.UI.StatusIndicators)
 			}
 
-			wantKeys := []string{"prefix+alt+g", "prefix+alt+t", "prefix+alt+f"}
+			wantKeys := []string{"prefix+t", "prefix+o", "prefix+alt+g", "prefix+alt+t", "prefix+alt+f"}
 			if len(config.Keys.Command) != len(wantKeys) {
-				t.Fatalf("popup commands = %#v, want keys %v", config.Keys.Command, wantKeys)
+				t.Fatalf("custom commands = %#v, want keys %v", config.Keys.Command, wantKeys)
 			}
-			for i, popup := range config.Keys.Command {
-				if popup.Key != wantKeys[i] || popup.Type != "popup" || popup.Width != "80%" || popup.Height != "80%" {
-					t.Errorf("popup %d = %#v, want key %q at 80%%", i, popup, wantKeys[i])
+			seenKeys := make(map[string]bool, len(config.Keys.Command))
+			for i, command := range config.Keys.Command {
+				if command.Key != wantKeys[i] {
+					t.Errorf("custom command %d = %#v, want key %q", i, command, wantKeys[i])
+				}
+				if seenKeys[command.Key] {
+					t.Errorf("custom key %q is declared more than once", command.Key)
+				}
+				seenKeys[command.Key] = true
+			}
+
+			commands := herdrPopupCommandsByKey(t, config)
+			wantPluginActions := map[string]string{
+				"prefix+t": "rmarganti.herdr-pluck.pluck",
+				"prefix+o": "rmarganti.herdr-pluck.open-url",
+			}
+			for key, wantCommand := range wantPluginActions {
+				action := commands[key]
+				if action.Type != "plugin_action" || action.Command != wantCommand || action.Width != "" || action.Height != "" {
+					t.Errorf("Pluck action %q = %#v, want plugin_action %q", key, action, wantCommand)
+				}
+			}
+			for _, key := range []string{"prefix+alt+g", "prefix+alt+t", "prefix+alt+f"} {
+				popup := commands[key]
+				if popup.Type != "popup" || popup.Width != "80%" || popup.Height != "80%" {
+					t.Errorf("popup %q = %#v, want 80%% popup", key, popup)
 				}
 				for _, forbidden := range []string{"brew ", "curl ", "wget ", "git clone", "npm install"} {
 					if strings.Contains(popup.Command, forbidden) {
@@ -133,6 +156,56 @@ func TestHerdrTagSelectsPopupDependenciesOnBothMacArchitectures(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHerdrTagSelectsPluckOnlyOnAppleSilicon(t *testing.T) {
+	root := repositoryRoot(t)
+	m, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	arm64 := selectedsurface.EvaluateForPlatform(*m, []string{"herdr"}, "darwin", "arm64")
+	amd64 := selectedsurface.EvaluateForPlatform(*m, []string{"herdr"}, "darwin", "amd64")
+
+	const plugin = "rmarganti/herdr-pluck"
+	const ref = "d1eacb80956c3a23ab6f7428a9e83961fb86ba28"
+	found := false
+	for _, provisioner := range arm64.Provisioners {
+		if provisioner.Spec.Plugin != plugin {
+			continue
+		}
+		found = true
+		if provisioner.Spec.Ref != ref || !reflect.DeepEqual(provisioner.OS, []string{"darwin"}) || !reflect.DeepEqual(provisioner.Arch, []string{"arm64"}) {
+			t.Fatalf("Apple Silicon Pluck Provisioner = %#v, want reviewed darwin/arm64 pin", provisioner)
+		}
+	}
+	if !found {
+		t.Fatalf("Apple Silicon Selected Surface omitted %s@%s", plugin, ref)
+	}
+	for _, provisioner := range amd64.Provisioners {
+		if provisioner.Spec.Plugin == plugin {
+			t.Fatalf("Intel Selected Surface included Apple Silicon-only Pluck: %#v", provisioner)
+		}
+	}
+
+	for _, name := range []string{"curl", "tar", "pbcopy", "open", "Rust stable (rustup)"} {
+		if !selectedDependencyNamed(arm64, name) {
+			t.Errorf("Apple Silicon Pluck surface misses Dependency %q", name)
+		}
+	}
+	if selectedDependencyNamed(amd64, "curl") || selectedDependencyNamed(amd64, "tar") || selectedDependencyNamed(amd64, "pbcopy") || selectedDependencyNamed(amd64, "open") || selectedDependencyNamed(amd64, "Rust stable (rustup)") {
+		t.Fatalf("Intel Selected Surface retained Pluck-only Dependencies: %#v", amd64.Dependencies)
+	}
+}
+
+func selectedDependencyNamed(surface selectedsurface.Surface, name string) bool {
+	for _, dependency := range surface.Dependencies {
+		if dependency.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestHerdrPopupWorkflowsAreSandboxedAndContextAware(t *testing.T) {
@@ -417,6 +490,9 @@ func herdrPopupCommandsByKey(t *testing.T, config herdrCockpitConfig) map[string
 	t.Helper()
 	commands := make(map[string]herdrPopupCommand, len(config.Keys.Command))
 	for _, command := range config.Keys.Command {
+		if _, exists := commands[command.Key]; exists {
+			t.Fatalf("duplicate Herdr custom key %q", command.Key)
+		}
 		commands[command.Key] = command
 	}
 	return commands
