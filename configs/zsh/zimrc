@@ -21,17 +21,6 @@ zmodule utility
 # for any caveats.
 
 #
-# Prompt
-#
-
-# Exposes how long the last command took to run to prompts.
-zmodule duration-info
-# Exposes git repository status information to prompts.
-zmodule git-info
-# A heavily reduced, ASCII-only version of the Spaceship and Starship prompts.
-zmodule asciiship
-
-#
 # Completion
 #
 

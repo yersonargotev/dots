@@ -2872,9 +2872,40 @@ func TestRepositoryStarshipConfigClassifiesPortablePromptSafely(t *testing.T) {
 		"[character]",
 		"[cmd_duration]",
 		"[time]",
+		`success_symbol = "[❯](bold fg:green)"`,
+		`error_symbol = "[❯](bold fg:red)"`,
+		"$git_status",
+		`symbol = " "`,
+		`staged = "+${count}"`,
+		`modified = "!${count}"`,
+		`untracked = "?${count}"`,
+		`ahead = "⇡${count}"`,
+		`behind = "⇣${count}"`,
 	} {
 		if !strings.Contains(managed, want) {
 			t.Fatalf("managed starship config missing portable prompt segment %q:\n%s", want, managed)
+		}
+	}
+
+	zimrcPath := filepath.Join(root, "configs/zsh/zimrc")
+	zimrcBytes, err := os.ReadFile(zimrcPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", zimrcPath, err)
+	}
+	zimrc := string(zimrcBytes)
+	for _, removed := range []string{"zmodule asciiship", "zmodule git-info", "zmodule duration-info"} {
+		if strings.Contains(zimrc, removed) {
+			t.Fatalf("Zim config still initializes redundant prompt module %q:\n%s", removed, zimrc)
+		}
+	}
+	for _, retained := range []string{
+		"zmodule completion",
+		"zmodule zsh-users/zsh-syntax-highlighting",
+		"zmodule zsh-users/zsh-history-substring-search",
+		"zmodule zsh-users/zsh-autosuggestions",
+	} {
+		if !strings.Contains(zimrc, retained) {
+			t.Fatalf("Zim config lost required interactive module %q:\n%s", retained, zimrc)
 		}
 	}
 

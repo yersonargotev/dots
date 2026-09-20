@@ -9,6 +9,7 @@ format = """\
 ($directory)\
 $os\
 $git_branch\
+$git_status\
 $fill\
 $nodejs\
 $rust\
@@ -19,6 +20,7 @@ $java\
 $c\
 $conda\
 $zig\
+$python\
 $cmd_duration\
 $time\
 \n$character\
@@ -60,8 +62,8 @@ mantle = "#181825"
 crust = "#11111b"
 
 [character]
-success_symbol = "[ ](fg:green)"
-error_symbol = "[ ](fg:red)"
+success_symbol = "[❯](bold fg:green)"
+error_symbol = "[❯](bold fg:red)"
 vimcmd_symbol = "[N](bold red)"
 vimcmd_replace_one_symbol = "[R](bold peach)"
 vimcmd_visual_symbol = "[V](bold mauve)"
@@ -90,13 +92,19 @@ style = "bold fg:yellow"
 min_time = 500
 
 [git_branch]
-format = "-> [$symbol$branch]($style) "
+format = "[$symbol$branch]($style) "
 style = "bold fg:mauve"
-symbol = " "
+symbol = " "
 
 [git_status]
-format = '[$all_status$ahead_behind ]($style)'
-style = "fg:text bg:pink"
+format = '([$all_status$ahead_behind]($style) )'
+style = "bold fg:pink"
+staged = "+${count}"
+modified = "!${count}"
+untracked = "?${count}"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
 
 [docker_context]
 disabled = true
@@ -104,47 +112,51 @@ symbol = " "
 
 [python]
 disabled = false
-format = "[$symbol$pyenv_prefix($version)( $virtualenv)](fg:peach)"
-symbol = " "
+format = "[py $version( $virtualenv)](fg:peach) "
+symbol = ""
 version_format = "$raw"
 
 [java]
-format = '[[ $symbol ($version) ](fg:red)]($style)'
+format = '[java $version](fg:red) '
 version_format = "$raw"
 symbol = " "
 disabled = false
 
 [c]
-format = '[[ $symbol ($version) ](fg:blue)]($style)'
+format = '[c $version](fg:blue) '
 symbol = " "
 version_format = "$raw"
 disabled = false
 
 [zig]
-format = '[[ $symbol ($version) ](fg:peach)]($style)'
+format = '[zig $version](fg:peach) '
 version_format = "$raw"
 disabled = false
 
 [bun]
 version_format = "$raw"
-format = '[[ $symbol ($version) ](fg:text)]($style)'
+format = '[bun $version](fg:text) '
 disabled = false
 
 [nodejs]
 symbol = ""
-format = '[[ $symbol ($version) ](fg:green)]($style)'
+format = '[node $version](fg:green) '
 
 [rust]
 symbol = ""
-format = '[[ $symbol ($version) ](fg:red)]($style)'
+format = '[rs $version](fg:red) '
 
 [golang]
 symbol = ""
-format = '[[ $symbol ($version) ](fg:teal)]($style)'
+format = '[go $version](fg:teal) '
 
 [php]
 symbol = ""
-format = '[[ $symbol ($version) ](fg:peach)]($style)'
+format = '[php $version](fg:peach) '
+
+[conda]
+symbol = ""
+format = '[conda $environment](fg:green) '
 
 [time]
 disabled = false
