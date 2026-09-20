@@ -22,12 +22,13 @@ The first line shows the Fish-style abbreviated directory, a `` branch label,
 and compact Git state (`+` staged, `!` modified, `?` untracked, `⇡` ahead, and
 `⇣` behind). Relevant project runtimes use short labels on the right side;
 unmatched runtimes remain hidden. Commands taking at least 500 ms display their
-duration, followed by 24-hour time. Git state uses foreground color only, with
-no filled status block.
+duration with millisecond precision below one second, followed by 24-hour time.
+Git state uses foreground color only, with no filled status block.
 
 The second line contains one `❯` input marker. It is green after a successful
 command and red after a failed command. Vim command modes continue to use their
-distinct `N`, `R`, and `V` markers.
+distinct `N`, `R`, and `V` markers. Starship does not prepend an additional
+blank line; the newline declared by `format` is the prompt's only line break.
 
 ## Prerequisite: a Nerd Font
 

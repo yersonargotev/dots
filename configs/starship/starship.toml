@@ -26,7 +26,7 @@ $time\
 \n$character\
 """
 
-add_newline = true
+add_newline = false
 command_timeout = 3600000
 palette = "catppuccin_mocha"
 
@@ -87,9 +87,10 @@ truncate_to_repo = false
 read_only = "  "
 
 [cmd_duration]
-format = " took [ $duration]($style) "
+format = " took [$duration]($style) "
 style = "bold fg:yellow"
 min_time = 500
+show_milliseconds = true
 
 [git_branch]
 format = "[$symbol$branch]($style) "
@@ -97,7 +98,7 @@ style = "bold fg:mauve"
 symbol = " "
 
 [git_status]
-format = '([$all_status$ahead_behind]($style) )'
+format = '([$staged$modified$untracked$ahead_behind]($style) )'
 style = "bold fg:pink"
 staged = "+${count}"
 modified = "!${count}"
