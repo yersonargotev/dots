@@ -170,17 +170,31 @@ require_command fd
 require_command fzf
 require_command bat
 
-if [ -n "${VISUAL:-}" ] && command -v "$VISUAL" >/dev/null 2>&1; then
+# Split the conventional editor command and its arguments without eval. Shell
+# metacharacters from the environment therefore remain ordinary argv values.
+editor_available() {
+  [ -n "$1" ] || return 1
+  set -f
+  set -- $1
+  set +f
+  [ "$#" -gt 0 ] && command -v "$1" >/dev/null 2>&1
+}
+
+if editor_available "${VISUAL:-}"; then
   editor=$VISUAL
-elif [ -n "${EDITOR:-}" ] && command -v "$EDITOR" >/dev/null 2>&1; then
+elif editor_available "${EDITOR:-}"; then
   editor=$EDITOR
-elif command -v vi >/dev/null 2>&1; then
+elif editor_available vi; then
   editor=vi
 else
   printf 'dots: VISUAL, EDITOR, or vi is required\nPress Enter to close.\n' >&2
   IFS= read -r _
   exit 127
 fi
+
+set -f
+set -- $editor
+set +f
 
 start=${HERDR_ACTIVE_PANE_CWD:-$PWD}
 root=$(git -C "$start" rev-parse --show-toplevel 2>/dev/null) || root=$start
@@ -193,6 +207,6 @@ fi
 selection=$(fd --hidden --type f --exclude .git --exclude node_modules --exclude target . |
   fzf --preview 'bat --color=always --style=numbers --line-range=:500 -- {}') || exit 0
 [ -n "$selection" ] || exit 0
-exec "$editor" "$selection"
+exec "$@" "$selection"
 ''', description = "find repository file", width = "80%", height = "80%" },
 ]

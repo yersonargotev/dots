@@ -147,7 +147,10 @@ The file finder resolves the current Git root and falls back to the focused
 directory outside a repository. fd includes hidden files while excluding
 `.git`, `node_modules`, and `target`; fzf previews with bat. An accepted path is
 opened through `VISUAL`, then `EDITOR`, then `vi`, in that order. Cancelling fzf
-exits without opening an editor or changing the underlying layout.
+exits without opening an editor or changing the underlying layout. `VISUAL` and
+`EDITOR` may include ordinary whitespace-separated arguments such as
+`code --wait`; the popup passes them as argv and never evaluates them as shell
+syntax.
 
 Every workflow checks its commands before starting. A missing command prints a
 short error inside the popup and waits for Enter; it does not install software

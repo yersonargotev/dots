@@ -292,6 +292,38 @@ func TestHerdrPopupWorkflowsAreSandboxedAndContextAware(t *testing.T) {
 		}
 	})
 
+	t.Run("finder preserves editor arguments without evaluating them", func(t *testing.T) {
+		sandbox := newFinderSandbox(t)
+		focused := t.TempDir()
+		result := sandbox.run(commands["prefix+alt+f"], focused, []string{
+			"VISUAL=visual --wait ; touch " + filepath.Join(sandbox.capture, "injected"),
+			"GIT_FAIL=1",
+			"FZF_SELECTION=.hidden",
+		})
+		result.requireSuccess(t)
+		if got := strings.TrimSpace(sandbox.read(t, "editor.args")); got != "--wait ; touch "+filepath.Join(sandbox.capture, "injected")+" .hidden" {
+			t.Fatalf("editor args = %q, want configured argv followed by selected file", got)
+		}
+		if _, err := os.Stat(filepath.Join(sandbox.capture, "injected")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("editor metacharacters were evaluated: %v", err)
+		}
+	})
+
+	t.Run("finder falls back from unavailable VISUAL to EDITOR arguments", func(t *testing.T) {
+		sandbox := newFinderSandbox(t)
+		focused := t.TempDir()
+		result := sandbox.run(commands["prefix+alt+f"], focused, []string{
+			"VISUAL=missing-visual --wait",
+			"EDITOR=visual --reuse-window",
+			"GIT_FAIL=1",
+			"FZF_SELECTION=.hidden",
+		})
+		result.requireSuccess(t)
+		if got := strings.TrimSpace(sandbox.read(t, "editor.args")); got != "--reuse-window .hidden" {
+			t.Fatalf("EDITOR fallback args = %q, want configured argument followed by selected file", got)
+		}
+	})
+
 	t.Run("finder falls back to focused directory", func(t *testing.T) {
 		sandbox := newFinderSandbox(t)
 		focused := t.TempDir()
