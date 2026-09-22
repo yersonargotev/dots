@@ -41,6 +41,17 @@ assert_prompt_excludes() {
   fi
 }
 
+assert_prompt_starts_with() {
+  local phase="$1"
+  local prompt="$2"
+  local expected="$3"
+  if [[ "$prompt" != "$expected"* ]]; then
+    printf 'Starship assertion failed [%s]: expected prefix %q\n' "$phase" "$expected" >&2
+    printf 'ANSI-stripped prompt: %q\n' "$prompt" >&2
+    exit 1
+  fi
+}
+
 assert_prompt_newlines() {
   local phase="$1"
   local prompt="$2"
@@ -83,6 +94,8 @@ clean_failure="$(render_prompt 1 52)"
 
 # Compare literal, ANSI-stripped prompt fragments. Dynamic path, fill, and time
 # content is deliberately outside these stable state assertions.
+assert_prompt_starts_with "clean success separation" "$clean_success" $'\n'
+assert_prompt_starts_with "clean failure separation" "$clean_failure" $'\n'
 assert_prompt_contains "clean success branch" "$clean_success" " main"
 assert_prompt_contains "clean success marker" "$clean_success" $'\n❯ '
 assert_prompt_excludes "clean success staged state" "$clean_success" "+"
@@ -90,8 +103,8 @@ assert_prompt_excludes "clean success modified state" "$clean_success" "!"
 assert_prompt_excludes "clean success untracked state" "$clean_success" "?"
 assert_prompt_contains "clean failure branch" "$clean_failure" " main"
 assert_prompt_contains "clean failure marker" "$clean_failure" $'\n❯ '
-assert_prompt_newlines "clean success shape" "$clean_success" 1
-assert_prompt_newlines "clean failure shape" "$clean_failure" 1
+assert_prompt_newlines "clean success shape" "$clean_success" 2
+assert_prompt_newlines "clean failure shape" "$clean_failure" 2
 
 runtime_repo="$sandbox_root/runtime"
 mkdir -p "$runtime_repo"
@@ -126,7 +139,7 @@ printf 'new\n' >"$repo/untracked"
 
 dirty="$(render_prompt 0 100)"
 assert_prompt_contains "dirty branch" "$dirty" " main"
-assert_prompt_contains "dirty Git state" "$dirty" "+1!1?1⇕⇡1⇣1"
+assert_prompt_contains "dirty Git state" "$dirty" "+1 !1 ?1 ⇕⇡1⇣1"
 assert_prompt_contains "dirty marker" "$dirty" $'\n❯ '
 
 for redundant_module in asciiship git-info duration-info; do
@@ -143,4 +156,4 @@ for retained_module in completion zsh-users/zsh-syntax-highlighting zsh-users/zs
   fi
 done
 
-printf 'Starship clean, dirty, success, failure, and Zim ownership checks passed.\n'
+printf 'Starship rendering, spacing, and Zim ownership checks passed.\n'

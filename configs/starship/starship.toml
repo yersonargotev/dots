@@ -26,7 +26,7 @@ $time\
 \n$character\
 """
 
-add_newline = false
+add_newline = true
 command_timeout = 3600000
 palette = "catppuccin_mocha"
 
@@ -98,14 +98,14 @@ style = "bold fg:mauve"
 symbol = " "
 
 [git_status]
-format = '([$staged$modified$untracked$ahead_behind]($style) )'
-style = "bold fg:pink"
-staged = "+${count}"
-modified = "!${count}"
-untracked = "?${count}"
-ahead = "⇡${count}"
-behind = "⇣${count}"
-diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+format = '([$staged$modified$untracked$ahead_behind]($style)) '
+style = "bold fg:text"
+staged = "[+${count}](fg:green) "
+modified = "[!${count}](fg:yellow) "
+untracked = "[?${count}](fg:red) "
+ahead = "[⇡${count}](fg:teal) "
+behind = "[⇣${count}](fg:peach) "
+diverged = "[⇕⇡${ahead_count}⇣${behind_count}](fg:mauve) "
 
 [docker_context]
 disabled = true
