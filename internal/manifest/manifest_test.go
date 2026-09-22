@@ -2869,7 +2869,7 @@ func TestRepositoryStarshipConfigClassifiesPortablePromptSafely(t *testing.T) {
 		`palette = "catppuccin_mocha"`,
 		"[palettes.catppuccin_mocha]",
 		"format = ",
-		"add_newline = false",
+		"add_newline = true",
 		"[character]",
 		"[cmd_duration]",
 		"show_milliseconds = true",
@@ -2878,11 +2878,12 @@ func TestRepositoryStarshipConfigClassifiesPortablePromptSafely(t *testing.T) {
 		`error_symbol = "[❯](bold fg:red)"`,
 		"$git_status",
 		`symbol = " "`,
-		`staged = "+${count}"`,
-		`modified = "!${count}"`,
-		`untracked = "?${count}"`,
-		`ahead = "⇡${count}"`,
-		`behind = "⇣${count}"`,
+		`staged = "[+${count}](fg:green) "`,
+		`modified = "[!${count}](fg:yellow) "`,
+		`untracked = "[?${count}](fg:red) "`,
+		`ahead = "[⇡${count}](fg:teal) "`,
+		`behind = "[⇣${count}](fg:peach) "`,
+		`diverged = "[⇕⇡${ahead_count}⇣${behind_count}](fg:mauve) "`,
 	} {
 		if !strings.Contains(managed, want) {
 			t.Fatalf("managed starship config missing portable prompt segment %q:\n%s", want, managed)
