@@ -63,7 +63,7 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 			if !config.UI.HideTabBarWhenSingleTab || config.UI.TabBarPosition != "top" {
 				t.Fatalf("tab row = hide-single %t, position %q", config.UI.HideTabBarWhenSingleTab, config.UI.TabBarPosition)
 			}
-			wantStatus := []herdrTabBarRight{{Type: "zoom"}, {Type: "hostname"}, {Type: "datetime", Format: "%H:%M"}}
+			wantStatus := []herdrTabBarRight{{Type: "zoom"}}
 			if !reflect.DeepEqual(config.UI.TabBarRight, wantStatus) || config.UI.TabBarRightSeparator != " · " {
 				t.Fatalf("right status = %#v separated by %q, want %#v", config.UI.TabBarRight, config.UI.TabBarRightSeparator, wantStatus)
 			}
