@@ -36,8 +36,6 @@ hide_tab_bar_when_single_tab = true
 tab_bar_position = "top"
 tab_bar_right = [
   { type = "zoom" },
-  { type = "hostname" },
-  { type = "datetime", format = "%H:%M" },
 ]
 tab_bar_right_separator = " · "
 status_indicators = "symbols"
