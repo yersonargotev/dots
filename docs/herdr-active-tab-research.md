@@ -4,6 +4,11 @@ Research date: 2026-09-16. Installed CLI verified locally: Herdr 0.9.1 (API prot
 
 Research issue: [#499](https://github.com/yersonargotev/dots/issues/499). The findings below record the initial investigation. The subsequently approved implementation is tracked by [#500](https://github.com/yersonargotev/dots/issues/500); see [current setup and approved layout](herdr.md).
 
+Historical record: the upstream Tab Git plugin and commands below describe the
+initial trial. The current `herdr` Tag uses the independently maintained
+`yersonargotev/herdr-tab-git` fork; follow [current setup](herdr.md) for its pin,
+token names, and migration steps.
+
 ## Diagnosis
 
 Confirmed in the stable v0.9.1 source: `Workspace::resolved_identity_cwd_from` selects `tabs.first()` and that tab's `root_pane`, falling back to stored identity cwd. `workspace_git_refresh_items` uses this method. Built-in Git branch/status therefore describe the first tab root pane, not the active tab's focused pane. Automatic workspace name has the same identity basis. Preserve the stable workspace name while making a separate contextual line dynamic. Agent state rollup should remain workspace-wide so a blocked background agent stays visible.

@@ -11,7 +11,7 @@ import (
 
 const (
 	herdrMetadataCommit = "c696c36256eddc6ee1983ab9f202848b84460e06"
-	herdrGitCommit      = "83ce41a11c5cc3ab2de1452ab303f6dfb976a937"
+	herdrGitCommit      = "a7c8ba53a05adb2b5b788ca78f49a41e065b6197"
 	herdrTabbyCommit    = "34c01f9791dd3228acae7ca378adb38e09d9fb6c"
 	herdrPluckCommit    = "d1eacb80956c3a23ab6f7428a9e83961fb86ba28"
 )
@@ -54,7 +54,7 @@ func TestHerdrPlanSelectsFourAppleSiliconPluginsAndNoLinuxPlugins(t *testing.T) 
 	pluck.Arch = []string{"arm64"}
 	plugins := []manifest.Provisioner{
 		herdrProvisioner("szrenwei/herdr-space-tab-metadata", herdrMetadataCommit),
-		herdrProvisioner("hasuwini77/herdr-tab-git", herdrGitCommit),
+		herdrProvisioner("yersonargotev/herdr-tab-git", herdrGitCommit),
 		tabby,
 		pluck,
 	}
@@ -101,7 +101,7 @@ func TestHerdrPlanSelectsFourAppleSiliconPluginsAndNoLinuxPlugins(t *testing.T) 
 }
 
 func TestHerdrReadinessReportsDependenciesWithoutRunning(t *testing.T) {
-	m := manifestWithProvisioners(herdrProvisioner("hasuwini77/herdr-tab-git", herdrGitCommit))
+	m := manifestWithProvisioners(herdrProvisioner("yersonargotev/herdr-tab-git", herdrGitCommit))
 
 	ready, err := provision.Check(m, provision.Options{Profile: "default", OS: "darwin"}, lookupWith("herdr", "git", "python3", "node"), fontLookupWith())
 	if err != nil {
@@ -122,7 +122,7 @@ func TestHerdrReadinessReportsDependenciesWithoutRunning(t *testing.T) {
 
 func TestHerdrApplyUsesOneCommandPerEntryAndPropagatesFailure(t *testing.T) {
 	first := herdrProvisioner("szrenwei/herdr-space-tab-metadata", herdrMetadataCommit)
-	second := herdrProvisioner("hasuwini77/herdr-tab-git", herdrGitCommit)
+	second := herdrProvisioner("yersonargotev/herdr-tab-git", herdrGitCommit)
 	m := manifestWithProvisioners(first, second)
 	look := lookupWith("herdr", "git", "python3", "node")
 	runErr := errors.New("herdr install failed")
@@ -134,7 +134,7 @@ func TestHerdrApplyUsesOneCommandPerEntryAndPropagatesFailure(t *testing.T) {
 	}
 	wantCalls := [][]string{
 		{"herdr", "plugin", "install", "szrenwei/herdr-space-tab-metadata", "--ref", herdrMetadataCommit, "--yes"},
-		{"herdr", "plugin", "install", "hasuwini77/herdr-tab-git", "--ref", herdrGitCommit, "--yes"},
+		{"herdr", "plugin", "install", "yersonargotev/herdr-tab-git", "--ref", herdrGitCommit, "--yes"},
 	}
 	if !reflect.DeepEqual(runner.calls, wantCalls) {
 		t.Fatalf("runner.calls = %#v, want %#v", runner.calls, wantCalls)

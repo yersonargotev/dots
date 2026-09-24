@@ -12,7 +12,7 @@ an existing installation's Tags.
 | Plugin | Source | Reviewed commit |
 |---|---|---|
 | Space Tab Metadata | `szrenwei/herdr-space-tab-metadata` | `c696c36256eddc6ee1983ab9f202848b84460e06` |
-| Tab Git Status | `hasuwini77/herdr-tab-git` | `83ce41a11c5cc3ab2de1452ab303f6dfb976a937` |
+| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `a7c8ba53a05adb2b5b788ca78f49a41e065b6197` |
 | Tabby | `yersonargotev/tabby` | `34c01f9791dd3228acae7ca378adb38e09d9fb6c` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
@@ -23,7 +23,7 @@ curl, tar, pbcopy, open, Python 3, Node LTS through fnm, and Rust stable through
 rustup are declared Dependencies. The popup tools belong directly to the `herdr`
 Tag, so selecting that atomic surface does not rely on `core` or another Profile
 to make its keybindings work. Python 3.9+ is needed by Space Tab Metadata; Node
-runs Tab Git Status. Tabby's pinned installer downloads a
+runs Tab Git Tokens. Tabby's pinned installer downloads a
 checksum-verified Apple Silicon binary and falls back to
 `cargo build --release --locked` if that artifact is missing, so its build
 toolchain is declared as well. The pinned Tabby installer rejects Intel Macs,
@@ -93,13 +93,30 @@ action on Intel):
 herdr --session work server reload-config
 herdr --session work plugin action invoke start --plugin yersonargotev.tabby
 herdr --session work plugin action invoke refresh --plugin herdr-space-tab-metadata
-herdr --session work plugin action invoke refresh --plugin hasuwini77.tab-git
+herdr --session work plugin action invoke refresh --plugin yersonargotev.tab-git
 herdr --session work plugin log list --plugin herdr-space-tab-metadata --limit 3
-herdr --session work plugin log list --plugin hasuwini77.tab-git --limit 3
+herdr --session work plugin log list --plugin yersonargotev.tab-git --limit 3
 ```
 
 An action response may mean only that execution started. Confirm `succeeded` in
 the logs. Multiple plugins call their action `refresh`; always qualify its ID.
+
+When upgrading an existing installation from `hasuwini77.tab-git`, the old
+registration remains in Herdr even though the Install Manifest no longer selects
+it. After installing the new pin, clear the old metadata, confirm its action
+completed, then uninstall the old plugin before refreshing the new one:
+
+```sh
+herdr --session work plugin action invoke clear --plugin hasuwini77.tab-git
+herdr --session work plugin log list --plugin hasuwini77.tab-git --limit 3
+herdr plugin uninstall hasuwini77.tab-git
+herdr --session work plugin action invoke refresh --plugin yersonargotev.tab-git
+```
+
+Use the intended session in place of `work`. The old plugin's `$gitbranch`
+token shares a name with the new plugin's token, so leaving both active can
+produce competing metadata. This is a one-time Herdr registry migration;
+routine dots installs do not uninstall external plugins.
 
 ## Approved Spaces layout
 
@@ -109,8 +126,12 @@ Each Space uses three lines, with one blank row between Spaces:
    workspace-wide rollup so an inactive blocked agent stays visible.
 2. Active tab label (`$active_tab`, `#cba6f7`), reusing Tabby's command/directory
    labels. The plugin's `tab:` prefix is preserved. The tab count is hidden.
-3. Active-tab Git branch (`$gitbranch`, `#89b4fa`) and status (`$gitstatus`,
-   `#f9e2af`), with an exact `clean` rule using `#a6e3a1`.
+3. Active-tab Git branch (`$gitbranch`) and independently styled status tokens:
+   `$gitconflicted` (`!N`), `$gitadded` (`+N`), `$gitmodified` (`~N`),
+   `$gitdeleted` (`−N`), `$gituntracked` (`?N`), `$gitahead` (`↑N`),
+   `$gitbehind` (`↓N`), and `$gitclean` (`clean`). Each category has its own
+   Mocha color, and zero categories are absent. The symbols retain meaning
+   without color. The line stays compact because counts have no labels.
 
 Styled text explicitly disables dimming. Agents, keybindings, and active/Navigate
 background colors remain unchanged. Default and adaptive variants share the same
@@ -130,6 +151,12 @@ only their palette behavior differs.
 Without plugin metadata, the corresponding tokens and empty lines disappear;
 native first-tab Git values are not silently substituted. A non-Git active pane
 also has no Git line. Long names may still be truncated by the sidebar width.
+
+Each path contributes once, even with staged and unstaged changes. Priority is
+conflict, deletion, addition, then modification; a rename counts as one modified
+destination path. A missing upstream yields zero ahead/behind. The `clean` token
+requires a successful Git status and all zero counts. Git failures and timeouts
+clear the tokens instead of presenting `clean`.
 
 ## Popup workflows
 
@@ -187,8 +214,8 @@ For a temporary rollback, restore your backed-up sidebar configuration, clear Gi
 metadata, and disable the two display plugins in the intended session:
 
 ```sh
-herdr --session work plugin action invoke clear --plugin hasuwini77.tab-git
-herdr --session work plugin disable hasuwini77.tab-git
+herdr --session work plugin action invoke clear --plugin yersonargotev.tab-git
+herdr --session work plugin disable yersonargotev.tab-git
 herdr --session work plugin disable herdr-space-tab-metadata
 herdr --session work server reload-config
 ```
@@ -198,15 +225,17 @@ remaining display-only metadata. Tabby can remain enabled because it owns tab
 labels independently. A later dots install reapplies the declared layout and
 plugin installations; change the Source of Truth if rollback should be permanent.
 
-## Known upstream limitations
+## Plugin refresh and limits
 
-Tab Git Status updates on focus/creation events, not continuously. A `cd`, branch
-switch, or file edit without another focus event may leave stale values; use its
-qualified refresh action when needed. Ahead/behind uses local tracking refs and
-performs no fetch. Its current Git-error handling can report `clean` after a
-failed status command, and overlapping hooks can race. Inactive workspaces with
-multiple panes may use a fallback pane rather than their remembered focused pane.
-These are upstream plugin limitations, not correctness guarantees from dots.
+Tab Git Tokens refreshes immediately on focus/creation events and starts one
+watcher per Herdr socket. The watcher checks only the focused Space every three
+seconds, so file and branch changes update without a tab switch. Inactive Spaces
+refresh on startup, focus, or the qualified `refresh` action; their file changes
+may remain stale until then. The `clear` action pauses automatic updates until
+`refresh` resumes them. Ahead/behind uses local tracking refs and performs no
+fetch. The watcher exits if Herdr snapshots repeatedly fail; a later focus
+event or manual refresh restarts it. The poll costs a snapshot, up to five local
+Git commands, and one metadata write per cycle.
 
 Pluck v0.3.1 supports dots only on Apple Silicon macOS. Its installer does not
 verify the release checksum sidecar and its Cargo fallback does not pass
@@ -216,5 +245,6 @@ checksum-verified artifact. The plugin runs as ordinary user code and can read
 visible pane contents. Custom global or project pattern files remain outside
 dots ownership.
 
-See [the research](herdr-active-tab-research.md) for pinned source links and
-isolated tests. No custom plugin code or polling was introduced by this integration.
+See [the initial research](herdr-active-tab-research.md) for historical upstream
+evidence. The current fork's source and tests are pinned in the Install Manifest;
+dots itself adds no polling process.
