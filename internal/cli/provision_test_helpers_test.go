@@ -2,7 +2,9 @@ package cli_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -21,8 +23,26 @@ func stubManifestProvisionerTools(t *testing.T) {
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
+func TestManifestProvisionerStubsRejectPackageManagers(t *testing.T) {
+	stubManifestProvisionerTools(t)
+	for _, name := range []string{"brew", "apt-get", "dnf"} {
+		t.Run(name, func(t *testing.T) {
+			output, err := exec.Command(name, "install", "example").CombinedOutput()
+			if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 97 {
+				t.Fatalf("%s unexpectedly succeeded or used a host executable: %v, output %q", name, err, output)
+			}
+			if !strings.Contains(string(output), "unexpected package manager call:") || !strings.Contains(string(output), "install example") {
+				t.Fatalf("%s did not report the blocked command: %q", name, output)
+			}
+		})
+	}
+}
+
 func writeManifestDependencyStubs(t *testing.T, dir string) {
 	t.Helper()
+	for _, name := range []string{"brew", "apt", "apt-get", "dnf", "yum", "pacman", "snap", "flatpak", "curl", "wget", "npm"} {
+		writeExecStub(t, filepath.Join(dir, name), "#!/bin/sh\nprintf 'unexpected package manager call: %s' \"$0\" >&2\nprintf ' %s' \"$@\" >&2\nprintf '\\n' >&2\nexit 97\n")
+	}
 	for _, name := range []string{
 		"agy",
 		"atuin",
