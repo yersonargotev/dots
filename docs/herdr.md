@@ -11,7 +11,7 @@ an existing installation's Tags.
 
 | Plugin | Source | Reviewed commit |
 |---|---|---|
-| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `f2524da0658403384ec9e224414bb7cd64a574fc` |
+| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
 | Tabby | `yersonargotev/tabby` | `34c01f9791dd3228acae7ca378adb38e09d9fb6c` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 

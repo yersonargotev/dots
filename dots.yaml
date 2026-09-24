@@ -1226,7 +1226,7 @@ provisioners:
     os: [darwin]
     spec:
       plugin: yersonargotev/herdr-tab-git
-      ref: f2524da0658403384ec9e224414bb7cd64a574fc
+      ref: 48fe5a66c17970a77919dc50a6ab3b6512bc7300
     dependencies:
       - name: herdr
         command: herdr
