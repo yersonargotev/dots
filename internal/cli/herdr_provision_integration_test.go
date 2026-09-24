@@ -52,8 +52,8 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	for _, want := range []string{
 		"szrenwei/herdr-space-tab-metadata",
 		"c696c36256eddc6ee1983ab9f202848b84460e06",
-		"hasuwini77/herdr-tab-git",
-		"83ce41a11c5cc3ab2de1452ab303f6dfb976a937",
+		"yersonargotev/herdr-tab-git",
+		"a7c8ba53a05adb2b5b788ca78f49a41e065b6197",
 		"yersonargotev/tabby",
 		"34c01f9791dd3228acae7ca378adb38e09d9fb6c",
 		"rmarganti/herdr-pluck",
@@ -62,6 +62,9 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		if !strings.Contains(dryRunOutput.String(), want) {
 			t.Fatalf("Herdr dry-run omitted pinned value %q:\n%s", want, dryRunOutput.String())
 		}
+	}
+	if strings.Contains(dryRunOutput.String(), "hasuwini77/herdr-tab-git") {
+		t.Fatalf("Herdr dry-run retained the retired plugin:\n%s", dryRunOutput.String())
 	}
 	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
 		t.Fatalf("Herdr dry-run executed a plugin installer: %v", err)
@@ -100,7 +103,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
 		"plugin install szrenwei/herdr-space-tab-metadata --ref c696c36256eddc6ee1983ab9f202848b84460e06 --yes",
-		"plugin install hasuwini77/herdr-tab-git --ref 83ce41a11c5cc3ab2de1452ab303f6dfb976a937 --yes",
+		"plugin install yersonargotev/herdr-tab-git --ref a7c8ba53a05adb2b5b788ca78f49a41e065b6197 --yes",
 		"plugin install yersonargotev/tabby --ref 34c01f9791dd3228acae7ca378adb38e09d9fb6c --yes",
 		"plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
 	}
@@ -264,7 +267,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
 		"plugin install szrenwei/herdr-space-tab-metadata --ref c696c36256eddc6ee1983ab9f202848b84460e06 --yes",
-		"plugin install hasuwini77/herdr-tab-git --ref 83ce41a11c5cc3ab2de1452ab303f6dfb976a937 --yes",
+		"plugin install yersonargotev/herdr-tab-git --ref a7c8ba53a05adb2b5b788ca78f49a41e065b6197 --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Intel Herdr invocations = %#v, want only compatible plugins %#v\noutput:\n%s", got, want, installOutput.String())

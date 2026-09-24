@@ -77,7 +77,15 @@ row_gap = 1
 rows = [
   ["state_icon", { token = "workspace", fg = "#cdd6f4", bold = true, dim = false }],
   [{ token = "$active_tab", fg = "#cba6f7", dim = false }],
-  [{ token = "$gitbranch", fg = "#89b4fa", dim = false }, { token = "$gitstatus", fg = "#f9e2af", dim = false, rules = [{ equals = "clean", fg = "#a6e3a1" }] }],
+  [{ token = "$gitbranch", fg = "#89b4fa", dim = false },
+   { token = "$gitconflicted", fg = "#f38ba8", dim = false },
+   { token = "$gitadded", fg = "#a6e3a1", dim = false },
+   { token = "$gitmodified", fg = "#f9e2af", dim = false },
+   { token = "$gitdeleted", fg = "#eba0ac", dim = false },
+   { token = "$gituntracked", fg = "#89dceb", dim = false },
+   { token = "$gitahead", fg = "#94e2d5", dim = false },
+   { token = "$gitbehind", fg = "#fab387", dim = false },
+   { token = "$gitclean", fg = "#6c7086", dim = false }],
 ]
 
 [ui.sidebar.agents]

@@ -1241,8 +1241,8 @@ provisioners:
     tags: [herdr]
     os: [darwin]
     spec:
-      plugin: hasuwini77/herdr-tab-git
-      ref: 83ce41a11c5cc3ab2de1452ab303f6dfb976a937
+      plugin: yersonargotev/herdr-tab-git
+      ref: a7c8ba53a05adb2b5b788ca78f49a41e065b6197
     dependencies:
       - name: herdr
         command: herdr
@@ -1250,9 +1250,6 @@ provisioners:
       - name: git
         command: git
         brew: git
-      - name: python3
-        command: python3
-        brew: python
       - name: Node LTS (fnm)
         commands: [fnm, node]
         brew: fnm
