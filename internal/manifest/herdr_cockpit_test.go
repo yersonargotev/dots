@@ -117,6 +117,10 @@ func TestRepositoryHerdrConfigsPassInstalledHerdrValidation(t *testing.T) {
 	if err != nil {
 		t.Skip("Herdr is not installed")
 	}
+	version, err := exec.Command(herdr, "--version").Output()
+	if err != nil || strings.TrimSpace(string(version)) != "herdr 0.9.1" {
+		t.Skipf("Herdr 0.9.1 is required for config validation; got %q (%v)", strings.TrimSpace(string(version)), err)
+	}
 	for _, name := range []string{"config.toml", "config-adaptive.toml"} {
 		t.Run(name, func(t *testing.T) {
 			root := repositoryRoot(t)
@@ -126,6 +130,7 @@ func TestRepositoryHerdrConfigsPassInstalledHerdrValidation(t *testing.T) {
 				"HOME="+home,
 				"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 				"HERDR_CONFIG_PATH="+filepath.Join(root, "configs", "herdr", name),
+				"HERDR_SOCKET_PATH="+filepath.Join(home, "missing.sock"),
 				"HERDR_SESSION=dots-issue-512-check",
 			)
 			if output, err := cmd.CombinedOutput(); err != nil {

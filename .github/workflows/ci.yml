@@ -60,5 +60,13 @@ jobs:
       - name: Validate rendered Starship prompt
         run: ./configs/starship/test-prompt.sh
 
+      - name: Install Zsh acceptance shell
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zsh
+
+      - name: Validate selected terminal workflow
+        run: go test ./internal/manifest -run 'TestTerminalSelectedSurfaceIntegration|TestRepositoryHerdrConfigsPassInstalledHerdrValidation' -v
+
       - name: Test
         run: go test ./...
