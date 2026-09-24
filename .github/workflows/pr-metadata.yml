@@ -1,0 +1,29 @@
+name: PR metadata
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Validate PR metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted base revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Validate body and labels
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { validatePullRequest } = require('./.github/scripts/pr-metadata.cjs');
+            const errors = validatePullRequest(context.payload.pull_request);
+            for (const error of errors) core.error(error);
+            if (errors.length > 0) core.setFailed(`${errors.length} PR metadata check(s) failed.`);
