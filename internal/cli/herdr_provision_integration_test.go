@@ -50,10 +50,8 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		t.Fatalf("Herdr dry-run failed: %v\noutput:\n%s", err, dryRunOutput.String())
 	}
 	for _, want := range []string{
-		"szrenwei/herdr-space-tab-metadata",
-		"c696c36256eddc6ee1983ab9f202848b84460e06",
 		"yersonargotev/herdr-tab-git",
-		"a7c8ba53a05adb2b5b788ca78f49a41e065b6197",
+		"f2524da0658403384ec9e224414bb7cd64a574fc",
 		"yersonargotev/tabby",
 		"34c01f9791dd3228acae7ca378adb38e09d9fb6c",
 		"rmarganti/herdr-pluck",
@@ -102,20 +100,19 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
-		"plugin install szrenwei/herdr-space-tab-metadata --ref c696c36256eddc6ee1983ab9f202848b84460e06 --yes",
-		"plugin install yersonargotev/herdr-tab-git --ref a7c8ba53a05adb2b5b788ca78f49a41e065b6197 --yes",
+		"plugin install yersonargotev/herdr-tab-git --ref f2524da0658403384ec9e224414bb7cd64a574fc --yes",
 		"plugin install yersonargotev/tabby --ref 34c01f9791dd3228acae7ca378adb38e09d9fb6c --yes",
 		"plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Herdr invocations = %#v, want only the four pinned plugins %#v\noutput:\n%s", got, want, installOutput.String())
+		t.Fatalf("Herdr invocations = %#v, want only the three pinned plugins %#v\noutput:\n%s", got, want, installOutput.String())
 	}
 	metadata, err := state.Load(state.Path(stateRoot))
 	if err != nil {
 		t.Fatalf("load Apple Silicon Installation Metadata: %v", err)
 	}
-	if len(metadata.Provisioners) != 4 {
-		t.Fatalf("Apple Silicon Provisioner inventory = %#v, want four pinned plugins", metadata.Provisioners)
+	if len(metadata.Provisioners) != 3 {
+		t.Fatalf("Apple Silicon Provisioner inventory = %#v, want three pinned plugins", metadata.Provisioners)
 	}
 	pluckRecorded := false
 	for _, record := range metadata.Provisioners {
@@ -266,8 +263,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
-		"plugin install szrenwei/herdr-space-tab-metadata --ref c696c36256eddc6ee1983ab9f202848b84460e06 --yes",
-		"plugin install yersonargotev/herdr-tab-git --ref a7c8ba53a05adb2b5b788ca78f49a41e065b6197 --yes",
+		"plugin install yersonargotev/herdr-tab-git --ref f2524da0658403384ec9e224414bb7cd64a574fc --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Intel Herdr invocations = %#v, want only compatible plugins %#v\noutput:\n%s", got, want, installOutput.String())
@@ -276,8 +272,8 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	if err != nil {
 		t.Fatalf("load Intel Installation Metadata: %v", err)
 	}
-	if len(metadata.Provisioners) != 2 {
-		t.Fatalf("Intel Provisioner inventory = %#v, want two compatible plugins", metadata.Provisioners)
+	if len(metadata.Provisioners) != 1 {
+		t.Fatalf("Intel Provisioner inventory = %#v, want one compatible plugin", metadata.Provisioners)
 	}
 	for _, record := range metadata.Provisioners {
 		if strings.Contains(strings.Join(record.Args, " "), "tabby") {

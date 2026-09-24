@@ -1225,24 +1225,8 @@ provisioners:
     tags: [herdr]
     os: [darwin]
     spec:
-      plugin: szrenwei/herdr-space-tab-metadata
-      ref: c696c36256eddc6ee1983ab9f202848b84460e06
-    dependencies:
-      - name: herdr
-        command: herdr
-        brew: herdr
-      - name: git
-        command: git
-        brew: git
-      - name: python3
-        command: python3
-        brew: python
-  - tool: herdr
-    tags: [herdr]
-    os: [darwin]
-    spec:
       plugin: yersonargotev/herdr-tab-git
-      ref: a7c8ba53a05adb2b5b788ca78f49a41e065b6197
+      ref: f2524da0658403384ec9e224414bb7cd64a574fc
     dependencies:
       - name: herdr
         command: herdr

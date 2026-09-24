@@ -11,7 +11,7 @@ import (
 
 const (
 	herdrMetadataCommit = "c696c36256eddc6ee1983ab9f202848b84460e06"
-	herdrGitCommit      = "a7c8ba53a05adb2b5b788ca78f49a41e065b6197"
+	herdrGitCommit      = "f2524da0658403384ec9e224414bb7cd64a574fc"
 	herdrTabbyCommit    = "34c01f9791dd3228acae7ca378adb38e09d9fb6c"
 	herdrPluckCommit    = "d1eacb80956c3a23ab6f7428a9e83961fb86ba28"
 )
@@ -47,13 +47,12 @@ func TestRenderHerdrPluginInstallCommand(t *testing.T) {
 	}
 }
 
-func TestHerdrPlanSelectsFourAppleSiliconPluginsAndNoLinuxPlugins(t *testing.T) {
+func TestHerdrPlanSelectsThreeAppleSiliconPluginsAndNoLinuxPlugins(t *testing.T) {
 	tabby := herdrProvisioner("yersonargotev/tabby", herdrTabbyCommit)
 	tabby.Arch = []string{"arm64"}
 	pluck := herdrProvisioner("rmarganti/herdr-pluck", herdrPluckCommit)
 	pluck.Arch = []string{"arm64"}
 	plugins := []manifest.Provisioner{
-		herdrProvisioner("szrenwei/herdr-space-tab-metadata", herdrMetadataCommit),
 		herdrProvisioner("yersonargotev/herdr-tab-git", herdrGitCommit),
 		tabby,
 		pluck,
@@ -64,8 +63,8 @@ func TestHerdrPlanSelectsFourAppleSiliconPluginsAndNoLinuxPlugins(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Build(darwin) error = %v", err)
 	}
-	if len(darwin.Steps) != 4 {
-		t.Fatalf("len(Build(darwin).Steps) = %d, want 4", len(darwin.Steps))
+	if len(darwin.Steps) != 3 {
+		t.Fatalf("len(Build(darwin).Steps) = %d, want 3", len(darwin.Steps))
 	}
 	for i, step := range darwin.Steps {
 		if step.Tool != "herdr" || step.Executable != "herdr" {
@@ -81,8 +80,8 @@ func TestHerdrPlanSelectsFourAppleSiliconPluginsAndNoLinuxPlugins(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Build(darwin/amd64) error = %v", err)
 	}
-	if len(intel.Steps) != 2 {
-		t.Fatalf("len(Build(darwin/amd64).Steps) = %d, want 2", len(intel.Steps))
+	if len(intel.Steps) != 1 {
+		t.Fatalf("len(Build(darwin/amd64).Steps) = %d, want 1", len(intel.Steps))
 	}
 	for _, step := range intel.Steps {
 		if reflect.DeepEqual(step.Args, []string{"plugin", "install", "yersonargotev/tabby", "--ref", herdrTabbyCommit, "--yes"}) ||
