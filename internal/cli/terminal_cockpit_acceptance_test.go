@@ -137,7 +137,6 @@ exit 97
 	}
 	log := string(logBytes)
 	for _, want := range []string{
-		"szrenwei/herdr-space-tab-metadata",
 		"yersonargotev/herdr-tab-git",
 		"yersonargotev/tabby",
 		"rmarganti/herdr-pluck",

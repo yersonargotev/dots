@@ -75,10 +75,9 @@ enabled = true
 [ui.sidebar.spaces]
 row_gap = 1
 rows = [
-  ["state_icon", { token = "workspace", fg = "#cdd6f4", bold = true, dim = false }],
-  [{ token = "$active_tab", fg = "#cba6f7", dim = false }],
-  [{ token = "$gitbranch", fg = "#89b4fa", dim = false },
-   { token = "$gitconflicted", fg = "#f38ba8", dim = false },
+  ["state_icon", { token = "$tab_name", fg = "#cdd6f4", bold = true, dim = false }],
+  [{ token = "$gitbranch", fg = "#89b4fa", dim = false }],
+  [{ token = "$gitconflicted", fg = "#f38ba8", dim = false },
    { token = "$gitadded", fg = "#a6e3a1", dim = false },
    { token = "$gitmodified", fg = "#f9e2af", dim = false },
    { token = "$gitdeleted", fg = "#eba0ac", dim = false },

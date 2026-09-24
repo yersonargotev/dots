@@ -1,7 +1,7 @@
 # Herdr workspace setup
 
 The `herdr` Tag installs Herdr configuration and compatible pinned plugins on
-macOS: all four on Apple Silicon, and the two Spaces plugins on Intel.
+macOS: three on Apple Silicon, and the Spaces plugin on Intel.
 It is already part of the `core` and `workstation` Profiles. Select it explicitly
 with `dots install --tag herdr` on a new installation, or include it in the
 selection you intend to retain. Review selection reconciliation before changing
@@ -11,8 +11,7 @@ an existing installation's Tags.
 
 | Plugin | Source | Reviewed commit |
 |---|---|---|
-| Space Tab Metadata | `szrenwei/herdr-space-tab-metadata` | `c696c36256eddc6ee1983ab9f202848b84460e06` |
-| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `a7c8ba53a05adb2b5b788ca78f49a41e065b6197` |
+| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
 | Tabby | `yersonargotev/tabby` | `34c01f9791dd3228acae7ca378adb38e09d9fb6c` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
@@ -22,13 +21,12 @@ not been exercised in a live 0.9.1 session. Herdr, Git, LazyGit, fzf, fd, bat,
 curl, tar, pbcopy, open, Python 3, Node LTS through fnm, and Rust stable through
 rustup are declared Dependencies. The popup tools belong directly to the `herdr`
 Tag, so selecting that atomic surface does not rely on `core` or another Profile
-to make its keybindings work. Python 3.9+ is needed by Space Tab Metadata; Node
-runs Tab Git Tokens. Tabby's pinned installer downloads a
-checksum-verified Apple Silicon binary and falls back to
+to make its keybindings work. Node runs Tab Git Tokens. Tabby's pinned installer
+downloads a checksum-verified Apple Silicon binary and falls back to
 `cargo build --release --locked` if that artifact is missing, so its build
 toolchain is declared as well. The pinned Tabby installer rejects Intel Macs,
 so its Provisioner and Rust fallback Dependency are filtered to `arm64`. Intel
-Macs receive both Spaces plugins and retain their normal tab labels. Tabby is
+Macs receive the Spaces plugin and retain their normal tab labels. Tabby is
 not needed to read the active tab's label.
 
 Pluck is also filtered to Apple Silicon. Its reviewed installer prefers the
@@ -92,14 +90,16 @@ action on Intel):
 ```sh
 herdr --session work server reload-config
 herdr --session work plugin action invoke start --plugin yersonargotev.tabby
-herdr --session work plugin action invoke refresh --plugin herdr-space-tab-metadata
 herdr --session work plugin action invoke refresh --plugin yersonargotev.tab-git
-herdr --session work plugin log list --plugin herdr-space-tab-metadata --limit 3
 herdr --session work plugin log list --plugin yersonargotev.tab-git --limit 3
 ```
 
 An action response may mean only that execution started. Confirm `succeeded` in
 the logs. Multiple plugins call their action `refresh`; always qualify its ID.
+
+On an existing installation, the retired `herdr-space-tab-metadata` plugin may
+remain registered after dots stops provisioning it. Once `$tab_name` is visible,
+remove the unused plugin with `herdr plugin uninstall herdr-space-tab-metadata`.
 
 When upgrading an existing installation from `hasuwini77.tab-git`, the old
 registration remains in Herdr even though the Install Manifest no longer selects
@@ -122,11 +122,11 @@ routine dots installs do not uninstall external plugins.
 
 Each Space uses three lines, with one blank row between Spaces:
 
-1. Semantic state icon and bold workspace name (`#cdd6f4`). The state remains a
-   workspace-wide rollup so an inactive blocked agent stays visible.
-2. Active tab label (`$active_tab`, `#cba6f7`), reusing Tabby's command/directory
-   labels. The plugin's `tab:` prefix is preserved. The tab count is hidden.
-3. Active-tab Git branch (`$gitbranch`) and independently styled status tokens:
+1. Semantic state icon and bold active tab name (`$tab_name`, `#cdd6f4`), without
+   a prefix. The state remains a workspace-wide rollup so an inactive blocked
+   agent stays visible.
+2. Active-tab Git branch (`$gitbranch`, `#89b4fa`).
+3. Independently styled active-tab Git status tokens:
    `$gitconflicted` (`!N`), `$gitadded` (`+N`), `$gitmodified` (`~N`),
    `$gitdeleted` (`−N`), `$gituntracked` (`?N`), `$gitahead` (`↑N`),
    `$gitbehind` (`↓N`), and `$gitclean` (`clean`). Each category has its own
@@ -210,20 +210,18 @@ rollback, `herdr plugin uninstall rmarganti.herdr-pluck` also removes Herdr's
 external plugin checkout. A later dots install will reapply any declarations
 that remain in the Install Manifest.
 
-For a temporary rollback, restore your backed-up sidebar configuration, clear Git
-metadata, and disable the two display plugins in the intended session:
+For a temporary rollback, restore your backed-up sidebar configuration, clear
+metadata, and disable the display plugin in the intended session:
 
 ```sh
 herdr --session work plugin action invoke clear --plugin yersonargotev.tab-git
 herdr --session work plugin disable yersonargotev.tab-git
-herdr --session work plugin disable herdr-space-tab-metadata
 herdr --session work server reload-config
 ```
 
-Space Tab Metadata has no clear action; restoring the previous layout hides its
-remaining display-only metadata. Tabby can remain enabled because it owns tab
-labels independently. A later dots install reapplies the declared layout and
-plugin installations; change the Source of Truth if rollback should be permanent.
+Tabby can remain enabled because it owns tab labels independently. A later dots
+install reapplies the declared layout and plugin installations; change the
+Source of Truth if rollback should be permanent.
 
 ## Plugin refresh and limits
 
