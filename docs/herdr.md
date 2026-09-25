@@ -12,7 +12,7 @@ an existing installation's Tags.
 | Plugin | Source | Pinned commit |
 |---|---|---|
 | Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
-| Tabby | `yersonargotev/tabby` | `39960fe0fbc19f02f0b7f69ab8fe3027fe7bc749` |
+| Tabby | `yersonargotev/tabby` | `c9c48fc5cad1da57b8aa6de630703e152331eefd` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
 The previous Herdr configuration and Spaces/Tabby bundle were verified with

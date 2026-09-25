@@ -10,7 +10,7 @@ import (
 func TestHerdrProvisionerCatalogPreservesPinAndArchitecture(t *testing.T) {
 	input := manifest.Provisioner{
 		Tool: "herdr", Tags: []string{"herdr"}, OS: []string{"darwin"}, Arch: []string{"arm64"},
-		Spec: manifest.ProvisionerSpec{Plugin: "yersonargotev/tabby", Ref: "39960fe0fbc19f02f0b7f69ab8fe3027fe7bc749"},
+		Spec: manifest.ProvisionerSpec{Plugin: "yersonargotev/tabby", Ref: "c9c48fc5cad1da57b8aa6de630703e152331eefd"},
 	}
 	got := provisioner(input)
 	if got.Identity != input.Spec.Plugin+"@"+input.Spec.Ref || !reflect.DeepEqual(got.Arch, input.Arch) {
