@@ -66,7 +66,7 @@ jobs:
           sudo apt-get install -y zsh
 
       - name: Validate selected terminal workflow
-        run: go test ./internal/manifest -run 'TestTerminalSelectedSurfaceIntegration|TestRepositoryHerdrConfigsPassInstalledHerdrValidation' -v
+        run: go test ./internal/cli ./internal/manifest -run 'TestTerminalAtomicTagsSelectRequiredCapabilities|TestTerminalInstalledZshStarshipIntegration|TestRepositoryHerdrConfigsPassInstalledHerdrValidation' -v
 
       - name: Test
         run: go test ./...
