@@ -25,9 +25,13 @@ func stubManifestProvisionerTools(t *testing.T) {
 
 func TestManifestProvisionerStubsRejectPackageManagers(t *testing.T) {
 	stubManifestProvisionerTools(t)
-	for _, name := range []string{"brew", "apt-get", "dnf"} {
+	for _, name := range []string{"brew", "apt-get", "dnf", "sudo"} {
 		t.Run(name, func(t *testing.T) {
-			output, err := exec.Command(name, "install", "example").CombinedOutput()
+			args := []string{"install", "example"}
+			if name == "sudo" {
+				args = append([]string{"apt-get"}, args...)
+			}
+			output, err := exec.Command(name, args...).CombinedOutput()
 			if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 97 {
 				t.Fatalf("%s unexpectedly succeeded or used a host executable: %v, output %q", name, err, output)
 			}
@@ -40,7 +44,7 @@ func TestManifestProvisionerStubsRejectPackageManagers(t *testing.T) {
 
 func writeManifestDependencyStubs(t *testing.T, dir string) {
 	t.Helper()
-	for _, name := range []string{"brew", "apt", "apt-get", "dnf", "yum", "pacman", "snap", "flatpak", "curl", "wget", "npm"} {
+	for _, name := range []string{"brew", "apt", "apt-get", "dnf", "yum", "pacman", "snap", "flatpak", "curl", "wget", "npm", "sudo"} {
 		writeExecStub(t, filepath.Join(dir, name), "#!/bin/sh\nprintf 'unexpected package manager call: %s' \"$0\" >&2\nprintf ' %s' \"$@\" >&2\nprintf '\\n' >&2\nexit 97\n")
 	}
 	for _, name := range []string{
