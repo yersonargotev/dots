@@ -16,7 +16,7 @@ concurrency:
 jobs:
   test:
     name: Test, vet and build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -62,6 +62,15 @@ jobs:
 
       - name: Validate rendered Starship prompt
         run: ./configs/starship/test-prompt.sh
+
+      - name: Install Zsh acceptance shell
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zsh=5.9-6ubuntu2 zsh-common=5.9-6ubuntu2
+          test "$(dpkg-query -W -f='${Version}' zsh)" = '5.9-6ubuntu2'
+
+      - name: Validate selected terminal workflow
+        run: go test ./internal/cli ./internal/manifest -run 'TestTerminalAtomicTagsSelectRequiredCapabilities|TestTerminalInstalledZshStarshipIntegration|TestRepositoryHerdrConfigsPassInstalledHerdrValidation' -v
 
       - name: Test
         run: go test ./...
