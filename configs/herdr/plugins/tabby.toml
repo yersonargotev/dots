@@ -4,4 +4,4 @@ version = 1
 additional_significant = ["pi"]
 
 [labels]
-command_format = "command_and_directory"
+command_format = "directory_and_command"
