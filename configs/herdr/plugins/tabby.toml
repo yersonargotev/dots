@@ -1,7 +1,13 @@
 version = 1
 
 [commands]
-additional_significant = ["pi"]
+additional_significant = ["pi", "agent", "opencode"]
 
 [labels]
 command_format = "directory_and_command"
+separator = "  "
+
+[commands.aliases]
+"agent" = "cursor"
+
+[directories.aliases]

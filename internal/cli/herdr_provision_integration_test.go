@@ -127,6 +127,15 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	if _, err := os.Stat(filepath.Join(home, ".config", "herdr", "config.toml")); err != nil {
 		t.Fatalf("Herdr Tag did not install its Managed Entry: %v", err)
 	}
+	tabbyConfig, err := os.ReadFile(filepath.Join(home, ".config", "herdr", "plugins", "config", "yersonargotev.tabby", "config.toml"))
+	if err != nil {
+		t.Fatalf("Herdr Tag did not install Tabby configuration: %v", err)
+	}
+	for _, want := range []string{`additional_significant = ["pi", "agent", "opencode"]`, `"agent" = "cursor"`, `command_format = "directory_and_command"`, `separator = "  "`} {
+		if !strings.Contains(string(tabbyConfig), want) {
+			t.Errorf("installed Tabby configuration omitted %q: %s", want, tabbyConfig)
+		}
+	}
 	if entries, err := os.ReadDir(fakeRealHome); err != nil || len(entries) != 0 {
 		t.Fatalf("Herdr install touched inherited HOME %q: entries=%v err=%v", fakeRealHome, entries, err)
 	}
