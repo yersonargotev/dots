@@ -1244,7 +1244,7 @@ provisioners:
     arch: [arm64]
     spec:
       plugin: yersonargotev/tabby
-      ref: c9c48fc5cad1da57b8aa6de630703e152331eefd
+      ref: 19031d668f0f8a79b58591db4ce8bc8f8846e329
     dependencies:
       - name: herdr
         command: herdr

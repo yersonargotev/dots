@@ -12,7 +12,7 @@ import (
 const (
 	herdrMetadataCommit = "c696c36256eddc6ee1983ab9f202848b84460e06"
 	herdrGitCommit      = "48fe5a66c17970a77919dc50a6ab3b6512bc7300"
-	herdrTabbyCommit    = "c9c48fc5cad1da57b8aa6de630703e152331eefd"
+	herdrTabbyCommit    = "19031d668f0f8a79b58591db4ce8bc8f8846e329"
 	herdrPluckCommit    = "d1eacb80956c3a23ab6f7428a9e83961fb86ba28"
 )
 
