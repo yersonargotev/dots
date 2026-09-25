@@ -27,6 +27,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Test pull request metadata validator
+        run: node --test .github/scripts/pr-metadata.test.cjs
+
       - name: Check formatting
         run: |
           set -euo pipefail
