@@ -6,6 +6,7 @@ const requiredHeadings = [
   'Dotfiles Safety',
   'Contributor Checklist',
 ];
+const allowedTypes = new Set(['type:bug', 'type:feature', 'type:docs', 'type:refactor', 'type:chore', 'type:breaking-change']);
 
 function validatePullRequest(pull) {
   const errors = [];
@@ -31,6 +32,8 @@ function validatePullRequest(pull) {
   const checkedTypes = [...typeSection.matchAll(/^- \[[xX]\] .+?\(`(type:[\w-]+)`\)\s*$/gm)].map((match) => match[1]);
   if (checkedTypes.length !== 1) {
     errors.push(`Expected exactly one checked PR Type option; found ${checkedTypes.length}.`);
+  } else if (!allowedTypes.has(checkedTypes[0])) {
+    errors.push(`Checked PR Type ${checkedTypes[0]} is not an option in the PR template.`);
   } else if (typeLabels.length === 1 && checkedTypes[0] !== typeLabels[0]) {
     errors.push(`Checked PR Type ${checkedTypes[0]} does not match label ${typeLabels[0]}.`);
   }

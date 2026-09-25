@@ -55,4 +55,8 @@ test('requires one checked type matching one type label', () => {
   assert.match(validatePullRequest(pull({ labels: [{ name: 'type:bug' }, { name: 'type:chore' }] })).join('\n'), /found 2/);
   assert.match(validatePullRequest(pull({ labels: [{ name: 'type:chore' }] })).join('\n'), /does not match/);
   assert.match(validatePullRequest(pull({ body: body.replace('- [ ] New feature', '- [x] New feature') })).join('\n'), /checked PR Type.*found 2/);
+  assert.match(validatePullRequest(pull({
+    body: body.replace('Bug fix (`type:bug`)', 'Configuration (`type:config`)'),
+    labels: [{ name: 'type:config' }],
+  })).join('\n'), /not an option in the PR template/);
 });
