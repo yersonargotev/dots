@@ -53,7 +53,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		"yersonargotev/herdr-tab-git",
 		"48fe5a66c17970a77919dc50a6ab3b6512bc7300",
 		"yersonargotev/tabby",
-		"34c01f9791dd3228acae7ca378adb38e09d9fb6c",
+		"c9c48fc5cad1da57b8aa6de630703e152331eefd",
 		"rmarganti/herdr-pluck",
 		"d1eacb80956c3a23ab6f7428a9e83961fb86ba28",
 	} {
@@ -101,7 +101,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
 		"plugin install yersonargotev/herdr-tab-git --ref 48fe5a66c17970a77919dc50a6ab3b6512bc7300 --yes",
-		"plugin install yersonargotev/tabby --ref 34c01f9791dd3228acae7ca378adb38e09d9fb6c --yes",
+		"plugin install yersonargotev/tabby --ref c9c48fc5cad1da57b8aa6de630703e152331eefd --yes",
 		"plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -228,7 +228,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	for _, excluded := range []string{
 		"yersonargotev/tabby",
-		"34c01f9791dd3228acae7ca378adb38e09d9fb6c",
+		"c9c48fc5cad1da57b8aa6de630703e152331eefd",
 		"rmarganti/herdr-pluck",
 		"d1eacb80956c3a23ab6f7428a9e83961fb86ba28",
 		"Rust stable (rustup)",

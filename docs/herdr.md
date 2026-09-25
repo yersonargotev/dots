@@ -9,13 +9,13 @@ an existing installation's Tags.
 
 ## Plugins and prerequisites
 
-| Plugin | Source | Reviewed commit |
+| Plugin | Source | Pinned commit |
 |---|---|---|
 | Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
-| Tabby | `yersonargotev/tabby` | `34c01f9791dd3228acae7ca378adb38e09d9fb6c` |
+| Tabby | `yersonargotev/tabby` | `c9c48fc5cad1da57b8aa6de630703e152331eefd` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
-The Herdr configuration and the existing Spaces/Tabby bundle were verified with
+The previous Herdr configuration and Spaces/Tabby bundle were verified with
 Herdr 0.9.1 on Apple Silicon macOS; Pluck declares Herdr 0.7.4 or newer but has
 not been exercised in a live 0.9.1 session. Herdr, Git, LazyGit, fzf, fd, bat,
 curl, tar, pbcopy, open, Python 3, Node LTS through fnm, and Rust stable through
@@ -74,7 +74,7 @@ The `herdr` Tag manages
 `~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml` on macOS using
 TOML Subset Ownership. The baseline sets configuration `version = 1`, adds `pi`
 to `commands.additional_significant`, and sets `labels.command_format` to
-`command_and_directory`. Once managed, target-only settings remain intact. An
+`directory_and_command`. Once managed, target-only settings remain intact. An
 existing unmanaged file that differs from the baseline uses the normal Conflict
 handling; review its contents and backup before choosing replacement. Changes to
 owned values also use normal Conflict handling. Intel Macs receive the baseline
@@ -123,7 +123,9 @@ routine dots installs do not uninstall external plugins.
 Each Space uses three lines, with one blank row between Spaces:
 
 1. Semantic state icon and bold active tab name (`$tab_name`, `#cdd6f4`), without
-   a prefix. The state remains a workspace-wide rollup so an inactive blocked
+   a prefix. Tabby presents contextual labels as `directory > command`, such as
+   `dots > codex`; the Spaces plugin copies the active tab label. The state
+   remains a workspace-wide rollup so an inactive blocked
    agent stays visible.
 2. Active-tab Git branch (`$gitbranch`, `#89b4fa`).
 3. Independently styled active-tab Git status tokens:
