@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -113,12 +114,21 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 }
 
 func TestRepositoryHerdrConfigsPassInstalledHerdrValidation(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skipf("Herdr config validation is unavailable on %s", runtime.GOOS)
+	}
 	herdr, err := exec.LookPath("herdr")
 	if err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("Herdr 0.9.1 is required on macOS CI: %v", err)
+		}
 		t.Skip("Herdr is not installed")
 	}
 	version, err := exec.Command(herdr, "--version").Output()
 	if err != nil || strings.TrimSpace(string(version)) != "herdr 0.9.1" {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("Herdr 0.9.1 is required on macOS CI; got %q (%v)", strings.TrimSpace(string(version)), err)
+		}
 		t.Skipf("Herdr 0.9.1 is required for config validation; got %q (%v)", strings.TrimSpace(string(version)), err)
 	}
 	for _, name := range []string{"config.toml", "config-adaptive.toml"} {
@@ -126,9 +136,13 @@ func TestRepositoryHerdrConfigsPassInstalledHerdrValidation(t *testing.T) {
 			root := repositoryRoot(t)
 			home := t.TempDir()
 			cmd := exec.Command(herdr, "config", "check")
+			cmd.Dir = home
 			cmd.Env = append(os.Environ(),
 				"HOME="+home,
 				"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
+				"XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
+				"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
+				"XDG_STATE_HOME="+filepath.Join(home, ".local", "state"),
 				"HERDR_CONFIG_PATH="+filepath.Join(root, "configs", "herdr", name),
 				"HERDR_SOCKET_PATH="+filepath.Join(home, "missing.sock"),
 				"HERDR_SESSION=dots-issue-512-check",
