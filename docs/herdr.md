@@ -12,7 +12,7 @@ an existing installation's Tags.
 | Plugin | Source | Pinned commit |
 |---|---|---|
 | Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
-| Tabby | `yersonargotev/tabby` | `c9c48fc5cad1da57b8aa6de630703e152331eefd` |
+| Tabby | `yersonargotev/tabby` | `19031d668f0f8a79b58591db4ce8bc8f8846e329` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
 The previous Herdr configuration and Spaces/Tabby bundle were verified with
@@ -40,7 +40,7 @@ still contain the action bindings, but without an installed Pluck action they
 provide no capability on Intel.
 The `herdr` Tag still selects no surface on Linux.
 
-`dots plan --tag herdr --output json` previews exact Provisioner commands without
+`dots install --dry-run --tag herdr` previews exact Provisioner commands without
 running them. Each entry invokes Herdr directly with `plugin install`, a full
 commit pin, and `--yes`. Herdr runs the plugin's declared build step and registers
 it enabled. Repeating installation refreshes the managed checkout and may repeat
