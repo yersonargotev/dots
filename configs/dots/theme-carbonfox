@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+# Shared Carbonfox palette for shell-readable managed configuration.
+#
+# Adapted from EdenEast/nightfox.nvim's Carbonfox palette at revision
+# 4dacd3f0185a2227bdf3b6c0975a8f0bf87cac9a. See configs/themes/LICENSE-nightfox.
+
+dots_carbonfox_ansi_palette() {
+  cat <<'PALETTE'
+blue='\033[38;2;120;169;255m'
+mauve='\033[38;2;190;149;255m'
+green='\033[38;2;37;190;106m'
+yellow='\033[38;2;8;189;186m'
+subtext='\033[38;2;182;184;187m'
+overlay='\033[38;2;110;111;112m'
+red='\033[38;2;238;83;150m'
+pink='\033[38;2;255;126;182m'
+PALETTE
+}
+
+dots_apply_carbonfox_ansi_palette() {
+  eval "$(dots_carbonfox_ansi_palette)"
+  reset='\033[0m'
+}
+
+dots_carbonfox_fzf_colors() {
+  printf '%s\n' 'bg:#161616,bg+:#2a2a2a,fg:#f2f4f8,fg+:#f2f4f8,hl:#ee5396,hl+:#ee5396,info:#be95ff,marker:#78a9ff,pointer:#ff7eb6,prompt:#be95ff,spinner:#ff7eb6,border:#6e6f70'
+}

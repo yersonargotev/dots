@@ -38,7 +38,7 @@ func TestTerminalInstalledZshStarshipIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, name := range []string{"zsh", "starship", "bat"} {
+	for _, name := range []string{"zsh", "starship", "bat", "themes"} {
 		if err := os.CopyFS(filepath.Join(sourceRoot, "configs", name), os.DirFS(filepath.Join(repositoryRoot, "configs", name))); err != nil {
 			t.Fatalf("copy %s Source of Truth: %v", name, err)
 		}

@@ -1,0 +1,54 @@
+# Carbonfox adaptation for tuicr's native local-theme schema.
+# Source: EdenEast/nightfox.nvim@4dacd3f0185a2227bdf3b6c0975a8f0bf87cac9a
+# License: MIT; see ../../themes/LICENSE-nightfox.
+
+panel_bg = "#0c0c0c"
+bg_highlight = "#353535"
+fg_primary = "#f2f4f8"
+fg_secondary = "#b6b8bb"
+fg_dim = "#7b7c7e"
+
+diff_add = "#25be6a"
+diff_add_bg = "#172b20"
+diff_del = "#ee5396"
+diff_del_bg = "#311d26"
+diff_context = "#f2f4f8"
+diff_hunk_header = "#78a9ff"
+expanded_context_fg = "#7b7c7e"
+
+syntax_add_bg = "#172b20"
+syntax_del_bg = "#311d26"
+syntax_theme = "carbonfox.tmTheme"
+
+file_added = "#25be6a"
+file_modified = "#08bdba"
+file_deleted = "#ee5396"
+file_renamed = "#33b1ff"
+
+reviewed = "#25be6a"
+pending = "#be95ff"
+
+comment_note = "#78a9ff"
+comment_suggestion = "#33b1ff"
+comment_issue = "#ee5396"
+comment_praise = "#25be6a"
+
+border_focused = "#52bdff"
+border_unfocused = "#535353"
+status_bar_bg = "#0c0c0c"
+cursor_color = "#be95ff"
+cursor_line_bg = "#353535"
+branch_name = "#be95ff"
+help_indicator = "#7b7c7e"
+
+message_info_fg = "#161616"
+message_info_bg = "#78a9ff"
+message_warning_fg = "#161616"
+message_warning_bg = "#be95ff"
+message_error_fg = "#161616"
+message_error_bg = "#ee5396"
+update_badge_fg = "#161616"
+update_badge_bg = "#08bdba"
+
+mode_fg = "#161616"
+mode_bg = "#33b1ff"

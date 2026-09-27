@@ -204,18 +204,18 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		dependencies []string
 		provisioners []string
 	}{
-		{tag: "zsh", osName: "linux", entries: []string{"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zshenv", "~/.config/bat/config"}, dependencies: []string{"fzf", "eza", "zsh", "bat"}},
+		{tag: "zsh", osName: "linux", entries: []string{"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zshenv", "~/.config/bat/config", "~/.config/bat/themes/Carbonfox.tmTheme"}, dependencies: []string{"fzf", "eza", "zsh", "bat"}},
 		{tag: "zimfw", osName: "linux", entries: []string{"~/.zimrc"}, dependencies: []string{"fzf", "zsh", "git", "curl"}, provisioners: []string{"zimfw"}},
 		{tag: "git", osName: "linux", entries: []string{"~/.gitconfig", "~/.config/dots/git/gitconfig"}, dependencies: []string{"git"}},
 		{tag: "starship", osName: "linux", entries: []string{"~/.config/starship.toml"}, dependencies: []string{"starship"}},
-		{tag: "tmux", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "~/.tmux.conf"}, dependencies: []string{"tmux"}},
+		{tag: "tmux", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "~/.tmux.conf", "~/.config/tmux/carbonfox.conf"}, dependencies: []string{"tmux"}},
 		{tag: "herdr", osName: "darwin", entries: []string{"~/.config/herdr/config.toml", "~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml"}, dependencies: []string{"lazygit", "fzf", "fd", "bat", "herdr", "git", "Node LTS (fnm)", "python3", "Rust stable (rustup)", "curl", "tar", "pbcopy", "open"}, provisioners: []string{"herdr", "herdr", "herdr"}},
 		{tag: "herdr", osName: "linux"},
-		{tag: "zellij", osName: "linux", entries: []string{"~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl"}, dependencies: []string{"zellij"}},
-		{tag: "atuin", osName: "linux", entries: []string{"~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml"}, dependencies: []string{"atuin"}},
+		{tag: "zellij", osName: "linux", entries: []string{"~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/zellij/themes/carbonfox.kdl"}, dependencies: []string{"zellij"}},
+		{tag: "atuin", osName: "linux", entries: []string{"~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/atuin/themes/carbonfox.toml"}, dependencies: []string{"atuin"}},
 		{tag: "neovim", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim"}, dependencies: []string{"neovim"}},
-		{tag: "tuicr", osName: "linux", entries: []string{"~/.config/tuicr/config.toml"}, dependencies: []string{"tuicr"}},
-		{tag: "bat", osName: "linux", entries: []string{"~/.config/bat/config"}, dependencies: []string{"bat"}},
+		{tag: "tuicr", osName: "linux", entries: []string{"~/.config/tuicr/config.toml", "~/.config/tuicr/themes/carbonfox.toml", "~/.config/tuicr/themes/carbonfox.tmTheme"}, dependencies: []string{"tuicr"}},
+		{tag: "bat", osName: "linux", entries: []string{"~/.config/bat/config", "~/.config/bat/themes/Carbonfox.tmTheme"}, dependencies: []string{"bat"}},
 		{tag: "node", osName: "linux", dependencies: []string{"Node LTS (fnm)", "unzip"}},
 		{tag: "rust", osName: "linux", dependencies: []string{"Rust stable (rustup)"}},
 		{tag: "go", osName: "linux", dependencies: []string{"go"}},
@@ -231,11 +231,11 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		{tag: "fd", osName: "linux", dependencies: []string{"fd"}},
 		{tag: "gh", osName: "linux", dependencies: []string{"GitHub CLI"}},
 		{tag: "jq", osName: "linux", dependencies: []string{"jq"}},
-		{tag: "ghostty", osName: "linux", entries: []string{"~/.config/ghostty/config.ghostty"}, dependencies: []string{"Desktop Nerd Font", "ghostty"}},
-		{tag: "warp", osName: "linux", entries: []string{"~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml"}, dependencies: []string{"Desktop Nerd Font", "Warp"}},
-		{tag: "zed", osName: "linux", entries: []string{"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json"}, dependencies: []string{"Desktop Nerd Font", "zed"}},
+		{tag: "ghostty", osName: "linux", entries: []string{"~/.config/ghostty/config.ghostty", "~/.config/ghostty/themes/Carbonfox"}, dependencies: []string{"Desktop Nerd Font", "ghostty"}},
+		{tag: "warp", osName: "linux", entries: []string{"~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml", "~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml"}, dependencies: []string{"Desktop Nerd Font", "Warp"}},
+		{tag: "zed", osName: "linux", entries: []string{"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json", "~/.config/zed/themes/carbonfox.json"}, dependencies: []string{"Desktop Nerd Font", "zed"}},
 		{tag: "codex", osName: "linux", entries: []string{"~/.codex/config.toml"}, dependencies: []string{"Codex"}},
-		{tag: "claude", osName: "linux", entries: []string{"~/.claude/settings.json", "~/.claude/statusline-command.sh"}, dependencies: []string{"Claude Code", "jq"}},
+		{tag: "claude", osName: "linux", entries: []string{"~/.claude/settings.json", "~/.claude/statusline-command.sh", "~/.claude/themes/carbonfox.json"}, dependencies: []string{"Claude Code", "jq"}},
 		{tag: "opencode", osName: "linux", entries: []string{"~/.config/opencode/opencode.json"}, dependencies: []string{"OpenCode"}},
 		{tag: "antigravity", osName: "linux", entries: []string{"~/.gemini/antigravity-cli/settings.json"}, dependencies: []string{"Antigravity"}},
 		{tag: "copilot", osName: "linux", entries: []string{"~/.copilot/settings.json", "~/.copilot/statusline-command.sh"}, dependencies: []string{"Copilot CLI", "jq"}},
@@ -274,7 +274,7 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 	}
 }
 
-func TestRepositoryDesktopAndAgentProfilesPreservePreAtomizationSurfaces(t *testing.T) {
+func TestRepositoryDesktopAndAgentProfilesPreserveCapabilitySurfaces(t *testing.T) {
 	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -292,6 +292,7 @@ func TestRepositoryDesktopAndAgentProfilesPreservePreAtomizationSurfaces(t *test
 			entries: []string{
 				"~/.config/ghostty/config.ghostty", "~/.warp/settings.toml", "~/.warp/keybindings.yaml",
 				"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json",
+				"~/.config/ghostty/themes/Carbonfox", "~/.warp/themes/carbonfox/carbonfox.yaml", "~/.config/zed/themes/carbonfox.json",
 			},
 			dependencies: []string{"Desktop Nerd Font", "CodexBar", "ghostty", "zed"},
 		},
@@ -301,6 +302,7 @@ func TestRepositoryDesktopAndAgentProfilesPreservePreAtomizationSurfaces(t *test
 			entries: []string{
 				"~/.config/ghostty/config.ghostty", "~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml",
 				"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json",
+				"~/.config/ghostty/themes/Carbonfox", "~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml", "~/.config/zed/themes/carbonfox.json",
 			},
 			dependencies: []string{"Desktop Nerd Font", "ghostty", "Warp", "zed"},
 		},
@@ -310,7 +312,7 @@ func TestRepositoryDesktopAndAgentProfilesPreservePreAtomizationSurfaces(t *test
 			entries: []string{
 				"~/.claude/settings.json", "~/.claude/statusline-command.sh", "~/.codex/config.toml",
 				"~/.copilot/settings.json", "~/.copilot/statusline-command.sh", "~/.gemini/antigravity-cli/settings.json",
-				"~/.config/opencode/opencode.json",
+				"~/.config/opencode/opencode.json", "~/.claude/themes/carbonfox.json",
 			},
 			dependencies: []string{"Codex", "Claude Code", "OpenCode", "Antigravity", "Copilot CLI", "jq"},
 		},
@@ -320,7 +322,7 @@ func TestRepositoryDesktopAndAgentProfilesPreservePreAtomizationSurfaces(t *test
 			entries: []string{
 				"~/.claude/settings.json", "~/.claude/statusline-command.sh", "~/.codex/config.toml",
 				"~/.copilot/settings.json", "~/.copilot/statusline-command.sh", "~/.gemini/antigravity-cli/settings.json",
-				"~/.config/opencode/opencode.json",
+				"~/.config/opencode/opencode.json", "~/.claude/themes/carbonfox.json",
 			},
 			dependencies: []string{"Codex", "Claude Code", "OpenCode", "Antigravity", "Copilot CLI", "jq"},
 		},
@@ -334,19 +336,19 @@ func TestRepositoryDesktopAndAgentProfilesPreservePreAtomizationSurfaces(t *test
 			}
 			surface := selectedsurface.Evaluate(*m, selection.Tags, tt.osName)
 			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, tt.entries) {
-				t.Errorf("Managed Entries changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.entries)
+				t.Errorf("Managed Entries differ from the declared capability surface\ngot:  %#v\nwant: %#v", got, tt.entries)
 			}
 			if got := dependencyNames(surface.Dependencies); !reflect.DeepEqual(got, tt.dependencies) {
-				t.Errorf("Dependencies changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.dependencies)
+				t.Errorf("Dependencies differ from the declared capability surface\ngot:  %#v\nwant: %#v", got, tt.dependencies)
 			}
 			if got := provisionerTools(surface.Provisioners); len(got) != 0 {
-				t.Errorf("Provisioners changed from the pre-atomization surface: %#v", got)
+				t.Errorf("Provisioners differ from the declared capability surface: %#v", got)
 			}
 		})
 	}
 }
 
-func TestRepositoryWebAndMobileProfilesPreservePreAtomizationSurfaces(t *testing.T) {
+func TestRepositoryWebAndMobileProfilesPreserveCapabilitySurfaces(t *testing.T) {
 	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -397,19 +399,19 @@ func TestRepositoryWebAndMobileProfilesPreservePreAtomizationSurfaces(t *testing
 			}
 			surface := selectedsurface.Evaluate(*m, selection.Tags, tt.osName)
 			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, tt.entries) {
-				t.Errorf("Managed Entries changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.entries)
+				t.Errorf("Managed Entries differ from the declared capability surface\ngot:  %#v\nwant: %#v", got, tt.entries)
 			}
 			if got := dependencyNames(surface.Dependencies); !reflect.DeepEqual(got, tt.dependencies) {
-				t.Errorf("Dependencies changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.dependencies)
+				t.Errorf("Dependencies differ from the declared capability surface\ngot:  %#v\nwant: %#v", got, tt.dependencies)
 			}
 			if got := provisionerTools(surface.Provisioners); !reflect.DeepEqual(got, tt.provisioners) {
-				t.Errorf("Provisioners changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, tt.provisioners)
+				t.Errorf("Provisioners differ from the declared capability surface\ngot:  %#v\nwant: %#v", got, tt.provisioners)
 			}
 		})
 	}
 }
 
-func TestRepositoryCoreProfilePreservesPreAtomizationSurface(t *testing.T) {
+func TestRepositoryCoreProfilePreservesCapabilitySurface(t *testing.T) {
 	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -420,8 +422,8 @@ func TestRepositoryCoreProfilePreservesPreAtomizationSurface(t *testing.T) {
 	}
 
 	wantEntries := map[string][]string{
-		"darwin": {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/herdr/config.toml", "~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim"},
-		"linux":  {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim"},
+		"darwin": {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/herdr/config.toml", "~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim", "~/.config/tmux/carbonfox.conf", "~/.config/zellij/themes/carbonfox.kdl", "~/.config/atuin/themes/carbonfox.toml", "~/.config/bat/themes/Carbonfox.tmTheme", "~/.config/tuicr/themes/carbonfox.toml", "~/.config/tuicr/themes/carbonfox.tmTheme"},
+		"linux":  {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim", "~/.config/tmux/carbonfox.conf", "~/.config/zellij/themes/carbonfox.kdl", "~/.config/atuin/themes/carbonfox.toml", "~/.config/bat/themes/Carbonfox.tmTheme", "~/.config/tuicr/themes/carbonfox.toml", "~/.config/tuicr/themes/carbonfox.tmTheme"},
 	}
 	wantDependencies := map[string][]string{
 		"darwin": {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "bat", "GitHub CLI", "jq", "zsh", "git", "tuicr", "starship", "tmux", "herdr", "zellij", "atuin", "neovim", "python3", "curl", "tar", "pbcopy", "open"},
@@ -432,10 +434,10 @@ func TestRepositoryCoreProfilePreservesPreAtomizationSurface(t *testing.T) {
 		t.Run(osName, func(t *testing.T) {
 			surface := selectedsurface.EvaluateForPlatform(*m, selection.Tags, osName, "arm64")
 			if got := selectedTargets(surface.Entries); !reflect.DeepEqual(got, wantEntries[osName]) {
-				t.Errorf("Managed Entries changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, wantEntries[osName])
+				t.Errorf("Managed Entries differ from the declared capability surface\ngot:  %#v\nwant: %#v", got, wantEntries[osName])
 			}
 			if got := dependencyNames(surface.Dependencies); !reflect.DeepEqual(got, wantDependencies[osName]) {
-				t.Errorf("Dependencies changed from the pre-atomization surface\ngot:  %#v\nwant: %#v", got, wantDependencies[osName])
+				t.Errorf("Dependencies differ from the declared capability surface\ngot:  %#v\nwant: %#v", got, wantDependencies[osName])
 			}
 			wantProvisioners := []string{"zimfw"}
 			if osName == "darwin" {

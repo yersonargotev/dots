@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GitHub Copilot CLI statusLine — plain text + Catppuccin adaptive palette
+# GitHub Copilot CLI statusLine — plain text + dots-managed palette
 
 input=$(cat)
 
@@ -17,9 +17,13 @@ agent=$(field '.agent.name // .agent // .customAgent.name')
 yolo=$(field '.yolo // .allowAllTools // .permissions.allowAll')
 sandbox=$(field '.sandbox.enabled // .sandbox')
 
-# Catppuccin palette. Latte is used only when the adaptive-theme marker is
-# installed and macOS reports light appearance; otherwise Mocha is the fallback.
-if [ -r "$HOME/.config/dots/theme.sh" ]; then
+# Carbonfox wins when its global preference marker is installed. Otherwise the
+# existing adaptive Catppuccin helper and Mocha fallback remain unchanged.
+if [ -r "$HOME/.config/dots/theme-carbonfox" ]; then
+  # shellcheck source=/dev/null
+  . "$HOME/.config/dots/theme-carbonfox"
+  dots_apply_carbonfox_ansi_palette
+elif [ -r "$HOME/.config/dots/theme.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOME/.config/dots/theme.sh"
   dots_apply_catppuccin_ansi_palette

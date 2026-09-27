@@ -9,7 +9,15 @@ command -v fnm      >/dev/null 2>&1 && eval "$(fnm env)"
 # fzf owns file insertion and directory navigation. Disable its history widget
 # while sourcing the official integration so Ctrl+R has one owner: Atuin.
 if command -v fzf >/dev/null 2>&1; then
-  export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:+${FZF_DEFAULT_OPTS} }--height=40% --min-height=12 --layout=reverse --border=top --color=bg:#1e1e2e,bg+:#313244,fg:#cdd6f4,fg+:#cdd6f4,hl:#f38ba8,hl+:#f38ba8,info:#cba6f7,marker:#b4befe,pointer:#f5e0dc,prompt:#cba6f7,spinner:#f5e0dc,border:#6c7086"
+  _dots_fzf_colors='bg:#1e1e2e,bg+:#313244,fg:#cdd6f4,fg+:#cdd6f4,hl:#f38ba8,hl+:#f38ba8,info:#cba6f7,marker:#b4befe,pointer:#f5e0dc,prompt:#cba6f7,spinner:#f5e0dc,border:#6c7086'
+  if [[ -r "${HOME}/.config/dots/theme-carbonfox" ]]; then
+    source "${HOME}/.config/dots/theme-carbonfox"
+    if (( ${+functions[dots_carbonfox_fzf_colors]} )); then
+      _dots_fzf_colors="$(dots_carbonfox_fzf_colors)"
+    fi
+  fi
+  export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:+${FZF_DEFAULT_OPTS} }--height=40% --min-height=12 --layout=reverse --border=top --color=${_dots_fzf_colors}"
+  unset _dots_fzf_colors
   export FZF_CTRL_T_OPTS="${FZF_CTRL_T_OPTS:+${FZF_CTRL_T_OPTS} }--walker-skip=.git,node_modules,target --preview 'if [ -d {} ]; then if command -v eza >/dev/null 2>&1; then eza -a --color=always --icons=always --tree --level=2 -- {}; else printf \"dots: eza is required for directory previews.\\n\"; fi; elif command -v bat >/dev/null 2>&1; then bat --color=always --style=numbers --line-range=:500 -- {}; else printf \"dots: bat is required for file previews.\\n\"; fi'"
   export FZF_ALT_C_OPTS="${FZF_ALT_C_OPTS:+${FZF_ALT_C_OPTS} }--walker-skip=.git,node_modules,target --preview 'if command -v eza >/dev/null 2>&1; then eza -a --color=always --icons=always --tree --level=2 -- {}; else printf \"dots: eza is required for directory previews.\\n\"; fi'"
 

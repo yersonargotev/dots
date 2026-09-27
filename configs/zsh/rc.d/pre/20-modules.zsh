@@ -15,11 +15,19 @@ ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
 zstyle ':completion:*:descriptions' format '[%d]'
 zstyle ':completion:*' menu no
 zstyle ':fzf-tab:*' switch-group '<' '>'
+_dots_fzf_colors='bg:#1e1e2e,bg+:#313244,fg:#cdd6f4,fg+:#cdd6f4,hl:#f38ba8,hl+:#f38ba8,info:#cba6f7,marker:#b4befe,pointer:#f5e0dc,prompt:#cba6f7,spinner:#f5e0dc,border:#6c7086'
+if [[ -r "${HOME}/.config/dots/theme-carbonfox" ]]; then
+  source "${HOME}/.config/dots/theme-carbonfox"
+  if (( ${+functions[dots_carbonfox_fzf_colors]} )); then
+    _dots_fzf_colors="$(dots_carbonfox_fzf_colors)"
+  fi
+fi
 zstyle ':fzf-tab:*' fzf-flags \
   '--height=40%' \
   '--min-height=12' \
   '--layout=reverse' \
   '--border=top' \
-  '--color=bg:#1e1e2e,bg+:#313244,fg:#cdd6f4,fg+:#cdd6f4,hl:#f38ba8,hl+:#f38ba8,info:#cba6f7,marker:#b4befe,pointer:#f5e0dc,prompt:#cba6f7,spinner:#f5e0dc,border:#6c7086'
+  "--color=${_dots_fzf_colors}"
+unset _dots_fzf_colors
 zstyle ':fzf-tab:complete:*:*' fzf-preview \
   'if [[ -d $realpath ]]; then if command -v eza >/dev/null 2>&1; then eza -a --color=always --icons=always --tree --level=2 -- "$realpath"; else print "dots: eza is required for directory previews."; fi; elif [[ -f $realpath ]]; then if command -v bat >/dev/null 2>&1; then bat --color=always --style=numbers --line-range=:500 -- "$realpath"; else print "dots: bat is required for file previews."; fi; fi'

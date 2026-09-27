@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/backups"
+	"github.com/yersonargotev/dots/internal/batcache"
 	"github.com/yersonargotev/dots/internal/codexconfig"
 	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/deps/pkgmgr"
@@ -66,7 +67,7 @@ func newInstallCommand() *cobra.Command {
 			"Without selection flags, an interactive terminal opens the Tag selector; scripts and non-interactive runs must pass --profile, --tag, or --clear-selection explicitly.",
 		// Domain installation failures are user-facing conflicts, not command misuse.
 		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (resultErr error) {
 			paths, err := resolvePaths(home, sourceRoot, stateRoot)
 			if err != nil {
 				return err
@@ -226,6 +227,13 @@ func newInstallCommand() *cobra.Command {
 			if !proceed {
 				return nil
 			}
+			currentMetadata, err := loadInstallationMetadata(paths, stateRoot)
+			if err != nil {
+				return fmt.Errorf("revalidate selection symlink transition Installation Metadata: %w", err)
+			}
+			if err := selectionRetirementPlan.AuthorizeSymlinkTransitions(currentMetadata, &p, conflictDecisions); err != nil {
+				return err
+			}
 			if err := install.ValidateManagedEntries(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}); err != nil {
 				return err
 			}
@@ -299,10 +307,31 @@ func newInstallCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			applied, metadataCommit, err := applyResolvedPlan(p, paths, conflictDecisions)
+			if err := validateCarbonfoxNativeSupport(cmd.Context(), p, paths.Home, hostOS, dependencyEnvironment); err != nil {
+				return err
+			}
+			installOptions := install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}
+			var batInput *batcache.Input
+			var batCaptures map[install.SourceCaptureKey]install.CapturedSource
+			if hasBatCacheStep(provPlan) {
+				captures, input, captureErr := captureBatCacheInput(p, installOptions)
+				if captureErr != nil {
+					return captureErr
+				}
+				defer func() {
+					if releaseErr := install.ReleaseCapturedSources(batCaptures); releaseErr != nil {
+						resultErr = errors.Join(resultErr, fmt.Errorf("release bat cache inputs: %w", releaseErr))
+					}
+				}()
+				installOptions.CapturedSources = captures
+				batCaptures = captures
+				batInput = input
+			}
+			metadataCommit, err := install.ApplyManagedEntries(p, installOptions)
 			if err != nil {
 				return err
 			}
+			applied := true
 			createdBackups, err := createdBackupSetReports(paths.StateRoot, beforeBackups)
 			if err != nil {
 				return err
@@ -314,7 +343,7 @@ func newInstallCommand() *cobra.Command {
 				return nil
 			}
 
-			provResult, err := runProvisionersWithOptionsAndEnvironment(cmd, *m, provision.Options{Selection: &effective.Selection, OS: hostOS, Arch: hostArch}, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment)
+			provResult, err := runProvisionersWithOptionsEnvironmentAndBatInput(cmd, *m, provision.Options{Selection: &effective.Selection, OS: hostOS, Arch: hostArch}, paths.Home, paths.StateRoot, paths.SourceRoot, dependencyEnvironment, batInput)
 			if err != nil {
 				if wantsJSON(cmd) {
 					return installProvisionerError{err: err, report: installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan, BackupSets: createdBackups, ProvisionerResults: &provResult}}
@@ -340,6 +369,10 @@ func newInstallCommand() *cobra.Command {
 			if err := commitInstallationMetadata(metadataCommit, installedSelection); err != nil {
 				return err
 			}
+			if releaseErr := install.ReleaseCapturedSources(batCaptures); releaseErr != nil {
+				return fmt.Errorf("release bat cache inputs after metadata commit: %w", releaseErr)
+			}
+			batCaptures = nil
 			if !wantsJSON(cmd) {
 				renderSelectionRetirement(cmd.OutOrStdout(), selectionRetirement)
 				renderHistoricalRetirement(cmd.OutOrStdout(), retirement)
@@ -560,6 +593,10 @@ func runProvisionersWithOptions(cmd *cobra.Command, m manifest.Manifest, provisi
 }
 
 func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Manifest, provisionOpts provision.Options, home string, stateRoot string, sourceRoot string, baseEnv []string) (provision.Report, error) {
+	return runProvisionersWithOptionsEnvironmentAndBatInput(cmd, m, provisionOpts, home, stateRoot, sourceRoot, baseEnv, nil)
+}
+
+func runProvisionersWithOptionsEnvironmentAndBatInput(cmd *cobra.Command, m manifest.Manifest, provisionOpts provision.Options, home string, stateRoot string, sourceRoot string, baseEnv []string, batInput *batcache.Input) (provision.Report, error) {
 	if provisionOpts.AppLookup == nil {
 		provisionOpts.AppLookup = appInstalled(provisionOpts.OS, home)
 	}
@@ -572,12 +609,13 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 		stdout = cmd.ErrOrStderr()
 	}
 	runner := provisionExecRunner{
-		ctx:     ctx,
-		home:    home,
-		stdin:   cmd.InOrStdin(),
-		stdout:  stdout,
-		stderr:  cmd.ErrOrStderr(),
-		baseEnv: baseEnv,
+		ctx:           ctx,
+		home:          home,
+		stdin:         cmd.InOrStdin(),
+		stdout:        stdout,
+		stderr:        cmd.ErrOrStderr(),
+		baseEnv:       baseEnv,
+		batCacheInput: batInput,
 	}
 	selected, selectErr := provision.Select(m, provisionOpts)
 	if selectErr != nil {
@@ -588,7 +626,7 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 		renderProvisionReport(cmd.OutOrStdout(), report)
 	}
 	if recordErr := recordProvisionerMetadata(stateRoot, sourceRoot, report); recordErr != nil {
-		return report, recordErr
+		return report, errors.Join(err, recordErr)
 	}
 	if err != nil {
 		return report, err
@@ -615,18 +653,6 @@ func selectedCodeGraphAgents(selected []manifest.Provisioner) []string {
 		}
 	}
 	return agents
-}
-
-// resolveAndApply resolves the plan's conflicts (via the TUI, text prompts, or
-// the conservative --yes default) and applies it with Backup Set protection. It
-// is shared by install and update so post-update installation reuses identical
-// Conflict Resolution and filesystem machinery instead of reimplementing it.
-func resolveAndApply(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI, backupAndReplace bool) (bool, install.MetadataCommit, error) {
-	decisions, proceed, err := resolveConflictDecisions(cmd, p, paths, yes, noTUI, backupAndReplace)
-	if err != nil || !proceed {
-		return false, install.MetadataCommit{}, err
-	}
-	return applyResolvedPlan(p, paths, decisions)
 }
 
 func resolveConflictDecisions(cmd *cobra.Command, p plan.Plan, paths resolvedPaths, yes, noTUI, backupAndReplace bool) (map[string]install.ConflictDecision, bool, error) {
@@ -656,11 +682,6 @@ func resolveConflictDecisions(cmd *cobra.Command, p plan.Plan, paths resolvedPat
 		}
 	}
 	return decisions, true, nil
-}
-
-func applyResolvedPlan(p plan.Plan, paths resolvedPaths, decisions map[string]install.ConflictDecision) (bool, install.MetadataCommit, error) {
-	commit, err := install.ApplyManagedEntries(p, install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: decisions})
-	return true, commit, err
 }
 
 func replaceAllConflictDecisions(p plan.Plan) map[string]install.ConflictDecision {

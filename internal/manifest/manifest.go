@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -112,6 +113,7 @@ type DependencySet struct {
 type Provisioner struct {
 	Tool         string          `yaml:"tool"`
 	Tags         []string        `yaml:"tags"`
+	RequiredTags []string        `yaml:"required_tags,omitempty"`
 	OS           []string        `yaml:"os,omitempty"`
 	Arch         []string        `yaml:"arch,omitempty"`
 	Spec         ProvisionerSpec `yaml:"spec"`
@@ -127,6 +129,10 @@ type Provisioner struct {
 // uses Plugin and Ref to install one GitHub plugin at an immutable commit. The dialects
 // are mutually exclusive: a spec speaks exactly one of them.
 type ProvisionerSpec struct {
+	// Cache selects a fixed application-native cache operation. It is currently
+	// restricted to `build` for the bat provisioner; it never carries a command
+	// or path from the manifest.
+	Cache  string   `yaml:"cache,omitempty"`
 	Scope  string   `yaml:"scope,omitempty"`
 	Agents []string `yaml:"agents,omitempty"`
 	Skills []string `yaml:"skills,omitempty"`
@@ -518,6 +524,12 @@ func (m Manifest) validateEvolutionInventory() error {
 		if j, ok := indexOfEmptyTag(provisioner.Tags); ok {
 			return fmt.Errorf("provisioners[%d].tags[%d] must not be empty", i, j)
 		}
+		if j, ok := indexOfEmptyTag(provisioner.RequiredTags); ok {
+			return fmt.Errorf("provisioners[%d].required_tags[%d] must not be empty", i, j)
+		}
+		if err := m.validateDeclaredTags(provisioner.RequiredTags, fmt.Sprintf("provisioners[%d].required_tags", i)); err != nil {
+			return err
+		}
 		for j, osName := range provisioner.OS {
 			if !allowedOS(osName) {
 				return fmt.Errorf("provisioners[%d].os[%d] must be one of darwin, linux", i, j)
@@ -673,7 +685,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of claude, codegraph, codex, herdr, skills, zimfw", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of bat, claude, codegraph, codex, herdr, skills, zimfw", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -682,6 +694,12 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tags[%d] must not be empty", i, j)
 		}
 		if err := m.validateDeclaredTags(prov.Tags, fmt.Sprintf("provisioners[%d].tags", i)); err != nil {
+			return err
+		}
+		if j, ok := indexOfEmptyTag(prov.RequiredTags); ok {
+			return fmt.Errorf("provisioners[%d].required_tags[%d] must not be empty", i, j)
+		}
+		if err := m.validateDeclaredTags(prov.RequiredTags, fmt.Sprintf("provisioners[%d].required_tags", i)); err != nil {
 			return err
 		}
 		for j, osName := range prov.OS {
@@ -697,7 +715,14 @@ func (m Manifest) Validate() error {
 		if prov.Spec.IsEmpty() {
 			return fmt.Errorf("provisioners[%d].spec is required", i)
 		}
+		if prov.Tool != "bat" && strings.TrimSpace(prov.Spec.Cache) != "" {
+			return fmt.Errorf("provisioners[%d].spec.cache is only valid for the bat tool", i)
+		}
 		switch prov.Tool {
+		case "bat":
+			if err := validateBatSpec(prov, i); err != nil {
+				return err
+			}
 		case "claude":
 			if err := validateClaudeSpec(prov.Spec, i); err != nil {
 				return err
@@ -728,6 +753,9 @@ func (m Manifest) Validate() error {
 				return err
 			}
 		}
+	}
+	if err := m.validateBatCacheInputs(); err != nil {
+		return err
 	}
 
 	return nil
@@ -844,7 +872,8 @@ func validateDependency(dep Dependency, path string) error {
 // an empty spec would render a bare command with nothing to do, so validation
 // rejects it.
 func (s ProvisionerSpec) IsEmpty() bool {
-	return strings.TrimSpace(s.Scope) == "" &&
+	return strings.TrimSpace(s.Cache) == "" &&
+		strings.TrimSpace(s.Scope) == "" &&
 		!hasNonEmptyString(s.Agents) &&
 		!hasNonEmptyString(s.Skills) &&
 		!s.Yes &&
@@ -852,6 +881,46 @@ func (s ProvisionerSpec) IsEmpty() bool {
 		!s.usesClaudeFields() &&
 		!s.usesMCPFields() &&
 		!s.usesSkillsFields()
+}
+
+func validateBatSpec(prov Provisioner, i int) error {
+	s := prov.Spec
+	if strings.TrimSpace(s.Cache) != "build" {
+		return fmt.Errorf("provisioners[%d].spec.cache must be build for the bat tool", i)
+	}
+	withoutCache := s
+	withoutCache.Cache = ""
+	if !withoutCache.IsEmpty() {
+		return fmt.Errorf("provisioners[%d].spec must set only cache for the bat tool", i)
+	}
+	if !reflect.DeepEqual(prov.Tags, []string{"bat", "zsh"}) {
+		return fmt.Errorf("provisioners[%d].tags must be [bat, zsh] for the bat cache builder", i)
+	}
+	if !reflect.DeepEqual(prov.RequiredTags, []string{"theme-carbonfox"}) {
+		return fmt.Errorf("provisioners[%d].required_tags must be [theme-carbonfox] for the bat cache builder", i)
+	}
+	return nil
+}
+
+func (m Manifest) validateBatCacheInputs() error {
+	for i, prov := range m.Provisioners {
+		if prov.Tool != "bat" {
+			continue
+		}
+		var configOK, themeOK bool
+		for _, entry := range m.Entries {
+			if entry.Target == "~/.config/bat/config" && entry.Strategy == "copy" && entry.SourceOverrides["theme-carbonfox"] == "configs/bat/config-carbonfox" && reflect.DeepEqual(entry.Tags, []string{"bat", "zsh"}) {
+				configOK = true
+			}
+			if entry.Source == "configs/themes/carbonfox.tmTheme" && entry.Target == "~/.config/bat/themes/Carbonfox.tmTheme" && entry.Strategy == "copy" && reflect.DeepEqual(entry.Tags, []string{"bat", "zsh"}) {
+				themeOK = true
+			}
+		}
+		if !configOK || !themeOK {
+			return fmt.Errorf("provisioners[%d] bat cache builder requires the Carbonfox bat config override and copied Carbonfox.tmTheme Managed Entry", i)
+		}
+	}
+	return nil
 }
 
 // usesClaudeFields reports whether the spec sets any Claude-specific field. It
@@ -1367,12 +1436,12 @@ func allowedArch(arch string) bool {
 }
 
 // allowedProvisionerTool enforces the provisioner allowlist. dots is never a
-// generic command runner: claude, codex, codegraph, herdr, skills, and zimfw
+// generic command runner: bat, claude, codex, codegraph, herdr, skills, and zimfw
 // are the only accepted provisioner tools, each driven through a fixed set of
 // subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "claude", "codex", "codegraph", "herdr", "skills", "zimfw":
+	case "bat", "claude", "codex", "codegraph", "herdr", "skills", "zimfw":
 		return true
 	default:
 		return false

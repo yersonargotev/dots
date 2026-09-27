@@ -11,7 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/backups"
+	"github.com/yersonargotev/dots/internal/batcache"
 	"github.com/yersonargotev/dots/internal/gitrepo"
+	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
@@ -160,7 +162,7 @@ func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resol
 		if opts.selectionIntent.Source == selection.SourceExplicit {
 			effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, runtime.GOOS)
 		}
-		return m, effective, nil
+		return m, effective, guardCarbonfoxRefreshPreference(meta.InstalledSelection, effective.Selection.Tags, opts.dryRun)
 	}
 	if len(opts.profiles) == 0 && len(opts.extraTags) == 0 && meta.InstalledSelection == nil && (meta.Version == 1 || meta.Version == 2) {
 		effective, err := resolveLegacyUpdateSelection(cmd, *m, meta, paths, opts)
@@ -173,10 +175,13 @@ func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resol
 	if err == nil {
 		effective, err = guardRecordedTagMigration(cmd, effective, opts.yes || opts.dryRun)
 	}
+	if err == nil {
+		err = guardCarbonfoxRefreshPreference(meta.InstalledSelection, effective.Selection.Tags, opts.dryRun)
+	}
 	return m, effective, err
 }
 
-func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updateReport, error) {
+func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (result updateReport, resultErr error) {
 	paths, err := resolvePaths(opts.home, opts.sourceRoot, opts.stateRoot)
 	if err != nil {
 		return updateReport{}, err
@@ -227,6 +232,9 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	}
 	effective, err = guardRecordedTagMigration(cmd, effective, opts.yes || opts.dryRun)
 	if err != nil {
+		return updateReport{}, err
+	}
+	if err := guardCarbonfoxRefreshPreference(meta.InstalledSelection, effective.Selection.Tags, opts.dryRun); err != nil {
 		return updateReport{}, err
 	}
 	legacyMigrations, err := repositoryrefresh.CaptureLegacyTargets(*previousManifest, *incomingManifest, meta, paths.SourceRoot, paths.Home, paths.XDGStateHome, preRefresh.OldRev)
@@ -311,16 +319,44 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 	if err != nil {
 		return updateReport{}, err
 	}
-	applied, metadataCommit, err := resolveAndApply(cmd, p, paths, opts.yes, opts.noTUI, false)
+	conflictDecisions, proceed, err := resolveConflictDecisions(cmd, p, paths, opts.yes, opts.noTUI, false)
 	if err != nil {
 		return updateReport{}, err
 	}
+	if !proceed {
+		return report, nil
+	}
+	if err := validateCarbonfoxNativeSupport(cmd.Context(), p, paths.Home, runtime.GOOS, nil); err != nil {
+		return updateReport{}, err
+	}
+	installOptions := install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}
+	var batInput *batcache.Input
+	var batCaptures map[install.SourceCaptureKey]install.CapturedSource
+	if hasBatCacheStep(provPlan) {
+		captures, input, captureErr := captureBatCacheInput(p, installOptions)
+		if captureErr != nil {
+			return updateReport{}, captureErr
+		}
+		defer func() {
+			if releaseErr := install.ReleaseCapturedSources(batCaptures); releaseErr != nil {
+				resultErr = errors.Join(resultErr, fmt.Errorf("release bat cache inputs: %w", releaseErr))
+			}
+		}()
+		installOptions.CapturedSources = captures
+		batCaptures = captures
+		batInput = input
+	}
+	metadataCommit, err := install.ApplyManagedEntries(p, installOptions)
+	if err != nil {
+		return updateReport{}, err
+	}
+	applied := true
 	report.BackupSets, err = createdBackupSetReports(paths.StateRoot, beforeBackups)
 	if err != nil {
 		return updateReport{}, err
 	}
 	if applied {
-		if _, err := runProvisionersWithOptions(cmd, *m, provisionOpts, paths.Home, paths.StateRoot, paths.SourceRoot); err != nil {
+		if _, err := runProvisionersWithOptionsEnvironmentAndBatInput(cmd, *m, provisionOpts, paths.Home, paths.StateRoot, paths.SourceRoot, nil, batInput); err != nil {
 			return updateReport{}, err
 		}
 		report.Retirement, err = retireHistoricalAgentState(meta, paths.Home)
@@ -331,6 +367,10 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (updat
 		if err := commitInstallationMetadata(metadataCommit, installedSelection); err != nil {
 			return updateReport{}, err
 		}
+		if releaseErr := install.ReleaseCapturedSources(batCaptures); releaseErr != nil {
+			return updateReport{}, fmt.Errorf("release bat cache inputs after metadata commit: %w", releaseErr)
+		}
+		batCaptures = nil
 		if !wantsJSON(cmd) {
 			renderHistoricalRetirement(out, report.Retirement)
 		}

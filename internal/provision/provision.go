@@ -38,6 +38,8 @@ source "${ZIM_HOME}/zimfw.zsh" init -q`
 // the manifest allowlist before this function is reached.
 func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 	switch p.Tool {
+	case "bat":
+		return p.Tool, []string{"cache", "--build"}
 	case "claude":
 		return p.Tool, renderClaudeArgs(p.Spec)
 	case "codegraph":

@@ -54,6 +54,47 @@ entries:
 	}
 }
 
+func TestBatCacheProvisionerDialect(t *testing.T) {
+	valid := `version: 1
+profiles:
+  default:
+    tags: [bat, zsh]
+entries:
+  - source: configs/bat/config
+    source_overrides:
+      theme-carbonfox: configs/bat/config-carbonfox
+    target: ~/.config/bat/config
+    strategy: copy
+    tags: [bat, zsh]
+  - source: configs/themes/carbonfox.tmTheme
+    target: ~/.config/bat/themes/Carbonfox.tmTheme
+    strategy: copy
+    tags: [bat, zsh]
+provisioners:
+  - tool: bat
+    tags: [bat, zsh]
+    required_tags: [theme-carbonfox]
+    spec:
+      cache: build
+`
+	if _, err := manifest.Parse([]byte(valid)); err != nil {
+		t.Fatalf("Parse(valid bat provisioner) error = %v", err)
+	}
+	tests := map[string]string{
+		"missing required tag": strings.Replace(valid, "    required_tags: [theme-carbonfox]\n", "", 1),
+		"wrong operation":      strings.Replace(valid, "      cache: build", "      cache: clean", 1),
+		"extra spec field":     strings.Replace(valid, "      cache: build", "      cache: build\n      yes: true", 1),
+		"symlink theme":        strings.Replace(valid, "    target: ~/.config/bat/themes/Carbonfox.tmTheme\n    strategy: copy", "    target: ~/.config/bat/themes/Carbonfox.tmTheme\n    strategy: symlink", 1),
+	}
+	for name, content := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, err := manifest.Parse([]byte(content)); err == nil {
+				t.Fatal("Parse() error = nil, want bat dialect rejection")
+			}
+		})
+	}
+}
+
 func TestParseValidatesOptionalTagRegistry(t *testing.T) {
 	valid := `version: 1
 tags:
@@ -2082,7 +2123,7 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be one of claude, codegraph, codex, herdr, skills, zimfw",
+			want: "provisioners[0].tool must be one of bat, claude, codegraph, codex, herdr, skills, zimfw",
 		},
 		{
 			name: "retired gentle-ai tool",
@@ -2092,7 +2133,7 @@ provisioners:
       scope: global
       agents: [codex]
 `,
-			want: "provisioners[0].tool must be one of claude, codegraph, codex, herdr, skills, zimfw",
+			want: "provisioners[0].tool must be one of bat, claude, codegraph, codex, herdr, skills, zimfw",
 		},
 		{
 			name: "claude spec sets neither marketplace nor plugin",
@@ -3558,20 +3599,30 @@ func TestRepositoryManifestRemainingSymlinksMatchAuditedClassifications(t *testi
 		conditionalInitializer = "conditional-initializer"
 	)
 	want := map[string]string{
-		"configs/zsh/zshrc\x00~/.config/dots/zsh/zshrc":                                               readUnderOrdinaryUse,
-		"configs/zsh/zimrc\x00~/.zimrc":                                                               readUnderOrdinaryUse,
-		"configs/zsh/zshenv\x00~/.zshenv":                                                             readUnderOrdinaryUse,
-		"configs/git/gitconfig\x00~/.config/dots/git/gitconfig":                                       readUnderOrdinaryUse,
-		"configs/dots/theme.sh\x00~/.config/dots/theme.sh":                                            readUnderOrdinaryUse,
-		"configs/dots/adaptive-theme\x00~/.config/dots/adaptive-theme":                                readUnderOrdinaryUse,
-		"configs/starship/starship.toml\x00~/.config/starship.toml":                                   explicitOperatorOutput,
-		"configs/tmux/tmux.conf\x00~/.tmux.conf":                                                      readUnderOrdinaryUse,
-		"configs/zellij/layouts/default.kdl\x00~/.config/zellij/layouts/default.kdl":                  explicitOperatorOutput,
-		"configs/ghostty/config.ghostty\x00~/.config/ghostty/config.ghostty":                          conditionalInitializer,
-		"configs/ghostty/adaptive/adaptive-theme.ghostty\x00~/.config/ghostty/adaptive-theme.ghostty": readUnderOrdinaryUse,
-		"configs/atuin/themes/catppuccin-mocha.toml\x00~/.config/atuin/themes/catppuccin-mocha.toml":  readUnderOrdinaryUse,
-		"configs/nvim\x00~/.config/dots/nvim":                                                         readUnderOrdinaryUse,
-		"configs/zed/themes/catppuccin-blue.json\x00~/.config/zed/themes/catppuccin-blue.json":        explicitOperatorOutput,
+		"configs/zsh/zshrc\x00~/.config/dots/zsh/zshrc":                                                                readUnderOrdinaryUse,
+		"configs/zsh/zimrc\x00~/.zimrc":                                                                                readUnderOrdinaryUse,
+		"configs/zsh/zshenv\x00~/.zshenv":                                                                              readUnderOrdinaryUse,
+		"configs/git/gitconfig\x00~/.config/dots/git/gitconfig":                                                        readUnderOrdinaryUse,
+		"configs/dots/theme-carbonfox\x00~/.config/dots/theme-carbonfox":                                               readUnderOrdinaryUse,
+		"configs/tmux/carbonfox.conf\x00~/.config/tmux/carbonfox.conf":                                                 readUnderOrdinaryUse,
+		"configs/ghostty/themes/Carbonfox\x00~/.config/ghostty/themes/Carbonfox":                                       readUnderOrdinaryUse,
+		"configs/zellij/themes/carbonfox.kdl\x00~/.config/zellij/themes/carbonfox.kdl":                                 readUnderOrdinaryUse,
+		"configs/warp/themes/carbonfox/carbonfox.yaml\x00~/.warp/themes/carbonfox/carbonfox.yaml":                      readUnderOrdinaryUse,
+		"configs/warp/themes/carbonfox/carbonfox.yaml\x00~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml": readUnderOrdinaryUse,
+		"configs/atuin/themes/carbonfox.toml\x00~/.config/atuin/themes/carbonfox.toml":                                 readUnderOrdinaryUse,
+		"configs/tuicr/themes/carbonfox.toml\x00~/.config/tuicr/themes/carbonfox.toml":                                 readUnderOrdinaryUse,
+		"configs/themes/carbonfox.tmTheme\x00~/.config/tuicr/themes/carbonfox.tmTheme":                                 readUnderOrdinaryUse,
+		"configs/zed/themes/carbonfox.json\x00~/.config/zed/themes/carbonfox.json":                                     explicitOperatorOutput,
+		"configs/dots/theme.sh\x00~/.config/dots/theme.sh":                                                             readUnderOrdinaryUse,
+		"configs/dots/adaptive-theme\x00~/.config/dots/adaptive-theme":                                                 readUnderOrdinaryUse,
+		"configs/starship/starship.toml\x00~/.config/starship.toml":                                                    explicitOperatorOutput,
+		"configs/tmux/tmux.conf\x00~/.tmux.conf":                                                                       readUnderOrdinaryUse,
+		"configs/zellij/layouts/default.kdl\x00~/.config/zellij/layouts/default.kdl":                                   explicitOperatorOutput,
+		"configs/ghostty/config.ghostty\x00~/.config/ghostty/config.ghostty":                                           conditionalInitializer,
+		"configs/ghostty/adaptive/adaptive-theme.ghostty\x00~/.config/ghostty/adaptive-theme.ghostty":                  readUnderOrdinaryUse,
+		"configs/atuin/themes/catppuccin-mocha.toml\x00~/.config/atuin/themes/catppuccin-mocha.toml":                   readUnderOrdinaryUse,
+		"configs/nvim\x00~/.config/dots/nvim":                                                                          readUnderOrdinaryUse,
+		"configs/zed/themes/catppuccin-blue.json\x00~/.config/zed/themes/catppuccin-blue.json":                         explicitOperatorOutput,
 	}
 
 	found := make(map[string]string)

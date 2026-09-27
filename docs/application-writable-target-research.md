@@ -166,3 +166,27 @@ entries, and Ghostty's separately classified conditional initializer. Repository
 Manifest tests lock that remaining set exactly, while the cross-application
 Temporary Home lifecycle verifies that each confirmed normal writer leaves the
 Installed Repository clean.
+
+## Carbonfox additions (2026-09-27)
+
+Issue #538 keeps the classifications above for whole-file source overrides:
+changing the selected source does not change the native target's write lifecycle.
+The following additional symlinks are audited separately. These findings concern
+ordinary native use, not arbitrary editors or plugins.
+
+| Sources / targets | Classification | Evidence |
+|---|---|---|
+| `configs/dots/theme-carbonfox` → `~/.config/dots/theme-carbonfox`; `configs/tmux/carbonfox.conf` → `~/.config/tmux/carbonfox.conf` | Read under ordinary use | Repository-owned shell palette and tmux include, read by the checked-in adapters; neither defines a file writer. |
+| `configs/ghostty/themes/Carbonfox` → `~/.config/ghostty/themes/Carbonfox` | Read under ordinary use | Ghostty loads named [theme files](https://ghostty.org/docs/features/theme); its main-config initializer does not write named theme assets. |
+| `configs/zellij/themes/carbonfox.kdl` → `~/.config/zellij/themes/carbonfox.kdl` | Read under ordinary use | Zellij loads [custom theme files](https://zellij.dev/documentation/themes); persistent reconfiguration concerns the native config, which remains a regular copy. |
+| `configs/warp/themes/carbonfox/carbonfox.yaml` → `~/.warp/themes/carbonfox/carbonfox.yaml` (macOS), `~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml` (Linux) | Read under ordinary use | Warp reads [custom theme YAML](https://docs.warp.dev/terminal/appearance/custom-themes) from its platform root. Settings remain a regular copy. No normal writer to the custom asset was found. |
+| `configs/atuin/themes/carbonfox.toml` → `~/.config/atuin/themes/carbonfox.toml` | Read under ordinary use | Same documented native theme loading lifecycle as the Catppuccin asset above. |
+| `configs/tuicr/themes/carbonfox.toml` → `~/.config/tuicr/themes/carbonfox.toml`; `configs/themes/carbonfox.tmTheme` → `~/.config/tuicr/themes/carbonfox.tmTheme` | Read under ordinary use | tuicr reads [local UI and syntax themes](https://github.com/agavra/tuicr#configuration); no ordinary writer to either named asset was found. |
+| `configs/zed/themes/carbonfox.json` → `~/.config/zed/themes/carbonfox.json` | Explicit operator output | Same Theme Builder export lifecycle as the Zed Catppuccin asset above; choosing a theme writes settings, which remain a regular copy. |
+
+Claude's named theme is a **regular copy** because its native custom-theme
+editor can save to that theme. bat's named theme is also a regular copy so cache
+activation can consume captured managed bytes. The bat cache is generated
+application state, not a symlink or Managed Entry. Source-capture confinement,
+private staging, selected-home publication, and post-publication native
+verification apply to that separate Provisioner operation.

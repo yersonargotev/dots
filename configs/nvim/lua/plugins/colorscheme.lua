@@ -10,10 +10,21 @@ local function dots_catppuccin_flavour()
   return "mocha"
 end
 local flavour = dots_catppuccin_flavour()
+local carbonfox = vim.fn.filereadable((os.getenv("HOME") or "") .. "/.config/dots/theme-carbonfox") == 1
 
 return {
   {
-    {
+    carbonfox and {
+      "EdenEast/nightfox.nvim",
+      name = "nightfox.nvim",
+      priority = 1000,
+      opts = {
+        options = {
+          transparent = true,
+          terminal_colors = true,
+        },
+      },
+    } or {
       "catppuccin/nvim",
       name = "catppuccin",
       priority = 1000,
@@ -26,7 +37,7 @@ return {
     {
       "LazyVim/LazyVim",
       opts = {
-        colorscheme = "catppuccin-" .. flavour,
+        colorscheme = carbonfox and "carbonfox" or "catppuccin-" .. flavour,
       },
     },
   },
