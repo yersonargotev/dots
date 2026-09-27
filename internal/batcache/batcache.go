@@ -494,12 +494,10 @@ func snapshotTree(source, target string, records *[]sourceRecord, directories *[
 	}
 	opened, err := file.Stat()
 	if err != nil {
-		_ = file.Close()
-		return err
+		return errors.Join(err, file.Close())
 	}
 	if !os.SameFile(info, opened) {
-		_ = file.Close()
-		return fmt.Errorf("custom bat input changed identity: %s", source)
+		return errors.Join(fmt.Errorf("custom bat input changed identity: %s", source), file.Close())
 	}
 	data, readErr := io.ReadAll(file)
 	closeErr := file.Close()
