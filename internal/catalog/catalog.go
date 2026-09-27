@@ -176,6 +176,7 @@ type Provisioner struct {
 	Command          []string     `json:"command,omitempty"`
 	EnvironmentNames []string     `json:"environment_names"`
 	Tags             []string     `json:"tags"`
+	RequiredTags     []string     `json:"required_tags,omitempty"`
 	OS               []string     `json:"os"`
 	Arch             []string     `json:"arch,omitempty"`
 	Dependencies     []Dependency `json:"dependencies"`
@@ -404,7 +405,7 @@ func ExplainProfileItem(m manifest.Manifest, profileName, query string, opts Opt
 		why.Matches = append(why.Matches, WhyMatch{
 			Type:             "provisioner",
 			Identity:         provisionerIdentity(provisioner),
-			ContributingTags: contributingTags(detail.ResolvedTags, provisioner.Tags, ""),
+			ContributingTags: contributingTags(detail.ResolvedTags, append(clone(provisioner.Tags), provisioner.RequiredTags...), ""),
 			Provisioner:      &provisioner,
 		})
 	}
@@ -675,7 +676,7 @@ func sourceOverrideKey(value SourceOverride) string {
 }
 
 func provisionerKey(value Provisioner) string {
-	return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v", value.Tool, value.Operation, value.Identity, value.Scope, value.Agents, value.Skills, value.Command, value.EnvironmentNames, value.Tags, value.OS, value.Arch)
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v\x00%v", value.Tool, value.Operation, value.Identity, value.Scope, value.Agents, value.Skills, value.Command, value.EnvironmentNames, value.Tags, value.OS, value.Arch, value.RequiredTags)
 }
 
 func behaviorKey(value Behavior) string {
@@ -685,7 +686,10 @@ func behaviorKey(value Behavior) string {
 func provisioner(p manifest.Provisioner) Provisioner {
 	s := p.Spec
 	result := Provisioner{Tool: p.Tool, Scope: s.Scope, Agents: clone(s.Agents), Skills: clone(s.Skills), Tags: clone(p.Tags), OS: declaredOS(p.OS), Arch: clone(p.Arch), Dependencies: []Dependency{}, EnvironmentNames: []string{}}
+	result.RequiredTags = clone(p.RequiredTags)
 	switch {
+	case p.Tool == "bat":
+		result.Operation, result.Identity, result.Command = "cache", "Carbonfox", []string{"bat", "cache", "--build"}
 	case p.Tool == "herdr":
 		result.Operation, result.Identity = "plugin", s.Plugin+"@"+s.Ref
 	case s.Marketplace != "":
@@ -765,6 +769,7 @@ func allTags(m manifest.Manifest) []string {
 	}
 	for _, p := range m.Provisioners {
 		add(p.Tags)
+		add(p.RequiredTags)
 	}
 	names := make([]string, 0, len(seen))
 	for name := range seen {

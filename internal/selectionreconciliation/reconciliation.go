@@ -401,7 +401,15 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 			if partialOwnership(ownership) {
 				return blocked(action, ReasonAmbiguousPartialOwnership), nil
 			}
-			return classifyForward(action, ownership, target.ForwardStatus, target.ForwardReason), nil
+			// A whole-owned symlink whose selected source changes is expected to
+			// conflict with the forward source. Let the symlink classifier decide
+			// whether the live link and exact contribution record still prove the
+			// previous source. Mutation remains an explicit Conflict Resolution
+			// Replace; reconciliation only distinguishes that owned transition
+			// from lost ownership.
+			if strategy != "symlink" || ownership != "whole" {
+				return classifyForward(action, ownership, target.ForwardStatus, target.ForwardReason), nil
+			}
 		case ForwardMissingSource:
 			return blocked(action, ReasonMissingSource), nil
 		}
@@ -418,6 +426,9 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 		return Action{}, err
 	}
 	if current.target != "" && !target.Exists {
+		if previous.target != "" && hasRetiredSources(previous, current) {
+			return blocked(action, ReasonLostOwnership), nil
+		}
 		action.Outcome = OutcomeCreate
 		return action, nil
 	}

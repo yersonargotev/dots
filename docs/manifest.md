@@ -150,6 +150,7 @@ from compact discovery unless `--all` is supplied.
 | `ripgrep` | surface | current | ripgrep recursive text search utility. |  |
 | `rust` | surface | current | Rust stable toolchain managed through rustup. |  |
 | `starship` | surface | current | Starship prompt configuration. |  |
+| `theme-carbonfox` | surface | current | Optional dark Carbonfox palette for selected supported applications; overrides adaptive-theme. |  |
 | `tmux` | surface | current | Tmux terminal multiplexer configuration. |  |
 | `tuicr` | surface | current | tuicr terminal interface configuration. |  |
 | `uv` | surface | current | uv Python project and package manager. |  |
@@ -283,6 +284,17 @@ explicit `--profile` and `--tag` flags to reuse an available Installed
 Selection, or pass each intended exact tag with repeated `--tag <tag>`.
 Co-owned files are still documented in [`docs/adaptive-theme-audit.md`](adaptive-theme-audit.md)
 when no safe dots-owned source can be selected.
+
+
+### Carbonfox theme tag
+
+`theme-carbonfox` is an optional global dark preference, independent of
+application Tags and Profiles. Alone it installs only a shared palette marker.
+See [Carbonfox support and activation](carbonfox-theme.md). When both preferences
+are selected and an entry has a Carbonfox override, `adaptive-theme` is excluded
+from that entry's override candidates. All other overrides retain last-selected
+precedence. Removing Carbonfox restores the remaining adaptive or base source
+through ordinary Selection Reconciliation and Conflict Resolution.
 
 
 A Managed Entry declares one repository source and one confined target. Targets
@@ -505,12 +517,31 @@ reuse user-local tools without requiring sudo in non-interactive runs.
 
 | Field | Required | Supported values |
 |-------|----------|------------------|
-| `tool` | Yes | `claude`, `codex`, `codegraph`, `herdr`, `skills`, or `zimfw`. |
+| `tool` | Yes | `bat`, `claude`, `codex`, `codegraph`, `herdr`, `skills`, or `zimfw`. |
 | `tags` | Yes | Non-empty strings matched against the selected Profile. |
+| `required_tags` | No | Every listed tag must also be selected; combines with the any-match `tags` condition. |
 | `os` | No | `darwin`, `linux`; empty means all supported operating systems. |
 | `arch` | No | Provisioner architectures: `amd64`, `arm64`; empty means either. |
 | `spec` | Yes | Tool-specific declaration. Each spec must speak exactly one tool dialect. |
 | `dependencies` | No | Dependencies required before running the Provisioner. |
+
+### `bat` spec
+
+`cache: build` activates the repository Carbonfox theme after its regular-copy
+config and theme Managed Entries are installed. `tags: [bat, zsh]` plus
+`required_tags: [theme-carbonfox]` selects it only when a consumer and the
+preference are both selected. All `required_tags` must match; omitted or empty
+keeps the existing any-tag behavior. This condition applies to Provisioners
+only and does not select additional Tags or change receipt identity.
+
+The adapter captures the two managed inputs before application, builds in
+private staging with native bat, and publishes only `metadata.yaml`,
+`syntaxes.bin`, and `themes.bin` beneath the selected home cache. Other user
+syntax/theme inputs are read without modification; unrelated cache files are
+preserved. Publication is app-cache regeneration, not managed ownership or
+rollback. Failures retain partial cache state, report failure, and leave the
+prior Installed Selection; rerun to regenerate. Native bat inventory and render
+checks must pass before completion. See [Carbonfox](carbonfox-theme.md).
 
 ### `claude` spec
 
@@ -641,7 +672,7 @@ Current Provisioners:
 
 1. The chosen Profile or repeated Profiles provide the base tag union in CLI order.
 2. Each repeated `--tag` adds an optional tag to that selection. Duplicate tags are ignored.
-3. A Managed Entry or Provisioner is selected when any of its tags matches the effective tag set.
+3. A Managed Entry or Provisioner is selected when any of its tags matches the effective tag set. A Provisioner additionally requires every `required_tags` value when present.
 4. If `os` is empty, the item matches all supported operating systems.
 5. If `os` is set, the item only matches the current OS (`darwin` or `linux`).
 6. Selected Managed Entries are installed before selected Provisioners run.

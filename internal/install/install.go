@@ -1231,6 +1231,13 @@ func (c MetadataCommit) validateTerminalPaths() error {
 		if err != nil {
 			return err
 		}
+		terminalAction, err := prepareCapturedAction(action, resolvedSources, c.opts)
+		if err != nil {
+			return fmt.Errorf("revalidate terminal captured sources for %s: %w", action.Target, err)
+		}
+		if action.Strategy == "copy" && !bytes.Equal(terminalAction.Content, action.Content) {
+			return fmt.Errorf("captured source content changed before terminal metadata commit for %s", action.Target)
+		}
 		for _, source := range resolvedSources {
 			if err := validateSource(action.Strategy, source, sourceRoot); err != nil {
 				return err

@@ -177,7 +177,7 @@ func evaluate(m manifest.Manifest, effectiveTags []string, matchesOS, matchesArc
 	}
 
 	for _, provisioner := range m.Provisioners {
-		if !sharesTag(provisioner.Tags, tags) || !matchesOS(provisioner.OS) || !matchesArch(provisioner.Arch) || containsExact(seenProvisioners, provisioner) {
+		if !sharesTag(provisioner.Tags, tags) || !containsAllTags(tags, provisioner.RequiredTags) || !matchesOS(provisioner.OS) || !matchesArch(provisioner.Arch) || containsExact(seenProvisioners, provisioner) {
 			continue
 		}
 		seenProvisioners = append(seenProvisioners, provisioner)
@@ -208,10 +208,26 @@ func evaluateEntries(m manifest.Manifest, tags []string, matchesOS func([]string
 func entrySource(entry manifest.Entry, tags []string) (string, string) {
 	for index := len(tags) - 1; index >= 0; index-- {
 		if source, ok := entry.SourceOverrides[tags[index]]; ok {
+			// Carbonfox dominates adaptive appearance without changing the last
+			// selected override rule for unrelated preferences.
+			if tags[index] == "adaptive-theme" && sharesTag(tags, []string{"theme-carbonfox"}) {
+				if _, exists := entry.SourceOverrides["theme-carbonfox"]; exists {
+					continue
+				}
+			}
 			return source, tags[index]
 		}
 	}
 	return entry.Source, ""
+}
+
+func containsAllTags(selected, required []string) bool {
+	for _, tag := range required {
+		if !sharesTag(selected, []string{tag}) {
+			return false
+		}
+	}
+	return true
 }
 
 func uniqueTags(tags []string) []string {
@@ -297,6 +313,7 @@ func cloneEntry(entry manifest.Entry) manifest.Entry {
 
 func cloneProvisioner(provisioner manifest.Provisioner) manifest.Provisioner {
 	provisioner.Tags = cloneStrings(provisioner.Tags)
+	provisioner.RequiredTags = cloneStrings(provisioner.RequiredTags)
 	provisioner.OS = cloneStrings(provisioner.OS)
 	provisioner.Arch = cloneStrings(provisioner.Arch)
 	provisioner.Dependencies = cloneDependencies(provisioner.Dependencies)

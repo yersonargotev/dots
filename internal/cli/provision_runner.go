@@ -2,10 +2,13 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/yersonargotev/dots/internal/batcache"
 )
 
 // provisionExecRunner executes an allowlisted provisioner command with HOME
@@ -21,10 +24,21 @@ type provisionExecRunner struct {
 	stderr io.Writer
 	// baseEnv is the environment to thread HOME into. It is os.Environ() in
 	// production and is injectable so sandbox tests never touch the real HOME.
-	baseEnv []string
+	baseEnv       []string
+	batCacheInput *batcache.Input
 }
 
 func (r provisionExecRunner) Run(executable string, args []string) error {
+	if executable == "bat" && len(args) == 2 && args[0] == "cache" && args[1] == "--build" {
+		if r.batCacheInput == nil {
+			return fmt.Errorf("bat cache provisioner is missing its captured native input")
+		}
+		input := *r.batCacheInput
+		input.Home = r.home
+		input.BaseEnv = r.environment()
+		_, err := batcache.Activate(r.ctx, input)
+		return err
+	}
 	env := r.environmentFor(executable)
 	if resolved, ok := lookPathInEnvironment(executable, env); ok {
 		executable = resolved

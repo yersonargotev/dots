@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/backups"
+	"github.com/yersonargotev/dots/internal/batcache"
 	"github.com/yersonargotev/dots/internal/catalog"
 	"github.com/yersonargotev/dots/internal/codexconfig"
 	"github.com/yersonargotev/dots/internal/deps"
@@ -948,6 +949,13 @@ func applyInstallTagSelectorCandidate(cmd *cobra.Command, candidate installTagSe
 	if !proceed {
 		return nil
 	}
+	currentMetadata, err := validateInstallTagSelectorAuthority(candidate)
+	if err != nil {
+		return err
+	}
+	if err := candidate.Retirement.AuthorizeSymlinkTransitions(currentMetadata, &candidate.Plan, conflictDecisions); err != nil {
+		return err
+	}
 	installOptions := install.Options{
 		SourceRoot: candidate.Paths.SourceRoot, Home: candidate.Paths.Home, StateRoot: candidate.Paths.StateRoot,
 		ConflictDecisions: conflictDecisions,
@@ -966,16 +974,22 @@ func applyInstallTagSelectorCandidate(cmd *cobra.Command, candidate installTagSe
 	if err := install.ValidateManagedEntries(candidate.Plan, installOptions); err != nil {
 		return err
 	}
-	if err := validateInstallTagSelectorAuthority(candidate); err != nil {
-		return err
-	}
-
 	dependencyEnvironment, dependenciesReport, err := applyInstallTagSelectorDependencies(cmd, candidate)
 	if err != nil {
 		return err
 	}
 	if candidate.Dependencies != nil && dependenciesReport == nil {
 		return nil
+	}
+	if err := validateCarbonfoxNativeSupport(cmd.Context(), candidate.Plan, candidate.Paths.Home, candidate.DependencyOptions.OS, dependencyEnvironment); err != nil {
+		return err
+	}
+	var batInput *batcache.Input
+	if hasBatCacheStep(candidate.Provisioners) {
+		batInput, err = batCacheInputFromCaptures(installOptions.CapturedSources)
+		if err != nil {
+			return err
+		}
 	}
 
 	beforeBackups, err := backups.Load(backups.Path(candidate.Paths.StateRoot))
@@ -991,7 +1005,7 @@ func applyInstallTagSelectorCandidate(cmd *cobra.Command, candidate installTagSe
 		return err
 	}
 
-	provisionerReport, err := applyAcceptedTagSelectorProvisioners(cmd, candidate, dependencyEnvironment)
+	provisionerReport, err := applyAcceptedTagSelectorProvisioners(cmd, candidate, dependencyEnvironment, batInput)
 	if err != nil {
 		return err
 	}
@@ -1007,6 +1021,9 @@ func applyInstallTagSelectorCandidate(cmd *cobra.Command, candidate installTagSe
 	installedSelection := candidate.Effective.InstalledSelection(state.CaptureProvenance(candidate.Paths.SourceRoot, version.Value))
 	if err := commitSelectorInstallationMetadata(metadataCommit, candidate.Metadata.InstalledSelection, installedSelection); err != nil {
 		return err
+	}
+	if err := candidate.releaseCapturedSources(); err != nil {
+		return fmt.Errorf("release accepted Tag selector inputs after metadata commit: %w", err)
 	}
 	renderTagSelectorFinalResult(cmd.OutOrStdout(), candidate, conflictDecisions, dependenciesReport, provisionerReport, retirementResult, len(createdBackups))
 	return nil
@@ -1126,24 +1143,24 @@ func selectorCapturedSourcesForDecisions(captures map[install.SourceCaptureKey]i
 	return selected
 }
 
-func validateInstallTagSelectorAuthority(candidate installTagSelectorCandidate) error {
+func validateInstallTagSelectorAuthority(candidate installTagSelectorCandidate) (state.Metadata, error) {
 	if candidate.ManifestPath != "" {
 		current, err := manifest.LoadFile(candidate.ManifestPath)
 		if err != nil {
-			return fmt.Errorf("revalidate accepted Tag selector Install Manifest: %w", err)
+			return state.Metadata{}, fmt.Errorf("revalidate accepted Tag selector Install Manifest: %w", err)
 		}
 		if !reflect.DeepEqual(*current, candidate.Manifest) {
-			return fmt.Errorf("accepted Tag selector candidate is stale: Install Manifest changed before mutation")
+			return state.Metadata{}, fmt.Errorf("accepted Tag selector candidate is stale: Install Manifest changed before mutation")
 		}
 	}
 	currentMetadata, err := loadInstallationMetadata(candidate.Paths, candidate.RequestedStateRoot)
 	if err != nil {
-		return fmt.Errorf("revalidate accepted Tag selector Installation Metadata: %w", err)
+		return state.Metadata{}, fmt.Errorf("revalidate accepted Tag selector Installation Metadata: %w", err)
 	}
 	if !reflect.DeepEqual(currentMetadata, candidate.Metadata) {
-		return fmt.Errorf("accepted Tag selector candidate is stale: Installation Metadata changed before mutation")
+		return state.Metadata{}, fmt.Errorf("accepted Tag selector candidate is stale: Installation Metadata changed before mutation")
 	}
-	return nil
+	return currentMetadata, nil
 }
 
 func applyInstallTagSelectorDependencies(cmd *cobra.Command, candidate installTagSelectorCandidate) ([]string, *deps.InstallReport, error) {
@@ -1206,7 +1223,7 @@ func applyInstallTagSelectorDependencies(cmd *cobra.Command, candidate installTa
 	return runner.Environment(), &report, err
 }
 
-func applyAcceptedTagSelectorProvisioners(cmd *cobra.Command, candidate installTagSelectorCandidate, baseEnv []string) (provision.Report, error) {
+func applyAcceptedTagSelectorProvisioners(cmd *cobra.Command, candidate installTagSelectorCandidate, baseEnv []string, batInputs ...*batcache.Input) (provision.Report, error) {
 	report := provision.Report{
 		Profile: candidate.Provisioners.Profile, Profiles: append([]string(nil), candidate.Provisioners.Profiles...),
 		Tags: append([]string(nil), candidate.Provisioners.Tags...), Items: []provision.RunItem{},
@@ -1220,7 +1237,11 @@ func applyAcceptedTagSelectorProvisioners(cmd *cobra.Command, candidate installT
 	}
 	ctx := cmd.Context()
 	stdout := cmd.OutOrStdout()
-	runner := provisionExecRunner{ctx: ctx, home: candidate.Paths.Home, stdin: cmd.InOrStdin(), stdout: stdout, stderr: cmd.ErrOrStderr(), baseEnv: baseEnv}
+	var batInput *batcache.Input
+	if len(batInputs) > 0 {
+		batInput = batInputs[0]
+	}
+	runner := provisionExecRunner{ctx: ctx, home: candidate.Paths.Home, stdin: cmd.InOrStdin(), stdout: stdout, stderr: cmd.ErrOrStderr(), baseEnv: baseEnv, batCacheInput: batInput}
 	for index, step := range candidate.Provisioners.Steps {
 		declaration := selected[index]
 		executable, args := provision.RenderCommand(declaration)

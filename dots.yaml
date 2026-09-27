@@ -264,6 +264,10 @@ tags:
       - codex-dart-mcp
       - antigravity-dart-mcp
       - vscode-mobile
+  theme-carbonfox:
+    description: Optional dark Carbonfox palette for selected supported applications; overrides adaptive-theme.
+    kind: surface
+    status: current
   adaptive-theme:
     description: Opt-in adaptive-theme marker and supported app-specific sources or fragments.
     kind: surface
@@ -791,6 +795,8 @@ entries:
       - darwin
       - linux
   - source: configs/tuicr/config.toml
+    source_overrides:
+      theme-carbonfox: configs/tuicr/config-carbonfox.toml
     target: ~/.config/tuicr/config.toml
     strategy: copy
     ownership: toml-subset
@@ -822,6 +828,8 @@ entries:
       - darwin
       - linux
   - source: configs/starship/starship.toml
+    source_overrides:
+      theme-carbonfox: configs/starship/starship-carbonfox.toml
     target: ~/.config/starship.toml
     strategy: symlink
     tags:
@@ -857,6 +865,7 @@ entries:
         pacman: tmux
   - source: configs/herdr/config.toml
     source_overrides:
+      theme-carbonfox: configs/herdr/config-carbonfox.toml
       adaptive-theme: configs/herdr/config-adaptive.toml
     target: ~/.config/herdr/config.toml
     strategy: copy
@@ -879,6 +888,7 @@ entries:
       - darwin
   - source: configs/zellij/config.kdl
     source_overrides:
+      theme-carbonfox: configs/zellij/config-carbonfox.kdl
       adaptive-theme: configs/zellij/config-adaptive.kdl
     target: ~/.config/zellij/config.kdl
     strategy: copy
@@ -900,6 +910,8 @@ entries:
             linux_amd64: 0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751
             linux_arm64: 15e6534d42644d66973d136c590c49739dcfd6a1a2a0d3d917973f16c81b45fb
   - source: configs/zellij/layouts/default.kdl
+    source_overrides:
+      theme-carbonfox: configs/zellij/layouts/default-carbonfox.kdl
     target: ~/.config/zellij/layouts/default.kdl
     strategy: symlink
     tags:
@@ -920,6 +932,8 @@ entries:
             linux_amd64: 0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751
             linux_arm64: 15e6534d42644d66973d136c590c49739dcfd6a1a2a0d3d917973f16c81b45fb
   - source: configs/ghostty/config.ghostty
+    source_overrides:
+      theme-carbonfox: configs/ghostty/config-carbonfox.ghostty
     target: ~/.config/ghostty/config.ghostty
     strategy: symlink
     tags:
@@ -947,6 +961,8 @@ entries:
     os:
       - darwin
   - source: configs/warp/settings.toml
+    source_overrides:
+      theme-carbonfox: configs/warp/settings-carbonfox.toml
     target: ~/.warp/settings.toml
     strategy: copy
     tags:
@@ -961,6 +977,8 @@ entries:
     os:
       - darwin
   - source: configs/warp/settings.toml
+    source_overrides:
+      theme-carbonfox: configs/warp/settings-carbonfox.toml
     target: ~/.config/warp-terminal/settings.toml
     strategy: copy
     tags:
@@ -981,6 +999,8 @@ entries:
       - name: Warp
         command: warp-terminal
   - source: configs/atuin/config.toml
+    source_overrides:
+      theme-carbonfox: configs/atuin/config-carbonfox.toml
     target: ~/.config/atuin/config.toml
     strategy: copy
     ownership: toml-subset
@@ -1020,6 +1040,8 @@ entries:
             linux_amd64: 5c41e20c0130ac84fa4bfa42c19bb55a07855838506063caad0d2922593b39be
             linux_arm64: 9b2b7b41c3587533964ec5ab204b5116200bda39d534619387bcf4f197739b47
   - source: configs/bat/config
+    source_overrides:
+      theme-carbonfox: configs/bat/config-carbonfox
     target: ~/.config/bat/config
     strategy: copy
     tags:
@@ -1081,6 +1103,8 @@ entries:
       - darwin
       - linux
   - source: configs/zed/settings.json
+    source_overrides:
+      theme-carbonfox: configs/zed/settings-carbonfox.json
     target: ~/.config/zed/settings.json
     strategy: copy
     ownership: jsonc-subset
@@ -1119,6 +1143,8 @@ entries:
         command: zed
         brew: zed
   - source: configs/claude/settings.json
+    source_overrides:
+      theme-carbonfox: configs/claude/settings-carbonfox.json
     target: ~/.claude/settings.json
     strategy: copy
     ownership: json-subset
@@ -1220,7 +1246,126 @@ entries:
     dependencies:
       - name: opencode
         command: opencode
+  - source: configs/dots/theme-carbonfox
+    target: ~/.config/dots/theme-carbonfox
+    strategy: symlink
+    tags:
+      - theme-carbonfox
+    os:
+      - darwin
+      - linux
+  - source: configs/tmux/carbonfox.conf
+    target: ~/.config/tmux/carbonfox.conf
+    strategy: symlink
+    tags:
+      - tmux
+    os:
+      - darwin
+      - linux
+  - source: configs/ghostty/themes/Carbonfox
+    target: ~/.config/ghostty/themes/Carbonfox
+    strategy: symlink
+    tags:
+      - ghostty
+    os:
+      - darwin
+      - linux
+  - source: configs/zellij/themes/carbonfox.kdl
+    target: ~/.config/zellij/themes/carbonfox.kdl
+    strategy: symlink
+    tags:
+      - zellij
+    os:
+      - darwin
+      - linux
+  - source: configs/warp/themes/carbonfox/carbonfox.yaml
+    target: ~/.warp/themes/carbonfox/carbonfox.yaml
+    strategy: symlink
+    tags:
+      - warp
+    os:
+      - darwin
+  - source: configs/warp/themes/carbonfox/carbonfox.yaml
+    target: ~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml
+    strategy: symlink
+    tags:
+      - warp
+    os:
+      - linux
+  - source: configs/atuin/themes/carbonfox.toml
+    target: ~/.config/atuin/themes/carbonfox.toml
+    strategy: symlink
+    tags:
+      - atuin
+    os:
+      - darwin
+      - linux
+  - source: configs/themes/carbonfox.tmTheme
+    target: ~/.config/bat/themes/Carbonfox.tmTheme
+    strategy: copy
+    tags:
+      - bat
+      - zsh
+    os:
+      - darwin
+      - linux
+  - source: configs/tuicr/themes/carbonfox.toml
+    target: ~/.config/tuicr/themes/carbonfox.toml
+    strategy: symlink
+    tags:
+      - tuicr
+    os:
+      - darwin
+      - linux
+  - source: configs/themes/carbonfox.tmTheme
+    target: ~/.config/tuicr/themes/carbonfox.tmTheme
+    strategy: symlink
+    tags:
+      - tuicr
+    os:
+      - darwin
+      - linux
+  - source: configs/zed/themes/carbonfox.json
+    target: ~/.config/zed/themes/carbonfox.json
+    strategy: symlink
+    tags:
+      - zed
+    os:
+      - darwin
+      - linux
+  - source: configs/claude/themes/carbonfox.json
+    target: ~/.claude/themes/carbonfox.json
+    strategy: copy
+    tags:
+      - claude
+    os:
+      - darwin
+      - linux
 provisioners:
+  - tool: bat
+    tags:
+      - bat
+      - zsh
+    required_tags:
+      - theme-carbonfox
+    os:
+      - darwin
+      - linux
+    spec:
+      cache: build
+    dependencies:
+      - name: bat
+        command: bat
+        brew: bat
+        linux_homebrew: true
+        dnf: bat
+        pacman: bat
+        user_local:
+          recipe: bat
+          version: v0.26.1
+          checksums:
+            linux_amd64: 726f04c8f576a7fd18b7634f1bbf2f915c43494c1c0f013baa3287edb0d5a2a3
+            linux_arm64: 422eb73e11c854fddd99f5ca8461c2f1d6e6dce0a2a8c3d5daade5ffcb6564aa
   - tool: herdr
     tags: [herdr]
     os: [darwin]

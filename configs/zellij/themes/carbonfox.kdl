@@ -1,0 +1,123 @@
+// Carbonfox for Zellij, adapted from Nightfox.
+// Upstream revision: 4dacd3f0185a2227bdf3b6c0975a8f0bf87cac9a
+// License: ../../themes/LICENSE-nightfox
+themes {
+    carbonfox {
+        text_unselected {
+            base 182 184 187
+            background 37 37 37
+            emphasis_0 90 224 223
+            emphasis_1 82 189 255
+            emphasis_2 37 190 106
+            emphasis_3 190 149 255
+        }
+        text_selected {
+            base 242 244 248
+            background 82 82 83
+            emphasis_0 90 224 223
+            emphasis_1 82 189 255
+            emphasis_2 37 190 106
+            emphasis_3 190 149 255
+        }
+        ribbon_selected {
+            base 22 22 22
+            background 120 169 255
+            emphasis_0 238 83 150
+            emphasis_1 61 219 217
+            emphasis_2 190 149 255
+            emphasis_3 51 177 255
+        }
+        ribbon_unselected {
+            base 22 22 22
+            background 182 184 187
+            emphasis_0 238 83 150
+            emphasis_1 110 111 112
+            emphasis_2 120 169 255
+            emphasis_3 190 149 255
+        }
+        table_title {
+            base 37 190 106
+            background 12 12 12
+            emphasis_0 61 219 217
+            emphasis_1 51 177 255
+            emphasis_2 37 190 106
+            emphasis_3 190 149 255
+        }
+        table_cell_selected {
+            base 242 244 248
+            background 42 42 42
+            emphasis_0 90 224 223
+            emphasis_1 82 189 255
+            emphasis_2 37 190 106
+            emphasis_3 190 149 255
+        }
+        table_cell_unselected {
+            base 182 184 187
+            background 37 37 37
+            emphasis_0 61 219 217
+            emphasis_1 51 177 255
+            emphasis_2 37 190 106
+            emphasis_3 190 149 255
+        }
+        list_selected {
+            base 242 244 248
+            background 42 42 42
+            emphasis_0 90 224 223
+            emphasis_1 82 189 255
+            emphasis_2 37 190 106
+            emphasis_3 190 149 255
+        }
+        list_unselected {
+            base 182 184 187
+            background 37 37 37
+            emphasis_0 61 219 217
+            emphasis_1 51 177 255
+            emphasis_2 37 190 106
+            emphasis_3 190 149 255
+        }
+        frame_selected {
+            base 37 190 106
+            background 12 12 12
+            emphasis_0 90 224 223
+            emphasis_1 82 189 255
+            emphasis_2 190 149 255
+            emphasis_3 123 124 126
+        }
+        frame_highlight {
+            base 61 219 217
+            background 12 12 12
+            emphasis_0 190 149 255
+            emphasis_1 90 224 223
+            emphasis_2 255 126 182
+            emphasis_3 241 109 166
+        }
+        exit_code_success {
+            base 37 190 106
+            background 12 12 12
+            emphasis_0 51 177 255
+            emphasis_1 37 37 37
+            emphasis_2 190 149 255
+            emphasis_3 120 169 255
+        }
+        exit_code_error {
+            base 238 83 150
+            background 12 12 12
+            emphasis_0 8 189 186
+            emphasis_1 123 124 126
+            emphasis_2 255 126 182
+            emphasis_3 241 109 166
+        }
+        multiplayer_user_colors {
+            player_1 190 149 255
+            player_2 120 169 255
+            player_3 51 177 255
+            player_4 8 189 186
+            player_5 61 219 217
+            player_6 37 190 106
+            player_7 238 83 150
+            player_8 255 126 182
+            player_9 110 111 112
+            player_10 182 184 187
+        }
+    }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code statusLine — plain text + Catppuccin adaptive palette
+# Claude Code statusLine — plain text + dots-managed palette
 
 input=$(cat)
 
@@ -13,9 +13,13 @@ seven_d_resets=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empt
 vim_mode=$(echo "$input" | jq -r '.vim.mode // ""')
 perm_mode=$(echo "$input" | jq -r '.permission_mode // .permissionMode // ""')
 
-# Catppuccin palette. Latte is used only when the adaptive-theme marker is
-# installed and macOS reports light appearance; otherwise Mocha is the fallback.
-if [ -r "$HOME/.config/dots/theme.sh" ]; then
+# Carbonfox wins when its global preference marker is installed. Otherwise the
+# existing adaptive Catppuccin helper and Mocha fallback remain unchanged.
+if [ -r "$HOME/.config/dots/theme-carbonfox" ]; then
+  # shellcheck source=/dev/null
+  . "$HOME/.config/dots/theme-carbonfox"
+  dots_apply_carbonfox_ansi_palette
+elif [ -r "$HOME/.config/dots/theme.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOME/.config/dots/theme.sh"
   dots_apply_catppuccin_ansi_palette

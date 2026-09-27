@@ -125,6 +125,41 @@ func TestPlanResolvesSelectedProvisioners(t *testing.T) {
 	}
 }
 
+func TestPlanRendersExactBatCacheOperation(t *testing.T) {
+	bat := manifest.Provisioner{
+		Tool: "bat", Tags: []string{"bat", "zsh"}, RequiredTags: []string{"theme-carbonfox"},
+		Spec: manifest.ProvisionerSpec{Cache: "build"},
+	}
+	m := manifestWithProvisioners(bat)
+	selection := manifest.Selection{Tags: []string{"zsh", "theme-carbonfox"}}
+	p, err := provision.Build(m, provision.Options{Selection: &selection, OS: "linux", Arch: "amd64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Steps) != 1 {
+		t.Fatalf("steps = %#v, want one bat cache step", p.Steps)
+	}
+	step := p.Steps[0]
+	if step.Executable != "bat" || !reflect.DeepEqual(step.Args, []string{"cache", "--build"}) {
+		t.Fatalf("bat command = %q %#v", step.Executable, step.Args)
+	}
+	if !reflect.DeepEqual(step.Targets, []string{"~/.cache/bat/metadata.yaml", "~/.cache/bat/syntaxes.bin", "~/.cache/bat/themes.bin"}) {
+		t.Fatalf("bat targets = %#v", step.Targets)
+	}
+	if !reflect.DeepEqual(step.RequiredTags, []string{"theme-carbonfox"}) {
+		t.Fatalf("bat required tags = %#v", step.RequiredTags)
+	}
+
+	selection.Tags = []string{"zsh"}
+	withoutPreference, err := provision.Build(m, provision.Options{Selection: &selection, OS: "linux", Arch: "amd64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withoutPreference.Steps) != 0 {
+		t.Fatalf("steps without required theme = %#v", withoutPreference.Steps)
+	}
+}
+
 func TestBuildProfileAndEquivalentExplicitTagsProduceSameSteps(t *testing.T) {
 	core := manifest.Provisioner{Tool: "zimfw", Tags: []string{"core"}, Spec: manifest.ProvisionerSpec{Yes: true}}
 	desktop := manifest.Provisioner{Tool: "claude", Tags: []string{"desktop"}, OS: []string{"darwin"}, Spec: manifest.ProvisionerSpec{Marketplace: "example/tools"}}

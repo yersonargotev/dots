@@ -1,6 +1,7 @@
-// Package selectionretirement applies the filesystem and Installation Metadata
-// effects of explicit selection reductions. It deliberately handles only whole
-// Managed Entry retirement; shared-ownership subtraction belongs to the
+// Package selectionretirement validates explicit selection transitions and
+// applies the filesystem and Installation Metadata effects of reductions. It
+// deliberately handles only whole Managed Entry retirement; shared-ownership
+// subtraction and still-selected target updates belong to the forward
 // ownership-specific reconciliation flow.
 package selectionretirement
 
@@ -12,6 +13,7 @@ import (
 	"reflect"
 
 	"github.com/yersonargotev/dots/internal/configsubset"
+	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/ownershipevidence"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/selectionreconciliation"
@@ -37,8 +39,21 @@ type Action struct {
 
 // Plan is a validated, deterministic sequence of retirement effects.
 type Plan struct {
-	Actions []Action `json:"actions"`
-	records map[string]state.Record
+	Actions                    []Action `json:"actions"`
+	records                    map[string]state.Record
+	symlinkTransitions         []symlinkTransitionAuthority
+	expectedInstalledSelection *state.InstalledSelection
+	home                       string
+}
+
+type symlinkTransitionAuthority struct {
+	target                  string
+	previousSources         []string
+	currentSources          []string
+	recordFingerprint       string
+	expectedLinkDestination string
+	forwardAction           plan.Action
+	requiresReplace         bool
 }
 
 // Result distinguishes targets deleted by dots from targets preserved while
@@ -48,7 +63,8 @@ type Result struct {
 	Retained []string `json:"retained"`
 }
 
-// Build validates every Managed Entry retirement before returning a plan. It
+// Build validates every Managed Entry retirement and any explicit Replace
+// requirement for an owned symlink source switch before returning a plan. It
 // performs no mutation.
 func Build(report selectionreconciliation.Report, meta state.Metadata, opts Options) (Plan, error) {
 	home, err := cleanAbs(opts.Home)
@@ -62,19 +78,31 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 		return Plan{}, fmt.Errorf("build selection retirement: source root is required")
 	}
 
-	result := Plan{Actions: make([]Action, 0), records: make(map[string]state.Record)}
+	result := Plan{
+		Actions:                    make([]Action, 0),
+		records:                    make(map[string]state.Record),
+		symlinkTransitions:         make([]symlinkTransitionAuthority, 0),
+		expectedInstalledSelection: cloneInstalledSelection(meta.InstalledSelection),
+		home:                       home,
+	}
 	if report.RequestedIntent.Authority != selectionreconciliation.AuthorityExplicitRequest {
 		return result, nil
 	}
-	if !hasSelectionReduction(report.Actions) {
-		return result, nil
-	}
+	selectionReduction := hasSelectionReduction(report.Actions)
 	seen := make(map[string]bool)
+	seenTransition := make(map[string]bool)
 	for _, action := range report.Actions {
 		if action.Scope != selectionreconciliation.ScopeManagedEntry || !retiresSource(action.PreviousSources, action.CurrentSources) {
 			continue
 		}
 		if action.Reason == selectionreconciliation.ReasonManifestEvolution {
+			continue
+		}
+		// Addition-only source changes normally belong entirely to the forward
+		// installer. The one exception is a whole-owned symlink conflict: its
+		// existing Replace path needs explicit authorization before the broader
+		// selection can be committed.
+		if !selectionReduction && !forwardSymlinkTransition(action.ResolvedTarget, opts.ForwardPlan) {
 			continue
 		}
 		rec, recorded := meta.FindByTarget(action.ResolvedTarget)
@@ -87,8 +115,16 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 				if !recorded {
 					return Plan{}, fmt.Errorf("build selection retirement for %s: installation metadata record is required for partial retirement", action.ResolvedTarget)
 				}
-				if err := validateForwardReconciliation(action, rec, opts.ForwardPlan); err != nil {
+				transition, err := validateForwardReconciliation(action, rec, opts.ForwardPlan, opts.SourceRoot)
+				if err != nil {
 					return Plan{}, fmt.Errorf("build selection retirement for %s: %w", action.ResolvedTarget, err)
+				}
+				if transition != nil && !seenTransition[action.ResolvedTarget] {
+					if err := validateTarget(action.ResolvedTarget, home); err != nil {
+						return Plan{}, fmt.Errorf("build selection retirement for %s: %w", action.ResolvedTarget, err)
+					}
+					result.symlinkTransitions = append(result.symlinkTransitions, *transition)
+					seenTransition[action.ResolvedTarget] = true
 				}
 				// The forward Managed Entry plan owns still-selected targets. Its
 				// ownership-specific update also replaces contribution evidence at
@@ -98,6 +134,9 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 			default:
 				return Plan{}, fmt.Errorf("build selection retirement for %s: partial retirement outcome %q is unsafe: %s", action.ResolvedTarget, action.Outcome, action.Reason)
 			}
+		}
+		if !selectionReduction {
+			continue
 		}
 		if action.ResolvedTarget == "" {
 			return Plan{}, fmt.Errorf("build selection retirement: managed entry target is required")
@@ -136,9 +175,72 @@ func Build(report selectionreconciliation.Report, meta state.Metadata, opts Opti
 	return result, nil
 }
 
-func validateForwardReconciliation(action selectionreconciliation.Action, record state.Record, forward *plan.Plan) error {
+func forwardSymlinkTransition(target string, forward *plan.Plan) bool {
 	if forward == nil {
-		return fmt.Errorf("forward plan is required for partial retirement")
+		return false
+	}
+	count := 0
+	transition := false
+	for _, action := range forward.Actions {
+		if action.Target != target {
+			continue
+		}
+		count++
+		transition = action.Strategy == "symlink" && normalizedOwnership(action.Ownership) == "whole"
+	}
+	return count == 1 && transition
+}
+
+// AuthorizeSymlinkTransitions revalidates the detached authority for every
+// symlink source switch against fresh Installation Metadata, the current
+// forward plan, the live target, and the operator's actual Conflict Resolution
+// decisions. Callers run it after resolving conflicts and immediately before
+// any dependency or filesystem effect.
+func (p Plan) AuthorizeSymlinkTransitions(meta state.Metadata, forward *plan.Plan, decisions map[string]install.ConflictDecision) error {
+	if len(p.symlinkTransitions) == 0 {
+		return nil
+	}
+	if !reflect.DeepEqual(meta.InstalledSelection, p.expectedInstalledSelection) {
+		return fmt.Errorf("authorize selection symlink transition: Installed Selection changed after planning")
+	}
+	for _, authority := range p.symlinkTransitions {
+		if authority.requiresReplace && decisions[authority.target] != install.DecisionReplace {
+			return fmt.Errorf("selection source switch for %s requires Conflict Resolution Replace; choose Replace interactively or rerun with --backup-and-replace", authority.target)
+		}
+		record, ok := meta.FindByTarget(authority.target)
+		if !ok {
+			return fmt.Errorf("authorize selection symlink transition for %s: installation metadata record disappeared", authority.target)
+		}
+		fingerprint, err := state.RecordEvidenceFingerprint(record)
+		if err != nil || fingerprint != authority.recordFingerprint || !reflect.DeepEqual(record.SourceList(), authority.previousSources) {
+			return fmt.Errorf("authorize selection symlink transition for %s: exact recorded contribution authority changed", authority.target)
+		}
+		matched, err := exactForwardAction(forward, authority.target)
+		if err != nil {
+			return fmt.Errorf("authorize selection symlink transition for %s: %w", authority.target, err)
+		}
+		if !reflect.DeepEqual(forwardActionSources(*matched), authority.currentSources) {
+			return fmt.Errorf("authorize selection symlink transition for %s: ordered forward sources changed after planning", authority.target)
+		}
+		if authority.requiresReplace && (matched.Status != plan.StatusConflict || matched.Strategy != "symlink" || normalizedOwnership(matched.Ownership) != "whole" || matched.PreviousRecordFingerprint != authority.recordFingerprint) {
+			return fmt.Errorf("authorize selection symlink transition for %s: forward conflict authority changed after planning", authority.target)
+		}
+		if !reflect.DeepEqual(clonePlanAction(*matched), authority.forwardAction) {
+			return fmt.Errorf("authorize selection symlink transition for %s: forward action changed after planning", authority.target)
+		}
+		if err := validateTarget(authority.target, p.home); err != nil {
+			return fmt.Errorf("authorize selection symlink transition for %s: %w", authority.target, err)
+		}
+		if err := validateLiveSymlink(authority.target, authority.expectedLinkDestination); err != nil {
+			return fmt.Errorf("authorize selection symlink transition for %s: %w", authority.target, err)
+		}
+	}
+	return nil
+}
+
+func validateForwardReconciliation(action selectionreconciliation.Action, record state.Record, forward *plan.Plan, sourceRoot string) (*symlinkTransitionAuthority, error) {
+	if forward == nil {
+		return nil, fmt.Errorf("forward plan is required for partial retirement")
 	}
 	want := plan.StatusUnchanged
 	switch action.Outcome {
@@ -149,52 +251,175 @@ func validateForwardReconciliation(action selectionreconciliation.Action, record
 	case selectionreconciliation.OutcomePreserve:
 		want = plan.StatusUnchanged
 	}
-	var matched *plan.Action
-	for i := range forward.Actions {
-		candidate := &forward.Actions[i]
-		if candidate.Target != action.ResolvedTarget {
-			continue
-		}
-		if matched != nil {
-			return fmt.Errorf("forward plan contains duplicate target %s", action.ResolvedTarget)
-		}
-		matched = candidate
+	matched, err := exactForwardAction(forward, action.ResolvedTarget)
+	if err != nil {
+		return nil, err
 	}
-	if matched == nil {
-		return fmt.Errorf("forward action is required for partial retirement")
-	}
-	if matched.Status != want {
-		return fmt.Errorf("forward action status %q does not implement safe outcome %q", matched.Status, action.Outcome)
+	requiresReplace := action.Outcome == selectionreconciliation.OutcomeUpdate && matched.Status == plan.StatusConflict &&
+		matched.Strategy == "symlink" && normalizedOwnership(matched.Ownership) == "whole"
+	if matched.Status != want && !requiresReplace {
+		return nil, fmt.Errorf("forward action status %q does not implement safe outcome %q", matched.Status, action.Outcome)
 	}
 	currentSources := []string{matched.Source}
 	if len(matched.Sources) > 0 {
 		currentSources = matched.Sources
 	}
 	if !reflect.DeepEqual(currentSources, action.CurrentSources) {
-		return fmt.Errorf("forward action sources %v do not match reconciliation sources %v", currentSources, action.CurrentSources)
+		return nil, fmt.Errorf("forward action sources %v do not match reconciliation sources %v", currentSources, action.CurrentSources)
 	}
 	if !reflect.DeepEqual(record.SourceList(), action.PreviousSources) {
-		return fmt.Errorf("recorded sources %v do not match reconciliation evidence %v", record.SourceList(), action.PreviousSources)
+		return nil, fmt.Errorf("recorded sources %v do not match reconciliation evidence %v", record.SourceList(), action.PreviousSources)
 	}
 	if matched.Strategy != record.Strategy || normalizedOwnership(matched.Ownership) != normalizedOwnership(record.Ownership) {
-		return fmt.Errorf("forward action mode %s/%s does not match recorded mode %s/%s", matched.Strategy, normalizedOwnership(matched.Ownership), record.Strategy, normalizedOwnership(record.Ownership))
+		return nil, fmt.Errorf("forward action mode %s/%s does not match recorded mode %s/%s", matched.Strategy, normalizedOwnership(matched.Ownership), record.Strategy, normalizedOwnership(record.Ownership))
 	}
 	if len(matched.Contributions) != len(action.CurrentSources) {
-		return fmt.Errorf("forward action has %d contribution identities for %d current sources", len(matched.Contributions), len(action.CurrentSources))
+		return nil, fmt.Errorf("forward action has %d contribution identities for %d current sources", len(matched.Contributions), len(action.CurrentSources))
 	}
 	for i, contribution := range matched.Contributions {
 		if contribution.Source != action.CurrentSources[i] {
-			return fmt.Errorf("forward contribution source %q does not match reconciliation source %q", contribution.Source, action.CurrentSources[i])
+			return nil, fmt.Errorf("forward contribution source %q does not match reconciliation source %q", contribution.Source, action.CurrentSources[i])
 		}
 	}
 	recordFingerprint, err := state.RecordEvidenceFingerprint(record)
 	if err != nil || matched.PreviousRecordFingerprint == "" || matched.PreviousRecordFingerprint != recordFingerprint {
-		return fmt.Errorf("forward action is not bound to the exact recorded contribution authority")
+		return nil, fmt.Errorf("forward action is not bound to the exact recorded contribution authority")
 	}
-	if want == plan.StatusUpdate && !matchesPreviousEvidence(*matched, record, action.PreviousSources) {
-		return fmt.Errorf("forward update does not carry the exact recorded previous contribution evidence")
+	var expectedLinkDestination string
+	if requiresReplace {
+		expectedLinkDestination, err = validateSymlinkReplacement(action, record, sourceRoot)
+		if err != nil {
+			return nil, err
+		}
+	} else if want == plan.StatusUpdate && !matchesPreviousEvidence(*matched, record, action.PreviousSources) {
+		return nil, fmt.Errorf("forward update does not carry the exact recorded previous contribution evidence")
+	} else if matched.Strategy == "symlink" && normalizedOwnership(matched.Ownership) == "whole" && action.Outcome == selectionreconciliation.OutcomePreserve {
+		if err := validateExactSymlinkContribution(record, action.PreviousSources); err != nil {
+			return nil, err
+		}
+		if len(action.CurrentSources) != 1 {
+			return nil, fmt.Errorf("forward symlink transition requires exactly one current source")
+		}
+		expectedLinkDestination, err = plan.ResolveSource(action.CurrentSources[0], sourceRoot)
+		if err != nil {
+			return nil, fmt.Errorf("resolve current symlink source: %w", err)
+		}
+		if err := validateLiveSymlink(action.ResolvedTarget, expectedLinkDestination); err != nil {
+			return nil, err
+		}
+	}
+	if expectedLinkDestination == "" {
+		return nil, nil
+	}
+	return &symlinkTransitionAuthority{
+		target:                  action.ResolvedTarget,
+		previousSources:         append([]string(nil), action.PreviousSources...),
+		currentSources:          append([]string(nil), action.CurrentSources...),
+		recordFingerprint:       recordFingerprint,
+		expectedLinkDestination: expectedLinkDestination,
+		forwardAction:           clonePlanAction(*matched),
+		requiresReplace:         requiresReplace,
+	}, nil
+}
+
+func validateSymlinkReplacement(action selectionreconciliation.Action, record state.Record, sourceRoot string) (string, error) {
+	if err := validateExactSymlinkContribution(record, action.PreviousSources); err != nil {
+		return "", err
+	}
+	expected, err := plan.ResolveSource(action.PreviousSources[0], sourceRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve previous symlink source: %w", err)
+	}
+	if err := validateLiveSymlink(action.ResolvedTarget, expected); err != nil {
+		return "", err
+	}
+	return expected, nil
+}
+
+func validateExactSymlinkContribution(record state.Record, previousSources []string) error {
+	if len(previousSources) != 1 || record.Strategy != "symlink" || normalizedOwnership(record.Ownership) != "whole" || len(record.Contributions) != 1 {
+		return fmt.Errorf("forward symlink replacement lacks exact previous contribution evidence")
+	}
+	contribution := record.Contributions[0]
+	if contribution.Source != previousSources[0] || contribution.Ownership != "whole" || !contribution.EvidenceRecorded {
+		return fmt.Errorf("forward symlink replacement lacks exact previous contribution evidence")
 	}
 	return nil
+}
+
+func validateLiveSymlink(target, expected string) error {
+	info, err := os.Lstat(target)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return fmt.Errorf("forward symlink replacement target is no longer the exact previous link")
+	}
+	destination, err := os.Readlink(target)
+	if err != nil || filepath.Clean(destination) != filepath.Clean(expected) {
+		return fmt.Errorf("forward symlink replacement target is no longer the exact previous link")
+	}
+	return nil
+}
+
+func exactForwardAction(forward *plan.Plan, target string) (*plan.Action, error) {
+	if forward == nil {
+		return nil, fmt.Errorf("forward plan is required for partial retirement")
+	}
+	var matched *plan.Action
+	for i := range forward.Actions {
+		candidate := &forward.Actions[i]
+		if candidate.Target != target {
+			continue
+		}
+		if matched != nil {
+			return nil, fmt.Errorf("forward plan contains duplicate target %s", target)
+		}
+		matched = candidate
+	}
+	if matched == nil {
+		return nil, fmt.Errorf("forward action is required for partial retirement")
+	}
+	return matched, nil
+}
+
+func forwardActionSources(action plan.Action) []string {
+	if len(action.Sources) > 0 {
+		return append([]string(nil), action.Sources...)
+	}
+	return []string{action.Source}
+}
+
+func cloneInstalledSelection(installed *state.InstalledSelection) *state.InstalledSelection {
+	if installed == nil {
+		return nil
+	}
+	cloned := *installed
+	cloned.Profiles = append([]string(nil), installed.Profiles...)
+	cloned.ExtraTags = append([]string(nil), installed.ExtraTags...)
+	cloned.ResolvedTags = append([]string(nil), installed.ResolvedTags...)
+	return &cloned
+}
+
+func clonePlanAction(action plan.Action) plan.Action {
+	cloned := action
+	cloned.Sources = append([]string(nil), action.Sources...)
+	cloned.ResolvedSources = append([]string(nil), action.ResolvedSources...)
+	cloned.Contributions = append([]plan.Contribution(nil), action.Contributions...)
+	for index := range cloned.Contributions {
+		cloned.Contributions[index].SelectorTags = append([]string(nil), action.Contributions[index].SelectorTags...)
+	}
+	cloned.Content = append([]byte(nil), action.Content...)
+	cloned.PreviousContent = append([]byte(nil), action.PreviousContent...)
+	cloned.MatchingTags = append([]string(nil), action.MatchingTags...)
+	cloned.PreviousReconciliationReceipt = action.PreviousReconciliationReceipt.Clone()
+	if action.Migration != nil {
+		migration := *action.Migration
+		migration.CapturedContent = append([]byte(nil), action.Migration.CapturedContent...)
+		migration.PreviousSourceContent = append([]byte(nil), action.Migration.PreviousSourceContent...)
+		migration.ExpectedLinkContent = append([]byte(nil), action.Migration.ExpectedLinkContent...)
+		migration.FinalContent = append([]byte(nil), action.Migration.FinalContent...)
+		migration.RecordedBaseline = append([]byte(nil), action.Migration.RecordedBaseline...)
+		cloned.Migration = &migration
+	}
+	return cloned
 }
 
 func normalizedOwnership(ownership string) string {

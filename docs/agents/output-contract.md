@@ -351,3 +351,12 @@ Renaming, removing, or changing the meaning of an existing field is a
 (`TestEnvelopeGolden`). Adding a portable, optional field to an existing report is
 schema-compatible and keeps the current `schema_version`, but it must update the
 matching JSON golden so agent-visible shape changes stay reviewable.
+
+### Conditional Provisioner catalog field
+
+Catalog Provisioner objects may include `required_tags`, an array of exact Tag
+names that must all be selected in addition to the ordinary any-match `tags`
+condition. It is omitted when empty. This optional additive field does not
+change the envelope schema version or persisted Provisioner receipt identity.
+The Carbonfox bat cache action reports tool `bat`, operation `cache`, name
+`Carbonfox`, and the native command intent `bat cache --build`.

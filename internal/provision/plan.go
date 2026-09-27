@@ -26,11 +26,12 @@ type Options struct {
 // plus the HOME-relative roots the tool will affect, shown so the user can judge
 // the blast radius before confirming.
 type Step struct {
-	Tool        string   `json:"tool"`
-	Executable  string   `json:"executable"`
-	Args        []string `json:"args"`
-	Targets     []string `json:"targets"`
-	GlobalTools []string `json:"global_tools,omitempty"`
+	Tool         string   `json:"tool"`
+	Executable   string   `json:"executable"`
+	Args         []string `json:"args"`
+	Targets      []string `json:"targets"`
+	RequiredTags []string `json:"required_tags,omitempty"`
+	GlobalTools  []string `json:"global_tools,omitempty"`
 }
 
 // Plan is the preview of Provisioner steps the installer would run for a
@@ -140,11 +141,12 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 	for _, prov := range selected {
 		executable, args := RenderCommand(prov)
 		plan.Steps = append(plan.Steps, Step{
-			Tool:        prov.Tool,
-			Executable:  executable,
-			Args:        args,
-			Targets:     managedRoots(prov),
-			GlobalTools: globalTools(prov),
+			Tool:         prov.Tool,
+			Executable:   executable,
+			Args:         args,
+			Targets:      managedRoots(prov),
+			RequiredTags: append([]string(nil), prov.RequiredTags...),
+			GlobalTools:  globalTools(prov),
 		})
 	}
 	return plan, nil
@@ -173,6 +175,12 @@ func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Select
 // opencode, and github-copilot write to ~/.agents/skills.
 func managedRoots(prov manifest.Provisioner) []string {
 	switch prov.Tool {
+	case "bat":
+		return []string{
+			"~/.cache/bat/metadata.yaml",
+			"~/.cache/bat/syntaxes.bin",
+			"~/.cache/bat/themes.bin",
+		}
 	case "claude":
 		return []string{"~/.claude", "~/.claude.json"}
 	case "codex":

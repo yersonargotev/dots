@@ -1,0 +1,35 @@
+# Ghostty portable preferences managed by dots.
+#
+# Machine-specific settings such as window dimensions, opacity/blur, shell paths,
+# working directories, and platform integrations live in the optional local file
+# included after the shared defaults below. Ghostty resolves optional includes
+# relative to this file and ignores them when they do not exist.
+
+# Shared font baseline. The Desktop Nerd Font dependency keeps this portable
+# across supported desktop hosts.
+font-family = "Cascadia Code NF"
+font-size = 20
+
+# Keep the baseline theme before the optional adaptive fragment so the fragment
+# remains valid on its own. Carbonfox is reapplied after it to stay dark-only.
+theme = Catppuccin Mocha
+
+# Installed only by `dots install --tag adaptive-theme`; absent by default.
+config-file = ?adaptive-theme.ghostty
+# The user theme file shadows bundled resources and pins the reviewed palette.
+# Keep this after adaptive-theme and before the local extension point.
+theme = Carbonfox
+# Local overrides are loaded last so explicit machine preferences win.
+config-file = ?config.local.ghostty
+
+# Portable keyboard behavior for the terminal workflow.
+# Keep right Option available for macOS character composition while ensuring
+# Herdr and shell Alt bindings receive chords from left Option.
+macos-option-as-alt = left
+keybind = alt+left=unbind
+keybind = alt+right=unbind
+keybind = super+shift+h=esc:H
+keybind = super+shift+j=esc:J
+keybind = super+shift+k=esc:K
+keybind = super+shift+l=esc:L
+keybind = alt+s=write_screen_file:paste

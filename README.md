@@ -82,6 +82,16 @@ Profiles are ordered convenience presets over atomic Tags, so the catalog also
 shows each independently meaningful capability. Select one directly with
 `dots install --tag <tag>`.
 
+Carbonfox is an optional global preference for supported selected applications:
+
+```bash
+dots install --profile workstation --tag theme-carbonfox
+```
+
+Explicit Profile and Tag flags are the complete selection for that invocation.
+See [Carbonfox support and activation](docs/carbonfox-theme.md) for arbitrary
+application Tags, version requirements, reload steps, and removal.
+
 In an interactive terminal, plain `dots install` opens the Tag selector from
 the current initialized Installed Repository. Profile presets can populate the
 draft, but the reviewed result is applied and recorded as an explicit list of
