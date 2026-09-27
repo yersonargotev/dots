@@ -301,7 +301,13 @@ func TestCarbonfoxTmuxReloadRestoresCatppuccinPalette(t *testing.T) {
 		}
 	}
 	config := filepath.Join(home, ".tmux.conf")
-	copyFile(filepath.Join(root, "configs", "tmux", "tmux.conf"), config, 0o644)
+	configBytes, err := os.ReadFile(filepath.Join(root, "configs", "tmux", "tmux.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config, tmuxConfigWithoutBindings(t, string(configBytes)), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	copyFile(filepath.Join(root, "configs", "tmux", "carbonfox.conf"), filepath.Join(configDir, "carbonfox.conf"), 0o644)
 	marker := filepath.Join(markerDir, "theme-carbonfox")
 	if err := os.WriteFile(marker, nil, 0o644); err != nil {
@@ -355,6 +361,9 @@ tmux set-option -g @catppuccin_status_uptime 'uptime'
 		t.Fatalf("Carbonfox tmux background = %q", got)
 	}
 	statusRight := run("show-options", "-gqv", "status-right")
+	if statusRight == "" {
+		t.Fatal("tmux status-right was not constructed")
+	}
 	if err := os.Remove(marker); err != nil {
 		t.Fatal(err)
 	}
@@ -365,6 +374,42 @@ tmux set-option -g @catppuccin_status_uptime 'uptime'
 	if got := run("show-options", "-gqv", "status-right"); got != statusRight {
 		t.Fatalf("tmux status layout changed across theme reload\nbefore: %q\nafter:  %q", statusRight, got)
 	}
+}
+
+// Isolate the real theme lifecycle from unrelated bindings such as display-popup
+// -k, which tmux 3.4 cannot parse. Preserve every other byte and directive order.
+func tmuxConfigWithoutBindings(t *testing.T, config string) []byte {
+	t.Helper()
+	var fixture strings.Builder
+	lines := strings.SplitAfter(config, "\n")
+	removed := 0
+	for i := 0; i < len(lines); i++ {
+		fields := strings.Fields(lines[i])
+		if len(fields) == 0 || (fields[0] != "bind" && fields[0] != "bind-key" && fields[0] != "unbind" && fields[0] != "unbind-key") {
+			fixture.WriteString(lines[i])
+			continue
+		}
+
+		removed++
+		depth := strings.Count(lines[i], "{") - strings.Count(lines[i], "}")
+		if depth < 0 {
+			t.Fatalf("tmux binding closes an unopened command block: %q", strings.TrimSpace(lines[i]))
+		}
+		for depth > 0 {
+			i++
+			if i == len(lines) {
+				t.Fatalf("tmux binding has an unterminated command block")
+			}
+			depth += strings.Count(lines[i], "{") - strings.Count(lines[i], "}")
+			if depth < 0 {
+				t.Fatalf("tmux binding closes an unopened command block: %q", strings.TrimSpace(lines[i]))
+			}
+		}
+	}
+	if removed == 0 {
+		t.Fatal("tmux theme fixture did not remove any bindings")
+	}
+	return []byte(fixture.String())
 }
 
 func TestCarbonfoxClaudeSettingsPreserveNonThemeConfiguration(t *testing.T) {
