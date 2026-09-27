@@ -145,12 +145,13 @@ dark Catppuccin; light-mode token contrast remains a limitation.
 
 The expanded sidebar prefers 26 columns and adapts between 18 and 36 columns.
 Herdr uses distinct semantic symbols for blocked, working, done, idle, and
-unknown agent state. The tab row is at the bottom, disappears for a single tab,
-and shows zoom state, server hostname, and 24-hour server-local time on its
-right edge. Panes have no gaps, outer frame, or scrollbar. Herdr's automatic
-split borders remain enabled, so a real split still has one divider while a
-single pane has no frame. The default and adaptive variants own the same layout;
-only their palette behavior differs.
+unknown agent state. The tab row is at the top and stays visible with a single
+tab. Its right edge shows zoom state followed by a command status entry for
+[hardware metrics](#hardware-metrics). The outer window title is the workspace
+name alone, without the machine hostname. Panes have no gaps, outer frame, or
+scrollbar. Herdr's automatic split borders remain enabled, so a real split still
+has one divider while a single pane has no frame. The default, adaptive, and
+Carbonfox variants own the same layout; only their palette behavior differs.
 
 Without plugin metadata, the corresponding tokens and empty lines disappear;
 native first-tab Git values are not silently substituted. A non-Git active pane
@@ -173,6 +174,7 @@ closes when its process exits:
 | `prefix+alt+g` | LazyGit in the focused directory |
 | `prefix+alt+t` | A scratch `$SHELL`, falling back to `/bin/sh` |
 | `prefix+alt+f` | Repository file finder with bat preview |
+| `prefix+alt+m` | macmon hardware monitor |
 
 The file finder resolves the current Git root and falls back to the focused
 directory outside a repository. fd includes hidden files while excluding
@@ -187,6 +189,38 @@ Every workflow checks its commands before starting. A missing command prints a
 short error inside the popup and waits for Enter; it does not install software
 or access the network. `dots deps check --tag herdr` reports missing declared
 tools before launch, while the runtime checks keep `--skip-deps` behavior safe.
+macmon is not a `herdr` Dependency; the hardware monitor popup needs the
+`herdr-metrics` Tag.
+
+## Hardware metrics
+
+The opt-in `herdr-metrics` Tag adds CPU, GPU, and RAM usage to the tab row on
+Apple Silicon macOS. It is not part of any Profile; add it to the selection you
+intend to retain:
+
+```sh
+dots install --profile workstation --tag herdr-metrics
+```
+
+The Tag installs Homebrew `macmon` and a dots-owned status script at
+`~/.config/herdr/status.sh`. Every five seconds Herdr runs the script, which
+takes one `macmon pipe -s 1` sample and prints a single unstyled line such as
+`CPU 9% GPU 4% RAM 19.5GiB`. CPU and GPU use macmon's active residency ratios;
+RAM is the used memory in GiB. The status entry has a two-second timeout.
+
+The `herdr` Tag owns the tab-row entry and the `prefix+alt+m` popup in every
+theme variant, so they are present even without `herdr-metrics`. A missing
+script, missing `macmon`, failed sample, malformed output, or timeout makes the
+script print nothing, and Herdr clears the entry instead of showing an error.
+The popup explains that macmon is required and waits for Enter.
+
+macmon is declared `optional`, so a missing or unavailable formula never blocks
+Managed Configuration. The Homebrew formula supports Apple Silicon only; on
+Intel Macs the Tag still installs the script, dependency checks report macmon
+as missing, and the status entry stays empty. The Tag selects nothing on Linux.
+Selecting `herdr-metrics` without `herdr` installs only the script and macmon,
+with no visible Herdr change. Deselecting the Tag stops managing the script but
+does not uninstall macmon.
 
 ## Ownership and rollback
 
