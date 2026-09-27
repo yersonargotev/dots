@@ -32,10 +32,14 @@ pane_borders = "auto"
 pane_outer_borders = false
 pane_scrollbars = false
 pane_gaps = false
-hide_tab_bar_when_single_tab = true
+hide_tab_bar_when_single_tab = false
 tab_bar_position = "top"
+window_title = "{workspace}"
+# The herdr-metrics Tag installs status.sh and macmon. Without them Herdr
+# clears this entry, so the status area stays empty instead of showing errors.
 tab_bar_right = [
   { type = "zoom" },
+  { type = "command", command = "sh ~/.config/herdr/status.sh", interval_seconds = 5, timeout_seconds = 2 },
 ]
 tab_bar_right_separator = " · "
 status_indicators = "symbols"
@@ -196,4 +200,12 @@ selection=$(fd --hidden --type f --exclude .git --exclude node_modules --exclude
 [ -n "$selection" ] || exit 0
 exec "$@" "$selection"
 ''', description = "find repository file", width = "80%", height = "80%" },
+  { key = "prefix+alt+m", type = "popup", command = '''
+if ! command -v macmon >/dev/null 2>&1; then
+  printf 'dots: macmon is required\nPress Enter to close.\n' >&2
+  IFS= read -r _
+  exit 127
+fi
+exec macmon
+''', description = "open hardware monitor", width = "80%", height = "80%" },
 ]

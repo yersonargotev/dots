@@ -24,6 +24,10 @@ tags:
     description: Herdr terminal configuration and pinned workspace plugins on macOS.
     kind: surface
     status: current
+  herdr-metrics:
+    description: Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS.
+    kind: surface
+    status: current
   zellij:
     description: Zellij terminal workspace configuration and default layout.
     kind: surface
@@ -635,6 +639,15 @@ dependencies:
             linux_amd64: 726f04c8f576a7fd18b7634f1bbf2f915c43494c1c0f013baa3287edb0d5a2a3
             linux_arm64: 422eb73e11c854fddd99f5ca8461c2f1d6e6dce0a2a8c3d5daade5ffcb6564aa
   - tags:
+      - herdr-metrics
+    os:
+      - darwin
+    dependencies:
+      - name: macmon
+        command: macmon
+        brew: macmon
+        requirement: optional
+  - tags:
       - gh
     os:
       - darwin
@@ -884,6 +897,13 @@ entries:
     ownership: toml-subset
     tags:
       - herdr
+    os:
+      - darwin
+  - source: configs/herdr/status.sh
+    target: ~/.config/herdr/status.sh
+    strategy: copy
+    tags:
+      - herdr-metrics
     os:
       - darwin
   - source: configs/zellij/config.kdl

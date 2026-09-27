@@ -138,6 +138,7 @@ from compact discovery unless `--all` is supplied.
 | `git` | surface | current | Portable Git configuration and native Git entrypoint. |  |
 | `go` | surface | current | Go language toolchain. |  |
 | `herdr` | surface | current | Herdr terminal configuration and pinned workspace plugins on macOS. |  |
+| `herdr-metrics` | surface | current | Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS. |  |
 | `jq` | surface | current | jq command-line JSON processor. |  |
 | `lazygit` | surface | current | Lazygit terminal interface for Git. |  |
 | `mobile` | compatibility | legacy | Legacy Mobile workbench alias; use the atomic mobile capability Tags. | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `antigravity-dart-mcp`, `vscode-mobile` |
@@ -377,6 +378,7 @@ Current Managed Entries:
 | `configs/starship/starship.toml` | `~/.config/starship.toml` | `symlink` | `starship` | `darwin`, `linux` | `starship` |
 | `configs/tmux/tmux.conf` | `~/.tmux.conf` | `symlink` | `tmux` | `darwin`, `linux` | `tmux` |
 | `configs/herdr/config.toml` (`adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` | `herdr` | `darwin` | `herdr`; owns TOML subset |
+| `configs/herdr/status.sh` | `~/.config/herdr/status.sh` | `copy` | `herdr-metrics` | `darwin` | None; Tag-scoped optional `macmon` |
 | `configs/zellij/config.kdl` (`adaptive-theme` override: `configs/zellij/config-adaptive.kdl`) | `~/.config/zellij/config.kdl` | `copy` | `zellij` | `darwin`, `linux` | `zellij`; whole-target ownership |
 | `configs/zellij/layouts/default.kdl` | `~/.config/zellij/layouts/default.kdl` | `symlink` | `zellij` | `darwin`, `linux` | `zellij` |
 | `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `ghostty` | `darwin`, `linux` | `ghostty` |
@@ -488,6 +490,7 @@ Current dependency package coverage:
 | `neovim` | `nvim` | `neovim` | User-local / Linuxbrew opt-in/manual | `neovim` | `neovim` |
 | `zed` | `zed` | `zed` | Manual | Manual | Manual |
 | `jq` | `jq` | `jq` | `jq` | `jq` | `jq` |
+| `macmon` (optional) | `macmon` | `macmon` (Apple Silicon only) | Not selected | Not selected | Not selected |
 | `OpenCode` | `opencode` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `Antigravity` | `agy` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `Copilot CLI` | `copilot` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |

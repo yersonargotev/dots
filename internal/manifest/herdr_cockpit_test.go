@@ -28,6 +28,7 @@ type herdrCockpitConfig struct {
 		PaneGaps                bool               `toml:"pane_gaps"`
 		HideTabBarWhenSingleTab bool               `toml:"hide_tab_bar_when_single_tab"`
 		TabBarPosition          string             `toml:"tab_bar_position"`
+		WindowTitle             string             `toml:"window_title"`
 		TabBarRight             []herdrTabBarRight `toml:"tab_bar_right"`
 		TabBarRightSeparator    string             `toml:"tab_bar_right_separator"`
 		StatusIndicators        string             `toml:"status_indicators"`
@@ -38,9 +39,14 @@ type herdrCockpitConfig struct {
 }
 
 type herdrTabBarRight struct {
-	Type   string `toml:"type"`
-	Format string `toml:"format"`
+	Type            string `toml:"type"`
+	Format          string `toml:"format"`
+	Command         string `toml:"command"`
+	IntervalSeconds int    `toml:"interval_seconds"`
+	TimeoutSeconds  int    `toml:"timeout_seconds"`
 }
+
+var herdrConfigVariants = []string{"config.toml", "config-adaptive.toml", "config-carbonfox.toml"}
 
 type herdrPopupCommand struct {
 	Key         string `toml:"key"`
@@ -52,7 +58,7 @@ type herdrPopupCommand struct {
 }
 
 func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
-	for _, name := range []string{"config.toml", "config-adaptive.toml"} {
+	for _, name := range herdrConfigVariants {
 		t.Run(name, func(t *testing.T) {
 			config := loadHerdrCockpitConfig(t, name)
 			if got, want := []int{config.UI.SidebarWidth, config.UI.SidebarMinWidth, config.UI.SidebarMaxWidth}, []int{26, 18, 36}; !reflect.DeepEqual(got, want) {
@@ -61,10 +67,16 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 			if config.UI.PaneBorders != "auto" || config.UI.PaneOuterBorders || config.UI.PaneScrollbars || config.UI.PaneGaps {
 				t.Fatalf("pane chrome = borders %q, outer %t, scrollbars %t, gaps %t", config.UI.PaneBorders, config.UI.PaneOuterBorders, config.UI.PaneScrollbars, config.UI.PaneGaps)
 			}
-			if !config.UI.HideTabBarWhenSingleTab || config.UI.TabBarPosition != "top" {
-				t.Fatalf("tab row = hide-single %t, position %q", config.UI.HideTabBarWhenSingleTab, config.UI.TabBarPosition)
+			if config.UI.HideTabBarWhenSingleTab || config.UI.TabBarPosition != "top" {
+				t.Fatalf("tab row = hide-single %t, position %q; want persistent top row", config.UI.HideTabBarWhenSingleTab, config.UI.TabBarPosition)
 			}
-			wantStatus := []herdrTabBarRight{{Type: "zoom"}}
+			if config.UI.WindowTitle != "{workspace}" {
+				t.Fatalf("window title = %q, want workspace only", config.UI.WindowTitle)
+			}
+			wantStatus := []herdrTabBarRight{
+				{Type: "zoom"},
+				{Type: "command", Command: "sh ~/.config/herdr/status.sh", IntervalSeconds: 5, TimeoutSeconds: 2},
+			}
 			if !reflect.DeepEqual(config.UI.TabBarRight, wantStatus) || config.UI.TabBarRightSeparator != " · " {
 				t.Fatalf("right status = %#v separated by %q, want %#v", config.UI.TabBarRight, config.UI.TabBarRightSeparator, wantStatus)
 			}
@@ -72,7 +84,7 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 				t.Fatalf("status indicators = %q, want symbols", config.UI.StatusIndicators)
 			}
 
-			wantKeys := []string{"prefix+t", "prefix+o", "prefix+alt+g", "prefix+alt+t", "prefix+alt+f"}
+			wantKeys := []string{"prefix+t", "prefix+o", "prefix+alt+g", "prefix+alt+t", "prefix+alt+f", "prefix+alt+m"}
 			if len(config.Keys.Command) != len(wantKeys) {
 				t.Fatalf("custom commands = %#v, want keys %v", config.Keys.Command, wantKeys)
 			}
@@ -98,7 +110,7 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 					t.Errorf("Pluck action %q = %#v, want plugin_action %q", key, action, wantCommand)
 				}
 			}
-			for _, key := range []string{"prefix+alt+g", "prefix+alt+t", "prefix+alt+f"} {
+			for _, key := range []string{"prefix+alt+g", "prefix+alt+t", "prefix+alt+f", "prefix+alt+m"} {
 				popup := commands[key]
 				if popup.Type != "popup" || popup.Width != "80%" || popup.Height != "80%" {
 					t.Errorf("popup %q = %#v, want 80%% popup", key, popup)
@@ -131,7 +143,7 @@ func TestRepositoryHerdrConfigsPassInstalledHerdrValidation(t *testing.T) {
 		}
 		t.Skipf("Herdr 0.9.1 is required for config validation; got %q (%v)", strings.TrimSpace(string(version)), err)
 	}
-	for _, name := range []string{"config.toml", "config-adaptive.toml"} {
+	for _, name := range herdrConfigVariants {
 		t.Run(name, func(t *testing.T) {
 			root := repositoryRoot(t)
 			home := t.TempDir()
@@ -398,6 +410,25 @@ func TestHerdrPopupWorkflowsAreSandboxedAndContextAware(t *testing.T) {
 		result.requireExitCode(t, 127)
 		if !strings.Contains(result.stderr, "dots: lazygit is required") {
 			t.Fatalf("stderr = %q", result.stderr)
+		}
+	})
+
+	t.Run("hardware monitor opens macmon", func(t *testing.T) {
+		sandbox := newPopupSandbox(t, "macmon")
+		sandbox.writeExecutable("macmon", `printf '%s\n' "$#" > "$CAPTURE/macmon.argc"`)
+		result := sandbox.run(commands["prefix+alt+m"], t.TempDir(), nil)
+		result.requireSuccess(t)
+		if got := strings.TrimSpace(sandbox.read(t, "macmon.argc")); got != "0" {
+			t.Fatalf("macmon argc = %q, want the interactive TUI without arguments", got)
+		}
+	})
+
+	t.Run("hardware monitor reports missing macmon", func(t *testing.T) {
+		sandbox := newPopupSandbox(t, "missing-macmon")
+		result := sandbox.run(commands["prefix+alt+m"], t.TempDir(), nil)
+		result.requireExitCode(t, 127)
+		if !strings.Contains(result.stderr, "dots: macmon is required") || !strings.Contains(result.stderr, "Press Enter to close.") {
+			t.Fatalf("stderr = %q, want missing macmon explanation", result.stderr)
 		}
 	})
 }

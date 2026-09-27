@@ -22,7 +22,7 @@ func TestRepositoryCatalogExposesAtomicWebAndMobileInventory(t *testing.T) {
 		"playwright", "frontend-design", "vercel-web-skills", "claude-chrome-devtools",
 		"codex-chrome-devtools", "opencode-chrome-devtools", "dart-skills", "flutter-skills",
 		"android-skills", "claude-dart-mcp", "codex-dart-mcp", "antigravity-dart-mcp", "vscode-mobile",
-		"adaptive-theme", "codegraph",
+		"adaptive-theme", "codegraph", "herdr-metrics",
 	}
 	visible := make(map[string]bool, len(report.Tags))
 	for _, tag := range report.Tags {
