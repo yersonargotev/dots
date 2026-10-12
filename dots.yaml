@@ -21,7 +21,7 @@ tags:
     kind: surface
     status: current
   herdr:
-    description: Herdr terminal configuration and pinned workspace plugins on macOS.
+    description: Herdr terminal layout, task identity, and pinned workspace plugins on macOS.
     kind: surface
     status: current
   herdr-metrics:
@@ -1454,6 +1454,23 @@ provisioners:
         commands: [rustup, rustc, cargo]
         brew: rustup
         toolchain: rust-stable-rustup
+  - tool: herdr
+    tags: [herdr]
+    os: [darwin]
+    spec:
+      plugin: yersonargotev/herdr-tasks
+      ref: add3f2f855ca7687e4be4b4b57e1400d2a06066d
+    dependencies:
+      - name: herdr
+        command: herdr
+        brew: herdr
+      - name: git
+        command: git
+        brew: git
+      - name: go
+        command: go
+        brew: go
+        linux_homebrew: true
   - tool: zimfw
     tags:
       - zimfw

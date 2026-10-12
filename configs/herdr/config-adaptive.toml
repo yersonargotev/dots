@@ -77,11 +77,11 @@ position = "bottom-center"
 enabled = true
 
 [ui.sidebar.spaces]
-row_gap = 1
+row_gap = 0
 rows = [
   ["state_icon", { token = "$tab_name", fg = "#cdd6f4", bold = true, dim = false }],
-  [{ token = "$gitbranch", fg = "#89b4fa", dim = false }],
-  [{ token = "$gitconflicted", fg = "#f38ba8", dim = false },
+  [{ token = "$gitbranch", fg = "#89b4fa", dim = false },
+   { token = "$gitconflicted", fg = "#f38ba8", dim = false },
    { token = "$gitadded", fg = "#a6e3a1", dim = false },
    { token = "$gitmodified", fg = "#f9e2af", dim = false },
    { token = "$gitdeleted", fg = "#eba0ac", dim = false },
@@ -92,10 +92,11 @@ rows = [
 ]
 
 [ui.sidebar.agents]
-row_gap = 1
+row_gap = 0
 rows = [
   ["state_icon", { token = "agent", fg = "#cba6f7", bold = true }, "state_text"],
-  [{ token = "workspace", fg = "#6c7086" }, "tab"],
+  [{ token = "$herdr_task_name", bold = true, dim = false }],
+  [{ token = "workspace", fg = "#6c7086" }],
 ]
 
 [keys]
@@ -144,11 +145,13 @@ zoom = "prefix+z"
 resize_mode = "prefix+r"
 copy_mode = "prefix+["
 
-# Pluck actions and temporary workflows. Herdr runs popup commands from the
+# Plugin actions and temporary workflows. Herdr runs popup commands from the
 # focused pane's working directory and restores the tiled layout when they exit.
 command = [
   { key = "prefix+t", type = "plugin_action", command = "rmarganti.herdr-pluck.pluck", description = "pluck visible token" },
   { key = "prefix+o", type = "plugin_action", command = "rmarganti.herdr-pluck.open-url", description = "open visible URL" },
+  { key = "prefix+alt+s", type = "plugin_action", command = "yersonargotev.herdr-tasks.setup", description = "set up task naming" },
+  { key = "prefix+alt+r", type = "plugin_action", command = "yersonargotev.herdr-tasks.rename", description = "correct current task name" },
   { key = "prefix+alt+g", type = "popup", command = '''
 if ! command -v lazygit >/dev/null 2>&1; then
   printf 'dots: lazygit is required\nPress Enter to close.\n' >&2
