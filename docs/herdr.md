@@ -14,7 +14,7 @@ an existing installation's Tags.
 | Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
 | Tabby | `yersonargotev/tabby` | `19031d668f0f8a79b58591db4ce8bc8f8846e329` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
-| Herdr Tasks | `yersonargotev/herdr-tasks` | `4ea07eb16a34ad5b406fb80547bedd488a27819b` |
+| Herdr Tasks | `yersonargotev/herdr-tasks` | `66a829c4b2793cb11300d865d83245432268c42e` |
 
 The previous Herdr configuration and Spaces/Tabby bundle were verified with
 Herdr 0.9.1 on Apple Silicon macOS; Pluck declares Herdr 0.7.4 or newer but has
@@ -71,8 +71,9 @@ to apply it. Its equivalent qualified action is:
 herdr --session work plugin action invoke setup --plugin yersonargotev.herdr-tasks
 ```
 
-The initial action result means the popup was opened, not that configuration or
-activation completed. The popup's completed JSON reports configured hooks with
+The initial action result acknowledges the request; it does not prove that a
+client displayed the popup or that configuration or activation completed.
+The popup's completed JSON reports configured hooks with
 `codex_activation: "trust_review_required"` and
 `claude_activation: "reload_or_restart_required"`. Reload Codex configuration
 and review/trust the new command hooks through native `/hooks`; reload/restart
@@ -95,8 +96,8 @@ owned hooks alongside Herdr/user hooks and preserves unrelated settings. Before
 moving or uninstalling the plugin, run its `remove` command with the same state
 and native configuration roots, then reload both engines; plugin uninstall alone
 does not subtract those hooks. See the pinned plugin's
-[producer guide](https://github.com/yersonargotev/herdr-tasks/blob/4ea07eb16a34ad5b406fb80547bedd488a27819b/docs/producers.md)
-and [operator guide](https://github.com/yersonargotev/herdr-tasks/blob/4ea07eb16a34ad5b406fb80547bedd488a27819b/docs/operator.md).
+[producer guide](https://github.com/yersonargotev/herdr-tasks/blob/66a829c4b2793cb11300d865d83245432268c42e/docs/producers.md)
+and [operator guide](https://github.com/yersonargotev/herdr-tasks/blob/66a829c4b2793cb11300d865d83245432268c42e/docs/operator.md).
 
 For a safe installation preview, keep dots and producer roots explicit and
 separate. Set `PLUGIN_BINARY` to the reviewed installed plugin's
