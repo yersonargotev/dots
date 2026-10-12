@@ -14,7 +14,7 @@ an existing installation's Tags.
 | Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
 | Tabby | `yersonargotev/tabby` | `19031d668f0f8a79b58591db4ce8bc8f8846e329` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
-| Herdr Tasks | `yersonargotev/herdr-tasks` | `e5e54fa388339a94dd349a9e618614b9fce24253` |
+| Herdr Tasks | `yersonargotev/herdr-tasks` | `4ea07eb16a34ad5b406fb80547bedd488a27819b` |
 
 The previous Herdr configuration and Spaces/Tabby bundle were verified with
 Herdr 0.9.1 on Apple Silicon macOS; Pluck declares Herdr 0.7.4 or newer but has
@@ -95,8 +95,8 @@ owned hooks alongside Herdr/user hooks and preserves unrelated settings. Before
 moving or uninstalling the plugin, run its `remove` command with the same state
 and native configuration roots, then reload both engines; plugin uninstall alone
 does not subtract those hooks. See the pinned plugin's
-[producer guide](https://github.com/yersonargotev/herdr-tasks/blob/e5e54fa388339a94dd349a9e618614b9fce24253/docs/producers.md)
-and [operator guide](https://github.com/yersonargotev/herdr-tasks/blob/e5e54fa388339a94dd349a9e618614b9fce24253/docs/operator.md).
+[producer guide](https://github.com/yersonargotev/herdr-tasks/blob/4ea07eb16a34ad5b406fb80547bedd488a27819b/docs/producers.md)
+and [operator guide](https://github.com/yersonargotev/herdr-tasks/blob/4ea07eb16a34ad5b406fb80547bedd488a27819b/docs/operator.md).
 
 For a safe installation preview, keep dots and producer roots explicit and
 separate. Set `PLUGIN_BINARY` to the reviewed installed plugin's
