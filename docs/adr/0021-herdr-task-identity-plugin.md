@@ -44,6 +44,24 @@ that behavior to the Git provider would combine unrelated state and freshness
 requirements. Keeping the implementation in dots would turn the distributor
 into a runtime task service. These alternatives were not selected.
 
+## Existing Auto Title alternative
+
+The subsequent [Auto Title comparison](../herdr-auto-title-comparison-research.md)
+evaluates `kryptamine/herdr-auto-title` at v0.13.1 and a release-qualified HEAD.
+It already names panes and tabs and reports workspace activity, so a general
+contextual-title product would not justify rebuilding those capabilities.
+It does not implement this decision's task-boundary and correction contract:
+activity follows available titles/transcripts, Claude has the only native
+transcript extractor, and manual locks are resource-ID/label records rather
+than native conversation/task records. Both it and Tabby also write tab names.
+
+This evidence does not make a new general auto-renamer necessary. Keep the
+selected task owner narrow, and assess an upstream task mode if that project
+wants the same semantics. Reusing Auto Title unchanged would require a
+separate product decision to relax stable task boundaries, correction lifetime,
+and conversation isolation. The ownership choice remains accepted; no new
+plugin implementation is authorized by this comparison.
+
 ## Consequences and boundaries
 
 The plugin persists and reconciles Task Names, task transitions, and protected

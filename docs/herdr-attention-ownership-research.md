@@ -105,6 +105,18 @@ The Git plugin already supplies active-tab `$tab_name` and workspace Git categor
 | Shared instruction + native alias + persistence helper | Reuses live native conversation ownership and API publication | Cold alias restore requires rehydration; slug/uniqueness, precedence, managed-agent exception, no native auto/manual provenance | Short aliases plus helper-owned correction satisfy the final contract. |
 | Herdr core contribution | Can change arbitrary native layout/controls | Upstream coordination and release dependency | Exact native chrome is required beyond rows, views, actions, and terminal popups. |
 
+## Existing Auto Title follow-up
+
+The user subsequently asked whether `kryptamine/herdr-auto-title` already
+satisfies this contract and could avoid another plugin. The
+[source- and test-backed comparison](herdr-auto-title-comparison-research.md)
+distinguishes its substantial contextual pane/tab naming from stable
+conversation/task identity. Reuse is a viable alternative for a relaxed
+contextual-title product; it is not equivalent fulfillment of the selected
+new-task, correction, and conversation-replacement rules. Avoid two independent
+tab-name writers. This follow-up neither installs a candidate nor authorizes
+implementation of the accepted plugin boundary.
+
 ## Accepted ownership and design vocabulary
 
 The user confirmed the dedicated plugin alternative after comparing configuration-only, expanding Tabby, and a shared helper. This is an ownership decision, not implementation evidence. The plugin owns task identity, saved task names, protected manual corrections, and conversation-aware restoration; Codex and Claude supply the semantic task name through one shared contract; dots owns portable layout/preferences, dependency declarations, and a pinned Provisioner. Herdr keeps rendering, navigation, and semantic lifecycle state. No always-on daemon is implied by this decision. See [ADR 0021](adr/0021-herdr-task-identity-plugin.md).
