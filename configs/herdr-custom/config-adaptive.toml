@@ -1,0 +1,233 @@
+# dots-managed compact Herdr custom config.
+# Adaptive variant selected only by dots' adaptive-theme tag.
+# Herdr switches its own UI between Catppuccin Latte and Mocha using its
+# native host-terminal light/dark appearance detection. Herdr does not expose a
+# dots-owned include seam, so keep non-theme sections synchronized with
+# configs/herdr-custom/config.toml; the manifest test guards that invariant.
+onboarding = false
+
+[update]
+channel = "stable"
+version_check = false
+manifest_check = true
+
+[terminal]
+shell_mode = "auto"
+new_cwd = "follow"
+
+[theme]
+name = "catppuccin"
+auto_switch = true
+dark_name = "catppuccin"
+light_name = "catppuccin-latte"
+
+[theme.custom]
+active_row_bg = "#313244"
+selection_bg = "#45475a"
+sidebar_bg = "#181825"
+surface_dim = "#45475a"
+
+[theme.custom.dark]
+active_row_bg = "#313244"
+selection_bg = "#45475a"
+sidebar_bg = "#181825"
+surface_dim = "#45475a"
+
+[theme.custom.light]
+active_row_bg = "#ccd0da"
+selection_bg = "#bcc0cc"
+sidebar_bg = "#e6e9ef"
+surface_dim = "#bcc0cc"
+
+[ui]
+accent = "#89b4fa"
+sidebar_width = 38
+sidebar_min_width = 18
+sidebar_max_width = 44
+confirm_close = true
+prompt_new_tab_name = true
+mouse_capture = true
+pane_borders = "auto"
+pane_outer_borders = false
+pane_scrollbars = false
+pane_gaps = false
+hide_tab_bar_when_single_tab = false
+tab_bar_position = "top"
+window_title = "{workspace}"
+# The herdr-metrics Tag installs status.sh and macmon. Without them Herdr
+# clears this entry, so the status area stays empty instead of showing errors.
+tab_bar_right = [
+  { type = "zoom" },
+  { type = "command", command = "sh ~/.config/herdr/status.sh", interval_seconds = 5, timeout_seconds = 2 },
+]
+tab_bar_right_separator = " · "
+status_indicators = "dots"
+
+[ui.toast]
+delivery = "system"
+delay_seconds = 1
+
+[ui.toast.herdr]
+position = "bottom-right"
+
+[ui.toast.clipboard]
+enabled = true
+position = "bottom-center"
+
+[ui.sound]
+enabled = true
+
+[ui.sidebar.spaces]
+row_gap = 0
+rows = [
+  ["state_icon", { token = "workspace", bold = true, dim = false }],
+  [{ token = "$gitbranch", fg = "#89b4fa", dim = false },
+   { token = "$gitconflicted", fg = "#f38ba8", dim = false },
+   { token = "$gitadded", fg = "#a6e3a1", dim = false },
+   { token = "$gitmodified", fg = "#f9e2af", dim = false },
+   { token = "$gitdeleted", fg = "#eba0ac", dim = false },
+   { token = "$gituntracked", fg = "#89dceb", dim = false },
+   { token = "$gitahead", fg = "#94e2d5", dim = false },
+   { token = "$gitbehind", fg = "#fab387", dim = false },
+   { token = "$gitclean", fg = "#6c7086", dim = false }],
+]
+
+[ui.sidebar.agents]
+row_gap = 0
+rows = [
+  ["state_icon", { token = "agent", fg = "#cba6f7", bold = true }, "state_text"],
+  [{ token = "$herdr_task_name", bold = true, dim = false }],
+  [{ token = "tab", dim = true }],
+]
+
+[keys]
+prefix = "ctrl+a"
+
+# Session/workspace
+# Keep Herdr's default detach plus dots' tmux/Zellij capital-D muscle memory.
+detach = ["prefix+q", "prefix+shift+d"]
+workspace_picker = "prefix+w"
+# Keep the workspace picker usable with both arrow keys and Vim movement.
+navigate_workspace_up = ["up", "k"]
+navigate_workspace_down = ["down", "j"]
+goto = "prefix+g"
+new_workspace = "prefix+shift+n"
+rename_workspace = "prefix+shift+w"
+close_workspace = "prefix+alt+d"
+# Keep workspace cycling behind prefix: many terminals collapse Ctrl+Alt+Shift+j/k
+# to Ctrl+Alt+j/k, which conflicts with the direct pane-focus bindings below.
+previous_workspace = "prefix+alt+k"
+next_workspace = "prefix+alt+j"
+previous_agent = "prefix+alt+h"
+next_agent = "prefix+alt+l"
+toggle_sidebar = "prefix+b"
+
+# Tabs: prefix-first tmux-like core plus explicit direct tab navigation.
+new_tab = "prefix+c"
+rename_tab = ["prefix+shift+t", "prefix+comma"]
+previous_tab = ["prefix+p", "ctrl+alt+["]
+next_tab = ["prefix+n", "ctrl+alt+]"]
+switch_tab = "prefix+1..9"
+close_tab = "prefix+shift+x"
+
+# Panes: mirror dots tmux/Zellij intent and add direct pane focus chords.
+focus_pane_left = ["prefix+h", "ctrl+alt+h"]
+focus_pane_down = ["prefix+j", "ctrl+alt+j"]
+focus_pane_up = ["prefix+k", "ctrl+alt+k"]
+focus_pane_right = ["prefix+l", "ctrl+alt+l"]
+swap_pane_left = "prefix+shift+h"
+swap_pane_down = "prefix+shift+j"
+swap_pane_up = "prefix+shift+k"
+swap_pane_right = "prefix+shift+l"
+split_vertical = "prefix+v"
+split_horizontal = ["prefix+minus", "prefix+d"]
+close_pane = "prefix+x"
+zoom = "prefix+z"
+resize_mode = "prefix+r"
+copy_mode = "prefix+["
+
+# Plugin actions and temporary workflows. Herdr runs popup commands from the
+# focused pane's working directory and restores the tiled layout when they exit.
+command = [
+  { key = "prefix+t", type = "plugin_action", command = "rmarganti.herdr-pluck.pluck", description = "pluck visible token" },
+  { key = "prefix+o", type = "plugin_action", command = "rmarganti.herdr-pluck.open-url", description = "open visible URL" },
+  { key = "prefix+alt+s", type = "plugin_action", command = "yersonargotev.herdr-tasks.setup", description = "set up task naming" },
+  { key = "prefix+alt+r", type = "plugin_action", command = "yersonargotev.herdr-tasks.rename", description = "correct current task name" },
+  { key = "prefix+alt+g", type = "popup", command = '''
+if ! command -v lazygit >/dev/null 2>&1; then
+  printf 'dots: lazygit is required\nPress Enter to close.\n' >&2
+  IFS= read -r _
+  exit 127
+fi
+exec lazygit
+''', description = "open LazyGit", width = "80%", height = "80%" },
+  { key = "prefix+alt+t", type = "popup", command = '''
+shell=${SHELL:-/bin/sh}
+if ! command -v "$shell" >/dev/null 2>&1; then
+  printf 'dots: %s was not found; using /bin/sh\n' "$shell" >&2
+  shell=/bin/sh
+fi
+exec "$shell"
+''', description = "open scratch shell", width = "80%", height = "80%" },
+  { key = "prefix+alt+f", type = "popup", command = '''
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    printf 'dots: %s is required\nPress Enter to close.\n' "$1" >&2
+    IFS= read -r _
+    exit 127
+  fi
+}
+
+require_command git
+require_command fd
+require_command fzf
+require_command bat
+
+# Split the conventional editor command and its arguments without eval. Shell
+# metacharacters from the environment therefore remain ordinary argv values.
+editor_available() {
+  [ -n "$1" ] || return 1
+  set -f
+  set -- $1
+  set +f
+  [ "$#" -gt 0 ] && command -v "$1" >/dev/null 2>&1
+}
+
+if editor_available "${VISUAL:-}"; then
+  editor=$VISUAL
+elif editor_available "${EDITOR:-}"; then
+  editor=$EDITOR
+elif editor_available vi; then
+  editor=vi
+else
+  printf 'dots: VISUAL, EDITOR, or vi is required\nPress Enter to close.\n' >&2
+  IFS= read -r _
+  exit 127
+fi
+
+set -f
+set -- $editor
+set +f
+
+start=${HERDR_ACTIVE_PANE_CWD:-$PWD}
+root=$(git -C "$start" rev-parse --show-toplevel 2>/dev/null) || root=$start
+if ! cd "$root"; then
+  printf 'dots: cannot open %s\nPress Enter to close.\n' "$root" >&2
+  IFS= read -r _
+  exit 1
+fi
+
+selection=$(fd --hidden --type f --exclude .git --exclude node_modules --exclude target . |
+  fzf --preview 'bat --color=always --style=numbers --line-range=:500 -- {}') || exit 0
+[ -n "$selection" ] || exit 0
+exec "$@" "$selection"
+''', description = "find repository file", width = "80%", height = "80%" },
+  { key = "prefix+alt+m", type = "popup", command = '''
+if ! command -v macmon >/dev/null 2>&1; then
+  printf 'dots: macmon is required\nPress Enter to close.\n' >&2
+  IFS= read -r _
+  exit 127
+fi
+exec macmon
+''', description = "open hardware monitor", width = "80%", height = "80%" },
+]

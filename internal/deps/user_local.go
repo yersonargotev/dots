@@ -65,6 +65,7 @@ const (
 )
 
 var userLocalRecipes = map[string]userLocalRecipe{
+	"herdr-custom": {layout: userLocalLayoutBundle, command: "herdr-custom", archiveType: userLocalArchiveTarGzip, binaryPath: func(archive, _ string) string { return strings.TrimSuffix(archive, ".tar.gz") + "/dots/herdr-custom" }, links: []string{"herdr-custom"}},
 	"codex": {
 		archiveName: func(version, goarch string) (string, bool) { return "", false },
 		url:         func(version, archive string) string { return "" },
@@ -279,6 +280,9 @@ func userLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact
 	if dep.RollingUserLocal != nil {
 		return rollingUserLocalArtifact(dep, opts)
 	}
+	if isHerdrCustom(dep) {
+		return herdrCustomArtifact(dep, opts)
+	}
 	if opts.OS != "linux" || dep.UserLocal == nil {
 		return UserLocalArtifact{}, false, nil
 	}
@@ -370,6 +374,11 @@ func InstallUserLocal(home string, action InstallAction) error {
 		return fmt.Errorf("unknown user-local recipe %q", artifact.Recipe)
 	}
 
+	if artifact.Recipe == "herdr-custom" {
+		if err := herdrCustomInstallGuard(home, *artifact); err != nil {
+			return err
+		}
+	}
 	data, err := downloadUserLocalArtifact(artifact.URL, artifact.Checksum)
 	if err != nil {
 		return err
@@ -395,8 +404,18 @@ func InstallUserLocal(home string, action InstallAction) error {
 		if err := stageUserLocalArtifact(data, archive, recipe, staging); err != nil {
 			return err
 		}
+		if artifact.Recipe == "herdr-custom" {
+			if err := stageHerdrCustom(staging, *artifact); err != nil {
+				return err
+			}
+		}
 		for _, link := range recipe.links {
 			if err := ensureExecutable(filepath.Join(staging, recipe.binaryPath(archive, link))); err != nil {
+				return err
+			}
+		}
+		if artifact.Recipe == "herdr-custom" {
+			if err := herdrCustomInstallGuard(home, *artifact); err != nil {
 				return err
 			}
 		}

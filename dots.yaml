@@ -24,6 +24,12 @@ tags:
     description: Herdr terminal layout, task identity, and pinned workspace plugins on macOS.
     kind: surface
     status: current
+  herdr-custom:
+    description: Compact custom Herdr on Apple Silicon macOS and Linux x86_64, independent of official Herdr.
+    kind: surface
+    status: current
+    conflicts_with: [herdr]
+    supported_platforms: [darwin_arm64, linux_amd64]
   herdr-metrics:
     description: Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS.
     kind: surface
@@ -607,7 +613,7 @@ dependencies:
       - herdr
     os:
       - darwin
-    dependencies:
+    dependencies: &herdr_popup_dependencies
       - name: lazygit
         command: lazygit
         brew: lazygit
@@ -638,6 +644,9 @@ dependencies:
           checksums:
             linux_amd64: 726f04c8f576a7fd18b7634f1bbf2f915c43494c1c0f013baa3287edb0d5a2a3
             linux_arm64: 422eb73e11c854fddd99f5ca8461c2f1d6e6dce0a2a8c3d5daade5ffcb6564aa
+  - tags: [herdr-custom]
+    os: [darwin, linux]
+    dependencies: *herdr_popup_dependencies
   - tags:
       - herdr-metrics
     os:
@@ -891,12 +900,32 @@ entries:
       - name: herdr
         command: herdr
         brew: herdr
+  - source: configs/herdr-custom/config.toml
+    source_overrides:
+      theme-carbonfox: configs/herdr-custom/config-carbonfox.toml
+      adaptive-theme: configs/herdr-custom/config-adaptive.toml
+    target: ~/.config/herdr/config.toml
+    strategy: copy
+    ownership: toml-subset
+    tags: [herdr-custom]
+    os: [darwin, linux]
+    dependencies:
+      - &herdr_custom_runtime
+        name: herdr-custom
+        command: herdr-custom
+        user_local:
+          recipe: herdr-custom
+          version: v0.9.3-custom.3
+          checksums:
+            darwin_arm64: 0a5125f2e0402dba3ebf509434836cc8e8f4b0902f6bbd2bf1259bdfa3f09389
+            linux_amd64: 5bd815660f60ae38c9e2ce812107abd31478d8bba45ce06b3e7dda0f9acce60c
   - source: configs/herdr/plugins/tabby.toml
     target: ~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml
     strategy: copy
     ownership: toml-subset
     tags:
       - herdr
+      - herdr-custom
     os:
       - darwin
   - source: configs/herdr/status.sh
@@ -1389,7 +1418,7 @@ provisioners:
   - tool: herdr
     tags: [herdr]
     os: [darwin]
-    spec:
+    spec: &herdr_git_spec
       plugin: yersonargotev/herdr-tab-git
       ref: 48fe5a66c17970a77919dc50a6ab3b6512bc7300
     dependencies:
@@ -1407,7 +1436,7 @@ provisioners:
     tags: [herdr]
     os: [darwin]
     arch: [arm64]
-    spec:
+    spec: &herdr_tabby_spec
       plugin: yersonargotev/tabby
       ref: 19031d668f0f8a79b58591db4ce8bc8f8846e329
     dependencies:
@@ -1428,7 +1457,7 @@ provisioners:
     tags: [herdr]
     os: [darwin]
     arch: [arm64]
-    spec:
+    spec: &herdr_pluck_spec
       plugin: rmarganti/herdr-pluck
       ref: d1eacb80956c3a23ab6f7428a9e83961fb86ba28
     dependencies:
@@ -1457,7 +1486,7 @@ provisioners:
   - tool: herdr
     tags: [herdr]
     os: [darwin]
-    spec:
+    spec: &herdr_tasks_spec
       plugin: yersonargotev/herdr-tasks
       ref: add3f2f855ca7687e4be4b4b57e1400d2a06066d
     dependencies:
@@ -1467,6 +1496,122 @@ provisioners:
       - name: git
         command: git
         brew: git
+      - name: go
+        command: go
+        brew: go
+        linux_homebrew: true
+  - tool: herdr-custom
+    tags: [herdr-custom]
+    os: [darwin, linux]
+    spec: *herdr_git_spec
+    dependencies:
+      - *herdr_custom_runtime
+      - &herdr_custom_git
+        name: git
+        command: git
+        brew: git
+        apt: git
+        dnf: git
+        pacman: git
+      - name: Node LTS (fnm)
+        commands: [fnm, node]
+        brew: fnm
+        linux_homebrew: true
+        toolchain: node-lts-fnm
+  - tool: herdr-custom
+    tags: [herdr-custom]
+    os: [darwin]
+    arch: [arm64]
+    spec: *herdr_tabby_spec
+    dependencies:
+      - *herdr_custom_runtime
+      - *herdr_custom_git
+      - name: python3
+        command: python3
+        brew: python
+      - &herdr_custom_rust
+        name: Rust stable (rustup)
+        commands: [rustup, rustc, cargo]
+        brew: rustup
+        linux_homebrew: true
+        toolchain: rust-stable-rustup
+  - tool: herdr-custom
+    tags: [herdr-custom]
+    os: [darwin]
+    arch: [arm64]
+    spec: *herdr_pluck_spec
+    dependencies:
+      - *herdr_custom_runtime
+      - *herdr_custom_git
+      - &herdr_custom_curl
+        name: curl
+        command: curl
+        brew: curl
+        apt: curl
+        dnf: curl
+        pacman: curl
+      - name: tar
+        command: tar
+        manual: Restore the macOS tar system utility, then rerun dots deps check.
+      - name: pbcopy
+        command: pbcopy
+        manual: Restore the macOS pbcopy system utility, then rerun dots deps check.
+      - name: open
+        command: open
+        manual: Restore the macOS open system utility, then rerun dots deps check.
+      - *herdr_custom_rust
+  - tool: herdr-custom
+    tags: [herdr-custom]
+    os: [linux]
+    arch: [amd64]
+    spec: *herdr_pluck_spec
+    dependencies:
+      - *herdr_custom_runtime
+      - *herdr_custom_git
+      - *herdr_custom_curl
+      - *herdr_custom_rust
+      - name: C toolchain
+        command: cc
+        apt: build-essential
+        dnf: gcc
+        pacman: base-devel
+      - name: tar
+        command: tar
+        apt: tar
+        dnf: tar
+        pacman: tar
+      - name: xdg-open
+        command: xdg-open
+        apt: xdg-utils
+        dnf: xdg-utils
+        pacman: xdg-utils
+      # Pluck chooses wl-copy, xclip, or xsel at runtime. These are alternatives,
+      # not an AND command probe; choose one suited to the desktop session.
+      - name: wl-copy
+        command: wl-copy
+        requirement: optional
+        apt: wl-clipboard
+        dnf: wl-clipboard
+        pacman: wl-clipboard
+      - name: xclip
+        command: xclip
+        requirement: optional
+        apt: xclip
+        dnf: xclip
+        pacman: xclip
+      - name: xsel
+        command: xsel
+        requirement: optional
+        apt: xsel
+        dnf: xsel
+        pacman: xsel
+  - tool: herdr-custom
+    tags: [herdr-custom]
+    os: [darwin, linux]
+    spec: *herdr_tasks_spec
+    dependencies:
+      - *herdr_custom_runtime
+      - *herdr_custom_git
       - name: go
         command: go
         brew: go

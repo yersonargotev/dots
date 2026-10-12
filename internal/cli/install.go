@@ -421,6 +421,7 @@ func buildInstallPlanAndProvisioners(m manifest.Manifest, meta state.Metadata, s
 	p, err := plan.Build(m, plan.Options{
 		Selection:        &selected,
 		OS:               hostOS,
+		Arch:             hostArch,
 		SourceRoot:       paths.SourceRoot,
 		SourceReadRoot:   sourceReadRoot,
 		Home:             paths.Home,
@@ -597,6 +598,7 @@ func runProvisionersWithOptionsAndEnvironment(cmd *cobra.Command, m manifest.Man
 }
 
 func runProvisionersWithOptionsEnvironmentAndBatInput(cmd *cobra.Command, m manifest.Manifest, provisionOpts provision.Options, home string, stateRoot string, sourceRoot string, baseEnv []string, batInput *batcache.Input) (provision.Report, error) {
+	provisionOpts.Home = home
 	if provisionOpts.AppLookup == nil {
 		provisionOpts.AppLookup = appInstalled(provisionOpts.OS, home)
 	}

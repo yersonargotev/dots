@@ -117,6 +117,9 @@ func CheckWithToolProbes(m manifest.Manifest, opts Options, look Lookup, fontLoo
 // DependencyPresent reports whether any declared detection mode satisfies a
 // Dependency in the selected environment.
 func DependencyPresent(dep manifest.Dependency, opts Options, look Lookup, fontLook FontLookup) bool {
+	if isHerdrCustom(dep) {
+		return look("herdr-custom") && herdrCustomPresent(dep, opts)
+	}
 	if dep.IsFont() {
 		return fontPresent(dep.FontMatches(), fontLook)
 	}
@@ -132,7 +135,11 @@ func checkResult(dep manifest.Dependency, opts Options, look Lookup, fontLook Fo
 		return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: fontProbeLabel(matches), Present: DependencyPresent(dep, opts, look, fontLook)}
 	}
 	probes := dep.Probes()
-	return Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: DependencyPresent(dep, opts, look, fontLook)}
+	result := Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: DependencyPresent(dep, opts, look, fontLook)}
+	if isHerdrCustom(dep) && !result.Present && look("herdr-custom") {
+		result.Hint = "herdr-custom must resolve to the verified dots-managed integration; remove a PATH shadow or migrate the existing custom installation explicitly"
+	}
+	return result
 }
 
 func darwinAppPresent(app string, opts Options) bool {
@@ -257,7 +264,18 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 	if strings.TrimSpace(arch) == "" {
 		arch = runtime.GOARCH
 	}
-	return selectedsurface.EvaluateForPlatform(m, selection.Tags, opts.OS, arch).Dependencies, nil
+	if err := manifest.ValidateSelection(m, selection, opts.OS, arch); err != nil {
+		return nil, err
+	}
+	selected := selectedsurface.EvaluateForPlatform(m, selection.Tags, opts.OS, arch).Dependencies
+	for _, dep := range selected {
+		if isHerdrCustom(dep) {
+			if _, _, err := herdrCustomArtifact(dep, opts); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return selected, nil
 }
 
 func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Selection, error) {

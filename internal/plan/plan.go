@@ -142,6 +142,7 @@ type Options struct {
 	ExtraTags []string
 	Selection *manifest.Selection
 	OS        string
+	Arch      string
 	// SourceRoot is the canonical Installed Repository path recorded in Actions.
 	SourceRoot string
 	// SourceReadRoot optionally supplies a snapshot used only to inspect source
@@ -168,6 +169,9 @@ func Build(m manifest.Manifest, opts Options) (Plan, error) {
 			return Plan{}, err
 		}
 		resolved = &selection
+	}
+	if err := manifest.ValidateSelection(m, *resolved, opts.OS, opts.Arch); err != nil {
+		return Plan{}, err
 	}
 	tags := resolved.Tags
 	readRoot := opts.SourceReadRoot

@@ -67,7 +67,7 @@ func (r provisionExecRunner) environment() []string {
 
 func (r provisionExecRunner) environmentFor(executable string) []string {
 	env := r.environment()
-	if executable == "herdr" {
+	if executable == "herdr" || executable == "herdr-custom" {
 		return envForHerdrProvisioner(env, r.home)
 	}
 	return env

@@ -61,6 +61,12 @@ func renderCatalogTagsTo(w io.Writer, tags []catalog.TagSummary) {
 		if tag.Description != "" {
 			fmt.Fprintf(w, ": %s", tag.Description)
 		}
+		if len(tag.ConflictsWith) > 0 {
+			fmt.Fprintf(w, " [conflicts with: %s]", catalogList(tag.ConflictsWith))
+		}
+		if len(tag.SupportedPlatforms) > 0 {
+			fmt.Fprintf(w, " [platforms: %s]", catalogList(tag.SupportedPlatforms))
+		}
 		if len(tag.ReplacedBy) > 0 {
 			fmt.Fprintf(w, " [replaced by: %s]", catalogList(tag.ReplacedBy))
 		}
@@ -257,6 +263,12 @@ func renderCatalogDetail(w io.Writer, label string, report catalog.Report, detai
 	fmt.Fprintf(w, "Status: %s\n", detail.Status)
 	if detail.Kind != "" {
 		fmt.Fprintf(w, "Kind: %s\n", detail.Kind)
+	}
+	if len(detail.ConflictsWith) > 0 {
+		fmt.Fprintf(w, "Conflicts with: %s\n", catalogList(detail.ConflictsWith))
+	}
+	if len(detail.SupportedPlatforms) > 0 {
+		fmt.Fprintf(w, "Supported platforms: %s\n", catalogList(detail.SupportedPlatforms))
 	}
 	if len(detail.ReplacedBy) > 0 {
 		fmt.Fprintf(w, "Replaced by: %s\n", catalogList(detail.ReplacedBy))

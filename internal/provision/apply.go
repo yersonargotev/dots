@@ -94,7 +94,7 @@ func Apply(m manifest.Manifest, opts Options, look deps.Lookup, fontLook deps.Fo
 func missingDependencies(prov manifest.Provisioner, opts Options, look deps.Lookup, fontLook deps.FontLookup) []string {
 	var missing []string
 	for _, dep := range prov.Dependencies {
-		if deps.DependencyPresent(dep, deps.Options{OS: opts.OS, AppLookup: opts.AppLookup}, look, fontLook) {
+		if deps.DependencyPresent(dep, deps.Options{OS: opts.OS, Arch: opts.Arch, Home: opts.Home, AppLookup: opts.AppLookup}, look, fontLook) {
 			continue
 		}
 		if dep.IsFont() {

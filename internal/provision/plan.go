@@ -19,6 +19,7 @@ type Options struct {
 	Selection *manifest.Selection
 	OS        string
 	Arch      string
+	Home      string
 	AppLookup deps.AppLookup
 }
 
@@ -48,6 +49,9 @@ type Plan struct {
 func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
 	selection, err := resolveOptionsSelection(m, opts)
 	if err != nil {
+		return nil, err
+	}
+	if err := manifest.ValidateSelection(m, selection, opts.OS, effectiveArch(opts.Arch)); err != nil {
 		return nil, err
 	}
 	selected := selectedProvisioners(m, selection.Tags, opts.OS, effectiveArch(opts.Arch))
@@ -187,7 +191,7 @@ func managedRoots(prov manifest.Provisioner) []string {
 		return []string{"~/.codex"}
 	case "codegraph":
 		return codeGraphRoots(prov.Spec.Agents)
-	case "herdr":
+	case "herdr", "herdr-custom":
 		return []string{
 			"~/.config/herdr",
 			"~/.local/state/herdr",
