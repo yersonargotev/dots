@@ -52,6 +52,10 @@ _Avoid_: loose ownership, ignored drift, special case
 A native configuration path that a supported application flow or configuration command can modify while the target exists. It excludes conditional creation when the target is absent, writes by external editors or arbitrary scripts, and output written only to an operator-selected destination.
 _Avoid_: mutable config, generated config, app-owned file
 
+**Application-Owned Runtime State**:
+Mutable operational data whose content and lifecycle belong to an application rather than to dots' portable configuration intent. It may retain application events and deliberate user input; Seeded Runtime State is the case initialized from a reviewed Source of Truth baseline.
+_Avoid_: dotfiles configuration, Installation Metadata, Source of Truth
+
 **Seeded Runtime State**:
 Application-owned mutable state initialized from a reviewed Source of Truth baseline and allowed to evolve locally after materialization.
 _Avoid_: copied config, managed runtime file, drifted baseline
