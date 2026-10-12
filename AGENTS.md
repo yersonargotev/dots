@@ -129,3 +129,7 @@ network.
 - **Domain docs.** Single-context layout: `CONTEXT.md` at the root and ADRs under
   `docs/adr/`. Read the relevant ADR before changing architecture or workflow.
   See [`docs/agents/domain.md`](docs/agents/domain.md).
+
+<!-- packy:project:instruction:matty-codex-project:start -->
+Packy manages the Matty Codex skill trees in .agents/skills.
+<!-- packy:project:instruction:matty-codex-project:end -->

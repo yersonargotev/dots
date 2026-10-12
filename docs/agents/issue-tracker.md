@@ -39,7 +39,9 @@ This repository tracks work in GitHub Issues.
   and verification. It is not a mandatory post-processor for external planning
   skills.
 - External `grill-with-docs`, `to-spec`, `to-tickets`, and `triage` skills remain
-  unmodified and unvendored by this repository.
+  unmodified upstream workflows. Do not manually copy, modify, or fork them.
+  Reviewed Packy-managed project projections are allowed; commit their
+  manifest, lock receipt, and notices, and verify integrity with `packy verify`.
 - Authenticate before agent work that touches GitHub: run `gh auth login` for an interactive workstation, or export `GH_TOKEN`/`GITHUB_TOKEN` in non-interactive environments.
 
 ## Notes
