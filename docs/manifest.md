@@ -137,7 +137,7 @@ from compact discovery unless `--all` is supplied.
 | `ghostty` | surface | current | Ghostty terminal configuration and application requirement. |  |
 | `git` | surface | current | Portable Git configuration and native Git entrypoint. |  |
 | `go` | surface | current | Go language toolchain. |  |
-| `herdr` | surface | current | Herdr terminal configuration and pinned workspace plugins on macOS. |  |
+| `herdr` | surface | current | Herdr terminal layout, task identity, and pinned workspace plugins on macOS. |  |
 | `herdr-metrics` | surface | current | Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS. |  |
 | `jq` | surface | current | jq command-line JSON processor. |  |
 | `lazygit` | surface | current | Lazygit terminal interface for Git. |  |
@@ -611,10 +611,13 @@ the same revision; Herdr retains plugin configuration outside the managed checko
 The child environment is rooted at the selected home, with inherited Herdr session
 and path overrides removed to avoid contacting another home's live server.
 
-The existing `herdr` Tag selects the two Spaces plugins on macOS and adds Tabby
-plus Pluck on Apple Silicon through `arch: [arm64]`;
+The existing `herdr` Tag selects Git Tokens and conversation-owned Herdr Tasks
+on macOS, including Go for the task plugin build, and adds Tabby plus Pluck on
+Apple Silicon through `arch: [arm64]`;
 core and workstation already include it. See [Herdr setup](herdr.md) for runtime
-requirements, live-session activation, ownership, and known limitations.
+requirements, previewable task-producer setup, native Codex trust/Claude reload,
+live-session activation, ownership, and known limitations. Plugin installation
+completion does not imply engine-hook activation.
 
 ### `skills` spec
 

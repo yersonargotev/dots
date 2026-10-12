@@ -19,23 +19,29 @@ import (
 
 type herdrCockpitConfig struct {
 	UI struct {
-		SidebarWidth            int                `toml:"sidebar_width"`
-		SidebarMinWidth         int                `toml:"sidebar_min_width"`
-		SidebarMaxWidth         int                `toml:"sidebar_max_width"`
-		PaneBorders             string             `toml:"pane_borders"`
-		PaneOuterBorders        bool               `toml:"pane_outer_borders"`
-		PaneScrollbars          bool               `toml:"pane_scrollbars"`
-		PaneGaps                bool               `toml:"pane_gaps"`
-		HideTabBarWhenSingleTab bool               `toml:"hide_tab_bar_when_single_tab"`
-		TabBarPosition          string             `toml:"tab_bar_position"`
-		WindowTitle             string             `toml:"window_title"`
-		TabBarRight             []herdrTabBarRight `toml:"tab_bar_right"`
-		TabBarRightSeparator    string             `toml:"tab_bar_right_separator"`
-		StatusIndicators        string             `toml:"status_indicators"`
+		Sidebar                 map[string]herdrSidebar `toml:"sidebar"`
+		SidebarWidth            int                     `toml:"sidebar_width"`
+		SidebarMinWidth         int                     `toml:"sidebar_min_width"`
+		SidebarMaxWidth         int                     `toml:"sidebar_max_width"`
+		PaneBorders             string                  `toml:"pane_borders"`
+		PaneOuterBorders        bool                    `toml:"pane_outer_borders"`
+		PaneScrollbars          bool                    `toml:"pane_scrollbars"`
+		PaneGaps                bool                    `toml:"pane_gaps"`
+		HideTabBarWhenSingleTab bool                    `toml:"hide_tab_bar_when_single_tab"`
+		TabBarPosition          string                  `toml:"tab_bar_position"`
+		WindowTitle             string                  `toml:"window_title"`
+		TabBarRight             []herdrTabBarRight      `toml:"tab_bar_right"`
+		TabBarRightSeparator    string                  `toml:"tab_bar_right_separator"`
+		StatusIndicators        string                  `toml:"status_indicators"`
 	} `toml:"ui"`
 	Keys struct {
 		Command []herdrPopupCommand `toml:"command"`
 	} `toml:"keys"`
+}
+
+type herdrSidebar struct {
+	RowGap int     `toml:"row_gap"`
+	Rows   [][]any `toml:"rows"`
 }
 
 type herdrTabBarRight struct {
@@ -84,7 +90,7 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 				t.Fatalf("status indicators = %q, want symbols", config.UI.StatusIndicators)
 			}
 
-			wantKeys := []string{"prefix+t", "prefix+o", "prefix+alt+g", "prefix+alt+t", "prefix+alt+f", "prefix+alt+m"}
+			wantKeys := []string{"prefix+t", "prefix+o", "prefix+alt+s", "prefix+alt+r", "prefix+alt+g", "prefix+alt+t", "prefix+alt+f", "prefix+alt+m"}
 			if len(config.Keys.Command) != len(wantKeys) {
 				t.Fatalf("custom commands = %#v, want keys %v", config.Keys.Command, wantKeys)
 			}
@@ -101,13 +107,15 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 
 			commands := herdrPopupCommandsByKey(t, config)
 			wantPluginActions := map[string]string{
-				"prefix+t": "rmarganti.herdr-pluck.pluck",
-				"prefix+o": "rmarganti.herdr-pluck.open-url",
+				"prefix+t":     "rmarganti.herdr-pluck.pluck",
+				"prefix+o":     "rmarganti.herdr-pluck.open-url",
+				"prefix+alt+s": "yersonargotev.herdr-tasks.setup",
+				"prefix+alt+r": "yersonargotev.herdr-tasks.rename",
 			}
 			for key, wantCommand := range wantPluginActions {
 				action := commands[key]
 				if action.Type != "plugin_action" || action.Command != wantCommand || action.Width != "" || action.Height != "" {
-					t.Errorf("Pluck action %q = %#v, want plugin_action %q", key, action, wantCommand)
+					t.Errorf("plugin action %q = %#v, want plugin_action %q", key, action, wantCommand)
 				}
 			}
 			for _, key := range []string{"prefix+alt+g", "prefix+alt+t", "prefix+alt+f", "prefix+alt+m"} {
@@ -132,16 +140,16 @@ func TestRepositoryHerdrConfigsPassInstalledHerdrValidation(t *testing.T) {
 	herdr, err := exec.LookPath("herdr")
 	if err != nil {
 		if os.Getenv("CI") != "" {
-			t.Fatalf("Herdr 0.9.1 is required on macOS CI: %v", err)
+			t.Fatalf("Herdr 0.9.3 is required on macOS CI: %v", err)
 		}
 		t.Skip("Herdr is not installed")
 	}
 	version, err := exec.Command(herdr, "--version").Output()
-	if err != nil || strings.TrimSpace(string(version)) != "herdr 0.9.1" {
+	if err != nil || strings.TrimSpace(string(version)) != "herdr 0.9.3" {
 		if os.Getenv("CI") != "" {
-			t.Fatalf("Herdr 0.9.1 is required on macOS CI; got %q (%v)", strings.TrimSpace(string(version)), err)
+			t.Fatalf("Herdr 0.9.3 is required on macOS CI; got %q (%v)", strings.TrimSpace(string(version)), err)
 		}
-		t.Skipf("Herdr 0.9.1 is required for config validation; got %q (%v)", strings.TrimSpace(string(version)), err)
+		t.Skipf("Herdr 0.9.3 is required for config validation; got %q (%v)", strings.TrimSpace(string(version)), err)
 	}
 	for _, name := range herdrConfigVariants {
 		t.Run(name, func(t *testing.T) {
@@ -150,7 +158,6 @@ func TestRepositoryHerdrConfigsPassInstalledHerdrValidation(t *testing.T) {
 			cmd := exec.Command(herdr, "config", "check")
 			cmd.Dir = home
 			cmd.Env = append(os.Environ(),
-				"HOME="+home,
 				"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 				"XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
 				"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
@@ -172,7 +179,7 @@ func TestHerdrTagSelectsPopupDependenciesOnBothMacArchitectures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"herdr", "lazygit", "fzf", "fd", "bat", "git"}
+	want := []string{"herdr", "lazygit", "fzf", "fd", "bat", "git", "go"}
 	for _, arch := range []string{"arm64", "amd64"} {
 		t.Run(arch, func(t *testing.T) {
 			surface := selectedsurface.EvaluateForPlatform(*m, []string{"herdr"}, "darwin", arch)
@@ -600,4 +607,50 @@ func sameDirectory(t *testing.T, left, right string) bool {
 		t.Fatal(err)
 	}
 	return os.SameFile(leftInfo, rightInfo)
+}
+
+func TestRepositoryHerdrTaskIdentityHasCompactReadableRows(t *testing.T) {
+	for _, name := range herdrConfigVariants {
+		t.Run(name, func(t *testing.T) {
+			cfg := loadHerdrCockpitConfig(t, name)
+			spaces, agents := cfg.UI.Sidebar["spaces"], cfg.UI.Sidebar["agents"]
+			if spaces.RowGap != 0 || len(spaces.Rows) != 2 {
+				t.Fatalf("Spaces should have two contiguous rows: %#v", spaces)
+			}
+			if agents.RowGap != 0 || len(agents.Rows) != 3 {
+				t.Fatalf("Agents should have engine/task/location rows: %#v", agents)
+			}
+			tokens := func(row []any) []string {
+				out := []string{}
+				for _, item := range row {
+					switch value := item.(type) {
+					case string:
+						out = append(out, value)
+					case map[string]any:
+						out = append(out, value["token"].(string))
+					default:
+						t.Fatalf("unexpected row item %#v", item)
+					}
+				}
+				return out
+			}
+			for i, want := range [][]string{{"state_icon", "$tab_name"}, {"$gitbranch", "$gitconflicted", "$gitadded", "$gitmodified", "$gitdeleted", "$gituntracked", "$gitahead", "$gitbehind", "$gitclean"}} {
+				if got := tokens(spaces.Rows[i]); !reflect.DeepEqual(got, want) {
+					t.Fatalf("Spaces row %d = %v, want %v", i, got, want)
+				}
+			}
+			for i, want := range [][]string{{"state_icon", "agent", "state_text"}, {"$herdr_task_name"}, {"workspace"}} {
+				if got := tokens(agents.Rows[i]); !reflect.DeepEqual(got, want) {
+					t.Fatalf("Agents row %d = %v, want %v", i, got, want)
+				}
+			}
+			task := agents.Rows[1][0].(map[string]any)
+			if _, ok := task["fg"]; ok {
+				t.Fatal("task name should inherit native theme foreground")
+			}
+			if task["dim"] != false || task["bold"] != true {
+				t.Fatalf("task name should remain readable: %#v", task)
+			}
+		})
+	}
 }

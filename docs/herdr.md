@@ -1,7 +1,7 @@
 # Herdr workspace setup
 
 The `herdr` Tag installs Herdr configuration and compatible pinned plugins on
-macOS: three on Apple Silicon, and the Spaces plugin on Intel.
+macOS: four on Apple Silicon, and Git Tokens plus Herdr Tasks on Intel.
 It is already part of the `core` and `workstation` Profiles. Select it explicitly
 with `dots install --tag herdr` on a new installation, or include it in the
 selection you intend to retain. Review selection reconciliation before changing
@@ -14,10 +14,11 @@ an existing installation's Tags.
 | Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
 | Tabby | `yersonargotev/tabby` | `19031d668f0f8a79b58591db4ce8bc8f8846e329` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
+| Herdr Tasks | `yersonargotev/herdr-tasks` | `e5e54fa388339a94dd349a9e618614b9fce24253` |
 
 The previous Herdr configuration and Spaces/Tabby bundle were verified with
 Herdr 0.9.1 on Apple Silicon macOS; Pluck declares Herdr 0.7.4 or newer but has
-not been exercised in a live 0.9.1 session. Herdr, Git, LazyGit, fzf, fd, bat,
+not been exercised in a live 0.9.1 session. Herdr, Git, Go, LazyGit, fzf, fd, bat,
 curl, tar, pbcopy, open, Python 3, Node LTS through fnm, and Rust stable through
 rustup are declared Dependencies. The popup tools belong directly to the `herdr`
 Tag, so selecting that atomic surface does not rely on `core` or another Profile
@@ -26,7 +27,7 @@ downloads a checksum-verified Apple Silicon binary and falls back to
 `cargo build --release --locked` if that artifact is missing, so its build
 toolchain is declared as well. The pinned Tabby installer rejects Intel Macs,
 so its Provisioner and Rust fallback Dependency are filtered to `arm64`. Intel
-Macs receive the Spaces plugin and retain their normal tab labels. Tabby is
+Macs receive Git Tokens and Herdr Tasks and retain their normal tab labels. Tabby is
 not needed to read the active tab's label.
 
 Pluck is also filtered to Apple Silicon. Its reviewed installer prefers the
@@ -35,7 +36,7 @@ release download cannot be used. curl and tar support the release path; Rust
 stable and Cargo support the fallback; pbcopy and open provide token-copy and
 URL-opening behavior at runtime. Upstream v0.3.1 rejects Intel macOS before its
 source-build fallback and publishes no Intel release asset, so dots does not
-select Pluck or its specific Dependencies on Intel. The two shared config files
+select Pluck or its specific Dependencies on Intel. All three shared config variants
 still contain the action bindings, but without an installed Pluck action they
 provide no capability on Intel.
 The `herdr` Tag still selects no surface on Linux.
@@ -45,6 +46,77 @@ running them. Each entry invokes Herdr directly with `plugin install`, a full
 commit pin, and `--yes`. Herdr runs the plugin's declared build step and registers
 it enabled. Repeating installation refreshes the managed checkout and may repeat
 download/build work; it is not a network-free no-op.
+
+## Task naming and activation
+
+Herdr Tasks requires **Herdr 0.9.3 / protocol 22** and Go 1.24 or newer for its
+native build. The plugin supports macOS and Linux upstream; the current dots
+`herdr` Tag remains macOS-only. Installing this atomic Tag brings the reviewed
+plugin, Herdr/Git/Go Dependencies, layout, and setup/correction actions together.
+It does not write engine hooks during a build or silently trust them.
+
+Start the intended Herdr session after installation, or reload its configuration
+and restore task names explicitly in an existing session:
+
+```sh
+herdr --session work server reload-config
+herdr --session work plugin action invoke restore --plugin yersonargotev.herdr-tasks
+```
+
+Then press `prefix+alt+s` (**Set Up Task Producers**). The plugin opens an
+interactive terminal popup showing the Codex/Claude hook preview before asking
+to apply it. Its equivalent qualified action is:
+
+```sh
+herdr --session work plugin action invoke setup --plugin yersonargotev.herdr-tasks
+```
+
+The initial action result means the popup was opened, not that configuration or
+activation completed. The popup's completed JSON reports configured hooks with
+`codex_activation: "trust_review_required"` and
+`claude_activation: "reload_or_restart_required"`. Reload Codex configuration
+and review/trust the new command hooks through native `/hooks`; reload/restart
+Claude to consume its settings. Until those steps are complete, an absent task
+row is an activation condition. A successful dots Provisioner/status only records
+the plugin installation result and cannot prove native hook trust.
+
+Once activated, Codex and Claude propose a stable human Task Name through the
+same semantic contract. Questions, tests, reviews, compaction, and resume retain
+it; a distinct task begins a new generation. `prefix+alt+r` opens a correction
+popup for the current task. The corrected name wins until the next generation.
+The engine and Herdr state remain visible separately. Tabby continues to own tab
+command/directory labels, and Git Tokens continues to own Git metadata.
+
+Task/correction records and the owned integration registry are
+Application-Owned Runtime State under Herdr's plugin state directory. They are
+not Managed Entries or stored in dots/the plugin checkout. Native actions,
+generated hooks, and direct calls share the exact captured state root. Setup adds
+owned hooks alongside Herdr/user hooks and preserves unrelated settings. Before
+moving or uninstalling the plugin, run its `remove` command with the same state
+and native configuration roots, then reload both engines; plugin uninstall alone
+does not subtract those hooks. See the pinned plugin's
+[producer guide](https://github.com/yersonargotev/herdr-tasks/blob/e5e54fa388339a94dd349a9e618614b9fce24253/docs/producers.md)
+and [operator guide](https://github.com/yersonargotev/herdr-tasks/blob/e5e54fa388339a94dd349a9e618614b9fce24253/docs/operator.md).
+
+For a safe installation preview, keep dots and producer roots explicit and
+separate. Set `PLUGIN_BINARY` to the reviewed installed plugin's
+`.herdr/bin/herdr-tasks` executable; do not execute a guessed PATH match:
+
+```sh
+TASK_SANDBOX="$(mktemp -d)"
+dots install --dry-run --tag herdr --file dots.yaml --source-root "$PWD" \
+  --home "$TASK_SANDBOX/home" --state-root "$TASK_SANDBOX/dots-state"
+"$PLUGIN_BINARY" setup --dry-run --state-root "$TASK_SANDBOX/task-state" \
+  --codex-home "$TASK_SANDBOX/codex" --claude-home "$TASK_SANDBOX/claude"
+```
+
+The producer preview validates inputs without writing files. Applying setup to
+those temporary roots tests emitted settings without activating real agents or
+writing to a live home. No model request or transcript parsing is needed.
+Acceptance verified this preview/setup path with existing native/user hook entries
+and operator-only settings preserved, plus all three layouts through native
+Herdr 0.9.3 `config check`. This is temporary-environment evidence, not a claim
+that live agents have trusted or loaded the hooks.
 
 ## Pluck actions
 
@@ -120,28 +192,26 @@ token shares a name with the new plugin's token, so leaving both active can
 produce competing metadata. This is a one-time Herdr registry migration;
 routine dots installs do not uninstall external plugins.
 
-## Approved Spaces layout
+## Approved sidebar layout
 
-Each Space uses three lines, with one blank row between Spaces:
+Spaces use two contiguous rows:
 
-1. Semantic state icon and bold active tab name (`$tab_name`, `#cdd6f4`), without
-   a prefix. Tabby presents contextual labels as `directory > command`, such as
-   `dots > codex`; the Spaces plugin copies the active tab label. The state
-   remains a workspace-wide rollup so an inactive blocked
-   agent stays visible.
-2. Active-tab Git branch (`$gitbranch`, `#89b4fa`).
-3. Independently styled active-tab Git status tokens:
+1. Semantic state icon and bold active tab name (`$tab_name`), without a prefix.
+   Tabby presents contextual labels such as `dots > codex`; Git Tokens copies
+   the active tab label. State remains Herdr's workspace-wide rollup.
+2. Active-tab Git branch followed by independently styled Git categories:
    `$gitconflicted` (`!N`), `$gitadded` (`+N`), `$gitmodified` (`~N`),
    `$gitdeleted` (`−N`), `$gituntracked` (`?N`), `$gitahead` (`↑N`),
-   `$gitbehind` (`↓N`), and `$gitclean` (`clean`). Each category has its own
-   Mocha color, and zero categories are absent. The symbols retain meaning
-   without color. The line stays compact because counts have no labels.
+   `$gitbehind` (`↓N`), and `$gitclean` (`clean`). Zero categories are absent and
+   symbols preserve their meaning without color.
 
-Styled text explicitly disables dimming. Agents, keybindings, and active/Navigate
-background colors remain unchanged. Default and adaptive variants share the same
-sidebar layout. Token foregrounds are fixed Mocha hex values: Herdr theme switching
-does not translate these inline colors to Latte. The approved visual target is
-dark Catppuccin; light-mode token contrast remains a limitation.
+Agents use three contiguous rows: native state icon/engine/state, the bold human
+`$herdr_task_name`, and workspace location. The task row inherits the active
+native foreground and explicitly disables dimming; it disappears until metadata
+is available. Command/directory labels stay in the tab bar. The default,
+adaptive, and Carbonfox variants share this layout and preserve their existing
+Git category colors and other keybindings. Inline Git colors are authored for
+their dark palettes; automatic light switching does not translate them.
 
 The expanded sidebar prefers 26 columns and adapts between 18 and 36 columns.
 Herdr uses distinct semantic symbols for blocked, working, done, idle, and

@@ -43,7 +43,7 @@ printf 'sandbox zim runtime\n' > "$HOME/.zim/zimfw.zsh"
 printf 'sandbox zim init\n' > "$HOME/.zim/init.zsh"
 `)
 	for _, command := range []string{
-		"atuin", "bat", "cargo", "curl", "eza", "fd", "fnm", "fzf", "git",
+		"atuin", "bat", "cargo", "curl", "eza", "fd", "fnm", "fzf", "git", "go", "npx",
 		"lazygit", "node", "open", "pbcopy", "python3", "rustc", "rustup",
 		"starship", "tar", "zoxide",
 	} {
@@ -82,6 +82,7 @@ exit 97
 		".config/starship.toml",
 		".config/atuin/config.toml",
 		"rmarganti/herdr-pluck",
+		"yersonargotev/herdr-tasks",
 		"d1eacb80956c3a23ab6f7428a9e83961fb86ba28",
 	} {
 		if !strings.Contains(dryRunOutput.String(), want) {
@@ -104,6 +105,9 @@ exit 97
 	assertInstalledContains(t, filepath.Join(home, ".config", "herdr", "config.toml"), []string{
 		`key = "prefix+t"`,
 		`rmarganti.herdr-pluck.pluck`,
+		`yersonargotev.herdr-tasks.setup`,
+		`yersonargotev.herdr-tasks.rename`,
+		`$herdr_task_name`,
 		`key = "prefix+alt+f"`,
 		`exec "$@" "$selection"`,
 	})
@@ -140,6 +144,7 @@ exit 97
 		"yersonargotev/herdr-tab-git",
 		"yersonargotev/tabby",
 		"rmarganti/herdr-pluck",
+		"yersonargotev/herdr-tasks",
 		"zsh:-c",
 	} {
 		if !strings.Contains(log, want) {

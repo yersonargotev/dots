@@ -4073,32 +4073,8 @@ func TestRepositoryHerdrConfigSupportsAdaptiveThemeOverride(t *testing.T) {
 	}
 
 	defaultText := string(defaultConfig)
-	for section, want := range map[string]string{
-		"spaces": `[ui.sidebar.spaces]
-row_gap = 1
-rows = [
-  ["state_icon", { token = "$tab_name", fg = "#cdd6f4", bold = true, dim = false }],
-  [{ token = "$gitbranch", fg = "#89b4fa", dim = false }],
-  [{ token = "$gitconflicted", fg = "#f38ba8", dim = false },
-   { token = "$gitadded", fg = "#a6e3a1", dim = false },
-   { token = "$gitmodified", fg = "#f9e2af", dim = false },
-   { token = "$gitdeleted", fg = "#eba0ac", dim = false },
-   { token = "$gituntracked", fg = "#89dceb", dim = false },
-   { token = "$gitahead", fg = "#94e2d5", dim = false },
-   { token = "$gitbehind", fg = "#fab387", dim = false },
-   { token = "$gitclean", fg = "#6c7086", dim = false }],
-]`,
-		"agents": `[ui.sidebar.agents]
-row_gap = 1
-rows = [
-  ["state_icon", { token = "agent", fg = "#cba6f7", bold = true }, "state_text"],
-  [{ token = "workspace", fg = "#6c7086" }, "tab"],
-]`,
-	} {
-		if got := herdrConfigSection(t, defaultText, "[ui.sidebar."+section+"]"); got != want {
-			t.Fatalf("default Herdr %s sidebar section =:\n%s\nwant:\n%s", section, got, want)
-		}
-	}
+	// Sidebar behavior is checked semantically across every theme by
+	// TestRepositoryHerdrTaskIdentityHasCompactReadableRows.
 	for _, want := range []string{
 		`navigate_workspace_up = ["up", "k"]`,
 		`navigate_workspace_down = ["down", "j"]`,
