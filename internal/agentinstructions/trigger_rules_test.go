@@ -817,7 +817,7 @@ func TestMutationSafetyGateDefinesImplementationConformanceChallenge(t *testing.
 	})
 }
 
-func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t *testing.T) {
+func TestIssueCreationSupportsDirectProducerPathWithoutModifyingExternalSkills(t *testing.T) {
 	root := filepath.Join("..", "..")
 	issueCreationPath := filepath.Join(root, ".agents", "skills", "dots-issue-creation", "SKILL.md")
 	assertDocumentContainsAll(t, issueCreationPath, []string{
@@ -827,19 +827,18 @@ func TestIssueCreationSupportsDirectProducerPathWithoutVendoringExternalSkills(t
 		"parent,subIssues,blockedBy,blocking,labels",
 		"`to-spec` → `to-tickets` → `delivery-issue`",
 		"mandatory post-processor",
+		"Never manually copy, modify, or fork",
+		"Reviewed Packy-managed project projections are allowed",
+		"`packy verify`",
 	})
 	assertDocumentContainsAll(t, filepath.Join(root, "docs", "agents", "issue-tracker.md"), []string{
 		"`to-spec` → `to-tickets` → `delivery-issue`",
-		"unmodified and unvendored",
+		"unmodified upstream workflows",
+		"Do not manually copy, modify, or fork",
+		"Reviewed Packy-managed project projections are allowed",
+		"`packy verify`",
 		"not a mandatory post-processor",
 	})
-
-	for _, externalSkill := range []string{"grill-with-docs", "to-spec", "to-tickets", "triage"} {
-		path := filepath.Join(root, ".agents", "skills", externalSkill)
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("external skill %q must not be vendored at %s; stat error = %v", externalSkill, path, err)
-		}
-	}
 }
 
 func TestDeliveryContractEvidenceAndRepositoryLanguage(t *testing.T) {

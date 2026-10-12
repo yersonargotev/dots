@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "packs": [
+    {
+      "id": "matty",
+      "surface_intents": [
+        {
+          "surface": "codex",
+          "version": "4.0.0",
+          "selection": {
+            "mode": "all",
+            "roots": []
+          },
+          "aliases": []
+        }
+      ]
+    }
+  ]
+}

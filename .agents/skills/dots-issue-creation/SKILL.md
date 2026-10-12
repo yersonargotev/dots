@@ -26,7 +26,9 @@ Read these when context is stale or the workflow may have changed:
   triage skills.
 - External `to-spec` or `to-tickets` results may go directly to
   `delivery-issue` when they already publish a complete Delivery Contract and
-  native relationships. Never copy, modify, or vendor those skills.
+  native relationships. Never manually copy, modify, or fork those skills.
+  Reviewed Packy-managed project projections are allowed; preserve their
+  upstream content and verify their locked integrity with `packy verify`.
 - The supported external route is `to-spec` → `to-tickets` → `delivery-issue`;
   this skill is optional when that route already satisfied repository
   publication requirements.
