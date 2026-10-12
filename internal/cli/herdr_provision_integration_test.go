@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -180,8 +181,17 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	if err := json.Unmarshal(statusOutput.Bytes(), &statusEnvelope); err != nil {
 		t.Fatal(err)
 	}
-	if statusEnvelope.Status != "ok" || statusEnvelope.Data.Provisioners.Summary.Completed != 4 {
-		t.Fatalf("status omitted aligned pinned plugin inventory: %s", statusOutput.String())
+	// Installation simulates Apple Silicon; read-only status uses the process's
+	// actual platform and excludes Provisioners unsupported there.
+	wantCompleted := 0
+	if runtime.GOOS == "darwin" {
+		wantCompleted = 2 // Git and Tasks support both macOS architectures.
+		if runtime.GOARCH == "arm64" {
+			wantCompleted = 4 // Tabby and Pluck are Apple Silicon only.
+		}
+	}
+	if statusEnvelope.Status != "ok" || statusEnvelope.Data.Provisioners.Summary.Completed != wantCompleted {
+		t.Fatalf("status on %s/%s should report %d aligned pinned plugins: %s", runtime.GOOS, runtime.GOARCH, wantCompleted, statusOutput.String())
 	}
 	if entries, err := os.ReadDir(fakeRealHome); err != nil || len(entries) != 0 {
 		t.Fatalf("Herdr install touched inherited HOME %q: entries=%v err=%v", fakeRealHome, entries, err)
