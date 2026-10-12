@@ -91,12 +91,14 @@ type ProfileSummary struct {
 
 // TagSummary is a compact Tag summary.
 type TagSummary struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Kind        string   `json:"kind"`
-	Status      string   `json:"status"`
-	ReplacedBy  []string `json:"replaced_by,omitempty"`
-	Origin      string   `json:"origin"`
+	Name               string   `json:"name"`
+	Description        string   `json:"description"`
+	Kind               string   `json:"kind"`
+	Status             string   `json:"status"`
+	ReplacedBy         []string `json:"replaced_by,omitempty"`
+	ConflictsWith      []string `json:"conflicts_with,omitempty"`
+	SupportedPlatforms []string `json:"supported_platforms,omitempty"`
+	Origin             string   `json:"origin"`
 }
 
 // Detail explains exactly one Profile or Tag selection without composing it
@@ -107,6 +109,8 @@ type Detail struct {
 	Status              string            `json:"status"`
 	Kind                string            `json:"kind,omitempty"`
 	ReplacedBy          []string          `json:"replaced_by,omitempty"`
+	ConflictsWith       []string          `json:"conflicts_with,omitempty"`
+	SupportedPlatforms  []string          `json:"supported_platforms,omitempty"`
 	ResolvedTags        []string          `json:"resolved_tags"`
 	Dependencies        []Dependency      `json:"dependencies"`
 	DependencySets      []DependencySet   `json:"dependency_sets"`
@@ -471,6 +475,8 @@ func Tag(m manifest.Manifest, name string, opts Options) (Report, error) {
 		return Report{}, fmt.Errorf("normalize catalog tag %q: %w", name, err)
 	}
 	base.Tag = buildDetail(m, name, t.Description, t.Status, t.Kind, t.ReplacedBy, resolvedTags, base.OS)
+	base.Tag.ConflictsWith = clone(t.ConflictsWith)
+	base.Tag.SupportedPlatforms = clone(t.SupportedPlatforms)
 	return base, nil
 }
 
@@ -734,7 +740,7 @@ func summaryProfile(name string, p manifest.Profile) ProfileSummary {
 }
 func summaryTag(m manifest.Manifest, name string) TagSummary {
 	if t, ok := m.Tags[name]; ok {
-		return TagSummary{Name: name, Description: t.Description, Kind: t.Kind, Status: t.Status, ReplacedBy: clone(t.ReplacedBy), Origin: MetadataDeclared}
+		return TagSummary{Name: name, Description: t.Description, Kind: t.Kind, Status: t.Status, ReplacedBy: clone(t.ReplacedBy), ConflictsWith: clone(t.ConflictsWith), SupportedPlatforms: clone(t.SupportedPlatforms), Origin: MetadataDeclared}
 	}
 	return TagSummary{Name: name, Kind: "surface", Status: "current", Origin: MetadataDerived}
 }

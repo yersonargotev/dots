@@ -57,6 +57,15 @@ may instead offer an unambiguous candidate for confirmation.
 
 ## Tags
 
+Tags may declare `conflicts_with: [other-tag]` to reject incompatible selections,
+including Tags contributed by Profiles. One declaration is sufficient; selection
+order does not change the result. Optional `supported_platforms` lists exact
+pairs (`darwin_arm64`, `darwin_amd64`, `linux_arm64`, `linux_amd64`). Install,
+dependency, and Provisioner plans reject unsupported selected capabilities before
+mutation. Omitted constraints preserve existing Tag behavior. For example,
+`herdr-custom` conflicts with `herdr` and supports only `darwin_arm64` and
+`linux_amd64`.
+
 Each current Tag is the smallest capability that makes sense to install or stop
 managing independently. It may select Managed Entries, Dependencies,
 Provisioners, or a cohesive combination of them. Declared Tags have a `kind`
@@ -138,6 +147,7 @@ from compact discovery unless `--all` is supplied.
 | `git` | surface | current | Portable Git configuration and native Git entrypoint. |  |
 | `go` | surface | current | Go language toolchain. |  |
 | `herdr` | surface | current | Herdr terminal layout, task identity, and pinned workspace plugins on macOS. |  |
+| `herdr-custom` | surface | current | Compact custom Herdr on Apple Silicon macOS and Linux x86_64, independent of official Herdr. |  |
 | `herdr-metrics` | surface | current | Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS. |  |
 | `jq` | surface | current | jq command-line JSON processor. |  |
 | `lazygit` | surface | current | Lazygit terminal interface for Git. |  |
@@ -434,7 +444,7 @@ Tag-scoped Dependency Sets use:
 | `toolchain` | No | Built-in runtime bootstrap flow. Supported values: `node-lts-fnm`, `rust-stable-rustup`. These values map to fixed argv commands, not arbitrary shell hooks. |
 | `brew` | No | Homebrew formula token. Mutually exclusive with `brew_cask`. |
 | `linux_homebrew` | No | Allows Linux distro tiers to fall back to the Homebrew formula when the distro provider is absent or unavailable. Keep this opt-in for reviewed CLI/runtime tools only. |
-| `user_local` | No | Linux-only opt-in for a reviewed User-Local Provider recipe. Requires `recipe`, `version`, and `checksum` or per-platform `checksums`; installs into `~/.local/bin` or `~/.local/opt/<tool>` without using system package managers. |
+| `user_local` | No | Opt-in for a reviewed User-Local Provider recipe; Linux-only except `herdr-custom` (Darwin ARM64/Linux AMD64). Requires `recipe`, `version`, and `checksum` or per-platform `checksums`; installs into `~/.local/bin` or `~/.local/opt/<tool>` without using system package managers. |
 | `rolling_user_local` | No | macOS/Linux opt-in for a closed Rolling User-Local Provider recipe. Accepts only `recipe`; dots resolves the latest stable official version, immutable platform artifact, and digest before the action is installable. |
 | `brew_cask` | No | Homebrew cask token. Renders as `brew install --cask <token>`. |
 | `apt` | No | Debian/Ubuntu package name. |
@@ -593,7 +603,7 @@ Constraints:
 - CodeGraph specs must not mix skill names, Claude plugin fields, MCP fields, or
   skills.sh-specific fields.
 
-### `herdr` spec
+### `herdr` and `herdr-custom` specs
 
 Supported fields: `plugin` (a GitHub `OWNER/REPO`) and `ref` (a full
 40-character hexadecimal commit). Other dialect fields are rejected. A Herdr
@@ -603,7 +613,11 @@ Provisioner renders exactly one direct invocation:
 herdr plugin install OWNER/REPO --ref COMMIT --yes
 ```
 
-`ref` is exclusive to Herdr. The Install Plan discloses Herdr configuration/registry, state, data/cache,
+`herdr-custom` uses the same constrained plugin/ref dialect and isolation, but
+renders `herdr-custom plugin install ...` and requires only the custom runtime.
+It never selects the official Herdr Dependency.
+
+`ref` is exclusive to these Herdr tools. The Install Plan discloses Herdr configuration/registry, state, data/cache,
 and Rust build roots affected by the command. Readiness only probes declared Dependencies; plan and
 doctor never install or contact plugins. Apply uses Herdr's native installer,
 including its reviewed build commands. Repeated installs may download and rebuild

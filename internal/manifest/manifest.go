@@ -70,10 +70,12 @@ func (r *ReplacementTags) UnmarshalYAML(value *yaml.Node) error {
 // compatibility; when present, every tag referenced by the manifest must be
 // declared here.
 type Tag struct {
-	Description string          `yaml:"description,omitempty"`
-	Kind        string          `yaml:"kind"`
-	Status      string          `yaml:"status"`
-	ReplacedBy  ReplacementTags `yaml:"replaced_by,omitempty"`
+	Description        string          `yaml:"description,omitempty"`
+	Kind               string          `yaml:"kind"`
+	Status             string          `yaml:"status"`
+	ReplacedBy         ReplacementTags `yaml:"replaced_by,omitempty"`
+	ConflictsWith      []string        `yaml:"conflicts_with,omitempty"`
+	SupportedPlatforms []string        `yaml:"supported_platforms,omitempty"`
 }
 
 // TagReplacement records one legacy Tag expansion applied during selection
@@ -685,7 +687,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of bat, claude, codegraph, codex, herdr, skills, zimfw", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of bat, claude, codegraph, codex, herdr, herdr-custom, skills, zimfw", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -735,7 +737,7 @@ func (m Manifest) Validate() error {
 			if err := validateCodeGraphSpec(prov.Spec, i); err != nil {
 				return err
 			}
-		case "herdr":
+		case "herdr", "herdr-custom":
 			if err := validateHerdrSpec(prov.Spec, i); err != nil {
 				return err
 			}
@@ -790,6 +792,9 @@ func (m Manifest) validateTagRegistry() error {
 		if tag.Status != "legacy" && len(tag.ReplacedBy) > 0 {
 			return fmt.Errorf("tags[%q].replaced_by requires status legacy", name)
 		}
+		if err := validateTagConstraints(m, name, tag); err != nil {
+			return err
+		}
 		replacementSeen := make(map[string]bool, len(tag.ReplacedBy))
 		for i, replacementName := range tag.ReplacedBy {
 			if strings.TrimSpace(replacementName) == "" {
@@ -824,6 +829,19 @@ func (m Manifest) validateDeclaredTags(tags []string, path string) error {
 }
 
 func validateDependency(dep Dependency, path string) error {
+	if dep.UserLocal != nil && (dep.UserLocal.Recipe == "herdr-custom" || dep.UserLocal.Recipe == "" && dep.Name == "herdr-custom") {
+		if dep.RollingUserLocal != nil || dep.Command != "herdr-custom" || len(dep.Commands) != 0 || dep.UserLocal.Checksum != "" {
+			return fmt.Errorf("%s herdr-custom requires command herdr-custom and fixed per-platform checksums", path)
+		}
+		if !regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+-custom\.[0-9]+$`).MatchString(dep.UserLocal.Version) {
+			return fmt.Errorf("%s herdr-custom version must be a pinned vMAJOR.MINOR.PATCH-custom.N release", path)
+		}
+		for _, platform := range []string{"darwin_arm64", "linux_amd64"} {
+			if !regexp.MustCompile(`^[0-9a-fA-F]{64}$`).MatchString(dep.UserLocal.Checksums[platform]) {
+				return fmt.Errorf("%s herdr-custom requires SHA-256 for %s", path, platform)
+			}
+		}
+	}
 	if strings.TrimSpace(dep.Name) == "" {
 		return fmt.Errorf("%s.name is required", path)
 	}
@@ -1338,7 +1356,11 @@ func resolveSelection(m Manifest, profileNames []string, extraTags []string, all
 	if err != nil {
 		return Selection{}, err
 	}
-	return Selection{Profile: strings.Join(profiles, ","), Profiles: profiles, Tags: normalizedTags, Replacements: replacements}, nil
+	selected := Selection{Profile: strings.Join(profiles, ","), Profiles: profiles, Tags: normalizedTags, Replacements: replacements}
+	if err := validateTagConflicts(m, selected.Tags); err != nil {
+		return Selection{}, err
+	}
+	return selected, nil
 }
 
 // MatchesOS reports whether an item's OS filter admits the current OS. An empty
@@ -1441,7 +1463,7 @@ func allowedArch(arch string) bool {
 // subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "bat", "claude", "codex", "codegraph", "herdr", "skills", "zimfw":
+	case "bat", "claude", "codex", "codegraph", "herdr", "herdr-custom", "skills", "zimfw":
 		return true
 	default:
 		return false

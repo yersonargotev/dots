@@ -7,6 +7,100 @@ with `dots install --tag herdr` on a new installation, or include it in the
 selection you intend to retain. Review selection reconciliation before changing
 an existing installation's Tags.
 
+## Independent custom variant
+
+The opt-in `herdr-custom` Tag uses
+[`herdr-custom v0.9.3-custom.4`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.3-custom.4),
+based on upstream Herdr 0.9.3. Supported platforms are **macOS Apple Silicon**
+and **Linux x86_64**. Apple Intel and Linux ARM64 are rejected before installation.
+No Profile selects it. The official `herdr` Tag and its existing platform behavior
+remain unchanged.
+
+Select exactly one variant. Both own `~/.config/herdr/config.toml`, so selecting
+both Tags is an error, including through a Profile. `core` and `workstation`
+already select `herdr`; adding `--tag herdr-custom` to either Profile does not
+replace that selection. Use an explicit retained Tag selection without `herdr`
+or a separately authored Profile. Preview reconciliation before switching an
+existing installation:
+
+```sh
+CUSTOM_SANDBOX="$(mktemp -d)"
+dots install --dry-run --tag herdr-custom --file dots.yaml --source-root "$PWD" \
+  --home "$CUSTOM_SANDBOX/home" --state-root "$CUSTOM_SANDBOX/state"
+```
+
+The reviewed User-Local Provider downloads the platform release with its pinned
+SHA-256, stages it under home-owned versioned storage, and exposes only
+`herdr-custom` in `~/.local/bin`. It does not install, replace, or alias the
+`herdr` command. Keep `~/.local/bin` on PATH. An unrelated existing custom command
+or a PATH entry shadowing the managed launcher needs explicit repair; it is not
+accepted as an integrated installation. Self-update is disabled in this
+custom distribution; updates go through reviewed Install Manifest version and
+checksum changes. Deselecting a Tag does not uninstall external Dependencies.
+
+The dots integration launcher selects `~/.config/herdr/config.toml`, honoring an
+explicit `HERDR_CONFIG_PATH` override. Thus the base, `adaptive-theme`, and
+`theme-carbonfox` variants remain effective instead of being bypassed by the
+release's bundled configuration. Shared keybindings, Git colors, and theme
+palettes match the official variants. The compact UI adds:
+
+- One-row tabs without numbering, underline, or vertical padding; active tabs
+  keep their highlight, inactive tabs use the bar background, with separators.
+- Blue selection stripes for Spaces and Agents, and state dots.
+- Stable native workspace names in Spaces, with the branch on the left and Git
+  status/change counts on the right; narrow sidebars retain inline metadata.
+- Agent identity on the left and state on the right, followed by the semantic
+  Task Name and native tab context when available.
+- Sidebar width 38, adapting between 18 and 44, with no blank padding rows or gaps.
+
+The patch owns native tab rendering, selection stripes, and state alignment;
+these are not unsupported TOML settings. Herdr Tasks keeps the same semantic
+naming contract, manual corrections, activation, and state ownership described
+below. No session is restarted or migrated by selecting this Tag. Use
+`herdr-custom` instead of `herdr` in the operator commands below, always selecting
+the intended existing session explicitly. The package contains server
+functionality too; starting a missing session may start its server.
+
+### Custom plugins on macOS and Linux
+
+Both variants share the full plugin commit pins in the Install Manifest through
+YAML aliases. Custom Provisioners invoke `herdr-custom plugin install`; none
+requires Homebrew Herdr. Native plugin execution supplies `HERDR_BIN_PATH` for
+runtime subprocesses, with no global official-name alias.
+
+| Custom platform | Plugins |
+|---|---|
+| macOS Apple Silicon | Git Tokens, Tabby, Pluck, Herdr Tasks |
+| Linux x86_64 | Git Tokens, Pluck, Herdr Tasks |
+
+[Tabby's pinned installer](https://github.com/yersonargotev/tabby/blob/19031d668f0f8a79b58591db4ce8bc8f8846e329/scripts/install-herdr-plugin.py)
+rejects Linux. Linux therefore retains native/manual tab labels; it does not
+receive Tabby's automatic directory/command naming or its config baseline.
+Tabby's standalone installation/status paths still assume the official `herdr`
+command. Custom support covers its plugin runtime, not those standalone commands.
+The shared Tabby baseline is installed for custom only on macOS.
+
+[Pluck's pinned source](https://github.com/rmarganti/herdr-pluck/tree/d1eacb80956c3a23ab6f7428a9e83961fb86ba28)
+supports Linux x86_64 and uses `xdg-open` for URLs. Clipboard copying needs a
+working desktop clipboard command: `wl-copy` on Wayland or `xclip`/`xsel` on X11.
+These are declared as optional native packages because they are alternatives,
+not an AND requirement; choose a backend suited to the active desktop session.
+Their presence alone does not prove a display server or clipboard is available,
+and a headless server may provide neither copying nor desktop URL opening.
+The installer uses curl/tar and can fall back to Rust/Cargo with the declared
+C linker toolchain (`build-essential`, `gcc`, or `base-devel`); Git Tokens needs
+Node LTS through fnm, and Herdr Tasks needs Go 1.24 or newer. The Linux surface
+includes the same LazyGit/file-finder popup tools, with platform package policies.
+These platform declarations follow the pinned source; they do not claim a live
+Linux desktop/plugin session has been exercised. Pluck's upstream downloaded
+payload is not independently checksum-verified by its installer; the custom
+client's verified distribution does not change that
+existing plugin limitation.
+
+`herdr-metrics` remains a separate Apple Silicon opt-in. Custom never selects
+macmon implicitly. On Linux the hardware-monitor popup reports the missing
+command and the status entry remains empty.
+
 ## Plugins and prerequisites
 
 | Plugin | Source | Pinned commit |
@@ -193,7 +287,7 @@ token shares a name with the new plugin's token, so leaving both active can
 produce competing metadata. This is a one-time Herdr registry migration;
 routine dots installs do not uninstall external plugins.
 
-## Approved sidebar layout
+## Official sidebar layout
 
 Spaces use two contiguous rows:
 
@@ -344,7 +438,8 @@ fetch. The watcher exits if Herdr snapshots repeatedly fail; a later focus
 event or manual refresh restarts it. The poll costs a snapshot, up to five local
 Git commands, and one metadata write per cycle.
 
-Pluck v0.3.1 supports dots only on Apple Silicon macOS. Its installer does not
+The official `herdr` Tag selects Pluck v0.3.1 only on Apple Silicon macOS;
+the custom variant also selects its Linux x86_64 implementation. Its installer does not
 verify the release checksum sidecar and its Cargo fallback does not pass
 `--locked`; the full reviewed commit pin makes the checkout and build command
 reviewable but does not turn the downloaded release payload into a

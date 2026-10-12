@@ -2123,7 +2123,7 @@ provisioners:
     spec:
       scope: global
 `,
-			want: "provisioners[0].tool must be one of bat, claude, codegraph, codex, herdr, skills, zimfw",
+			want: "provisioners[0].tool must be one of bat, claude, codegraph, codex, herdr, herdr-custom, skills, zimfw",
 		},
 		{
 			name: "retired gentle-ai tool",
@@ -2133,7 +2133,7 @@ provisioners:
       scope: global
       agents: [codex]
 `,
-			want: "provisioners[0].tool must be one of bat, claude, codegraph, codex, herdr, skills, zimfw",
+			want: "provisioners[0].tool must be one of bat, claude, codegraph, codex, herdr, herdr-custom, skills, zimfw",
 		},
 		{
 			name: "claude spec sets neither marketplace nor plugin",
