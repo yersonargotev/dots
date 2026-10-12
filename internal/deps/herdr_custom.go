@@ -190,7 +190,11 @@ func validHerdrCustomBundle(a UserLocalArtifact) bool {
 
 func herdrCustomPresent(dep manifest.Dependency, opts Options) bool {
 	a, _, err := herdrCustomArtifact(dep, opts)
-	if err != nil || !validHerdrCustomBundle(a) {
+	return err == nil && herdrCustomArtifactPresent(a)
+}
+
+func herdrCustomArtifactPresent(a UserLocalArtifact) bool {
+	if !validHerdrCustomBundle(a) {
 		return false
 	}
 	expected := filepath.Join(herdrCustomRoot(a.Destination, a), "dots/herdr-custom")

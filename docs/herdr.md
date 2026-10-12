@@ -10,7 +10,7 @@ an existing installation's Tags.
 ## Independent custom variant
 
 The opt-in `herdr-custom` Tag uses
-[`herdr-custom v0.9.3-custom.3`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.3-custom.3),
+[`herdr-custom v0.9.3-custom.4`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.3-custom.4),
 based on upstream Herdr 0.9.3. Supported platforms are **macOS Apple Silicon**
 and **Linux x86_64**. Apple Intel and Linux ARM64 are rejected before installation.
 No Profile selects it. The official `herdr` Tag and its existing platform behavior
@@ -47,7 +47,8 @@ palettes match the official variants. The compact UI adds:
 - One-row tabs without numbering, underline, or vertical padding; active tabs
   keep their highlight, inactive tabs use the bar background, with separators.
 - Blue selection stripes for Spaces and Agents, and state dots.
-- Stable native workspace names in Spaces, followed by Git metadata.
+- Stable native workspace names in Spaces, with the branch on the left and Git
+  status/change counts on the right; narrow sidebars retain inline metadata.
 - Agent identity on the left and state on the right, followed by the semantic
   Task Name and native tab context when available.
 - Sidebar width 38, adapting between 18 and 44, with no blank padding rows or gaps.

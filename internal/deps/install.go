@@ -395,6 +395,9 @@ func runBootstrap(action InstallAction, runner Runner) error {
 }
 
 func actionPresent(action InstallAction, opts Options, look Lookup, fontLook FontLookup) bool {
+	if action.UserLocal != nil && action.UserLocal.Recipe == "herdr-custom" {
+		return look("herdr-custom") && herdrCustomArtifactPresent(*action.UserLocal)
+	}
 	matches := action.FontMatches
 	if len(matches) == 0 && action.FontMatch != "" {
 		matches = []string{action.FontMatch}

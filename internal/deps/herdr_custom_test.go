@@ -17,7 +17,7 @@ import (
 )
 
 func customDependency() manifest.Dependency {
-	return manifest.Dependency{Name: "herdr-custom", Command: "herdr-custom", UserLocal: &manifest.UserLocalProvider{Recipe: "herdr-custom", Version: "v0.9.3-custom.3", Checksums: map[string]string{"darwin_arm64": "0a5125f2e0402dba3ebf509434836cc8e8f4b0902f6bbd2bf1259bdfa3f09389", "linux_amd64": "5bd815660f60ae38c9e2ce812107abd31478d8bba45ce06b3e7dda0f9acce60c"}}}
+	return manifest.Dependency{Name: "herdr-custom", Command: "herdr-custom", UserLocal: &manifest.UserLocalProvider{Recipe: "herdr-custom", Version: "v0.9.3-custom.4", Checksums: map[string]string{"darwin_arm64": "5cc58039c8b9a1ce19fd06971d29f53d6e5a67229aa9e432d1f4e778d09ba69f", "linux_amd64": "2ad4110a8402f28d52cf586c2804b39385ccc480be6c437a0fd8f10b5a5c525a"}}}
 }
 
 func TestHerdrCustomArtifactPlatformsAndProvider(t *testing.T) {
@@ -27,7 +27,7 @@ func TestHerdrCustomArtifactPlatformsAndProvider(t *testing.T) {
 		if err != nil || !ok {
 			t.Fatalf("resolve: %v", err)
 		}
-		want := "https://github.com/yersonargotev/herdr-custom/releases/download/v0.9.3-custom.3/herdr-custom-0.9.3-custom.3-" + platform.target + ".tar.gz"
+		want := "https://github.com/yersonargotev/herdr-custom/releases/download/v0.9.3-custom.4/herdr-custom-0.9.3-custom.4-" + platform.target + ".tar.gz"
 		if a.URL != want || a.Command != "herdr-custom" || a.Layout != userLocalLayoutBundle {
 			t.Fatalf("artifact: %+v", a)
 		}
@@ -44,7 +44,7 @@ func TestHerdrCustomArtifactPlatformsAndProvider(t *testing.T) {
 }
 
 func customFixture(t *testing.T, missing, unsafe, badMode bool) ([]byte, UserLocalArtifact) {
-	return customFixtureVersion(t, "v0.9.3-custom.3", missing, unsafe, badMode)
+	return customFixtureVersion(t, "v0.9.3-custom.4", missing, unsafe, badMode)
 }
 
 func customFixtureVersion(t *testing.T, version string, missing, unsafe, badMode bool) ([]byte, UserLocalArtifact) {
@@ -216,7 +216,7 @@ func TestHerdrCustomUpgradePreservesPriorUntilValidated(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			data, next := customFixtureVersion(t, "v0.9.3-custom.4", failure == "missing-runtime", false, false)
+			data, next := customFixtureVersion(t, "v0.9.3-custom.5", failure == "missing-runtime", false, false)
 			dep := customDependency()
 			dep.UserLocal.Version = next.Version
 			opts := Options{OS: "linux", Arch: "amd64", Home: home}
@@ -226,6 +226,9 @@ func TestHerdrCustomUpgradePreservesPriorUntilValidated(t *testing.T) {
 			action, err := actionFor(dep, opts, TierHomebrew, func(string) bool { return true })
 			if err != nil || action.UserLocal == nil {
 				t.Fatalf("upgrade plan %+v %v", action, err)
+			}
+			if actionPresent(action, opts, func(string) bool { return true }, nil) {
+				t.Fatal("execution recheck must not let the old version satisfy the new action")
 			}
 			downloadUserLocalArtifact = func(string, string) ([]byte, error) {
 				if failure == "checksum" {
@@ -248,6 +251,9 @@ func TestHerdrCustomUpgradePreservesPriorUntilValidated(t *testing.T) {
 				}
 				if !DependencyPresent(dep, opts, func(string) bool { return true }, nil) {
 					t.Fatal("new version not detected")
+				}
+				if !actionPresent(action, opts, func(string) bool { return true }, nil) {
+					t.Fatal("installed pinned action must satisfy the execution recheck")
 				}
 			}
 			if got, err := os.ReadFile(oldRuntime); err != nil || !bytes.Equal(got, oldBytes) {
@@ -319,7 +325,7 @@ func TestHerdrCustomUpgradeRejectsUnconfinedOrUnverifiedPrior(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, next := customFixtureVersion(t, "v0.9.3-custom.4", false, false, false)
+			_, next := customFixtureVersion(t, "v0.9.3-custom.5", false, false, false)
 			if err := InstallUserLocal(home, InstallAction{UserLocal: &next}); err == nil {
 				t.Fatal("accepted invalid prior integration")
 			}

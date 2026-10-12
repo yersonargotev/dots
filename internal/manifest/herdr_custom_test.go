@@ -53,7 +53,7 @@ func TestHerdrCustomSelectionAndSharedPluginPins(t *testing.T) {
 				}
 				if dep.Name == "herdr-custom" {
 					runtimeFound = true
-					if dep.UserLocal == nil || dep.UserLocal.Recipe != "herdr-custom" || dep.UserLocal.Version != "v0.9.3-custom.3" || len(dep.UserLocal.Checksums) != 2 {
+					if dep.UserLocal == nil || dep.UserLocal.Recipe != "herdr-custom" || dep.UserLocal.Version != "v0.9.3-custom.4" || len(dep.UserLocal.Checksums) != 2 {
 						t.Fatalf("unpinned custom runtime: %#v", dep)
 					}
 				}
