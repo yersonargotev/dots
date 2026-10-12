@@ -1459,7 +1459,7 @@ provisioners:
     os: [darwin]
     spec:
       plugin: yersonargotev/herdr-tasks
-      ref: 66a829c4b2793cb11300d865d83245432268c42e
+      ref: add3f2f855ca7687e4be4b4b57e1400d2a06066d
     dependencies:
       - name: herdr
         command: herdr
