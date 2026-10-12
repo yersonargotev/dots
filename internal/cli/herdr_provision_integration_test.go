@@ -60,7 +60,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		"rmarganti/herdr-pluck",
 		"d1eacb80956c3a23ab6f7428a9e83961fb86ba28",
 		"yersonargotev/herdr-tasks",
-		"e5e54fa388339a94dd349a9e618614b9fce24253",
+		"4ea07eb16a34ad5b406fb80547bedd488a27819b",
 	} {
 		if !strings.Contains(dryRunOutput.String(), want) {
 			t.Fatalf("Herdr dry-run omitted pinned value %q:\n%s", want, dryRunOutput.String())
@@ -108,7 +108,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		"plugin install yersonargotev/herdr-tab-git --ref 48fe5a66c17970a77919dc50a6ab3b6512bc7300 --yes",
 		"plugin install yersonargotev/tabby --ref 19031d668f0f8a79b58591db4ce8bc8f8846e329 --yes",
 		"plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
-		"plugin install yersonargotev/herdr-tasks --ref e5e54fa388339a94dd349a9e618614b9fce24253 --yes",
+		"plugin install yersonargotev/herdr-tasks --ref 4ea07eb16a34ad5b406fb80547bedd488a27819b --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Herdr invocations = %#v, want only the four pinned plugins %#v\noutput:\n%s", got, want, installOutput.String())
@@ -206,7 +206,7 @@ func TestRepositoryHerdrAppleSiliconDryRunDisclosesMissingPluckDependencies(t *t
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("PATH", stubDir)
 
-	for _, command := range []string{"herdr", "git", "python3", "fnm", "node", "go", "go", "lazygit", "fzf", "fd", "bat"} {
+	for _, command := range []string{"herdr", "git", "python3", "fnm", "node", "go", "lazygit", "fzf", "fd", "bat"} {
 		writeHerdrIntegrationStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
 	}
 	writeHerdrIntegrationStub(t, filepath.Join(stubDir, "brew"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$COMMAND_LOG\"\nexit 99\n")
@@ -320,7 +320,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
 		"plugin install yersonargotev/herdr-tab-git --ref 48fe5a66c17970a77919dc50a6ab3b6512bc7300 --yes",
-		"plugin install yersonargotev/herdr-tasks --ref e5e54fa388339a94dd349a9e618614b9fce24253 --yes",
+		"plugin install yersonargotev/herdr-tasks --ref 4ea07eb16a34ad5b406fb80547bedd488a27819b --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Intel Herdr invocations = %#v, want only compatible plugins %#v\noutput:\n%s", got, want, installOutput.String())
