@@ -131,7 +131,7 @@ func TestRepositoryHerdrCustomInstallsPinnedPluginsInSandbox(t *testing.T) {
 			if platform.os == "darwin" {
 				want = append(want, "plugin install yersonargotev/tabby --ref 19031d668f0f8a79b58591db4ce8bc8f8846e329 --yes")
 			}
-			want = append(want, "plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes", "plugin install yersonargotev/herdr-tasks --ref add3f2f855ca7687e4be4b4b57e1400d2a06066d --yes")
+			want = append(want, "plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes")
 			got := strings.Split(strings.TrimSpace(string(log)), "\n")
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("custom commands=%v want=%v", got, want)

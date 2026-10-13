@@ -146,7 +146,7 @@ from compact discovery unless `--all` is supplied.
 | `ghostty` | surface | current | Ghostty terminal configuration and application requirement. |  |
 | `git` | surface | current | Portable Git configuration and native Git entrypoint. |  |
 | `go` | surface | current | Go language toolchain. |  |
-| `herdr` | surface | current | Herdr terminal layout, task identity, and pinned workspace plugins on macOS. |  |
+| `herdr` | surface | current | Herdr terminal layout and pinned workspace plugins on macOS. |  |
 | `herdr-custom` | surface | current | Compact custom Herdr on Apple Silicon macOS and Linux x86_64, independent of official Herdr. |  |
 | `herdr-metrics` | surface | current | Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS. |  |
 | `jq` | surface | current | jq command-line JSON processor. |  |
@@ -625,13 +625,11 @@ the same revision; Herdr retains plugin configuration outside the managed checko
 The child environment is rooted at the selected home, with inherited Herdr session
 and path overrides removed to avoid contacting another home's live server.
 
-The existing `herdr` Tag selects Git Tokens and conversation-owned Herdr Tasks
-on macOS, including Go for the task plugin build, and adds Tabby plus Pluck on
-Apple Silicon through `arch: [arm64]`;
-core and workstation already include it. See [Herdr setup](herdr.md) for runtime
-requirements, previewable task-producer setup, native Codex trust/Claude reload,
-live-session activation, ownership, and known limitations. Plugin installation
-completion does not imply engine-hook activation.
+The existing `herdr` Tag selects Git Tokens on macOS and adds Tabby plus Pluck
+on Apple Silicon through `arch: [arm64]`; core and workstation already include
+it. The independent `herdr-custom` Tag shares the supported plugin pins without
+selecting the official runtime. See [Herdr setup](herdr.md) for platform support,
+live-session activation, ownership, and known limitations.
 
 ### `skills` spec
 

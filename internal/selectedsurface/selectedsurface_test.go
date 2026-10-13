@@ -209,7 +209,7 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		{tag: "git", osName: "linux", entries: []string{"~/.gitconfig", "~/.config/dots/git/gitconfig"}, dependencies: []string{"git"}},
 		{tag: "starship", osName: "linux", entries: []string{"~/.config/starship.toml"}, dependencies: []string{"starship"}},
 		{tag: "tmux", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "~/.tmux.conf", "~/.config/tmux/carbonfox.conf"}, dependencies: []string{"tmux"}},
-		{tag: "herdr", osName: "darwin", entries: []string{"~/.config/herdr/config.toml", "~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml"}, dependencies: []string{"lazygit", "fzf", "fd", "bat", "herdr", "git", "Node LTS (fnm)", "python3", "Rust stable (rustup)", "curl", "tar", "pbcopy", "open", "go"}, provisioners: []string{"herdr", "herdr", "herdr", "herdr"}},
+		{tag: "herdr", osName: "darwin", entries: []string{"~/.config/herdr/config.toml", "~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml"}, dependencies: []string{"lazygit", "fzf", "fd", "bat", "herdr", "git", "Node LTS (fnm)", "python3", "Rust stable (rustup)", "curl", "tar", "pbcopy", "open"}, provisioners: []string{"herdr", "herdr", "herdr"}},
 		{tag: "herdr", osName: "linux"},
 		{tag: "zellij", osName: "linux", entries: []string{"~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/zellij/themes/carbonfox.kdl"}, dependencies: []string{"zellij"}},
 		{tag: "atuin", osName: "linux", entries: []string{"~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/atuin/themes/carbonfox.toml"}, dependencies: []string{"atuin"}},
@@ -441,7 +441,7 @@ func TestRepositoryCoreProfilePreservesCapabilitySurface(t *testing.T) {
 			}
 			wantProvisioners := []string{"zimfw"}
 			if osName == "darwin" {
-				wantProvisioners = []string{"herdr", "herdr", "herdr", "herdr", "zimfw"}
+				wantProvisioners = []string{"herdr", "herdr", "herdr", "zimfw"}
 			}
 			if got := provisionerTools(surface.Provisioners); !reflect.DeepEqual(got, wantProvisioners) {
 				t.Errorf("Provisioners = %#v, want %#v", got, wantProvisioners)

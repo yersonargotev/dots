@@ -32,7 +32,7 @@ func TestHerdrCustomSelectionAndSharedPluginPins(t *testing.T) {
 	for _, platform := range []struct {
 		os, arch string
 		plugins  int
-	}{{"darwin", "arm64", 4}, {"linux", "amd64", 3}} {
+	}{{"darwin", "arm64", 3}, {"linux", "amd64", 2}} {
 		t.Run(platform.os, func(t *testing.T) {
 			custom := selectedsurface.EvaluateForPlatform(*m, []string{"herdr-custom"}, platform.os, platform.arch)
 			if len(custom.Provisioners) != platform.plugins {
@@ -61,7 +61,7 @@ func TestHerdrCustomSelectionAndSharedPluginPins(t *testing.T) {
 			if !runtimeFound {
 				t.Fatal("custom runtime missing")
 			}
-			for _, tool := range []string{"lazygit", "fzf", "fd", "bat", "git", "Node LTS (fnm)", "Rust stable (rustup)", "go"} {
+			for _, tool := range []string{"lazygit", "fzf", "fd", "bat", "git", "Node LTS (fnm)", "Rust stable (rustup)"} {
 				if !selectedDependencyNamed(custom, tool) {
 					t.Errorf("custom misses %s", tool)
 				}
@@ -157,8 +157,8 @@ func TestHerdrCustomThemeAndCompactSettings(t *testing.T) {
 			if first[0] != "state_icon" || first[1].(map[string]any)["token"] != "agent" || first[2] != "state_text" {
 				t.Fatal("agent/state row changed")
 			}
-			if agents[1].([]any)[0].(map[string]any)["token"] != "$herdr_task_name" || agents[2].([]any)[0].(map[string]any)["token"] != "tab" {
-				t.Fatal("task/tab context missing")
+			if len(agents) != 2 || agents[1].([]any)[0].(map[string]any)["token"] != "tab" {
+				t.Fatal("native tab context missing")
 			}
 			surface := selectedsurface.EvaluateForPlatform(*m, []string{"herdr-custom", variant.tag}, "linux", "amd64")
 			found := false

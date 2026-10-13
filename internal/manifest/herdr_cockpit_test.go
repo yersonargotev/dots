@@ -90,7 +90,7 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 				t.Fatalf("status indicators = %q, want symbols", config.UI.StatusIndicators)
 			}
 
-			wantKeys := []string{"prefix+t", "prefix+o", "prefix+alt+s", "prefix+alt+r", "prefix+alt+g", "prefix+alt+t", "prefix+alt+f", "prefix+alt+m"}
+			wantKeys := []string{"prefix+t", "prefix+o", "prefix+alt+g", "prefix+alt+t", "prefix+alt+f", "prefix+alt+m"}
 			if len(config.Keys.Command) != len(wantKeys) {
 				t.Fatalf("custom commands = %#v, want keys %v", config.Keys.Command, wantKeys)
 			}
@@ -107,10 +107,8 @@ func TestRepositoryHerdrCockpitMatchesApprovedLayout(t *testing.T) {
 
 			commands := herdrPopupCommandsByKey(t, config)
 			wantPluginActions := map[string]string{
-				"prefix+t":     "rmarganti.herdr-pluck.pluck",
-				"prefix+o":     "rmarganti.herdr-pluck.open-url",
-				"prefix+alt+s": "yersonargotev.herdr-tasks.setup",
-				"prefix+alt+r": "yersonargotev.herdr-tasks.rename",
+				"prefix+t": "rmarganti.herdr-pluck.pluck",
+				"prefix+o": "rmarganti.herdr-pluck.open-url",
 			}
 			for key, wantCommand := range wantPluginActions {
 				action := commands[key]
@@ -179,7 +177,7 @@ func TestHerdrTagSelectsPopupDependenciesOnBothMacArchitectures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"herdr", "lazygit", "fzf", "fd", "bat", "git", "go"}
+	want := []string{"herdr", "lazygit", "fzf", "fd", "bat", "git"}
 	for _, arch := range []string{"arm64", "amd64"} {
 		t.Run(arch, func(t *testing.T) {
 			surface := selectedsurface.EvaluateForPlatform(*m, []string{"herdr"}, "darwin", arch)
@@ -609,7 +607,7 @@ func sameDirectory(t *testing.T, left, right string) bool {
 	return os.SameFile(leftInfo, rightInfo)
 }
 
-func TestRepositoryHerdrTaskIdentityHasCompactReadableRows(t *testing.T) {
+func TestRepositoryHerdrHasCompactNativeAgentRows(t *testing.T) {
 	for _, name := range herdrConfigVariants {
 		t.Run(name, func(t *testing.T) {
 			cfg := loadHerdrCockpitConfig(t, name)
@@ -617,8 +615,8 @@ func TestRepositoryHerdrTaskIdentityHasCompactReadableRows(t *testing.T) {
 			if spaces.RowGap != 0 || len(spaces.Rows) != 2 {
 				t.Fatalf("Spaces should have two contiguous rows: %#v", spaces)
 			}
-			if agents.RowGap != 0 || len(agents.Rows) != 3 {
-				t.Fatalf("Agents should have engine/task/location rows: %#v", agents)
+			if agents.RowGap != 0 || len(agents.Rows) != 2 {
+				t.Fatalf("Agents should have engine/location rows: %#v", agents)
 			}
 			tokens := func(row []any) []string {
 				out := []string{}
@@ -639,18 +637,12 @@ func TestRepositoryHerdrTaskIdentityHasCompactReadableRows(t *testing.T) {
 					t.Fatalf("Spaces row %d = %v, want %v", i, got, want)
 				}
 			}
-			for i, want := range [][]string{{"state_icon", "agent", "state_text"}, {"$herdr_task_name"}, {"workspace"}} {
+			for i, want := range [][]string{{"state_icon", "agent", "state_text"}, {"workspace"}} {
 				if got := tokens(agents.Rows[i]); !reflect.DeepEqual(got, want) {
 					t.Fatalf("Agents row %d = %v, want %v", i, got, want)
 				}
 			}
-			task := agents.Rows[1][0].(map[string]any)
-			if _, ok := task["fg"]; ok {
-				t.Fatal("task name should inherit native theme foreground")
-			}
-			if task["dim"] != false || task["bold"] != true {
-				t.Fatalf("task name should remain readable: %#v", task)
-			}
+
 		})
 	}
 }
