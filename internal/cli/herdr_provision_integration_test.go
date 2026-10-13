@@ -60,8 +60,6 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		"19031d668f0f8a79b58591db4ce8bc8f8846e329",
 		"rmarganti/herdr-pluck",
 		"d1eacb80956c3a23ab6f7428a9e83961fb86ba28",
-		"yersonargotev/herdr-tasks",
-		"add3f2f855ca7687e4be4b4b57e1400d2a06066d",
 	} {
 		if !strings.Contains(dryRunOutput.String(), want) {
 			t.Fatalf("Herdr dry-run omitted pinned value %q:\n%s", want, dryRunOutput.String())
@@ -109,17 +107,16 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 		"plugin install yersonargotev/herdr-tab-git --ref 48fe5a66c17970a77919dc50a6ab3b6512bc7300 --yes",
 		"plugin install yersonargotev/tabby --ref 19031d668f0f8a79b58591db4ce8bc8f8846e329 --yes",
 		"plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
-		"plugin install yersonargotev/herdr-tasks --ref add3f2f855ca7687e4be4b4b57e1400d2a06066d --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Herdr invocations = %#v, want only the four pinned plugins %#v\noutput:\n%s", got, want, installOutput.String())
+		t.Fatalf("Herdr invocations = %#v, want only the three pinned plugins %#v\noutput:\n%s", got, want, installOutput.String())
 	}
 	metadata, err := state.Load(state.Path(stateRoot))
 	if err != nil {
 		t.Fatalf("load Apple Silicon Installation Metadata: %v", err)
 	}
-	if len(metadata.Provisioners) != 4 {
-		t.Fatalf("Apple Silicon Provisioner inventory = %#v, want four pinned plugins", metadata.Provisioners)
+	if len(metadata.Provisioners) != 3 {
+		t.Fatalf("Apple Silicon Provisioner inventory = %#v, want three pinned plugins", metadata.Provisioners)
 	}
 	pluckRecorded := false
 	for _, record := range metadata.Provisioners {
@@ -159,7 +156,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	if err := repeat.Execute(); err != nil {
 		t.Fatalf("repeat install with user-only settings: %v\n%s", err, repeatOutput.String())
 	}
-	assertInstalledContains(t, target, []string{`[operator]`, `keep = true`, `yersonargotev.herdr-tasks.setup`, `yersonargotev.herdr-tasks.rename`, `$herdr_task_name`})
+	assertInstalledContains(t, target, []string{`[operator]`, `keep = true`, `rmarganti.herdr-pluck.pluck`, `$tab_name`})
 	status := NewRootCommand()
 	var statusOutput bytes.Buffer
 	status.SetOut(&statusOutput)
@@ -185,9 +182,9 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	// actual platform and excludes Provisioners unsupported there.
 	wantCompleted := 0
 	if runtime.GOOS == "darwin" {
-		wantCompleted = 2 // Git and Tasks support both macOS architectures.
+		wantCompleted = 1 // Git supports both macOS architectures.
 		if runtime.GOARCH == "arm64" {
-			wantCompleted = 4 // Tabby and Pluck are Apple Silicon only.
+			wantCompleted = 3 // Tabby and Pluck are Apple Silicon only.
 		}
 	}
 	if statusEnvelope.Status != "ok" || statusEnvelope.Data.Provisioners.Summary.Completed != wantCompleted {
@@ -330,7 +327,6 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
 		"plugin install yersonargotev/herdr-tab-git --ref 48fe5a66c17970a77919dc50a6ab3b6512bc7300 --yes",
-		"plugin install yersonargotev/herdr-tasks --ref add3f2f855ca7687e4be4b4b57e1400d2a06066d --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Intel Herdr invocations = %#v, want only compatible plugins %#v\noutput:\n%s", got, want, installOutput.String())
@@ -339,8 +335,8 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	if err != nil {
 		t.Fatalf("load Intel Installation Metadata: %v", err)
 	}
-	if len(metadata.Provisioners) != 2 {
-		t.Fatalf("Intel Provisioner inventory = %#v, want two compatible plugins", metadata.Provisioners)
+	if len(metadata.Provisioners) != 1 {
+		t.Fatalf("Intel Provisioner inventory = %#v, want one compatible plugin", metadata.Provisioners)
 	}
 	for _, record := range metadata.Provisioners {
 		if strings.Contains(strings.Join(record.Args, " "), "tabby") {

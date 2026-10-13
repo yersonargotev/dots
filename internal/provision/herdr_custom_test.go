@@ -9,10 +9,10 @@ import (
 )
 
 func TestCustomHerdrUsesOwnExecutableAndOriginalPluginArguments(t *testing.T) {
-	p := herdrProvisioner("yersonargotev/herdr-tasks", herdrGitCommit)
+	p := herdrProvisioner("yersonargotev/herdr-tab-git", herdrGitCommit)
 	p.Tool = "herdr-custom"
 	executable, args := provision.RenderCommand(p)
-	if executable != "herdr-custom" || !reflect.DeepEqual(args, []string{"plugin", "install", "yersonargotev/herdr-tasks", "--ref", herdrGitCommit, "--yes"}) {
+	if executable != "herdr-custom" || !reflect.DeepEqual(args, []string{"plugin", "install", "yersonargotev/herdr-tab-git", "--ref", herdrGitCommit, "--yes"}) {
 		t.Fatalf("%q %v", executable, args)
 	}
 	m := manifestWithProvisioners(p)

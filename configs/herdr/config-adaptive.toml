@@ -95,7 +95,6 @@ rows = [
 row_gap = 0
 rows = [
   ["state_icon", { token = "agent", fg = "#cba6f7", bold = true }, "state_text"],
-  [{ token = "$herdr_task_name", bold = true, dim = false }],
   [{ token = "workspace", fg = "#6c7086" }],
 ]
 
@@ -150,8 +149,6 @@ copy_mode = "prefix+["
 command = [
   { key = "prefix+t", type = "plugin_action", command = "rmarganti.herdr-pluck.pluck", description = "pluck visible token" },
   { key = "prefix+o", type = "plugin_action", command = "rmarganti.herdr-pluck.open-url", description = "open visible URL" },
-  { key = "prefix+alt+s", type = "plugin_action", command = "yersonargotev.herdr-tasks.setup", description = "set up task naming" },
-  { key = "prefix+alt+r", type = "plugin_action", command = "yersonargotev.herdr-tasks.rename", description = "correct current task name" },
   { key = "prefix+alt+g", type = "popup", command = '''
 if ! command -v lazygit >/dev/null 2>&1; then
   printf 'dots: lazygit is required\nPress Enter to close.\n' >&2
