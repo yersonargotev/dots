@@ -81,8 +81,8 @@ enabled = true
 row_gap = 1
 rows = [
   ["state_icon", { token = "$tab_name", bold = true, dim = false }],
-  [{ token = "$gitbranch", fg = "#be95ff", bold = true, dim = false },
-   { token = "$gitstaged", fg = "#25be6a", dim = false },
+  [{ token = "$gitbranch", fg = "#be95ff", bold = true, dim = false }],
+  [{ token = "$gitstaged", fg = "#25be6a", dim = false },
    { token = "$gitworkmodified", fg = "#08bdba", dim = false },
    { token = "$gituntracked", fg = "#ee5396", dim = false },
    { token = "$gitforward", fg = "#2dc7c4", dim = false },

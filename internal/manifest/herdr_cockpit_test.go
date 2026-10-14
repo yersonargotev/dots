@@ -612,8 +612,8 @@ func TestRepositoryHerdrHasCompactNativeAgentRows(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := loadHerdrCockpitConfig(t, name)
 			spaces, agents := cfg.UI.Sidebar["spaces"], cfg.UI.Sidebar["agents"]
-			if spaces.RowGap != 1 || len(spaces.Rows) != 2 {
-				t.Fatalf("Spaces should have two content rows and one blank row between entries: %#v", spaces)
+			if spaces.RowGap != 1 || len(spaces.Rows) != 3 {
+				t.Fatalf("Spaces should have three content rows and one blank row between entries: %#v", spaces)
 			}
 			if agents.RowGap != 0 || len(agents.Rows) != 2 {
 				t.Fatalf("Agents should have engine/location rows: %#v", agents)
@@ -632,7 +632,7 @@ func TestRepositoryHerdrHasCompactNativeAgentRows(t *testing.T) {
 				}
 				return out
 			}
-			for i, want := range [][]string{{"state_icon", "$tab_name"}, {"$gitbranch", "$gitstaged", "$gitworkmodified", "$gituntracked", "$gitforward", "$gitbackward", "$gitdiverged", "$gitclean"}} {
+			for i, want := range [][]string{{"state_icon", "$tab_name"}, {"$gitbranch"}, {"$gitstaged", "$gitworkmodified", "$gituntracked", "$gitforward", "$gitbackward", "$gitdiverged", "$gitclean"}} {
 				if got := tokens(spaces.Rows[i]); !reflect.DeepEqual(got, want) {
 					t.Fatalf("Spaces row %d = %v, want %v", i, got, want)
 				}

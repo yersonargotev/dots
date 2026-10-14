@@ -149,7 +149,10 @@ func TestHerdrCustomThemeAndCompactSettings(t *testing.T) {
 				}
 			}
 			spaces := sidebar["spaces"].(map[string]any)["rows"].([]any)
-			if spaces[0].([]any)[1].(map[string]any)["token"] != "$tab_name" {
+			if len(spaces) != 3 || len(spaces[0].([]any)) != 2 || len(spaces[1].([]any)) != 1 || len(spaces[2].([]any)) != 7 {
+				t.Fatalf("Spaces must have separate tab, branch, and status rows: %#v", spaces)
+			}
+			if spaces[0].([]any)[0] != "state_icon" || spaces[0].([]any)[1].(map[string]any)["token"] != "$tab_name" {
 				t.Fatal("Spaces must use active tab names")
 			}
 			agents := sidebar["agents"].(map[string]any)["rows"].([]any)
@@ -207,7 +210,7 @@ func TestHerdrGitColorsMatchStarship(t *testing.T) {
 			t.Run(folder+"/"+variant.herdr, func(t *testing.T) {
 				config := read(filepath.Join(folder, variant.herdr))
 				rows := config["ui"].(map[string]any)["sidebar"].(map[string]any)["spaces"].(map[string]any)["rows"].([]any)
-				row := rows[1].([]any)
+				row := append(append([]any{}, rows[1].([]any)...), rows[2].([]any)...)
 				want := []struct{ token, role, module, format string }{
 					{"gitbranch", "mauve", "", ""},
 					{"gitstaged", "green", "staged", "[+${count}](fg:green) "},
@@ -219,7 +222,7 @@ func TestHerdrGitColorsMatchStarship(t *testing.T) {
 					{"gitclean", "overlay0", "", ""},
 				}
 				if len(row) != len(want) {
-					t.Fatalf("Git row has %d tokens, want %d", len(row), len(want))
+					t.Fatalf("Git rows have %d tokens, want %d", len(row), len(want))
 				}
 				for i, item := range want {
 					got := row[i].(map[string]any)
