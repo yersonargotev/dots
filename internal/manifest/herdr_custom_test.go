@@ -149,8 +149,8 @@ func TestHerdrCustomThemeAndCompactSettings(t *testing.T) {
 				}
 			}
 			spaces := sidebar["spaces"].(map[string]any)["rows"].([]any)
-			if spaces[0].([]any)[1].(map[string]any)["token"] != "workspace" {
-				t.Fatal("Spaces must use stable workspace names")
+			if spaces[0].([]any)[1].(map[string]any)["token"] != "$tab_name" {
+				t.Fatal("Spaces must use active tab names")
 			}
 			agents := sidebar["agents"].(map[string]any)["rows"].([]any)
 			first := agents[0].([]any)
