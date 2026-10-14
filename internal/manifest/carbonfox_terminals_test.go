@@ -176,7 +176,7 @@ func TestCarbonfoxTerminalAdaptersUsePinnedPalette(t *testing.T) {
 		`"$tab_name", fg = "#f2f4f8"`, `"$gitbranch", fg = "#be95ff"`,
 		`"$gitstaged", fg = "#25be6a"`, `"$gitworkmodified", fg = "#08bdba"`,
 		`"$gituntracked", fg = "#ee5396"`, `"$gitforward", fg = "#2dc7c4"`,
-		`"$gitbackward", fg = "#3ddbd9"`, `"$gitdiverged", fg = "#be95ff"`,
+		`"$gitbackward", fg = "#3ddbd9"`, `"$gitdiverged", fg = "#be95ff"`, `"$gitclean", fg = "#6e6f70"`,
 		`"agent", fg = "#be95ff"`, `"workspace", fg = "#6e6f70"`,
 	} {
 		if !strings.Contains(herdrText, rowColor) {

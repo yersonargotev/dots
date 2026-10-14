@@ -127,7 +127,7 @@ func TestRepositoryHerdrCustomInstallsPinnedPluginsInSandbox(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := []string{"plugin install yersonargotev/herdr-tab-git --ref e217041ba70dc819a77a3aa4bf8b94cc043d3097 --yes"}
+			want := []string{"plugin install yersonargotev/herdr-tab-git --ref 8eb3a68dcf79797593c0eca1bacab2aaa23e05ec --yes"}
 			if platform.os == "darwin" {
 				want = append(want, "plugin install yersonargotev/tabby --ref 19031d668f0f8a79b58591db4ce8bc8f8846e329 --yes")
 			}

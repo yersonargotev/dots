@@ -69,7 +69,8 @@ rows = [
    { token = "$gituntracked", fg = "#f38ba8", dim = false },
    { token = "$gitforward", fg = "#94e2d5", dim = false },
    { token = "$gitbackward", fg = "#fab387", dim = false },
-   { token = "$gitdiverged", fg = "#cba6f7", dim = false }],
+   { token = "$gitdiverged", fg = "#cba6f7", dim = false },
+   { token = "$gitclean", fg = "#6c7086", dim = false }],
 ]
 
 [ui.sidebar.agents]

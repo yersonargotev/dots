@@ -199,8 +199,8 @@ func TestHerdrGitColorsMatchStarship(t *testing.T) {
 		prompt := read(filepath.Join("starship", variant.starship))
 		palette := prompt["palettes"].(map[string]any)[prompt["palette"].(string)].(map[string]any)
 		branch := prompt["git_branch"].(map[string]any)
-		if branch["symbol"] != " " || branch["style"] != "bold fg:mauve" {
-			t.Fatal("Herdr branch contract must follow the Starship symbol and style")
+		if branch["style"] != "bold fg:mauve" {
+			t.Fatal("Herdr branch color and weight must follow the Starship style")
 		}
 		status := prompt["git_status"].(map[string]any)
 		for _, folder := range []string{"herdr", "herdr-custom"} {
@@ -216,6 +216,7 @@ func TestHerdrGitColorsMatchStarship(t *testing.T) {
 					{"gitforward", "teal", "ahead", "[⇡${count}](fg:teal) "},
 					{"gitbackward", "peach", "behind", "[⇣${count}](fg:peach) "},
 					{"gitdiverged", "mauve", "diverged", "[⇕⇡${ahead_count}⇣${behind_count}](fg:mauve) "},
+					{"gitclean", "overlay0", "", ""},
 				}
 				if len(row) != len(want) {
 					t.Fatalf("Git row has %d tokens, want %d", len(row), len(want))

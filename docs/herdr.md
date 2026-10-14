@@ -104,7 +104,7 @@ command and the status entry remains empty.
 
 | Plugin | Source | Pinned commit |
 |---|---|---|
-| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `e217041ba70dc819a77a3aa4bf8b94cc043d3097` |
+| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `8eb3a68dcf79797593c0eca1bacab2aaa23e05ec` |
 | Tabby | `yersonargotev/tabby` | `19031d668f0f8a79b58591db4ce8bc8f8846e329` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
@@ -220,12 +220,12 @@ Spaces use two contiguous rows:
 1. Semantic state icon and bold active tab name (`$tab_name`), without a prefix.
    Tabby presents contextual labels such as `dots > codex`; Git Tokens copies
    the active tab label. State remains Herdr's workspace-wide rollup.
-2. Active-tab Git branch (`$gitbranch`, ` branch`) in bold mauve, followed by
+2. Active-tab Git branch (`$gitbranch`, without a symbol prefix) in bold mauve, followed by
    the same visible status categories as the Starship prompt: `$gitstaged`
    (`+N`, green), `$gitworkmodified` (`!N`, yellow), `$gituntracked` (`?N`, red),
    and either `$gitforward` (`⇡N`, teal), `$gitbackward` (`⇣N`, peach), or
    `$gitdiverged` (`⇕⇡N⇣N`, mauve). Zero categories are absent. Clean repositories
-   show just the branch, matching the terminal. Conflict, deletion, and rename
+   retain `$gitclean` (`clean`) in the original muted color. Conflict, deletion, and rename
    markers are omitted because Starship's configured format omits them too.
 
 Agents use two contiguous rows: native state icon/engine/state and workspace
