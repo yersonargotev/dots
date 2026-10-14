@@ -47,7 +47,7 @@ palettes match the official variants. The compact UI adds:
 - One-row tabs without numbering, underline, or vertical padding; active tabs
   keep their highlight, inactive tabs use the bar background, with separators.
 - Blue selection stripes for Spaces and Agents, and state dots.
-- Stable native workspace names in Spaces, with the branch on the left and Git
+- Active tab names (`$tab_name`) in Spaces, with the branch on the left and Git
   status/change counts on the right; narrow sidebars retain inline metadata.
 - Agent identity on the left and state on the right, followed by native tab
   context when available.

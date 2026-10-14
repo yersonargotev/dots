@@ -80,7 +80,7 @@ enabled = true
 [ui.sidebar.spaces]
 row_gap = 0
 rows = [
-  ["state_icon", { token = "workspace", bold = true, dim = false }],
+  ["state_icon", { token = "$tab_name", bold = true, dim = false }],
   [{ token = "$gitbranch", fg = "#78a9ff", dim = false },
    { token = "$gitconflicted", fg = "#ee5396", dim = false },
    { token = "$gitadded", fg = "#25be6a", dim = false },
