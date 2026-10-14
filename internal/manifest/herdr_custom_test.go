@@ -137,10 +137,10 @@ func TestHerdrCustomThemeAndCompactSettings(t *testing.T) {
 				t.Fatal("official update checks enabled")
 			}
 			sidebar := ui["sidebar"].(map[string]any)
-			for _, name := range []string{"spaces", "agents"} {
+			for name, wantGap := range map[string]int64{"spaces": 1, "agents": 0} {
 				section := sidebar[name].(map[string]any)
-				if section["row_gap"] != int64(0) {
-					t.Fatalf("%s has padding", name)
+				if section["row_gap"] != wantGap {
+					t.Fatalf("%s row_gap = %v, want %d", name, section["row_gap"], wantGap)
 				}
 				for _, row := range section["rows"].([]any) {
 					if len(row.([]any)) == 0 {

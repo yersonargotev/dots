@@ -77,7 +77,7 @@ position = "bottom-center"
 enabled = true
 
 [ui.sidebar.spaces]
-row_gap = 0
+row_gap = 1
 rows = [
   ["state_icon", { token = "$tab_name", fg = "#cdd6f4", bold = true, dim = false }],
   [{ token = "$gitbranch", fg = "#cba6f7", bold = true, dim = false },
