@@ -51,7 +51,9 @@ palettes match the official variants. The compact UI adds:
   status/change counts on the right; narrow sidebars retain inline metadata.
 - Agent identity on the left and state on the right, followed by native tab
   context when available.
-- Sidebar width 38, adapting between 18 and 44, with no blank padding rows or gaps.
+- Sidebar width 38, adapting between 18 and 44, with one blank row between
+  independent Spaces and contiguous Agent entries. Space rows have no added
+  inner padding.
 
 The patch owns native tab rendering, selection stripes, and state alignment;
 these are not unsupported TOML settings. No session is restarted or migrated
@@ -233,6 +235,11 @@ location. Command/directory labels stay in the tab bar. The default, adaptive,
 and Carbonfox variants share this layout and use their corresponding Starship
 palette roles. The custom variants retain branch-left/status-right alignment.
 Inline Git colors are authored for their dark palettes; automatic light switching does not translate them.
+
+Independent Spaces are separated by one blank terminal row (`row_gap = 1`) in
+both the `herdr` and `herdr-custom` Tags and all theme variants. This separates
+entries without adding inner padding to each Space. Native worktree groups may
+keep parents and children packed. Agent entries remain contiguous (`row_gap = 0`).
 
 The expanded sidebar prefers 26 columns and adapts between 18 and 36 columns.
 Herdr uses distinct semantic symbols for blocked, working, done, idle, and

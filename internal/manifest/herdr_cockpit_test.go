@@ -612,8 +612,8 @@ func TestRepositoryHerdrHasCompactNativeAgentRows(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := loadHerdrCockpitConfig(t, name)
 			spaces, agents := cfg.UI.Sidebar["spaces"], cfg.UI.Sidebar["agents"]
-			if spaces.RowGap != 0 || len(spaces.Rows) != 2 {
-				t.Fatalf("Spaces should have two contiguous rows: %#v", spaces)
+			if spaces.RowGap != 1 || len(spaces.Rows) != 2 {
+				t.Fatalf("Spaces should have two content rows and one blank row between entries: %#v", spaces)
 			}
 			if agents.RowGap != 0 || len(agents.Rows) != 2 {
 				t.Fatalf("Agents should have engine/location rows: %#v", agents)
