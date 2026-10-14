@@ -47,8 +47,8 @@ palettes match the official variants. The compact UI adds:
 - One-row tabs without numbering, underline, or vertical padding; active tabs
   keep their highlight, inactive tabs use the bar background, with separators.
 - Blue selection stripes for Spaces and Agents, and state dots.
-- Active tab names (`$tab_name`) in Spaces, with the branch on the left and Git
-  status/change counts on the right; narrow sidebars retain inline metadata.
+- Three Space rows: active tab name (`$tab_name`), Git branch, then Git status
+  or change counts. Empty Git rows disappear when their tokens are absent.
 - Agent identity on the left and state on the right, followed by native tab
   context when available.
 - Sidebar width 38, adapting between 18 and 44, with one blank row between
@@ -217,13 +217,13 @@ routine dots installs do not uninstall external plugins.
 
 ## Official sidebar layout
 
-Spaces use two contiguous rows:
+Both the `herdr` and `herdr-custom` Tags use three contiguous Space rows:
 
 1. Semantic state icon and bold active tab name (`$tab_name`), without a prefix.
    Tabby presents contextual labels such as `dots > codex`; Git Tokens copies
    the active tab label. State remains Herdr's workspace-wide rollup.
-2. Active-tab Git branch (`$gitbranch`, without a symbol prefix) in bold mauve, followed by
-   the same visible status categories as the Starship prompt: `$gitstaged`
+2. Active-tab Git branch (`$gitbranch`, without a symbol prefix) in bold mauve.
+3. The same visible status categories as the Starship prompt: `$gitstaged`
    (`+N`, green), `$gitworkmodified` (`!N`, yellow), `$gituntracked` (`?N`, red),
    and either `$gitforward` (`⇡N`, teal), `$gitbackward` (`⇣N`, peach), or
    `$gitdiverged` (`⇕⇡N⇣N`, mauve). Zero categories are absent. Clean repositories
@@ -233,7 +233,7 @@ Spaces use two contiguous rows:
 Agents use two contiguous rows: native state icon/engine/state and workspace
 location. Command/directory labels stay in the tab bar. The default, adaptive,
 and Carbonfox variants share this layout and use their corresponding Starship
-palette roles. The custom variants retain branch-left/status-right alignment.
+palette roles. The custom variants also keep branch and status on separate rows.
 Inline Git colors are authored for their dark palettes; automatic light switching does not translate them.
 
 Independent Spaces are separated by one blank terminal row (`row_gap = 1`) in
@@ -253,14 +253,15 @@ Carbonfox variants own the same layout; only their palette behavior differs.
 
 Without plugin metadata, the corresponding tokens and empty lines disappear;
 native first-tab Git values are not silently substituted. A non-Git active pane
-also has no Git line. Long names may still be truncated by the sidebar width.
+also has no Git rows. Long names are truncated with an ellipsis at the sidebar
+width; they do not wrap onto another row.
 
 Prompt counts distinguish the index from the worktree: an index addition,
 modification, or type change contributes to staged; a worktree modification or
 intent-to-add path contributes to modified. A path with both changes contributes
 to both counters, as in Starship. The plugin still publishes its original
 path-category tokens for other consumers. A missing upstream yields no arrows.
-Git failures and timeouts clear the tokens; a non-Git pane has no Git row.
+Git failures and timeouts clear the tokens; a non-Git pane has no Git rows.
 
 ## Popup workflows
 
