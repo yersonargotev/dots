@@ -104,7 +104,7 @@ command and the status entry remains empty.
 
 | Plugin | Source | Pinned commit |
 |---|---|---|
-| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `48fe5a66c17970a77919dc50a6ab3b6512bc7300` |
+| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `e217041ba70dc819a77a3aa4bf8b94cc043d3097` |
 | Tabby | `yersonargotev/tabby` | `19031d668f0f8a79b58591db4ce8bc8f8846e329` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
@@ -220,17 +220,19 @@ Spaces use two contiguous rows:
 1. Semantic state icon and bold active tab name (`$tab_name`), without a prefix.
    Tabby presents contextual labels such as `dots > codex`; Git Tokens copies
    the active tab label. State remains Herdr's workspace-wide rollup.
-2. Active-tab Git branch followed by independently styled Git categories:
-   `$gitconflicted` (`!N`), `$gitadded` (`+N`), `$gitmodified` (`~N`),
-   `$gitdeleted` (`−N`), `$gituntracked` (`?N`), `$gitahead` (`↑N`),
-   `$gitbehind` (`↓N`), and `$gitclean` (`clean`). Zero categories are absent and
-   symbols preserve their meaning without color.
+2. Active-tab Git branch (`$gitbranch`, ` branch`) in bold mauve, followed by
+   the same visible status categories as the Starship prompt: `$gitstaged`
+   (`+N`, green), `$gitworkmodified` (`!N`, yellow), `$gituntracked` (`?N`, red),
+   and either `$gitforward` (`⇡N`, teal), `$gitbackward` (`⇣N`, peach), or
+   `$gitdiverged` (`⇕⇡N⇣N`, mauve). Zero categories are absent. Clean repositories
+   show just the branch, matching the terminal. Conflict, deletion, and rename
+   markers are omitted because Starship's configured format omits them too.
 
 Agents use two contiguous rows: native state icon/engine/state and workspace
 location. Command/directory labels stay in the tab bar. The default, adaptive,
-and Carbonfox variants share this layout and preserve their existing Git
-category colors and other keybindings. Inline Git colors are authored for their
-dark palettes; automatic light switching does not translate them.
+and Carbonfox variants share this layout and use their corresponding Starship
+palette roles. The custom variants retain branch-left/status-right alignment.
+Inline Git colors are authored for their dark palettes; automatic light switching does not translate them.
 
 The expanded sidebar prefers 26 columns and adapts between 18 and 36 columns.
 Herdr uses distinct semantic symbols for blocked, working, done, idle, and
@@ -246,11 +248,12 @@ Without plugin metadata, the corresponding tokens and empty lines disappear;
 native first-tab Git values are not silently substituted. A non-Git active pane
 also has no Git line. Long names may still be truncated by the sidebar width.
 
-Each path contributes once, even with staged and unstaged changes. Priority is
-conflict, deletion, addition, then modification; a rename counts as one modified
-destination path. A missing upstream yields zero ahead/behind. The `clean` token
-requires a successful Git status and all zero counts. Git failures and timeouts
-clear the tokens instead of presenting `clean`.
+Prompt counts distinguish the index from the worktree: an index addition,
+modification, or type change contributes to staged; a worktree modification or
+intent-to-add path contributes to modified. A path with both changes contributes
+to both counters, as in Starship. The plugin still publishes its original
+path-category tokens for other consumers. A missing upstream yields no arrows.
+Git failures and timeouts clear the tokens; a non-Git pane has no Git row.
 
 ## Popup workflows
 

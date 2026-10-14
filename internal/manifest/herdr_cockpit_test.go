@@ -632,7 +632,7 @@ func TestRepositoryHerdrHasCompactNativeAgentRows(t *testing.T) {
 				}
 				return out
 			}
-			for i, want := range [][]string{{"state_icon", "$tab_name"}, {"$gitbranch", "$gitconflicted", "$gitadded", "$gitmodified", "$gitdeleted", "$gituntracked", "$gitahead", "$gitbehind", "$gitclean"}} {
+			for i, want := range [][]string{{"state_icon", "$tab_name"}, {"$gitbranch", "$gitstaged", "$gitworkmodified", "$gituntracked", "$gitforward", "$gitbackward", "$gitdiverged"}} {
 				if got := tokens(spaces.Rows[i]); !reflect.DeepEqual(got, want) {
 					t.Fatalf("Spaces row %d = %v, want %v", i, got, want)
 				}

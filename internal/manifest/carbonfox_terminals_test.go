@@ -173,11 +173,10 @@ func TestCarbonfoxTerminalAdaptersUsePinnedPalette(t *testing.T) {
 	}
 	herdrText := readCarbonfoxTerminalFile(t, root, "configs/herdr/config-carbonfox.toml")
 	for _, rowColor := range []string{
-		`"$tab_name", fg = "#f2f4f8"`, `"$gitbranch", fg = "#78a9ff"`,
-		`"$gitconflicted", fg = "#ee5396"`, `"$gitadded", fg = "#25be6a"`,
-		`"$gitmodified", fg = "#08bdba"`, `"$gitdeleted", fg = "#f16da6"`,
-		`"$gituntracked", fg = "#33b1ff"`, `"$gitahead", fg = "#52bdff"`,
-		`"$gitbehind", fg = "#3ddbd9"`, `"$gitclean", fg = "#6e6f70"`,
+		`"$tab_name", fg = "#f2f4f8"`, `"$gitbranch", fg = "#be95ff"`,
+		`"$gitstaged", fg = "#25be6a"`, `"$gitworkmodified", fg = "#08bdba"`,
+		`"$gituntracked", fg = "#ee5396"`, `"$gitforward", fg = "#2dc7c4"`,
+		`"$gitbackward", fg = "#3ddbd9"`, `"$gitdiverged", fg = "#be95ff"`,
 		`"agent", fg = "#be95ff"`, `"workspace", fg = "#6e6f70"`,
 	} {
 		if !strings.Contains(herdrText, rowColor) {
