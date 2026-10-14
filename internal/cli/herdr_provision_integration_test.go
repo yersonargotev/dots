@@ -55,7 +55,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	for _, want := range []string{
 		"yersonargotev/herdr-tab-git",
-		"48fe5a66c17970a77919dc50a6ab3b6512bc7300",
+		"8eb3a68dcf79797593c0eca1bacab2aaa23e05ec",
 		"yersonargotev/tabby",
 		"19031d668f0f8a79b58591db4ce8bc8f8846e329",
 		"rmarganti/herdr-pluck",
@@ -104,7 +104,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
-		"plugin install yersonargotev/herdr-tab-git --ref 48fe5a66c17970a77919dc50a6ab3b6512bc7300 --yes",
+		"plugin install yersonargotev/herdr-tab-git --ref 8eb3a68dcf79797593c0eca1bacab2aaa23e05ec --yes",
 		"plugin install yersonargotev/tabby --ref 19031d668f0f8a79b58591db4ce8bc8f8846e329 --yes",
 		"plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
 	}
@@ -326,7 +326,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
-		"plugin install yersonargotev/herdr-tab-git --ref 48fe5a66c17970a77919dc50a6ab3b6512bc7300 --yes",
+		"plugin install yersonargotev/herdr-tab-git --ref 8eb3a68dcf79797593c0eca1bacab2aaa23e05ec --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Intel Herdr invocations = %#v, want only compatible plugins %#v\noutput:\n%s", got, want, installOutput.String())

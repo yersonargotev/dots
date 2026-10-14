@@ -81,14 +81,13 @@ enabled = true
 row_gap = 0
 rows = [
   ["state_icon", { token = "$tab_name", bold = true, dim = false }],
-  [{ token = "$gitbranch", fg = "#78a9ff", dim = false },
-   { token = "$gitconflicted", fg = "#ee5396", dim = false },
-   { token = "$gitadded", fg = "#25be6a", dim = false },
-   { token = "$gitmodified", fg = "#08bdba", dim = false },
-   { token = "$gitdeleted", fg = "#f16da6", dim = false },
-   { token = "$gituntracked", fg = "#33b1ff", dim = false },
-   { token = "$gitahead", fg = "#52bdff", dim = false },
-   { token = "$gitbehind", fg = "#3ddbd9", dim = false },
+  [{ token = "$gitbranch", fg = "#be95ff", bold = true, dim = false },
+   { token = "$gitstaged", fg = "#25be6a", dim = false },
+   { token = "$gitworkmodified", fg = "#08bdba", dim = false },
+   { token = "$gituntracked", fg = "#ee5396", dim = false },
+   { token = "$gitforward", fg = "#2dc7c4", dim = false },
+   { token = "$gitbackward", fg = "#3ddbd9", dim = false },
+   { token = "$gitdiverged", fg = "#be95ff", dim = false },
    { token = "$gitclean", fg = "#6e6f70", dim = false }],
 ]
 
