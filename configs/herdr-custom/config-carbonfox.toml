@@ -92,7 +92,7 @@ rows = [
 ]
 
 [ui.sidebar.agents]
-row_gap = 0
+row_gap = 1
 rows = [
   ["state_icon", { token = "agent", fg = "#be95ff", bold = true }, "state_text"],
   [{ token = "tab", dim = true }],

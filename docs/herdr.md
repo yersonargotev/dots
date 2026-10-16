@@ -10,7 +10,7 @@ an existing installation's Tags.
 ## Independent custom variant
 
 The opt-in `herdr-custom` Tag uses
-[`herdr-custom v0.9.3-custom.4`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.3-custom.4),
+[`herdr-custom v0.9.3-custom.5`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.3-custom.5),
 based on upstream Herdr 0.9.3. Supported platforms are **macOS Apple Silicon**
 and **Linux x86_64**. Apple Intel and Linux ARM64 are rejected before installation.
 No Profile selects it. The official `herdr` Tag and its existing platform behavior
@@ -49,10 +49,14 @@ palettes match the official variants. The compact UI adds:
 - Blue selection stripes for Spaces and Agents, and state dots.
 - Three Space rows: active tab name (`$tab_name`), Git branch, then Git status
   or change counts. Empty Git rows disappear when their tokens are absent.
+- Space tab names use the theme accent for the navigation selection, or the
+  active Space outside navigation, and the original theme gray for other Spaces.
+  Cancelling navigation restores the active Space highlight. Explicit token
+  foreground overrides take precedence over these contextual colors.
 - Agent identity on the left and state on the right, followed by native tab
   context when available.
 - Sidebar width 38, adapting between 18 and 44, with one blank row between
-  independent Spaces and contiguous Agent entries. Space rows have no added
+  independent Spaces and between Agent entries. Space rows have no added
   inner padding.
 
 The patch owns native tab rendering, selection stripes, and state alignment;
@@ -230,16 +234,17 @@ Both the `herdr` and `herdr-custom` Tags use three contiguous Space rows:
    retain `$gitclean` (`clean`) in the original muted color. Conflict, deletion, and rename
    markers are omitted because Starship's configured format omits them too.
 
-Agents use two contiguous rows: native state icon/engine/state and workspace
-location. Command/directory labels stay in the tab bar. The default, adaptive,
-and Carbonfox variants share this layout and use their corresponding Starship
-palette roles. The custom variants also keep branch and status on separate rows.
+Agents use two contiguous content rows: native state icon/engine/state, then
+workspace location for `herdr` or native tab context for `herdr-custom`. The
+default, adaptive, and Carbonfox variants share this layout and use their
+corresponding Starship palette roles. The custom variants also keep branch and status on separate rows.
 Inline Git colors are authored for their dark palettes; automatic light switching does not translate them.
 
 Independent Spaces are separated by one blank terminal row (`row_gap = 1`) in
 both the `herdr` and `herdr-custom` Tags and all theme variants. This separates
 entries without adding inner padding to each Space. Native worktree groups may
-keep parents and children packed. Agent entries remain contiguous (`row_gap = 0`).
+keep parents and children packed. Agent entries also have one blank row between them (`row_gap = 1`); their
+two content rows remain contiguous.
 
 The expanded sidebar prefers 26 columns and adapts between 18 and 36 columns.
 Herdr uses distinct semantic symbols for blocked, working, done, idle, and

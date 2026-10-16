@@ -615,7 +615,7 @@ func TestRepositoryHerdrHasCompactNativeAgentRows(t *testing.T) {
 			if spaces.RowGap != 1 || len(spaces.Rows) != 3 {
 				t.Fatalf("Spaces should have three content rows and one blank row between entries: %#v", spaces)
 			}
-			if agents.RowGap != 0 || len(agents.Rows) != 2 {
+			if agents.RowGap != 1 || len(agents.Rows) != 2 {
 				t.Fatalf("Agents should have engine/location rows: %#v", agents)
 			}
 			tokens := func(row []any) []string {
