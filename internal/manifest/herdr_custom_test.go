@@ -53,7 +53,7 @@ func TestHerdrCustomSelectionAndSharedPluginPins(t *testing.T) {
 				}
 				if dep.Name == "herdr-custom" {
 					runtimeFound = true
-					if dep.UserLocal == nil || dep.UserLocal.Recipe != "herdr-custom" || dep.UserLocal.Version != "v0.9.3-custom.4" || len(dep.UserLocal.Checksums) != 2 {
+					if dep.UserLocal == nil || dep.UserLocal.Recipe != "herdr-custom" || dep.UserLocal.Version != "v0.9.3-custom.5" || len(dep.UserLocal.Checksums) != 2 {
 						t.Fatalf("unpinned custom runtime: %#v", dep)
 					}
 				}
@@ -137,7 +137,7 @@ func TestHerdrCustomThemeAndCompactSettings(t *testing.T) {
 				t.Fatal("official update checks enabled")
 			}
 			sidebar := ui["sidebar"].(map[string]any)
-			for name, wantGap := range map[string]int64{"spaces": 1, "agents": 0} {
+			for name, wantGap := range map[string]int64{"spaces": 1, "agents": 1} {
 				section := sidebar[name].(map[string]any)
 				if section["row_gap"] != wantGap {
 					t.Fatalf("%s row_gap = %v, want %d", name, section["row_gap"], wantGap)
@@ -154,6 +154,13 @@ func TestHerdrCustomThemeAndCompactSettings(t *testing.T) {
 			}
 			if spaces[0].([]any)[0] != "state_icon" || spaces[0].([]any)[1].(map[string]any)["token"] != "$tab_name" {
 				t.Fatal("Spaces must use active tab names")
+			}
+			nameStyle := spaces[0].([]any)[1].(map[string]any)
+			if _, fixed := nameStyle["fg"]; fixed {
+				t.Fatal("Space tab names must inherit native selection colors")
+			}
+			if _, rules := nameStyle["rules"]; rules {
+				t.Fatal("Space tab names must not use label-specific selection rules")
 			}
 			agents := sidebar["agents"].(map[string]any)["rows"].([]any)
 			first := agents[0].([]any)

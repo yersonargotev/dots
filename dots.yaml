@@ -915,10 +915,10 @@ entries:
         command: herdr-custom
         user_local:
           recipe: herdr-custom
-          version: v0.9.3-custom.4
+          version: v0.9.3-custom.5
           checksums:
-            darwin_arm64: 5cc58039c8b9a1ce19fd06971d29f53d6e5a67229aa9e432d1f4e778d09ba69f
-            linux_amd64: 2ad4110a8402f28d52cf586c2804b39385ccc480be6c437a0fd8f10b5a5c525a
+            darwin_arm64: a61297e3db57796b3f2fe6823e58f389d1acc26b962207edf1932b87e8309a42
+            linux_amd64: e1fb9cb5959acc529d5aad4c53389829286fdb803619da7e9eeeb65b869eb178
   - source: configs/herdr/plugins/tabby.toml
     target: ~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml
     strategy: copy
