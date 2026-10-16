@@ -53,7 +53,7 @@ func TestHerdrCustomSelectionAndSharedPluginPins(t *testing.T) {
 				}
 				if dep.Name == "herdr-custom" {
 					runtimeFound = true
-					if dep.UserLocal == nil || dep.UserLocal.Recipe != "herdr-custom" || dep.UserLocal.Version != "v0.9.3-custom.5" || len(dep.UserLocal.Checksums) != 2 {
+					if dep.UserLocal == nil || dep.UserLocal.Recipe != "herdr-custom" || dep.UserLocal.Version != "v0.9.3-custom.6" || len(dep.UserLocal.Checksums) != 2 {
 						t.Fatalf("unpinned custom runtime: %#v", dep)
 					}
 				}
@@ -166,6 +166,16 @@ func TestHerdrCustomThemeAndCompactSettings(t *testing.T) {
 			first := agents[0].([]any)
 			if first[0] != "state_icon" || first[1].(map[string]any)["token"] != "agent" || first[2] != "state_text" {
 				t.Fatal("agent/state row changed")
+			}
+			agentStyle := first[1].(map[string]any)
+			if _, fixed := agentStyle["fg"]; fixed {
+				t.Fatal("Agent names must inherit native focus colors")
+			}
+			if _, rules := agentStyle["rules"]; rules {
+				t.Fatal("Agent names must not use label-specific focus rules")
+			}
+			if agentStyle["bold"] != true {
+				t.Fatal("Agent names must remain bold")
 			}
 			if len(agents) != 2 || agents[1].([]any)[0].(map[string]any)["token"] != "tab" {
 				t.Fatal("native tab context missing")
