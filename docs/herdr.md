@@ -10,7 +10,7 @@ an existing installation's Tags.
 ## Independent custom variant
 
 The opt-in `herdr-custom` Tag uses
-[`herdr-custom v0.9.3-custom.5`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.3-custom.5),
+[`herdr-custom v0.9.3-custom.6`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.3-custom.6),
 based on upstream Herdr 0.9.3. Supported platforms are **macOS Apple Silicon**
 and **Linux x86_64**. Apple Intel and Linux ARM64 are rejected before installation.
 No Profile selects it. The official `herdr` Tag and its existing platform behavior
@@ -245,6 +245,12 @@ both the `herdr` and `herdr-custom` Tags and all theme variants. This separates
 entries without adding inner padding to each Space. Native worktree groups may
 keep parents and children packed. Agent entries also have one blank row between them (`row_gap = 1`); their
 two content rows remain contiguous.
+
+In `herdr-custom`, Agent names use the theme accent while their pane has focus
+and the same theme gray as inactive Spaces otherwise. The color follows existing
+Agent navigation; explicit token foregrounds can override it. Status dots and
+state text retain their status colors, and the secondary tab context stays muted.
+The official `herdr` Tag retains its configured Agent name color.
 
 The expanded sidebar prefers 26 columns and adapts between 18 and 36 columns.
 Herdr uses distinct semantic symbols for blocked, working, done, idle, and
