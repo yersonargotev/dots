@@ -5,8 +5,8 @@
       "id": "matty",
       "surface_intents": [
         {
-          "surface": "codex",
-          "version": "4.0.0",
+          "surface": "agents",
+          "version": "4.3.0",
           "selection": {
             "mode": "all",
             "roots": []
