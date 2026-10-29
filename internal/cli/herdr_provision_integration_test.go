@@ -38,7 +38,7 @@ func TestRepositoryHerdrTagPlansAndExecutesPinnedPluginsInSandbox(t *testing.T) 
 	writeHerdrIntegrationStub(t, filepath.Join(stubDir, "herdr"), `#!/bin/sh
 printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 `)
-	for _, command := range []string{"git", "python3", "fnm", "node", "go", "rustup", "rustc", "cargo", "curl", "tar", "pbcopy", "open", "lazygit", "fzf", "fd", "bat"} {
+	for _, command := range []string{"git", "python3", "fnm", "node", "go", "rustup", "rustc", "cargo", "curl", "tar", "pbcopy", "open", "lazygit", "fzf", "fd", "bat", "npx", "brew", "apt-get", "sudo"} {
 		writeHerdrIntegrationStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
 	}
 
@@ -55,7 +55,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	for _, want := range []string{
 		"yersonargotev/herdr-tab-git",
-		"8eb3a68dcf79797593c0eca1bacab2aaa23e05ec",
+		"5ef7d5a69ccfc7552d3cc81a1a7cfb059cb256df",
 		"yersonargotev/tabby",
 		"19031d668f0f8a79b58591db4ce8bc8f8846e329",
 		"rmarganti/herdr-pluck",
@@ -104,7 +104,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
-		"plugin install yersonargotev/herdr-tab-git --ref 8eb3a68dcf79797593c0eca1bacab2aaa23e05ec --yes",
+		"plugin install yersonargotev/herdr-tab-git --ref 5ef7d5a69ccfc7552d3cc81a1a7cfb059cb256df --yes",
 		"plugin install yersonargotev/tabby --ref 19031d668f0f8a79b58591db4ce8bc8f8846e329 --yes",
 		"plugin install rmarganti/herdr-pluck --ref d1eacb80956c3a23ab6f7428a9e83961fb86ba28 --yes",
 	}
@@ -156,7 +156,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	if err := repeat.Execute(); err != nil {
 		t.Fatalf("repeat install with user-only settings: %v\n%s", err, repeatOutput.String())
 	}
-	assertInstalledContains(t, target, []string{`[operator]`, `keep = true`, `rmarganti.herdr-pluck.pluck`, `$tab_name`})
+	assertInstalledContains(t, target, []string{`[operator]`, `keep = true`, `rmarganti.herdr-pluck.pluck`, `$tab_name`, `$project`})
 	status := NewRootCommand()
 	var statusOutput bytes.Buffer
 	status.SetOut(&statusOutput)
@@ -213,7 +213,7 @@ func TestRepositoryHerdrAppleSiliconDryRunDisclosesMissingPluckDependencies(t *t
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("PATH", stubDir)
 
-	for _, command := range []string{"herdr", "git", "python3", "fnm", "node", "go", "lazygit", "fzf", "fd", "bat"} {
+	for _, command := range []string{"herdr", "git", "python3", "fnm", "node", "go", "lazygit", "fzf", "fd", "bat", "npx", "brew", "apt-get", "sudo"} {
 		writeHerdrIntegrationStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
 	}
 	writeHerdrIntegrationStub(t, filepath.Join(stubDir, "brew"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$COMMAND_LOG\"\nexit 99\n")
@@ -271,7 +271,7 @@ func TestRepositoryHerdrTagOnIntelExcludesArmOnlyTabbyAndRust(t *testing.T) {
 	writeHerdrIntegrationStub(t, filepath.Join(stubDir, "herdr"), `#!/bin/sh
 printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 `)
-	for _, command := range []string{"git", "python3", "fnm", "node", "go", "lazygit", "fzf", "fd", "bat"} {
+	for _, command := range []string{"git", "python3", "fnm", "node", "go", "lazygit", "fzf", "fd", "bat", "npx", "brew", "apt-get", "sudo"} {
 		writeHerdrIntegrationStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
 	}
 	// If architecture filtering regresses, the missing Rust toolchain must fail
@@ -326,7 +326,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	}
 	got := strings.Split(strings.TrimSpace(string(logContent)), "\n")
 	want := []string{
-		"plugin install yersonargotev/herdr-tab-git --ref 8eb3a68dcf79797593c0eca1bacab2aaa23e05ec --yes",
+		"plugin install yersonargotev/herdr-tab-git --ref 5ef7d5a69ccfc7552d3cc81a1a7cfb059cb256df --yes",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Intel Herdr invocations = %#v, want only compatible plugins %#v\noutput:\n%s", got, want, installOutput.String())
