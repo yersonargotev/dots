@@ -129,12 +129,19 @@ command and the status entry remains empty.
 
 | Plugin | Source | Pinned commit |
 |---|---|---|
-| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `5ef7d5a69ccfc7552d3cc81a1a7cfb059cb256df` |
+| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `21b2baa278f571fafa7a1247851a17754fbeedf0` |
 | Tabby | `yersonargotev/tabby` | `19031d668f0f8a79b58591db4ce8bc8f8846e329` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
-The shared Git Tokens pin requires Herdr 0.9.5 or newer. Its project and
-Space/Git metadata are verified with official Herdr 0.9.5 and custom
+The shared Git Tokens pin is version 1.4.1 and requires Herdr 0.9.5 or newer.
+After a plugin update, the next hook or explicit refresh replaces the previous
+installation's watcher, including legacy watchers that did not renew pane
+projects. This keeps Agent project labels from expiring without focus events;
+no `$project` configuration change is needed. See the
+[upstream fix](https://github.com/yersonargotev/herdr-tab-git/pull/12).
+
+The project and Space/Git metadata integration was verified with official
+Herdr 0.9.5 and custom
 `v0.9.5-custom.1` on macOS ARM64. Automated installation coverage also retains
 custom Linux AMD64 selection; this does not claim a local Linux runtime smoke.
 The previous Spaces/Tabby bundle was verified with Herdr 0.9.1 on Apple Silicon
