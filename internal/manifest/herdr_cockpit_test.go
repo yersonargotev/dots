@@ -637,10 +637,18 @@ func TestRepositoryHerdrHasCompactNativeAgentRows(t *testing.T) {
 					t.Fatalf("Spaces row %d = %v, want %v", i, got, want)
 				}
 			}
-			for i, want := range [][]string{{"state_icon", "agent", "state_text"}, {"workspace"}} {
+			for i, want := range [][]string{{"state_icon", "agent", "state_text"}, {"$project"}} {
 				if got := tokens(agents.Rows[i]); !reflect.DeepEqual(got, want) {
 					t.Fatalf("Agents row %d = %v, want %v", i, got, want)
 				}
+			}
+
+			projectColor := "#6c7086"
+			if name == "config-carbonfox.toml" {
+				projectColor = "#6e6f70"
+			}
+			if !reflect.DeepEqual(agents.Rows[1], []any{map[string]any{"token": "$project", "fg": projectColor}}) {
+				t.Fatalf("project row style changed: %#v", agents.Rows[1])
 			}
 
 		})

@@ -76,7 +76,7 @@ rows = [
 row_gap = 1
 rows = [
   ["state_icon", { token = "agent", fg = "#cba6f7", bold = true }, "state_text"],
-  [{ token = "workspace", fg = "#6c7086" }],
+  [{ token = "$project", fg = "#6c7086" }],
 ]
 
 [keys]

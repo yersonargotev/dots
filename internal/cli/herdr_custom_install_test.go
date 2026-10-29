@@ -67,7 +67,7 @@ func TestRepositoryHerdrCustomInstallsPinnedPluginsInSandbox(t *testing.T) {
 			installHostOS, installHostArch = platform.os, platform.arch
 			t.Cleanup(func() { installHostOS, installHostArch = oldOS, oldArch })
 
-			archiveName := "herdr-custom-0.9.3-custom.6-" + platform.target + ".tar.gz"
+			archiveName := "herdr-custom-0.9.5-custom.1-" + platform.target + ".tar.gz"
 			data := herdrCustomCLIArchive(t, strings.TrimSuffix(archiveName, ".tar.gz"))
 			sum := sha256.Sum256(data)
 			checksum := hex.EncodeToString(sum[:])
@@ -82,7 +82,7 @@ func TestRepositoryHerdrCustomInstallsPinnedPluginsInSandbox(t *testing.T) {
 			oldTransport := http.DefaultTransport
 			http.DefaultTransport = herdrCustomCLIFixtureTransport{base: oldTransport, allowedURL: server.URL + "/" + archiveName}
 			t.Cleanup(func() { http.DefaultTransport = oldTransport })
-			artifact := deps.UserLocalArtifact{Recipe: "herdr-custom", Version: "v0.9.3-custom.6", Artifact: archiveName, URL: server.URL + "/" + archiveName, Checksum: checksum, Platform: platform.os + "_" + platform.arch, Layout: "bundle", Command: "herdr-custom", Destination: filepath.Join(home, ".local/opt/herdr-custom/v0.9.3-custom.6"), InstalledPath: filepath.Join(bin, "herdr-custom")}
+			artifact := deps.UserLocalArtifact{Recipe: "herdr-custom", Version: "v0.9.5-custom.1", Artifact: archiveName, URL: server.URL + "/" + archiveName, Checksum: checksum, Platform: platform.os + "_" + platform.arch, Layout: "bundle", Command: "herdr-custom", Destination: filepath.Join(home, ".local/opt/herdr-custom/v0.9.5-custom.1"), InstalledPath: filepath.Join(bin, "herdr-custom")}
 			if err := deps.InstallUserLocal(home, deps.InstallAction{UserLocal: &artifact}); err != nil {
 				t.Fatal(err)
 			}
@@ -127,7 +127,7 @@ func TestRepositoryHerdrCustomInstallsPinnedPluginsInSandbox(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := []string{"plugin install yersonargotev/herdr-tab-git --ref 8eb3a68dcf79797593c0eca1bacab2aaa23e05ec --yes"}
+			want := []string{"plugin install yersonargotev/herdr-tab-git --ref 5ef7d5a69ccfc7552d3cc81a1a7cfb059cb256df --yes"}
 			if platform.os == "darwin" {
 				want = append(want, "plugin install yersonargotev/tabby --ref 19031d668f0f8a79b58591db4ce8bc8f8846e329 --yes")
 			}

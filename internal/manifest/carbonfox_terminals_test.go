@@ -177,7 +177,7 @@ func TestCarbonfoxTerminalAdaptersUsePinnedPalette(t *testing.T) {
 		`"$gitstaged", fg = "#25be6a"`, `"$gitworkmodified", fg = "#08bdba"`,
 		`"$gituntracked", fg = "#ee5396"`, `"$gitforward", fg = "#2dc7c4"`,
 		`"$gitbackward", fg = "#3ddbd9"`, `"$gitdiverged", fg = "#be95ff"`, `"$gitclean", fg = "#6e6f70"`,
-		`"agent", fg = "#be95ff"`, `"workspace", fg = "#6e6f70"`,
+		`"agent", fg = "#be95ff"`, `"$project", fg = "#6e6f70"`,
 	} {
 		if !strings.Contains(herdrText, rowColor) {
 			t.Errorf("Herdr Carbonfox authored rows miss %q", rowColor)

@@ -10,8 +10,8 @@ an existing installation's Tags.
 ## Independent custom variant
 
 The opt-in `herdr-custom` Tag uses
-[`herdr-custom v0.9.3-custom.6`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.3-custom.6),
-based on upstream Herdr 0.9.3. Supported platforms are **macOS Apple Silicon**
+[`herdr-custom v0.9.5-custom.1`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.5-custom.1),
+based on upstream Herdr 0.9.5. Supported platforms are **macOS Apple Silicon**
 and **Linux x86_64**. Apple Intel and Linux ARM64 are rejected before installation.
 No Profile selects it. The official `herdr` Tag and its existing platform behavior
 remain unchanged.
@@ -66,6 +66,25 @@ commands below, always selecting
 the intended existing session explicitly. The package contains server
 functionality too; starting a missing session may start its server.
 
+### Runtime adoption and rollback
+
+`v0.9.5-custom.1` supersedes `v0.9.3-custom.6`, which rejects the shared plugin's
+Herdr 0.9.5 requirement. The Install Manifest verifies the published archives:
+
+| Platform | Archive SHA-256 |
+|---|---|
+| macOS ARM64 | `f9e2d5bdbc5eec0a7d632bfde46a6a30087a55b178eaa1145511acb912d2625d` |
+| Linux AMD64 | `cb58d07ef727d3ce330a82746768ecca20d30b8556e19aa34af43a8db7ca23dc` |
+
+Before an operator-authorized upgrade, preserve the complete pre-upgrade Herdr
+configuration, plugin registry and managed plugin directories, session state,
+and history. A new client does not replace an existing server; use matching
+0.9.5 clients and servers for attach/detach. Changing a launcher or symlink back
+to 0.9.3 does not downgrade state written by 0.9.5. A rollback requires the
+preserved pre-upgrade environment and compatible plugin pins, not just the old
+binary. Follow the [release's verified compatibility and rollback boundaries](https://github.com/yersonargotev/herdr-custom/blob/v0.9.5-custom.1/docs/verification-0.9.5.md).
+Selecting the Tag does not authorize restarting or migrating live sessions.
+
 ### Custom plugins on macOS and Linux
 
 Both variants share the full plugin commit pins in the Install Manifest through
@@ -110,13 +129,17 @@ command and the status entry remains empty.
 
 | Plugin | Source | Pinned commit |
 |---|---|---|
-| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `8eb3a68dcf79797593c0eca1bacab2aaa23e05ec` |
+| Tab Git Tokens | `yersonargotev/herdr-tab-git` | `5ef7d5a69ccfc7552d3cc81a1a7cfb059cb256df` |
 | Tabby | `yersonargotev/tabby` | `19031d668f0f8a79b58591db4ce8bc8f8846e329` |
 | Pluck | `rmarganti/herdr-pluck` | `d1eacb80956c3a23ab6f7428a9e83961fb86ba28` |
 
-The previous Herdr configuration and Spaces/Tabby bundle were verified with
-Herdr 0.9.1 on Apple Silicon macOS; Pluck declares Herdr 0.7.4 or newer but has
-not been exercised in a live 0.9.1 session. Herdr, Git, Go, LazyGit, fzf, fd, bat,
+The shared Git Tokens pin requires Herdr 0.9.5 or newer. Its project and
+Space/Git metadata are verified with official Herdr 0.9.5 and custom
+`v0.9.5-custom.1` on macOS ARM64. Automated installation coverage also retains
+custom Linux AMD64 selection; this does not claim a local Linux runtime smoke.
+The previous Spaces/Tabby bundle was verified with Herdr 0.9.1 on Apple Silicon
+macOS; Pluck declares Herdr 0.7.4 or newer but has not been exercised in that
+live session. Herdr, Git, Go, LazyGit, fzf, fd, bat,
 curl, tar, pbcopy, open, Python 3, Node LTS through fnm, and Rust stable through
 rustup are declared Dependencies. The popup tools belong directly to the `herdr`
 Tag, so selecting that atomic surface does not rely on `core` or another Profile
@@ -235,10 +258,22 @@ Both the `herdr` and `herdr-custom` Tags use three contiguous Space rows:
    markers are omitted because Starship's configured format omits them too.
 
 Agents use two contiguous content rows: native state icon/engine/state, then
-workspace location for `herdr` or native tab context for `herdr-custom`. The
+pane-scoped project (`$project`) for `herdr` or native tab context (`tab`) for
+`herdr-custom`, such as `packy-catalog › codex`. The
 default, adaptive, and Carbonfox variants share this layout and use their
 corresponding Starship palette roles. The custom variants also keep branch and status on separate rows.
 Inline Git colors are authored for their dark palettes; automatic light switching does not translate them.
+
+For the official Agent location, the plugin publishes the current checkout-root
+basename: an agent in `herdr-tab-git` within Workspace `dots` shows
+`herdr-tab-git`. Repository subdirectories retain that root name, and a worktree
+uses its own root basename. Outside Git or when root lookup fails, the reported
+directory basename is used; no directory clears the label. There is no Workspace
+or title fallback, and identical basenames intentionally produce identical short
+labels. Values are independent per agent pane, including panes in the same tab.
+The plugin updates through events and nominal three-second polling, including
+inactive tabs and Workspaces. The custom Tag deliberately retains its native tab
+context and dim styling rather than consuming `$project`.
 
 Independent Spaces are separated by one blank terminal row (`row_gap = 1`) in
 both the `herdr` and `herdr-custom` Tags and all theme variants. This separates

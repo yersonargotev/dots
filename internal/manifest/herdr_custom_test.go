@@ -53,8 +53,15 @@ func TestHerdrCustomSelectionAndSharedPluginPins(t *testing.T) {
 				}
 				if dep.Name == "herdr-custom" {
 					runtimeFound = true
-					if dep.UserLocal == nil || dep.UserLocal.Recipe != "herdr-custom" || dep.UserLocal.Version != "v0.9.3-custom.6" || len(dep.UserLocal.Checksums) != 2 {
+					if dep.UserLocal == nil || dep.UserLocal.Recipe != "herdr-custom" || dep.UserLocal.Version != "v0.9.5-custom.1" || len(dep.UserLocal.Checksums) != 2 {
 						t.Fatalf("unpinned custom runtime: %#v", dep)
+					}
+					wantChecksums := map[string]string{
+						"darwin_arm64": "f9e2d5bdbc5eec0a7d632bfde46a6a30087a55b178eaa1145511acb912d2625d",
+						"linux_amd64":  "cb58d07ef727d3ce330a82746768ecca20d30b8556e19aa34af43a8db7ca23dc",
+					}
+					if !reflect.DeepEqual(dep.UserLocal.Checksums, wantChecksums) {
+						t.Fatalf("custom archive checksums = %v, want %v", dep.UserLocal.Checksums, wantChecksums)
 					}
 				}
 			}
@@ -177,7 +184,7 @@ func TestHerdrCustomThemeAndCompactSettings(t *testing.T) {
 			if agentStyle["bold"] != true {
 				t.Fatal("Agent names must remain bold")
 			}
-			if len(agents) != 2 || agents[1].([]any)[0].(map[string]any)["token"] != "tab" {
+			if len(agents) != 2 || !reflect.DeepEqual(agents[1], []any{map[string]any{"token": "tab", "dim": true}}) {
 				t.Fatal("native tab context missing")
 			}
 			surface := selectedsurface.EvaluateForPlatform(*m, []string{"herdr-custom", variant.tag}, "linux", "amd64")
