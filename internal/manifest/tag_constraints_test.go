@@ -41,6 +41,7 @@ func TestTagConstraintDeclarationValidation(t *testing.T) {
 	for _, bad := range []manifest.Tag{
 		{ConflictsWith: []string{"missing"}}, {ConflictsWith: []string{"herdr"}},
 		{SupportedPlatforms: []string{"windows_amd64"}}, {SupportedPlatforms: []string{"linux_amd64", "linux_amd64"}},
+		{SupportedPlatforms: []string{"darwin_amd64"}},
 	} {
 		m := manifestWithHerdrSpec(manifest.ProvisionerSpec{Plugin: "owner/repo", Ref: herdrTestCommit})
 		bad.Kind = "surface"

@@ -21,7 +21,6 @@ func TestRollingClaudeSelectsStableVerifiedArtifactForSupportedPlatforms(t *test
 	platforms := []struct {
 		os, arch, platform string
 	}{
-		{"darwin", "amd64", "darwin-x64"},
 		{"darwin", "arm64", "darwin-arm64"},
 		{"linux", "amd64", "linux-x64"},
 		{"linux", "arm64", "linux-arm64"},
@@ -111,7 +110,6 @@ func TestRollingCodexSelectsStableOfficialArtifactForSupportedPlatforms(t *testi
 	platforms := []struct {
 		os, arch, asset string
 	}{
-		{"darwin", "amd64", "codex-package-x86_64-apple-darwin.tar.gz"},
 		{"darwin", "arm64", "codex-package-aarch64-apple-darwin.tar.gz"},
 		{"linux", "amd64", "codex-package-x86_64-unknown-linux-musl.tar.gz"},
 		{"linux", "arm64", "codex-package-aarch64-unknown-linux-musl.tar.gz"},
@@ -149,7 +147,7 @@ func TestRollingGitHubRecipesSelectStableVerifiedArtifactsForSupportedPlatforms(
 		{"antigravity", "agy", "1.1.0", antigravityPlatformAssets},
 		{"copilot", "copilot", "v1.0.0", copilotPlatformAssets},
 	}
-	platforms := []string{"darwin_amd64", "darwin_arm64", "linux_amd64", "linux_arm64"}
+	platforms := []string{"darwin_arm64", "linux_amd64", "linux_arm64"}
 	for _, recipe := range recipes {
 		t.Run(recipe.name, func(t *testing.T) {
 			for _, platform := range platforms {

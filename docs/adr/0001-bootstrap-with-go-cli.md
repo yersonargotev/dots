@@ -1,5 +1,7 @@
 # Bootstrap with a Go CLI
 
+**Platform policy updated by issue #580**: macOS Intel is retired. Supported distribution and validation target macOS ARM64 and Linux AMD64/ARM64; component-specific filters remain in effect.
+
 The project will expose a curl-compatible bootstrap command for convenience, but the bootstrapper will only detect the platform, download and verify the compiled Dotfiles CLI, and delegate installation to it. The installation logic will live in a Go CLI, with Cobra for command structure and Bubble Tea for interactive conflict resolution, because backup handling, OS-specific behavior, dry runs, and local extension points are too important to bury in an increasingly complex shell script.
 
 **Considered Options**: A shell-only installer would be simpler to start but harder to test and maintain once conflict resolution, rollback, and TUI flows exist. A Go CLI has higher upfront cost but gives us a safer, testable installer while preserving the simple `curl | sh` entrypoint.
@@ -18,7 +20,7 @@ The v1 CLI will declare and verify external dependencies, then produce an OS-awa
 
 **Superseded in part by ADR 0010**: dependency execution is now allowed inside `dots install` behind provider selection, required/optional dependency semantics, pre-configuration gating, and an explicit `--skip-deps` escape hatch.
 
-v1 officially supports macOS arm64/amd64 and Linux arm64/amd64 for configuration installation. Dependency Plans will provide specific package-manager guidance for macOS/Homebrew, Debian/Ubuntu, Fedora, and Arch, with a generic fallback for other Linux distributions; Windows, WSL as an official target, NixOS-specific behavior, Alpine/musl specialization, and automatic package installation are out of scope for v1.
+v1 officially supports macOS arm64 and Linux arm64/amd64 for configuration installation. Dependency Plans will provide specific package-manager guidance for macOS/Homebrew, Debian/Ubuntu, Fedora, and Arch, with a generic fallback for other Linux distributions; Windows, WSL as an official target, NixOS-specific behavior, Alpine/musl specialization, and automatic package installation are out of scope for v1.
 
 The first-install flow will keep the bootstrapper minimal, install the `dots` binary under `~/.local/bin/dots`, then run `dots install --profile workstation`. The CLI will compute and show an Install Plan before applying changes, support `dots install --profile workstation --dry-run` from v1, and include the v1 commands `install`, `status`, `doctor`, `deps check`, `deps plan`, and `backups list`; `diff`, `backups restore`, and `deps install` are optional or future work.
 
@@ -34,7 +36,7 @@ The Install Manifest will support Profiles, Tags, and OS Filters in v1. Profiles
 
 The v1 implementation will follow Strict TDD and include unit tests for pure logic, Temporary Home Tests for filesystem installation behavior, Golden Output Tests for important CLI output, and focused TUI Model Tests for Bubble Tea state transitions. Full visual TUI snapshot testing is out of scope for v1 because installer correctness matters more than pixel-perfect terminal rendering.
 
-Distribution starts with GitHub Releases in v1, publishing Release Artifacts and checksums for macOS amd64/arm64 and Linux amd64/arm64. The Bootstrapper must perform Checksum Verification before installing or executing the downloaded CLI. Homebrew Distribution uses the same checksum-backed artifacts through `yersonargotev/tap/dots`, so the tap remains a distribution surface rather than a separate install implementation. Initial versioning uses `v0.x`.
+Distribution starts with GitHub Releases in v1, publishing Release Artifacts and checksums for macOS arm64 and Linux amd64/arm64. The Bootstrapper must perform Checksum Verification before installing or executing the downloaded CLI. Homebrew Distribution uses the same checksum-backed artifacts through `yersonargotev/tap/dots`, so the tap remains a distribution surface rather than a separate install implementation. Initial versioning uses `v0.x`.
 
 The MVP Configuration Set is the bounded `dots.yaml` manifest: shell, git, terminal, editor, and agent-tool config with explicit install strategies and dependencies. Generated editor state, machine-local state, secrets, runtime caches, and non-portable application configuration remain Deferred Configuration because they distract from proving installer, backups, manifest selection, status, and conflict handling.
 

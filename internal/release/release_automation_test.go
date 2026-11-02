@@ -17,7 +17,6 @@ import (
 )
 
 var supportedReleasePlatforms = []string{
-	"darwin/amd64",
 	"darwin/arm64",
 	"linux/amd64",
 	"linux/arm64",
@@ -306,7 +305,6 @@ func TestGenerateHomebrewFormulaUsesChecksummedReleaseArtifacts(t *testing.T) {
 	root := repoRoot(t)
 	checksumsPath := filepath.Join(t.TempDir(), "checksums.txt")
 	checksums := strings.Join([]string{
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dots_v0.99.0_darwin_amd64",
 		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  dots_v0.99.0_darwin_arm64",
 		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc  dots_v0.99.0_linux_amd64",
 		"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd  dots_v0.99.0_linux_arm64",
@@ -342,8 +340,7 @@ func TestGenerateHomebrewFormulaUsesChecksummedReleaseArtifacts(t *testing.T) {
 		`desc "Safe dotfiles installer"`,
 		`homepage "https://github.com/yersonargotev/dots"`,
 		`version "0.99.0"`,
-		`url "https://github.com/yersonargotev/dots/releases/download/v0.99.0/dots_v0.99.0_darwin_amd64", using: :nounzip`,
-		`sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`,
+		`depends_on arch: :arm64`,
 		`url "https://github.com/yersonargotev/dots/releases/download/v0.99.0/dots_v0.99.0_darwin_arm64", using: :nounzip`,
 		`sha256 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"`,
 		`url "https://github.com/yersonargotev/dots/releases/download/v0.99.0/dots_v0.99.0_linux_amd64", using: :nounzip`,
@@ -360,13 +357,15 @@ func TestGenerateHomebrewFormulaUsesChecksummedReleaseArtifacts(t *testing.T) {
 	if got := strings.Count(text, "using: :nounzip"); got != len(supportedReleasePlatforms) {
 		t.Fatalf("formula should mark every raw executable URL as using: :nounzip; got %d occurrences in:\n%s", got, text)
 	}
+	if strings.Contains(text, "darwin_amd64") {
+		t.Fatalf("formula must not offer a macOS Intel artifact:\n%s", text)
+	}
 }
 
 func TestGenerateHomebrewFormulaFailsClearlyWhenChecksumEntryIsMissing(t *testing.T) {
 	root := repoRoot(t)
 	checksumsPath := filepath.Join(t.TempDir(), "checksums.txt")
 	checksums := strings.Join([]string{
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dots_v0.99.0_darwin_amd64",
 		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  dots_v0.99.0_darwin_arm64",
 		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc  dots_v0.99.0_linux_amd64",
 	}, "\n") + "\n"
@@ -399,7 +398,6 @@ func TestGenerateHomebrewFormulaFailsClearlyWhenChecksumManifestIsNotExact(t *te
 	root := repoRoot(t)
 
 	baseChecksums := []string{
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dots_v0.99.0_darwin_amd64",
 		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  dots_v0.99.0_darwin_arm64",
 		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc  dots_v0.99.0_linux_amd64",
 		"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd  dots_v0.99.0_linux_arm64",
@@ -411,14 +409,19 @@ func TestGenerateHomebrewFormulaFailsClearlyWhenChecksumManifestIsNotExact(t *te
 		wantError string
 	}{
 		{
+			name:      "rejects retired macOS Intel artifact",
+			extraLine: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dots_v0.99.0_darwin_amd64",
+			wantError: "unexpected checksum entry for dots_v0.99.0_darwin_amd64",
+		},
+		{
 			name:      "rejects unexpected release artifact",
 			extraLine: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee  dots_v0.99.0_linux_386",
 			wantError: "unexpected checksum entry for dots_v0.99.0_linux_386",
 		},
 		{
 			name:      "rejects duplicate expected artifact",
-			extraLine: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  dots_v0.99.0_darwin_amd64",
-			wantError: "duplicate checksum entry for dots_v0.99.0_darwin_amd64",
+			extraLine: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  dots_v0.99.0_darwin_arm64",
+			wantError: "duplicate checksum entry for dots_v0.99.0_darwin_arm64",
 		},
 	}
 

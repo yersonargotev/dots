@@ -164,13 +164,11 @@ require_checksum() {
   printf '%s' "$checksum"
 }
 
-darwin_amd64_artifact="dots_${version}_darwin_amd64"
 darwin_arm64_artifact="dots_${version}_darwin_arm64"
 linux_amd64_artifact="dots_${version}_linux_amd64"
 linux_arm64_artifact="dots_${version}_linux_arm64"
 
 expected_artifacts=(
-  "$darwin_amd64_artifact"
   "$darwin_arm64_artifact"
   "$linux_amd64_artifact"
   "$linux_arm64_artifact"
@@ -178,7 +176,6 @@ expected_artifacts=(
 
 validate_checksum_manifest
 
-darwin_amd64_sha="$(require_checksum "$darwin_amd64_artifact")"
 darwin_arm64_sha="$(require_checksum "$darwin_arm64_artifact")"
 linux_amd64_sha="$(require_checksum "$linux_amd64_artifact")"
 linux_arm64_sha="$(require_checksum "$linux_arm64_artifact")"
@@ -191,13 +188,9 @@ class Dots < Formula
   version "$formula_version"
 
   on_macos do
-    if Hardware::CPU.arm?
-      url "${asset_base}/${darwin_arm64_artifact}", using: :nounzip
-      sha256 "$darwin_arm64_sha"
-    else
-      url "${asset_base}/${darwin_amd64_artifact}", using: :nounzip
-      sha256 "$darwin_amd64_sha"
-    end
+    depends_on arch: :arm64
+    url "${asset_base}/${darwin_arm64_artifact}", using: :nounzip
+    sha256 "$darwin_arm64_sha"
   end
 
   on_linux do

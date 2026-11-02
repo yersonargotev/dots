@@ -454,7 +454,6 @@ func chatGPTCodexResources(t *testing.T) string {
 func codexFixtureNames(t *testing.T, goos, goarch string) (asset, binary string) {
 	t.Helper()
 	targets := map[string]string{
-		"darwin_amd64": "x86_64-apple-darwin",
 		"darwin_arm64": "aarch64-apple-darwin",
 		"linux_amd64":  "x86_64-unknown-linux-musl",
 		"linux_arm64":  "aarch64-unknown-linux-musl",
@@ -469,7 +468,6 @@ func codexFixtureNames(t *testing.T, goos, goarch string) (asset, binary string)
 func claudeFixturePlatform(t *testing.T, goos, goarch string) string {
 	t.Helper()
 	platforms := map[string]string{
-		"darwin_amd64": "darwin-x64",
 		"darwin_arm64": "darwin-arm64",
 		"linux_amd64":  "linux-x64",
 		"linux_arm64":  "linux-arm64",
@@ -507,16 +505,16 @@ func githubRecipeFixtureAsset(t *testing.T, recipe, goos, goarch string) string 
 	platform := goos + "_" + goarch
 	assets := map[string]map[string]string{
 		"opencode": {
-			"darwin_amd64": "opencode-darwin-x64.zip", "darwin_arm64": "opencode-darwin-arm64.zip",
-			"linux_amd64": "opencode-linux-x64.tar.gz", "linux_arm64": "opencode-linux-arm64.tar.gz",
+			"darwin_arm64": "opencode-darwin-arm64.zip",
+			"linux_amd64":  "opencode-linux-x64.tar.gz", "linux_arm64": "opencode-linux-arm64.tar.gz",
 		},
 		"antigravity": {
-			"darwin_amd64": "agy_cli_mac_x64.tar.gz", "darwin_arm64": "agy_cli_mac_arm64.tar.gz",
-			"linux_amd64": "agy_cli_linux_x64.tar.gz", "linux_arm64": "agy_cli_linux_arm64.tar.gz",
+			"darwin_arm64": "agy_cli_mac_arm64.tar.gz",
+			"linux_amd64":  "agy_cli_linux_x64.tar.gz", "linux_arm64": "agy_cli_linux_arm64.tar.gz",
 		},
 		"copilot": {
-			"darwin_amd64": "copilot-darwin-x64.tar.gz", "darwin_arm64": "copilot-darwin-arm64.tar.gz",
-			"linux_amd64": "copilot-linux-x64.tar.gz", "linux_arm64": "copilot-linux-arm64.tar.gz",
+			"darwin_arm64": "copilot-darwin-arm64.tar.gz",
+			"linux_amd64":  "copilot-linux-x64.tar.gz", "linux_arm64": "copilot-linux-arm64.tar.gz",
 		},
 	}
 	asset := assets[recipe][platform]

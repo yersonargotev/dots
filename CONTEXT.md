@@ -117,7 +117,7 @@ A Dependency that is a font rather than an executable, such as a Nerd Font requi
 _Avoid_: typeface, glyph pack, icon font
 
 **Supported Platform**:
-An operating system and architecture combination the Dotfiles CLI intentionally supports. v1 supports macOS arm64/amd64 and Linux arm64/amd64 for configuration installation.
+An operating system and architecture combination the Dotfiles CLI intentionally supports. v1 supports macOS arm64 and Linux arm64/amd64 for configuration installation.
 _Avoid_: environment, system, machine type
 
 **Dependency Plan Tier**:

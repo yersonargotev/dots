@@ -351,32 +351,45 @@ func TestBootstrapperRejectsChecksumMismatchBeforeInstallOrDelegation(t *testing
 
 func TestBootstrapperRejectsUnsupportedPlatformBeforeDownloading(t *testing.T) {
 	root := repoRoot(t)
-	releaseHits := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		releaseHits++
-		http.NotFound(w, r)
-	}))
-	t.Cleanup(server.Close)
-
-	cmd := exec.Command("bash", filepath.Join(root, "scripts", "install.sh"))
-	cmd.Dir = root
-	cmd.Env = append(os.Environ(),
-		"HOME="+t.TempDir(),
-		"DOTS_VERSION=v0.99.0",
-		"DOTS_RELEASE_BASE_URL="+server.URL,
-		"DOTS_INSTALL_DIR="+filepath.Join(t.TempDir(), "bin"),
-		"DOTS_OS=windows",
-		"DOTS_ARCH=amd64",
-	)
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("bootstrap should reject unsupported platforms\n%s", output)
-	}
-	if !strings.Contains(string(output), "unsupported operating system") {
-		t.Fatalf("unsupported platform should be explained, got:\n%s", output)
-	}
-	if releaseHits != 0 {
-		t.Fatalf("unsupported platform should fail before downloading; got %d release requests", releaseHits)
+	for _, tt := range []struct{ name, os, arch, want string }{
+		{"windows", "windows", "amd64", "unsupported operating system"},
+		{"macos x86_64", "Darwin", "x86_64", "unsupported platform: darwin/amd64"},
+		{"macos amd64", "darwin", "amd64", "unsupported platform: darwin/amd64"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, version := range []string{"latest", "v0.99.0"} {
+				t.Run(version, func(t *testing.T) {
+					releaseHits := 0
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						releaseHits++
+						http.NotFound(w, r)
+					}))
+					defer server.Close()
+					home := t.TempDir()
+					installDir := filepath.Join(home, "bin")
+					sourceRoot := filepath.Join(home, "source")
+					cmd := exec.Command("bash", filepath.Join(root, "scripts", "install.sh"))
+					cmd.Dir = root
+					cmd.Env = append(os.Environ(),
+						"HOME="+home, "DOTS_VERSION="+version,
+						"DOTS_RELEASE_BASE_URL="+server.URL, "DOTS_INSTALL_DIR="+installDir,
+						"DOTS_SOURCE_ROOT="+sourceRoot, "DOTS_OS="+tt.os, "DOTS_ARCH="+tt.arch,
+					)
+					output, err := cmd.CombinedOutput()
+					if err == nil || !strings.Contains(string(output), tt.want) {
+						t.Fatalf("bootstrap should reject platform with %q: %v\n%s", tt.want, err, output)
+					}
+					if releaseHits != 0 {
+						t.Fatalf("unsupported platform made %d release requests", releaseHits)
+					}
+					for _, path := range []string{installDir, sourceRoot} {
+						if _, err := os.Stat(path); !os.IsNotExist(err) {
+							t.Fatalf("unsupported platform created %s: %v", path, err)
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -395,7 +408,6 @@ func TestBootstrapperSelectsSupportedReleaseArtifacts(t *testing.T) {
 		arch     string
 		artifact string
 	}{
-		{name: "macos amd64", os: "Darwin", arch: "x86_64", artifact: "dots_v0.99.0_darwin_amd64"},
 		{name: "macos arm64", os: "Darwin", arch: "arm64", artifact: "dots_v0.99.0_darwin_arm64"},
 		{name: "linux amd64", os: "Linux", arch: "x86_64", artifact: "dots_v0.99.0_linux_amd64"},
 		{name: "linux arm64", os: "Linux", arch: "aarch64", artifact: "dots_v0.99.0_linux_arm64"},

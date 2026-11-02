@@ -16,7 +16,7 @@ func validateTagConstraints(m Manifest, name string, tag Tag) error {
 	}
 	seen = map[string]bool{}
 	for _, platform := range tag.SupportedPlatforms {
-		if !slices.Contains([]string{"darwin_arm64", "darwin_amd64", "linux_arm64", "linux_amd64"}, platform) || seen[platform] {
+		if !slices.Contains([]string{"darwin_arm64", "linux_arm64", "linux_amd64"}, platform) || seen[platform] {
 			return fmt.Errorf("tags[%q].supported_platforms contains an invalid or duplicate platform %q", name, platform)
 		}
 		seen[platform] = true

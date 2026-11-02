@@ -48,6 +48,10 @@ case "${DOTS_ARCH:-$(uname -m)}" in
   *) fail "unsupported architecture: ${DOTS_ARCH:-$(uname -m)}" ;;
 esac
 
+if [[ "$goos/$goarch" == "darwin/amd64" ]]; then
+  fail "unsupported platform: darwin/amd64; macOS requires Apple Silicon (arm64)"
+fi
+
 if [[ "$version" == "latest" && "$release_base_url" == "$default_release_base_url" ]]; then
   asset_base="https://github.com/yersonargotev/dots/releases/latest/download"
 else

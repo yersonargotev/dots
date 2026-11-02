@@ -301,8 +301,10 @@ Release artifacts are published for:
 
 | OS | Architecture |
 |----|--------------|
-| macOS | `amd64`, `arm64` |
+| macOS | `arm64` (Apple Silicon) |
 | Linux | `amd64`, `arm64` |
+
+macOS Intel is unsupported. The Bootstrapper rejects it before downloading or installing files.
 
 ## v1 scope boundary
 
