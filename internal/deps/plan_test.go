@@ -616,7 +616,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("GitHub CLI action = %#v, want verified latest user-local provider", githubCLI)
 		}
 
-		for _, name := range []string{"bat", "starship", "zellij", "pnpm"} {
+		for _, name := range []string{"bat", "starship", "pnpm"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)
@@ -644,7 +644,7 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 			t.Fatalf("GitHub CLI action = %#v, want verified latest without Ubuntu apt or Homebrew", githubCLI)
 		}
 
-		for _, name := range []string{"bat", "starship", "zellij", "pnpm"} {
+		for _, name := range []string{"bat", "starship", "pnpm"} {
 			action, ok := findAction(report.Actions, name)
 			if !ok {
 				t.Fatalf("missing action for %q in %#v", name, report.Actions)

@@ -96,7 +96,7 @@ func TestGhosttyDesktopProfileInstallsAndReportsAlignedInSandbox(t *testing.T) {
 	}
 	foundDesktopFontDependency := false
 	for _, set := range manifestFile.Dependencies {
-		if !slices.Contains(set.Tags, "ghostty") || !slices.Contains(set.Tags, "warp") || !slices.Contains(set.Tags, "zed") {
+		if !slices.Contains(set.Tags, "ghostty") {
 			continue
 		}
 		for _, dep := range set.Dependencies {
