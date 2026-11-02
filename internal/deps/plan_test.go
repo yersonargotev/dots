@@ -29,6 +29,37 @@ func planManifest() manifest.Manifest {
 	}
 }
 
+func TestPlanRejectsMacOSIntelRollingProvidersBeforeNetwork(t *testing.T) {
+	for _, recipe := range []struct{ name, command string }{
+		{"codex", "codex"}, {"claude", "claude"}, {"opencode", "opencode"},
+		{"antigravity", "agy"}, {"copilot", "copilot"},
+	} {
+		t.Run(recipe.name, func(t *testing.T) {
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				http.Error(w, "unexpected request", http.StatusInternalServerError)
+			}))
+			defer server.Close()
+			m := planManifest()
+			m.Entries[0].Dependencies = []manifest.Dependency{{
+				Name: recipe.name, Command: recipe.command,
+				RollingUserLocal: &manifest.RollingUserLocalProvider{Recipe: recipe.name},
+			}}
+			_, err := deps.Plan(m, deps.Options{
+				Profile: "default", OS: "darwin", Arch: "amd64", Home: t.TempDir(),
+				HTTPClient: server.Client(), RollingReleaseURL: server.URL,
+			}, noProviderLookup(), fontLookupSet(), deps.TierUserLocal)
+			if err == nil || !strings.Contains(err.Error(), "does not support darwin/amd64") {
+				t.Fatalf("Plan() error = %v, want unsupported platform", err)
+			}
+			if requests != 0 {
+				t.Fatalf("unsupported platform made %d network requests", requests)
+			}
+		})
+	}
+}
+
 func TestPlanProducesStructuredInstallActionsForMappedPackages(t *testing.T) {
 	tests := []struct {
 		name       string

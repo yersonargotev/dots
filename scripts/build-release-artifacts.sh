@@ -52,7 +52,6 @@ mkdir -p "$out_dir"
 out_dir="$(cd "$out_dir" && pwd)"
 
 platforms=(
-  "darwin/amd64"
   "darwin/arm64"
   "linux/amd64"
   "linux/arm64"

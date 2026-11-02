@@ -62,25 +62,21 @@ type githubRollingSpec struct {
 
 var (
 	codexPlatformAssets = map[string]string{
-		"darwin_amd64": "codex-package-x86_64-apple-darwin.tar.gz",
 		"darwin_arm64": "codex-package-aarch64-apple-darwin.tar.gz",
 		"linux_amd64":  "codex-package-x86_64-unknown-linux-musl.tar.gz",
 		"linux_arm64":  "codex-package-aarch64-unknown-linux-musl.tar.gz",
 	}
 	opencodePlatformAssets = map[string]string{
-		"darwin_amd64": "opencode-darwin-x64.zip",
 		"darwin_arm64": "opencode-darwin-arm64.zip",
 		"linux_amd64":  "opencode-linux-x64.tar.gz",
 		"linux_arm64":  "opencode-linux-arm64.tar.gz",
 	}
 	antigravityPlatformAssets = map[string]string{
-		"darwin_amd64": "agy_cli_mac_x64.tar.gz",
 		"darwin_arm64": "agy_cli_mac_arm64.tar.gz",
 		"linux_amd64":  "agy_cli_linux_x64.tar.gz",
 		"linux_arm64":  "agy_cli_linux_arm64.tar.gz",
 	}
 	copilotPlatformAssets = map[string]string{
-		"darwin_amd64": "copilot-darwin-x64.tar.gz",
 		"darwin_arm64": "copilot-darwin-arm64.tar.gz",
 		"linux_amd64":  "copilot-linux-x64.tar.gz",
 		"linux_arm64":  "copilot-linux-arm64.tar.gz",
@@ -262,7 +258,6 @@ func rollingClaudeArtifact(dep manifest.Dependency, opts Options) (UserLocalArti
 
 func claudePlatform(goos, goarch string) (string, bool) {
 	platforms := map[string]string{
-		"darwin_amd64": "darwin-x64",
 		"darwin_arm64": "darwin-arm64",
 		"linux_amd64":  "linux-x64",
 		"linux_arm64":  "linux-arm64",

@@ -1,7 +1,7 @@
 # Herdr workspace setup
 
 The `herdr` Tag installs Herdr configuration and compatible pinned plugins on
-macOS: three on Apple Silicon, and Git Tokens on Intel.
+Apple Silicon macOS: three compatible plugins. macOS Intel is unsupported by dots.
 It is already part of the `core` and `workstation` Profiles. Select it explicitly
 with `dots install --tag herdr` on a new installation, or include it in the
 selection you intend to retain. Review selection reconciliation before changing

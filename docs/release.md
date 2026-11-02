@@ -14,7 +14,6 @@ This workflow publishes `dots` Release Artifacts for macOS and Linux, then updat
    git push origin v0.5.1
    ```
 3. Open the GitHub release created by the `Release` workflow and verify these assets exist:
-   - `dots_v0.5.1_darwin_amd64`
    - `dots_v0.5.1_darwin_arm64`
    - `dots_v0.5.1_linux_amd64`
    - `dots_v0.5.1_linux_arm64`
@@ -27,7 +26,7 @@ Use manual dispatch when the tag already exists but the release needs to be rebu
 
 1. Go to **Actions → Release → Run workflow**.
 2. Enter the existing tag, for example `v0.5.1`.
-3. Run the workflow. It checks out that tag, rebuilds the four artifacts, recreates `checksums.txt`, and uploads the GitHub Release assets with `--clobber`.
+3. Run the workflow. It checks out that tag, rebuilds the three artifacts, recreates `checksums.txt`, and uploads the GitHub Release assets with `--clobber`.
 4. Approve the pending `homebrew` deployment. The protected job downloads the published checksum manifest, verifies `HOMEBREW_TAP_TOKEN` is present, regenerates and locally commits `Formula/dots.rb` when changed, dry-run proves access, and pushes the prepared tap commit.
 
 ## Checksum Verification contract
@@ -82,13 +81,17 @@ For Brewfile-managed machines, prefer formula-level trust:
 brew "yersonargotev/tap/dots", trusted: true
 ```
 
-The formula selects the correct Release Artifact for macOS/Linux and amd64/arm64, marks each raw executable URL with `using: :nounzip`, verifies the published SHA-256 checksum from the generated formula, installs the downloaded binary as `dots`, and runs `dots --version` in `brew test`.
+The formula selects the correct Release Artifact for macOS arm64 and Linux amd64/arm64, marks each raw executable URL with `using: :nounzip`, verifies the published SHA-256 checksum from the generated formula, installs the downloaded binary as `dots`, and runs `dots --version` in `brew test`.
+
+On macOS the formula requires ARM64 through a Homebrew architecture requirement;
+Intel macOS is unsupported. The Bootstrapper also rejects Intel macOS before
+downloading checksums, installing the CLI, or cloning the Source of Truth.
 
 The release workflow publishes the GitHub Release first, then gates the separate tap update behind the protected `homebrew` environment:
 
-1. The release job builds and uploads the four binaries plus `checksums.txt`, preserving the checksum manifest as a workflow artifact.
+1. The release job builds and uploads the three binaries plus `checksums.txt`, preserving the checksum manifest as a workflow artifact.
 2. The dependent Homebrew job waits for approval of the `homebrew` environment, then reads its `HOMEBREW_TAP_TOKEN` environment secret and checks out `yersonargotev/homebrew-tap`.
-3. It generates `Formula/dots.rb` with `scripts/generate-homebrew-formula.sh`. The script reads the transferred `dist/checksums.txt` and requires exactly the four supported artifact entries.
+3. It generates `Formula/dots.rb` with `scripts/generate-homebrew-formula.sh`. The script reads the transferred `dist/checksums.txt` and requires exactly the three supported artifact entries.
 4. It stages and commits the formula update locally when the tap formula changed, dry-run proves that prepared state can be pushed, and then publishes the tap commit.
 
 Maintainer setup:
@@ -127,7 +130,7 @@ DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 |-------|----------|
 | Trigger | Push tags matching `v0.*`, or run the workflow manually with an existing v0.x tag. |
 | Artifacts | Raw `dots` binaries named `dots_<version>_<goos>_<goarch>`. |
-| Platforms | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, and `linux/arm64`. |
+| Platforms | `darwin/arm64`, `linux/amd64`, and `linux/arm64`. |
 | Checksums | One `checksums.txt` file covers every Release Artifact. |
 | Homebrew Distribution | `scripts/generate-homebrew-formula.sh` generates `Formula/dots.rb` from the release tag and transferred `checksums.txt`; after the GitHub Release assets exist, the environment-protected Homebrew job locally prepares the tap commit, dry-run proves that prepared state can be pushed, then publishes it to `yersonargotev/homebrew-tap` with the environment `HOMEBREW_TAP_TOKEN`. Users should prefer formula-level Tap Trust through `brew install yersonargotev/tap/dots`, `brew trust --formula yersonargotev/tap/dots`, or Brewfile `trusted: true`. Homebrew installs only the binary, so first-run package-manager installs must run `dots init` to clone the default Installed Repository before `dots status`, `dots doctor`, or `dots install --profile workstation --dry-run`. |
 
@@ -136,7 +139,7 @@ DOTS_VERSION=v0.5.1 DOTS_SOURCE_ROOT="$PWD" bash scripts/install.sh
 - [ ] The tag is a v0.x tag, such as `v0.5.1`.
 - [ ] The workflow completed from the tag commit.
 - [ ] The pending `homebrew` deployment was approved by the required reviewer.
-- [ ] All four platform artifacts are attached to the GitHub Release.
+- [ ] All three platform artifacts are attached to the GitHub Release.
 - [ ] `checksums.txt` contains one SHA-256 entry for each artifact.
 - [ ] The Bootstrapper maps its detected `goos/goarch` to the matching artifact name.
 - [ ] `dots --version` and `dots version` both report the release tag.

@@ -44,7 +44,7 @@ Migration trigger: the day a genuinely hard, broad capability is needed (serious
 | Diagnostics | `dots doctor` reports platform, dependency, secret, and configuration concerns without pretending that guardrails are a complete audit. |
 | Dependency management | `dots deps check`, `dots deps plan`, and `dots deps install` detect missing Dependencies, show OS-aware guidance, preview installable actions, and execute package-manager commands only after `--yes` or interactive confirmation. Manual-only Dependencies remain manual. |
 | Backups list | `dots backups list` exposes Backup Sets and Backup Metadata so preserved files can be audited after installation. |
-| Release artifacts | GitHub Releases publish platform-specific Release Artifacts for macOS amd64/arm64 and Linux amd64/arm64. |
+| Release artifacts | GitHub Releases publish platform-specific Release Artifacts for macOS arm64 and Linux amd64/arm64. |
 | Bootstrapper support | The Bootstrapper downloads the matching Release Artifact, performs Checksum Verification, installs or locates `dots`, and delegates setup to the Dotfiles CLI. |
 | Homebrew Distribution | The release workflow generates a tap formula from the same Release Artifacts and checksum manifest, then publishes it to `yersonargotev/homebrew-tap`. |
 | MVP Configuration Set | v1 proves the installer with the bounded `dots.yaml` manifest: shell, git, terminal, editor, and agent-tool config with explicit install strategies and Dependencies. The `agents` Profile now owns a native Agent CLI Baseline; optional web/mobile integration still uses the closed Provisioner allowlist, and OpenCode composes native and web JSON subsets in one co-owned target. Authentication, generated state, and editor runtime state remain out of scope. |
@@ -80,7 +80,7 @@ A Dependency Plan helps the user understand missing tools before any package-man
 
 ### Distribution starts with verifiable artifacts
 
-v1 distribution starts with GitHub Release Artifacts plus Checksum Verification because every install path can verify exactly what it downloads. Homebrew Distribution now uses that same artifact contract: the formula is generated from `checksums.txt`, selects the correct macOS/Linux amd64/arm64 binary, and delegates all setup behavior to the installed `dots` CLI.
+v1 distribution starts with GitHub Release Artifacts plus Checksum Verification because every install path can verify exactly what it downloads. Homebrew Distribution now uses that same artifact contract: the formula is generated from `checksums.txt`, selects the correct macOS arm64 or Linux amd64/arm64 binary, and delegates all setup behavior to the installed `dots` CLI.
 
 ### The MVP Configuration Set keeps the feedback loop tight
 
