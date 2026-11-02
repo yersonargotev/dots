@@ -5,12 +5,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/pelletier/go-toml/v2"
-	"gopkg.in/yaml.v3"
 
 	"github.com/yersonargotev/dots/internal/manifest"
 )
@@ -25,12 +23,8 @@ func TestCarbonfoxTerminalManifestMappings(t *testing.T) {
 	}
 
 	overrides := map[string]string{
-		"~/.config/ghostty/config.ghostty":      "configs/ghostty/config-carbonfox.ghostty",
-		"~/.config/herdr/config.toml":           "configs/herdr/config-carbonfox.toml",
-		"~/.config/zellij/config.kdl":           "configs/zellij/config-carbonfox.kdl",
-		"~/.config/zellij/layouts/default.kdl":  "configs/zellij/layouts/default-carbonfox.kdl",
-		"~/.warp/settings.toml":                 "configs/warp/settings-carbonfox.toml",
-		"~/.config/warp-terminal/settings.toml": "configs/warp/settings-carbonfox.toml",
+		"~/.config/ghostty/config.ghostty": "configs/ghostty/config-carbonfox.ghostty",
+		"~/.config/herdr/config.toml":      "configs/herdr/config-carbonfox.toml",
 	}
 	for target, source := range overrides {
 		entry := findEntry(got.Entries, target)
@@ -50,9 +44,6 @@ func TestCarbonfoxTerminalManifestMappings(t *testing.T) {
 		os     []string
 	}{
 		{"~/.config/ghostty/themes/Carbonfox", "configs/ghostty/themes/Carbonfox", []string{"ghostty"}, []string{"darwin", "linux"}},
-		{"~/.config/zellij/themes/carbonfox.kdl", "configs/zellij/themes/carbonfox.kdl", []string{"zellij"}, []string{"darwin", "linux"}},
-		{"~/.warp/themes/carbonfox/carbonfox.yaml", "configs/warp/themes/carbonfox/carbonfox.yaml", []string{"warp"}, []string{"darwin"}},
-		{"~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml", "configs/warp/themes/carbonfox/carbonfox.yaml", []string{"warp"}, []string{"linux"}},
 	}
 	for _, asset := range assets {
 		entry := findEntry(got.Entries, asset.target)
@@ -92,38 +83,6 @@ func TestCarbonfoxTerminalVariantsPreserveNonThemeBehavior(t *testing.T) {
 		t.Fatal("Herdr Carbonfox variant changed settings outside the theme and authored row colors")
 	}
 
-	zellijBase := readCarbonfoxTerminalFile(t, root, "configs/zellij/config.kdl")
-	zellijCarbonfox := readCarbonfoxTerminalFile(t, root, "configs/zellij/config-carbonfox.kdl")
-	if got, want := zellijDirectives(zellijCarbonfox), zellijDirectives(zellijBase); !reflect.DeepEqual(got, want) {
-		t.Fatal("Zellij Carbonfox config changed keybindings, plugins, layout selection, or another non-theme directive")
-	}
-
-	layoutBase := normalizeZellijLayout(readCarbonfoxTerminalFile(t, root, "configs/zellij/layouts/default.kdl"))
-	layoutCarbonfox := normalizeZellijLayout(readCarbonfoxTerminalFile(t, root, "configs/zellij/layouts/default-carbonfox.kdl"))
-	if layoutCarbonfox != layoutBase {
-		t.Fatal("Zellij Carbonfox status layout changed text, format strings, plugin location, icons, or layout structure")
-	}
-
-	warpBase := readCarbonfoxTerminalTOML(t, root, "configs/warp/settings.toml")
-	warpCarbonfox := readCarbonfoxTerminalTOML(t, root, "configs/warp/settings-carbonfox.toml")
-	if got := nestedMap(t, nestedMap(t, warpCarbonfox, "appearance"), "themes")["system_theme"]; got != false {
-		t.Fatalf("Warp system theme = %#v, want explicit false for dark-only Carbonfox", got)
-	}
-	warpTheme := nestedMap(t, nestedMap(t, warpCarbonfox, "appearance"), "themes")["theme"]
-	wantWarpTheme := map[string]any{"custom": map[string]any{
-		"name": "Carbonfox",
-		"path": "carbonfox/carbonfox.yaml",
-	}}
-	if !reflect.DeepEqual(warpTheme, wantWarpTheme) {
-		t.Fatalf("Warp custom theme setting = %#v, want %#v", warpTheme, wantWarpTheme)
-	}
-	delete(nestedMap(t, nestedMap(t, warpBase, "appearance"), "themes"), "theme")
-	delete(nestedMap(t, nestedMap(t, warpCarbonfox, "appearance"), "themes"), "theme")
-	delete(nestedMap(t, nestedMap(t, warpBase, "appearance"), "themes"), "system_theme")
-	delete(nestedMap(t, nestedMap(t, warpCarbonfox, "appearance"), "themes"), "system_theme")
-	if !reflect.DeepEqual(warpCarbonfox, warpBase) {
-		t.Fatal("Warp Carbonfox variant changed the font family, font size, or another non-theme preference")
-	}
 }
 
 func TestCarbonfoxTerminalAdaptersUsePinnedPalette(t *testing.T) {
@@ -131,9 +90,6 @@ func TestCarbonfoxTerminalAdaptersUsePinnedPalette(t *testing.T) {
 	provenanceFiles := []string{
 		"configs/ghostty/themes/Carbonfox",
 		"configs/herdr/config-carbonfox.toml",
-		"configs/zellij/themes/carbonfox.kdl",
-		"configs/zellij/layouts/default-carbonfox.kdl",
-		"configs/warp/themes/carbonfox/carbonfox.yaml",
 	}
 	for _, path := range provenanceFiles {
 		content := readCarbonfoxTerminalFile(t, root, path)
@@ -184,63 +140,6 @@ func TestCarbonfoxTerminalAdaptersUsePinnedPalette(t *testing.T) {
 		}
 	}
 
-	zellijTheme := readCarbonfoxTerminalFile(t, root, "configs/zellij/themes/carbonfox.kdl")
-	for _, component := range []string{
-		"text_unselected", "text_selected", "ribbon_selected", "ribbon_unselected",
-		"table_title", "table_cell_selected", "table_cell_unselected", "list_selected",
-		"list_unselected", "frame_selected", "frame_highlight", "exit_code_success",
-		"exit_code_error", "multiplayer_user_colors",
-	} {
-		if !strings.Contains(zellijTheme, component+" {") {
-			t.Errorf("Zellij Carbonfox theme misses component %q", component)
-		}
-	}
-	assertZellijThemeUsesCanonicalColors(t, zellijTheme)
-
-	zellijLayout := readCarbonfoxTerminalFile(t, root, "configs/zellij/layouts/default-carbonfox.kdl")
-	wantLayoutColors := map[string]bool{
-		"#78A9FF": true, "#0C0C0C": true, "#3DDBD9": true, "#EE5396": true,
-		"#08BDBA": true, "#25BE6A": true, "#BE95FF": true, "#6E6F70": true,
-		"#7B7C7E": true, "#FF7EB6": true,
-	}
-	gotLayoutColors := map[string]bool{}
-	for _, color := range regexp.MustCompile(`#[0-9A-Fa-f]{6}`).FindAllString(zellijLayout, -1) {
-		gotLayoutColors[strings.ToUpper(color)] = true
-	}
-	if !reflect.DeepEqual(gotLayoutColors, wantLayoutColors) {
-		t.Fatalf("Zellij status colors = %v, want %v", gotLayoutColors, wantLayoutColors)
-	}
-
-	var warp struct {
-		Name           string `yaml:"name"`
-		Accent         string `yaml:"accent"`
-		Cursor         string `yaml:"cursor"`
-		Background     string `yaml:"background"`
-		Foreground     string `yaml:"foreground"`
-		Details        string `yaml:"details"`
-		TerminalColors struct {
-			Bright map[string]string `yaml:"bright"`
-			Normal map[string]string `yaml:"normal"`
-		} `yaml:"terminal_colors"`
-	}
-	if err := yaml.Unmarshal([]byte(readCarbonfoxTerminalFile(t, root, "configs/warp/themes/carbonfox/carbonfox.yaml")), &warp); err != nil {
-		t.Fatalf("parse Warp Carbonfox theme: %v", err)
-	}
-	if warp.Name != "Carbonfox" || warp.Accent != "#78a9ff" || warp.Cursor != "#f2f4f8" ||
-		warp.Background != "#161616" || warp.Foreground != "#f2f4f8" || warp.Details != "darker" {
-		t.Fatalf("Warp theme metadata = %#v", warp)
-	}
-	wantNormal := map[string]string{
-		"black": "#282828", "red": "#ee5396", "green": "#25be6a", "yellow": "#08bdba",
-		"blue": "#78a9ff", "magenta": "#be95ff", "cyan": "#33b1ff", "white": "#dfdfe0",
-	}
-	wantBright := map[string]string{
-		"black": "#484848", "red": "#f16da6", "green": "#46c880", "yellow": "#2dc7c4",
-		"blue": "#8cb6ff", "magenta": "#c8a5ff", "cyan": "#52bdff", "white": "#e4e4e5",
-	}
-	if !reflect.DeepEqual(warp.TerminalColors.Normal, wantNormal) || !reflect.DeepEqual(warp.TerminalColors.Bright, wantBright) {
-		t.Fatalf("Warp terminal colors = normal %v, bright %v", warp.TerminalColors.Normal, warp.TerminalColors.Bright)
-	}
 }
 
 func TestCarbonfoxTerminalConfigsPassAvailableNativeValidators(t *testing.T) {
@@ -295,26 +194,6 @@ func TestCarbonfoxTerminalConfigsPassAvailableNativeValidators(t *testing.T) {
 		})
 	}
 
-	if zellij, err := exec.LookPath("zellij"); err == nil {
-		t.Run("Zellij", func(t *testing.T) {
-			configDir := filepath.Join(sandbox, ".config", "zellij")
-			if err := os.MkdirAll(filepath.Join(configDir, "themes"), 0o700); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.MkdirAll(filepath.Join(configDir, "layouts"), 0o700); err != nil {
-				t.Fatal(err)
-			}
-			mustSymlink(t, filepath.Join(root, "configs/zellij/config-carbonfox.kdl"), filepath.Join(configDir, "config.kdl"))
-			mustSymlink(t, filepath.Join(root, "configs/zellij/themes/carbonfox.kdl"), filepath.Join(configDir, "themes", "carbonfox.kdl"))
-			mustSymlink(t, filepath.Join(root, "configs/zellij/layouts/default-carbonfox.kdl"), filepath.Join(configDir, "layouts", "default.kdl"))
-			cmd := exec.Command(zellij, "setup", "--check")
-			cmd.Env = append(env, "ZELLIJ_CONFIG_DIR="+configDir)
-			output, err := cmd.CombinedOutput()
-			if err != nil || !strings.Contains(string(output), "[CONFIG FILE]: Well defined.") {
-				t.Fatalf("zellij validate Carbonfox config: %v\n%s", err, output)
-			}
-		})
-	}
 }
 
 func readCarbonfoxTerminalFile(t *testing.T, root, name string) string {
@@ -368,54 +247,6 @@ func ghosttyDirectives(content string) []string {
 		result = append(result, line)
 	}
 	return result
-}
-
-func zellijDirectives(content string) []string {
-	var result []string
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "//") ||
-			strings.HasPrefix(line, "theme ") || strings.HasPrefix(line, "theme_dark ") ||
-			strings.HasPrefix(line, "theme_light ") {
-			continue
-		}
-		result = append(result, line)
-	}
-	return result
-}
-
-func normalizeZellijLayout(content string) string {
-	hexColor := regexp.MustCompile(`#[0-9A-Fa-f]{6}`)
-	var result []string
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-		result = append(result, hexColor.ReplaceAllString(line, "#COLOR"))
-	}
-	return strings.Join(result, "\n")
-}
-
-func assertZellijThemeUsesCanonicalColors(t *testing.T, content string) {
-	t.Helper()
-	allowed := map[string]bool{
-		"12 12 12": true, "22 22 22": true, "37 37 37": true, "42 42 42": true,
-		"82 82 83": true, "110 111 112": true, "123 124 126": true, "182 184 187": true,
-		"242 244 248": true, "238 83 150": true, "241 109 166": true, "37 190 106": true,
-		"8 189 186": true, "120 169 255": true, "190 149 255": true, "51 177 255": true,
-		"61 219 217": true, "90 224 223": true, "82 189 255": true, "255 126 182": true,
-	}
-	colorLine := regexp.MustCompile(`(?m)^\s+(?:base|background|emphasis_[0-3]|player_[0-9]+)\s+([0-9]+(?:\s+[0-9]+){2})\s*$`)
-	matches := colorLine.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
-		t.Fatal("Zellij Carbonfox theme has no color component values")
-	}
-	for _, match := range matches {
-		if !allowed[match[1]] {
-			t.Errorf("Zellij Carbonfox theme contains non-canonical RGB %s", match[1])
-		}
-	}
 }
 
 func mustSymlink(t *testing.T, source, target string) {

@@ -2,7 +2,6 @@ package manifest_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"encoding/xml"
 	"io"
 	"math"
@@ -15,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/pelletier/go-toml/v2"
-	"github.com/tailscale/hujson"
 )
 
 const carbonfoxRevision = "4dacd3f0185a2227bdf3b6c0975a8f0bf87cac9a"
@@ -43,7 +41,6 @@ func TestCarbonfoxWholeFileVariantsPreserveNonThemeSettings(t *testing.T) {
 		themeField string
 	}{
 		{"Atuin", "configs/atuin/config.toml", "configs/atuin/config-carbonfox.toml", "theme"},
-		{"tuicr", "configs/tuicr/config.toml", "configs/tuicr/config-carbonfox.toml", "theme"},
 	} {
 		t.Run(pair.name, func(t *testing.T) {
 			baseline := readTOMLMap(t, filepath.Join(root, pair.baseline))
@@ -62,13 +59,6 @@ func TestCarbonfoxWholeFileVariantsPreserveNonThemeSettings(t *testing.T) {
 		t.Fatalf("bat configs = %q and %q, want theme-only variants", batBase, batCarbonfox)
 	}
 
-	zedBase := readJSONCMap(t, filepath.Join(root, "configs/zed/settings.json"))
-	zedCarbonfox := readJSONCMap(t, filepath.Join(root, "configs/zed/settings-carbonfox.json"))
-	delete(zedBase, "theme")
-	delete(zedCarbonfox, "theme")
-	if !reflect.DeepEqual(zedCarbonfox, zedBase) {
-		t.Fatal("Zed Carbonfox variant changed a non-theme setting, extension, font, or icon selection")
-	}
 }
 
 func TestCarbonfoxAdaptersUsePinnedCanonicalPalette(t *testing.T) {
@@ -76,9 +66,7 @@ func TestCarbonfoxAdaptersUsePinnedCanonicalPalette(t *testing.T) {
 	adapterPaths := []string{
 		"configs/starship/starship-carbonfox.toml",
 		"configs/atuin/themes/carbonfox.toml",
-		"configs/tuicr/themes/carbonfox.toml",
 		"configs/themes/carbonfox.tmTheme",
-		"configs/zed/themes/carbonfox.json",
 	}
 	provenancePaths := append(append([]string(nil), adapterPaths...), "configs/themes/README.md")
 	for _, path := range provenancePaths {
@@ -132,40 +120,6 @@ func TestCarbonfoxNativeAssetsCoverSemanticAndTerminalRoles(t *testing.T) {
 		"AlertInfo": "#78a9ff", "AlertWarn": "#be95ff", "AlertError": "#ee5396",
 		"Base": "#f2f4f8", "Guidance": "#7b7c7e", "Muted": "#6e6f70",
 	})
-
-	tuicr := readTOMLMap(t, filepath.Join(root, "configs/tuicr/themes/carbonfox.toml"))
-	assertColorValues(t, stringMap(t, tuicr, "tuicr theme"), map[string]string{
-		"diff_add": "#25be6a", "diff_del": "#ee5396",
-		"message_info_bg": "#78a9ff", "message_warning_bg": "#be95ff",
-		"message_error_bg": "#ee5396", "syntax_theme": "carbonfox.tmTheme",
-	})
-
-	var zed struct {
-		Themes []struct {
-			Name       string                     `json:"name"`
-			Appearance string                     `json:"appearance"`
-			Style      map[string]json.RawMessage `json:"style"`
-		} `json:"themes"`
-	}
-	if err := json.Unmarshal(readFile(t, filepath.Join(root, "configs/zed/themes/carbonfox.json")), &zed); err != nil {
-		t.Fatalf("parse Zed Carbonfox theme: %v", err)
-	}
-	if len(zed.Themes) != 1 || zed.Themes[0].Name != "Carbonfox" || zed.Themes[0].Appearance != "dark" {
-		t.Fatalf("Zed themes = %#v, want one dark Carbonfox theme", zed.Themes)
-	}
-	zedStyle := zed.Themes[0].Style
-	assertJSONString(t, zedStyle, "editor.background", "#161616")
-	assertJSONString(t, zedStyle, "terminal.ansi.red", "#ee5396")
-	assertJSONString(t, zedStyle, "terminal.ansi.green", "#25be6a")
-	assertJSONString(t, zedStyle, "terminal.ansi.bright_blue", "#8cb6ff")
-	assertJSONString(t, zedStyle, "terminal.ansi.dim_magenta", "#a27fd9")
-	assertJSONString(t, zedStyle, "created", "#25be6a")
-	assertJSONString(t, zedStyle, "deleted", "#ee5396")
-	assertJSONString(t, zedStyle, "modified", "#08bdba")
-	assertJSONString(t, zedStyle, "error", "#ee5396")
-	assertJSONString(t, zedStyle, "success", "#25be6a")
-	assertJSONString(t, zedStyle, "text.disabled", "#7b7c7e")
-	assertJSONString(t, zedStyle, "text.placeholder", "#b6b8bb")
 
 	tmTheme := readFile(t, filepath.Join(root, "configs/themes/carbonfox.tmTheme"))
 	decoder := xml.NewDecoder(bytes.NewReader(tmTheme))
@@ -225,19 +179,6 @@ func readTOMLMap(t *testing.T, path string) map[string]any {
 	return parsed
 }
 
-func readJSONCMap(t *testing.T, path string) map[string]any {
-	t.Helper()
-	standard, err := hujson.Standardize(readFile(t, path))
-	if err != nil {
-		t.Fatalf("standardize %s: %v", path, err)
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal(standard, &parsed); err != nil {
-		t.Fatalf("parse %s: %v", path, err)
-	}
-	return parsed
-}
-
 func stringMap(t *testing.T, value any, name string) map[string]string {
 	t.Helper()
 	source, ok := value.(map[string]any)
@@ -261,17 +202,6 @@ func assertColorValues(t *testing.T, got, want map[string]string) {
 		if got[key] != value {
 			t.Errorf("%s = %q, want %q", key, got[key], value)
 		}
-	}
-}
-
-func assertJSONString(t *testing.T, values map[string]json.RawMessage, key, want string) {
-	t.Helper()
-	var got string
-	if err := json.Unmarshal(values[key], &got); err != nil {
-		t.Fatalf("parse Zed style %s: %v", key, err)
-	}
-	if got != want {
-		t.Errorf("Zed style %s = %q, want %q", key, got, want)
 	}
 }
 

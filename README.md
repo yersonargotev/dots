@@ -1,6 +1,6 @@
 # dots
 
-`dots` is a safe Dotfiles CLI for installing repository-owned shell, git, starship, and tmux configuration. It treats this repository as the Source of Truth, reads an Install Manifest, shows an Install Plan before changing files, and preserves user-owned configuration with Backup Sets instead of overwriting blindly.
+`dots` is a safe Dotfiles CLI for installing repository-owned shell, Git, editor, terminal, and agent configuration. It treats this repository as the Source of Truth, reads an Install Manifest, shows an Install Plan before changing files, and preserves user-owned configuration with Backup Sets instead of overwriting blindly.
 
 The Bootstrapper in [`scripts/install.sh`](scripts/install.sh) installs the released `dots` binary, verifies the matching SHA-256 checksum, and then delegates setup to the tested Go CLI. That keeps install behavior in one place instead of duplicating dangerous filesystem logic in shell.
 
@@ -75,12 +75,20 @@ dots install --profile workstation --dry-run
 ```
 
 There is no implicit Profile. Repeat `--profile` to compose selections:
-`workstation` covers `core + desktop + agents`, while `web` and `mobile` stay
-explicit opt-ins. For a full workstation plus optional web and mobile setup, run
-`dots install --profile workstation --profile web --profile mobile`.
+`workstation` composes core, desktop and agent capabilities, while `mobile` stays
+an explicit opt-in. For a workstation plus mobile setup, run
+`dots install --profile workstation --profile mobile`.
 Profiles are ordered convenience presets over atomic Tags, so the catalog also
 shows each independently meaningful capability. Select one directly with
 `dots install --tag <tag>`.
+
+The offered Source of Truth focuses on the retained shell, editor, runtimes,
+utilities, Ghostty, CodexBar, Rex, Codex and Claude Code. The `web` Profile and
+retired tool Tags are no longer selectable. Inactive source files needed by
+previously installed symlinks stay at their original paths. Manifest evolution
+alone does not remove previously installed Managed Entries, external packages, or Provisioner
+effects. Explicit selection reductions keep their acknowledgement and ownership
+checks; external effects remain Retained External State.
 
 Carbonfox is an optional global preference for supported selected applications:
 
@@ -146,7 +154,7 @@ exhaustive item-by-item view. Use `catalog why PROFILE QUERY` for the inverse
 question: it traces an exact Dependency name, Managed Entry target or resolved
 source, or Provisioner tool or identity back to the Profile Tags and manifest
 declarations that selected it. For example,
-`dots catalog why workstation ~/.config/zed/settings.json` explains the winning
+`dots catalog why workstation ~/.config/ghostty/config.ghostty` explains the winning
 Source of Truth source and any source override. This is a portable catalog
 answer only; it does not inspect Installed Selection, Drift, or other machine
 state. Add `--os darwin`, `--os linux`, or `--os all` to choose the catalog

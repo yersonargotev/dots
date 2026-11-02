@@ -694,37 +694,6 @@ provisioners:
 	}
 }
 
-func TestRepositoryManifestIncludesChromeDevToolsCodexProvisioner(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var codex *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool == "codex" && prov.Spec.MCP == "chrome-devtools" {
-			codex = prov
-		}
-	}
-
-	if codex == nil {
-		t.Fatal("repository manifest missing codex MCP provisioner for chrome-devtools")
-	}
-	if !sameStrings(codex.Tags, []string{"codex-chrome-devtools"}) {
-		t.Errorf("codex provisioner tags = %#v, want [codex-chrome-devtools]", codex.Tags)
-	}
-	if !sameStrings(codex.OS, []string{"darwin", "linux"}) {
-		t.Errorf("codex provisioner OS = %#v, want [darwin linux]", codex.OS)
-	}
-	if !hasDependency(codex.Dependencies, "codex") {
-		t.Errorf("codex provisioner missing codex dependency: %#v", codex.Dependencies)
-	}
-}
-
 func TestRepositoryManifestIncludesDartFlutterMCPProvisioners(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
@@ -820,31 +789,6 @@ func TestRepositoryManifestIncludesMobileAgentMCPConfigEntries(t *testing.T) {
 	}
 }
 
-func TestRepositoryManifestWebDependencySetIncludesPlaywrightCLI(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var dep manifest.Dependency
-	for _, set := range got.Dependencies {
-		if !hasString(set.Tags, "playwright") {
-			continue
-		}
-		for _, candidate := range set.Dependencies {
-			if candidate.Name == "Playwright CLI" {
-				dep = candidate
-			}
-		}
-	}
-	if dep.Command != "playwright-cli" || dep.Brew != "playwright-cli" || !dep.LinuxHomebrew {
-		t.Fatalf("Playwright CLI dependency = %#v, want command/brew playwright-cli with linux_homebrew", dep)
-	}
-}
-
 func TestRepositoryManifestDeclaresAtomicDesktopCapabilities(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
@@ -854,7 +798,7 @@ func TestRepositoryManifestDeclaresAtomicDesktopCapabilities(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	capabilityTags := []string{"ghostty", "warp", "zed"}
+	capabilityTags := []string{"ghostty"}
 	for _, name := range capabilityTags {
 		tag, ok := got.Tags[name]
 		if !ok {
@@ -875,7 +819,7 @@ func TestRepositoryManifestDeclaresAtomicDesktopCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveSelection(desktop) error = %v", err)
 	}
-	if want := []string{"ghostty", "warp", "zed", "rex", "codexbar"}; !reflect.DeepEqual(selection.Tags, want) {
+	if want := []string{"ghostty", "rex", "codexbar"}; !reflect.DeepEqual(selection.Tags, want) {
 		t.Fatalf("desktop selection tags = %#v, want %#v", selection.Tags, want)
 	}
 	legacySelection, err := manifest.ResolveSelection(*got, nil, []string{"desktop"})
@@ -920,7 +864,7 @@ func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
 	}
 
-	capabilityTags := []string{"codex", "claude", "opencode", "antigravity", "copilot"}
+	capabilityTags := []string{"codex", "claude"}
 	for _, name := range capabilityTags {
 		tag, ok := got.Tags[name]
 		if !ok {
@@ -946,9 +890,6 @@ func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 	}{
 		"Codex":       {tag: "codex", command: "codex", recipe: "codex"},
 		"Claude Code": {tag: "claude", command: "claude", recipe: "claude"},
-		"OpenCode":    {tag: "opencode", command: "opencode", recipe: "opencode"},
-		"Antigravity": {tag: "antigravity", command: "agy", recipe: "antigravity"},
-		"Copilot CLI": {tag: "copilot", command: "copilot", recipe: "copilot"},
 	}
 	for name, want := range wantAgents {
 		surface := selectedsurface.Evaluate(*got, []string{want.tag}, "linux")
@@ -964,7 +905,7 @@ func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 			t.Errorf("Tag %q dependency %s rolling provider = %#v, want recipe %q", want.tag, name, dep.RollingUserLocal, want.recipe)
 		}
 	}
-	for _, name := range []string{"claude", "copilot"} {
+	for _, name := range []string{"claude"} {
 		if dep := findDependency(selectedsurface.Evaluate(*got, []string{name}, "linux").Dependencies, "jq"); dep == nil {
 			t.Errorf("Tag %q missing shared jq Dependency", name)
 		}
@@ -981,22 +922,6 @@ func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 		t.Fatal("jq Tag missing jq Dependency")
 	}
 
-	opencodeEntry := findEntry(got.Entries, "~/.config/opencode/opencode.json")
-	if opencodeEntry == nil {
-		t.Fatal("agents profile missing native OpenCode Managed Entry")
-	}
-	if opencodeEntry.Source != "configs/opencode/opencode.json" || opencodeEntry.Ownership != "json-subset" || !sameStrings(opencodeEntry.Tags, []string{"opencode"}) {
-		t.Errorf("OpenCode Managed Entry = %#v, want opencode-tagged configs/opencode/opencode.json with JSON Subset Ownership", *opencodeEntry)
-	}
-
-	zedSettings := findEntry(got.Entries, "~/.config/zed/settings.json")
-	if zedSettings == nil {
-		t.Fatal("desktop profile missing Zed settings Managed Entry")
-	}
-	if zedSettings.Source != "configs/zed/settings.json" || zedSettings.Strategy != "copy" || zedSettings.Ownership != "jsonc-subset" || !sameStrings(zedSettings.Tags, []string{"zed"}) {
-		t.Errorf("Zed settings Managed Entry = %#v, want zed-tagged copy with JSONC Subset Ownership", *zedSettings)
-	}
-
 	selected, err := provision.Select(*got, provision.Options{Profile: "agents", OS: "darwin"})
 	if err != nil {
 		t.Fatalf("provision.Select(agents) error = %v", err)
@@ -1005,9 +930,9 @@ func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 		t.Errorf("agents selected legacy Provisioners = %#v, want none", selected)
 	}
 
-	wantWorkstation := append(append(append([]string(nil), got.Profiles["core"].Tags...), got.Profiles["desktop"].Tags[:4]...), capabilityTags...)
+	wantWorkstation := append(append(append([]string(nil), got.Profiles["core"].Tags...), got.Profiles["desktop"].Tags[:2]...), capabilityTags...)
 	if profile := got.Profiles["workstation"]; !reflect.DeepEqual(profile.Tags, wantWorkstation) {
-		t.Fatalf("workstation Profile Tags = %#v, want core + Ghostty/Warp/Zed/Rex + Agent capability Tags %#v", profile.Tags, wantWorkstation)
+		t.Fatalf("workstation Profile Tags = %#v, want core + Ghostty/Rex + Agent capability Tags %#v", profile.Tags, wantWorkstation)
 	}
 
 	for i, set := range got.Dependencies {
@@ -1027,17 +952,13 @@ func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 	}
 }
 
-func TestRepositoryManifestDeclaresAtomicWebAndMobileCapabilities(t *testing.T) {
+func TestRepositoryManifestDeclaresAtomicMobileCapabilities(t *testing.T) {
 	got, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	wantProfiles := map[string][]string{
-		"web": {
-			"playwright", "frontend-design", "vercel-web-skills",
-			"claude-chrome-devtools", "codex-chrome-devtools", "opencode-chrome-devtools",
-		},
 		"mobile": {
 			"dart-skills", "flutter-skills", "android-skills", "claude-dart-mcp",
 			"codex-dart-mcp", "vscode-mobile",
@@ -1086,7 +1007,7 @@ func TestRepositoryManifestDeclaresAtomicWebAndMobileCapabilities(t *testing.T) 
 		}
 	}
 
-	for _, name := range []string{"adaptive-theme", "codegraph"} {
+	for _, name := range []string{"adaptive-theme", "theme-carbonfox"} {
 		tag := got.Tags[name]
 		if tag.Kind != "surface" || tag.Status != "current" || len(tag.ReplacedBy) != 0 {
 			t.Errorf("global Tag %q = %#v, want one current opt-in without replacements", name, tag)
@@ -1103,11 +1024,6 @@ func TestRepositoryManifestDeclaresAtomicWebAndMobileCapabilities(t *testing.T) 
 			t.Errorf("adaptive-theme selected unrequested consumer %q", entry.Entry.Target)
 		}
 	}
-	for _, entry := range selectedsurface.Evaluate(*got, []string{"codegraph"}, "linux").Entries {
-		if entry.Entry.Target == "~/.codex/config.toml" {
-			t.Errorf("codegraph selected the unrequested Codex consumer")
-		}
-	}
 
 	wantOverrides := []struct {
 		tags   []string
@@ -1116,7 +1032,6 @@ func TestRepositoryManifestDeclaresAtomicWebAndMobileCapabilities(t *testing.T) 
 		source string
 	}{
 		{tags: []string{"herdr", "adaptive-theme"}, osName: "darwin", target: "~/.config/herdr/config.toml", source: "configs/herdr/config-adaptive.toml"},
-		{tags: []string{"codex", "codegraph"}, osName: "linux", target: "~/.codex/config.toml", source: "configs/codex/config-codegraph.toml"},
 	}
 	for _, want := range wantOverrides {
 		found := false
@@ -1133,45 +1048,6 @@ func TestRepositoryManifestDeclaresAtomicWebAndMobileCapabilities(t *testing.T) 
 			t.Errorf("Tags %#v did not select consumer %q", want.tags, want.target)
 		}
 	}
-}
-
-func TestRepositoryAtomicAgentCompositionAndCodexSourceOverride(t *testing.T) {
-	got, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tests := []struct {
-		name    string
-		tags    []string
-		target  string
-		sources []string
-	}{
-		{name: "OpenCode baseline plus Chrome DevTools subset", tags: []string{"opencode", "opencode-chrome-devtools"}, target: "~/.config/opencode/opencode.json", sources: []string{"configs/opencode/opencode.json", "configs/opencode/mcp.json"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var sources []string
-			for _, entry := range selectedsurface.Evaluate(*got, tt.tags, "linux").Entries {
-				if entry.Entry.Target == tt.target {
-					sources = append(sources, entry.Source)
-				}
-			}
-			if !reflect.DeepEqual(sources, tt.sources) {
-				t.Fatalf("selected sources for %q = %#v, want %#v", tt.target, sources, tt.sources)
-			}
-		})
-	}
-
-	for _, entry := range selectedsurface.Evaluate(*got, []string{"codex", "codegraph"}, "linux").Entries {
-		if entry.Entry.Target == "~/.codex/config.toml" {
-			if entry.Source != "configs/codex/config-codegraph.toml" || entry.OverrideTag != "codegraph" {
-				t.Fatalf("Codex selected entry = %#v, want codegraph source override", entry)
-			}
-			return
-		}
-	}
-	t.Fatal("Codex and codegraph Tags did not select the Codex Managed Entry")
 }
 
 func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
@@ -1200,7 +1076,7 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"ghostty", "zed"} {
+	for _, name := range []string{"ghostty"} {
 		for _, dep := range dependencies[name] {
 			if dep.LinuxHomebrew {
 				t.Fatalf("%s dependency = %#v, want manual Linux handling without linux_homebrew", name, dep)
@@ -1224,7 +1100,7 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 		t.Fatalf("ghostty dependency missing Darwin app-bundle detection: %#v", dependencies["ghostty"])
 	}
 
-	for _, name := range []string{"bat", "starship", "zellij", "atuin", "pnpm"} {
+	for _, name := range []string{"bat", "starship", "atuin", "pnpm"} {
 		if len(dependencies[name]) == 0 {
 			t.Fatalf("repository manifest missing %s dependency", name)
 		}
@@ -1232,7 +1108,7 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 			if !dep.LinuxHomebrew {
 				t.Fatalf("%s dependency = %#v, want reviewed Linuxbrew opt-in", name, dep)
 			}
-			if (name == "bat" || name == "starship" || name == "zellij" || name == "atuin" || name == "pnpm") && dep.Apt != "" {
+			if (name == "bat" || name == "starship" || name == "atuin" || name == "pnpm") && dep.Apt != "" {
 				t.Fatalf("%s dependency = %#v, want no Ubuntu apt package declaration", name, dep)
 			}
 			if name == "pnpm" {
@@ -1249,123 +1125,6 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 				}
 			}
 		}
-	}
-}
-
-func TestRepositoryManifestIncludesPlaywrightCLISkillProvisioner(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var skills *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool == "skills" && prov.Spec.Package == "microsoft/playwright-cli" {
-			skills = prov
-		}
-	}
-
-	if skills == nil {
-		t.Fatal("repository manifest missing skills provisioner for microsoft/playwright-cli")
-	}
-	if !sameStrings(skills.Tags, []string{"playwright"}) {
-		t.Errorf("skills provisioner tags = %#v, want [playwright]", skills.Tags)
-	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
-	}
-	if !sameStrings(skills.Spec.Skills, []string{"playwright-cli"}) {
-		t.Errorf("skills provisioner skills = %#v, want [playwright-cli]", skills.Spec.Skills)
-	}
-	if !skills.Spec.Global || !skills.Spec.Copy {
-		t.Errorf("skills provisioner global/copy = %v/%v, want true/true", skills.Spec.Global, skills.Spec.Copy)
-	}
-	if !hasDependency(skills.Dependencies, "npx") {
-		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
-	}
-}
-
-func TestRepositoryManifestIncludesExternalSkillsProvisioner(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var skills *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool == "skills" && prov.Spec.Package == "vercel-labs/agent-skills" {
-			skills = prov
-		}
-	}
-
-	if skills == nil {
-		t.Fatal("repository manifest missing skills provisioner for vercel-labs/agent-skills")
-	}
-	if !sameStrings(skills.Tags, []string{"vercel-web-skills"}) {
-		t.Errorf("skills provisioner tags = %#v, want [vercel-web-skills]", skills.Tags)
-	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
-	}
-	wantSkills := []string{
-		"vercel-react-best-practices",
-		"vercel-composition-patterns",
-		"vercel-react-view-transitions",
-		"web-design-guidelines",
-	}
-	if !sameStrings(skills.Spec.Skills, wantSkills) {
-		t.Errorf("skills provisioner skills = %#v, want %#v", skills.Spec.Skills, wantSkills)
-	}
-	if !skills.Spec.Global {
-		t.Errorf("skills provisioner global = false, want true")
-	}
-	if !hasDependency(skills.Dependencies, "npx") {
-		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
-	}
-}
-
-func TestRepositoryManifestIncludesAnthropicFrontendDesignSkillProvisioner(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var skills *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool == "skills" && prov.Spec.Package == "anthropics/skills" {
-			skills = prov
-		}
-	}
-
-	if skills == nil {
-		t.Fatal("repository manifest missing skills provisioner for anthropics/skills")
-	}
-	if !sameStrings(skills.Tags, []string{"frontend-design"}) {
-		t.Errorf("skills provisioner tags = %#v, want [frontend-design]", skills.Tags)
-	}
-	if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
-		t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
-	}
-	if !sameStrings(skills.Spec.Skills, []string{"frontend-design"}) {
-		t.Errorf("skills provisioner skills = %#v, want [frontend-design]", skills.Spec.Skills)
-	}
-	if !skills.Spec.Global {
-		t.Errorf("skills provisioner global = false, want true")
-	}
-	if !hasDependency(skills.Dependencies, "npx") {
-		t.Errorf("skills provisioner missing npx dependency: %#v", skills.Dependencies)
 	}
 }
 
@@ -1445,89 +1204,6 @@ func TestRepositoryManifestDoesNotIncludeRetiredDelegationSkillProvisioner(t *te
 	}
 }
 
-func TestRepositoryManifestIncludesCodeGraphProvisioner(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var codegraph *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool == "codegraph" {
-			codegraph = prov
-		}
-	}
-
-	if codegraph == nil {
-		t.Fatal("repository manifest missing codegraph provisioner")
-	}
-	if !hasString(codegraph.Tags, "codegraph") {
-		t.Errorf("codegraph provisioner %#v missing codegraph tag", codegraph.Spec)
-	}
-	if hasString(codegraph.Tags, "agents") {
-		t.Errorf("codegraph provisioner tags = %#v, want independent from agents tag", codegraph.Tags)
-	}
-	if !sameStrings(codegraph.OS, []string{"darwin", "linux"}) {
-		t.Errorf("codegraph provisioner OS = %#v, want [darwin linux]", codegraph.OS)
-	}
-	if codegraph.Spec.Scope != "global" || !codegraph.Spec.Yes {
-		t.Errorf("codegraph provisioner scalar flags = %#v, want global/yes", codegraph.Spec)
-	}
-	if !sameStrings(codegraph.Spec.Agents, []string{"codex", "claude", "antigravity", "opencode"}) {
-		t.Errorf("codegraph provisioner agents = %#v, want [codex claude antigravity opencode]", codegraph.Spec.Agents)
-	}
-	if !hasDependency(codegraph.Dependencies, "curl") {
-		t.Errorf("codegraph provisioner missing curl dependency: %#v", codegraph.Dependencies)
-	}
-}
-
-func TestRepositoryManifestIncludesChromeDevToolsPluginProvisioners(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	var market, plugin *manifest.Provisioner
-	for i := range got.Provisioners {
-		prov := &got.Provisioners[i]
-		if prov.Tool != "claude" {
-			continue
-		}
-		switch {
-		case prov.Spec.Marketplace == "ChromeDevTools/chrome-devtools-mcp":
-			market = prov
-		case prov.Spec.Plugin == "chrome-devtools-mcp" && prov.Spec.From == "chrome-devtools-plugins":
-			plugin = prov
-		}
-	}
-
-	if market == nil {
-		t.Fatal("repository manifest missing claude marketplace provisioner for chrome-devtools")
-	}
-	if plugin == nil {
-		t.Fatal("repository manifest missing claude plugin provisioner for chrome-devtools-mcp")
-	}
-
-	for _, prov := range []*manifest.Provisioner{market, plugin} {
-		if !sameStrings(prov.Tags, []string{"claude-chrome-devtools"}) {
-			t.Errorf("claude provisioner tags = %#v, want [claude-chrome-devtools]", prov.Tags)
-		}
-		if !sameStrings(prov.OS, []string{"darwin", "linux"}) {
-			t.Errorf("claude provisioner OS = %#v, want [darwin linux]", prov.OS)
-		}
-		if !hasDependency(prov.Dependencies, "claude") {
-			t.Errorf("claude provisioner missing claude dependency: %#v", prov.Dependencies)
-		}
-	}
-}
-
 func TestRepositoryManifestMarksClaudeSettingsAsJSONSubsetOwned(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	manifestPath := filepath.Join(root, "dots.yaml")
@@ -1584,8 +1260,8 @@ func TestRepositoryManifestMarksCodexConfigAsTOMLSubsetOwned(t *testing.T) {
 	if settings.Ownership != "toml-subset" {
 		t.Fatalf("Codex config ownership = %q, want toml-subset", settings.Ownership)
 	}
-	if settings.SourceOverrides["codegraph"] != "configs/codex/config-codegraph.toml" {
-		t.Fatalf("Codex config codegraph override = %q, want configs/codex/config-codegraph.toml", settings.SourceOverrides["codegraph"])
+	if len(settings.SourceOverrides) != 0 {
+		t.Fatalf("Codex retains retired source overrides: %#v", settings.SourceOverrides)
 	}
 }
 
@@ -2562,7 +2238,6 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 		{name: "zsh", target: "~/.zshrc", source: "configs/zsh/loader.zsh", strategy: "copy", tag: "zsh", dep: "zsh"},
 		{name: "git", target: "~/.gitconfig", source: "configs/git/loader.gitconfig", strategy: "copy", tag: "git", dep: "git"},
 		{name: "starship", target: "~/.config/starship.toml", source: "configs/starship/starship.toml", strategy: "symlink", tag: "starship", dep: "starship"},
-		{name: "tmux", target: "~/.tmux.conf", source: "configs/tmux/tmux.conf", strategy: "symlink", tag: "tmux", dep: "tmux"},
 	}
 
 	for _, tt := range tests {
@@ -2602,10 +2277,6 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	if !ok || bat.Source != "configs/bat/config" || bat.Strategy != "copy" || bat.Ownership != "" {
 		t.Errorf("bat config entry = %#v, want copy with implicit Whole-Target Ownership", bat)
 	}
-	zellij, ok := entriesByTarget["~/.config/zellij/config.kdl"]
-	if !ok || zellij.Source != "configs/zellij/config.kdl" || zellij.Strategy != "copy" || zellij.Ownership != "" {
-		t.Errorf("Zellij config entry = %#v, want copy with implicit Whole-Target Ownership", zellij)
-	}
 	portable, ok := entriesByTarget["~/.config/dots/zsh/zshrc"]
 	if !ok || portable.Source != "configs/zsh/zshrc" || portable.Strategy != "symlink" {
 		t.Errorf("portable zsh entry = %#v, want managed symlink", portable)
@@ -2613,62 +2284,6 @@ func TestRepositoryManifestIncludesMVPConfigurationSet(t *testing.T) {
 	portableGit, ok := entriesByTarget["~/.config/dots/git/gitconfig"]
 	if !ok || portableGit.Source != "configs/git/gitconfig" || portableGit.Strategy != "symlink" {
 		t.Errorf("portable git entry = %#v, want managed symlink", portableGit)
-	}
-}
-
-func TestRepositoryManifestIncludesTuicrCoreConfiguration(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	if _, ok := got.Profiles["tuicr"]; ok {
-		t.Fatal("repository manifest defines a dedicated tuicr Profile, want core ownership")
-	}
-	tuicrTag, ok := got.Tags["tuicr"]
-	if !ok || tuicrTag.Kind != "surface" || tuicrTag.Status != "current" {
-		t.Fatalf("repository manifest tuicr Tag = %#v, want current surface", tuicrTag)
-	}
-
-	var entry *manifest.Entry
-	for i := range got.Entries {
-		if got.Entries[i].Target == "~/.config/tuicr/config.toml" {
-			entry = &got.Entries[i]
-			break
-		}
-	}
-	if entry == nil {
-		t.Fatal("repository manifest missing tuicr Managed Entry")
-	}
-	if entry.Source != "configs/tuicr/config.toml" || entry.Strategy != "copy" || entry.Ownership != "toml-subset" {
-		t.Fatalf("tuicr config entry = %#v, want copy with TOML Subset Ownership", *entry)
-	}
-	if !sameStrings(entry.Tags, []string{"tuicr"}) || !sameStrings(entry.OS, []string{"darwin", "linux"}) {
-		t.Fatalf("tuicr config scope = tags %#v, OS %#v; want tuicr on darwin and linux", entry.Tags, entry.OS)
-	}
-	if len(entry.Dependencies) != 1 {
-		t.Fatalf("tuicr dependencies = %#v, want one dependency", entry.Dependencies)
-	}
-	dependency := entry.Dependencies[0]
-	if dependency.Name != "tuicr" || dependency.Command != "tuicr" || dependency.Brew != "agavra/tap/tuicr" || !dependency.LinuxHomebrew {
-		t.Fatalf("tuicr dependency = %#v, want command tuicr through agavra/tap/tuicr with Linuxbrew enabled", dependency)
-	}
-
-	config, err := os.ReadFile(filepath.Join(root, entry.Source))
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", entry.Source, err)
-	}
-	if string(config) != "theme = \"catppuccin-mocha\"\n" {
-		t.Fatalf("tuicr config = %q, want Catppuccin Mocha baseline", config)
-	}
-
-	for _, provisioner := range got.Provisioners {
-		if provisioner.Spec.Package == "agavra/tuicr" {
-			t.Fatalf("repository manifest includes tuicr skill Provisioner: %#v", provisioner)
-		}
 	}
 }
 
@@ -2744,14 +2359,6 @@ func TestRepositoryManagedConfigsExposeLocalExtensionPoints(t *testing.T) {
 				"path = ~/.gitconfig.local",
 			},
 		},
-		{
-			name: "tmux has private local include",
-			path: "configs/tmux/tmux.conf",
-			contains: []string{
-				"Machine-specific overrides and secrets",
-				"source-file ~/.tmux.conf.local",
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -2766,30 +2373,6 @@ func TestRepositoryManagedConfigsExposeLocalExtensionPoints(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestRepositoryManagedZshExposesClaudeProxyHarness(t *testing.T) {
-	path := filepath.Clean(filepath.Join("..", "..", "configs", "zsh", "rc.d", "post", "60-ai.zsh"))
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", path, err)
-	}
-
-	for _, want := range []string{
-		"command -v claude >/dev/null 2>&1 && command -v cliproxyapi >/dev/null 2>&1",
-		"alias claudex=",
-		"ANTHROPIC_BASE_URL=http://127.0.0.1:8317",
-		"ANTHROPIC_AUTH_TOKEN=sk-dummy",
-		"CLAUDE_CODE_SUBAGENT_MODEL=gpt-5.6-sol",
-		"CLAUDE_CODE_ALWAYS_ENABLE_EFFORT=1",
-		"CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY=3",
-		"ENABLE_TOOL_SEARCH=false",
-		"claude --model gpt-5.6-sol",
-	} {
-		if !strings.Contains(string(content), want) {
-			t.Errorf("%s missing %q", path, want)
-		}
 	}
 }
 
@@ -3011,443 +2594,6 @@ func TestRepositoryStarshipConfigClassifiesPortablePromptSafely(t *testing.T) {
 	}
 }
 
-func TestRepositoryTmuxConfigClassifiesPortableConfigSafely(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-
-	managedPath := filepath.Join(root, "configs/tmux/tmux.conf")
-	managedBytes, err := os.ReadFile(managedPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", managedPath, err)
-	}
-	managed := string(managedBytes)
-
-	if strings.TrimSpace(managed) == "" {
-		t.Fatalf("managed tmux config is empty")
-	}
-
-	for _, want := range []string{
-		"set -g @plugin 'tmux-plugins/tpm'",
-		"set -g @plugin 'catppuccin/tmux#v2.3.0'",
-		`.config/dots/theme.sh`,
-		`dots_catppuccin_flavor`,
-		`set -g @catppuccin_flavor "latte"`,
-		`set -g @catppuccin_flavor "mocha"`,
-		`@dots_catppuccin_status_icon_fg`,
-		`@catppuccin_status_directory_icon_fg`,
-		`#{E:@dots_catppuccin_status_icon_fg}`,
-		`set -g @catppuccin_reset "true"`,
-		`#{@thm_text}`,
-		"set -g prefix C-a",
-		"set -g mode-keys vi",
-		"set -g status-position top",
-		`set -as terminal-features ",*:RGB"`,
-		`set-environment -g COLORTERM "truecolor"`,
-		"display-popup",
-		"source-file ~/.tmux.conf.local",
-	} {
-		if !strings.Contains(managed, want) {
-			t.Fatalf("managed tmux config missing portable segment %q:\n%s", want, managed)
-		}
-	}
-
-	// Guard against committing active machine-specific shell wiring or private
-	// values. Comments may explain why those concerns are excluded, so only
-	// non-comment configuration lines are checked for shell commands.
-	for _, line := range strings.Split(managed, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		for _, forbidden := range []string{
-			"default-command",
-			"default-shell",
-		} {
-			if strings.Contains(trimmed, forbidden) {
-				t.Fatalf("managed tmux config contains active machine-specific shell setting %q:\n%s", line, managed)
-			}
-		}
-	}
-
-	activeTmuxConfig := make([]string, 0)
-	for _, line := range strings.Split(managed, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		activeTmuxConfig = append(activeTmuxConfig, trimmed)
-	}
-	normalizedManaged := strings.ToLower(strings.Join(activeTmuxConfig, "\n"))
-	for _, forbidden := range []string{
-		"/users/",
-		"/bin/zsh",
-		"argote",
-		"yerson",
-		"password",
-		"secret",
-		"token",
-		"api_key",
-	} {
-		if strings.Contains(normalizedManaged, forbidden) {
-			t.Fatalf("managed tmux config contains machine-specific/private concern %q:\n%s", forbidden, managed)
-		}
-	}
-
-	tmuxDir := filepath.Join(root, "configs/tmux")
-	if err := filepath.WalkDir(tmuxDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			return nil
-		}
-		if d.Name() == "plugins" || d.Name() == ".tmux" {
-			t.Fatalf("repository ships generated tmux plugin state under %s", path)
-		}
-		return nil
-	}); err != nil {
-		t.Fatalf("WalkDir(%q) error = %v", tmuxDir, err)
-	}
-
-	docPath := filepath.Join(root, "configs/tmux/README.md")
-	docBytes, err := os.ReadFile(docPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", docPath, err)
-	}
-	doc := string(docBytes)
-	for _, want := range []string{
-		"Portable",
-		"Machine-specific",
-		"Generated",
-		"Private",
-		"Tmux Plugin Manager",
-		"~/.tmux.conf.local",
-		"Sandbox validation",
-	} {
-		if !strings.Contains(doc, want) {
-			t.Fatalf("tmux config documentation missing %q:\n%s", want, doc)
-		}
-	}
-}
-
-func TestRepositoryZellijConfigClassifiesPortableConfigSafely(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	manifestPath := filepath.Join(root, "dots.yaml")
-
-	got, err := manifest.LoadFile(manifestPath)
-	if err != nil {
-		t.Fatalf("LoadFile(%q) error = %v", manifestPath, err)
-	}
-
-	entriesByTarget := map[string]manifest.Entry{}
-	for _, entry := range got.Entries {
-		entriesByTarget[entry.Target] = entry
-	}
-
-	tests := []struct {
-		name   string
-		target string
-		source string
-	}{
-		{
-			name:   "config",
-			target: "~/.config/zellij/config.kdl",
-			source: "configs/zellij/config.kdl",
-		},
-		{
-			name:   "default layout",
-			target: "~/.config/zellij/layouts/default.kdl",
-			source: "configs/zellij/layouts/default.kdl",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			entry, ok := entriesByTarget[tt.target]
-			if !ok {
-				t.Fatalf("repository manifest missing Zellij entry for target %q", tt.target)
-			}
-			if entry.Source != tt.source {
-				t.Errorf("Source = %q, want %q", entry.Source, tt.source)
-			}
-			wantStrategy := "symlink"
-			if tt.name == "config" {
-				wantStrategy = "copy"
-			}
-			if entry.Strategy != wantStrategy {
-				t.Errorf("Strategy = %q, want %s", entry.Strategy, wantStrategy)
-			}
-			if !sameStrings(entry.Tags, []string{"zellij"}) {
-				t.Errorf("Tags = %#v, want zellij tag", entry.Tags)
-			}
-			if !sameStrings(entry.OS, []string{"darwin", "linux"}) {
-				t.Errorf("OS = %#v, want [darwin linux]", entry.OS)
-			}
-			if !hasDependency(entry.Dependencies, "zellij") {
-				t.Errorf("Dependencies = %#v, want zellij", entry.Dependencies)
-			}
-		})
-	}
-
-	configPath := filepath.Join(root, "configs/zellij/config.kdl")
-	configBytes, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", configPath, err)
-	}
-	config := string(configBytes)
-
-	if strings.TrimSpace(config) == "" {
-		t.Fatalf("managed Zellij config is empty")
-	}
-
-	for _, want := range []string{
-		`keybinds clear-defaults=true`,
-		`bind "Ctrl g" { SwitchToMode "normal"; }`,
-		`bind "Ctrl g" { SwitchToMode "locked"; }`,
-		`theme "catppuccin-mocha"`,
-		`default_mode "locked"`,
-		`mouse_mode true`,
-		`scroll_buffer_size 10000`,
-		`default_layout "default"`,
-		`scrollback_editor "nvim"`,
-		`plugins {`,
-		`session-manager location="zellij:session-manager"`,
-		`plugin-manager location="zellij:plugin-manager"`,
-		`pane_frames {`,
-		`rounded_corners true`,
-	} {
-		if !strings.Contains(config, want) {
-			t.Fatalf("managed Zellij config missing portable segment %q:\n%s", want, config)
-		}
-	}
-
-	for _, notWant := range []string{`theme_light "catppuccin-latte"`, `theme_dark "catppuccin-mocha"`} {
-		if strings.Contains(config, notWant) {
-			t.Fatalf("default Zellij config contains untagged adaptive segment %q:\n%s", notWant, config)
-		}
-	}
-
-	layoutPath := filepath.Join(root, "configs/zellij/layouts/default.kdl")
-	layoutBytes, err := os.ReadFile(layoutPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", layoutPath, err)
-	}
-	layout := string(layoutBytes)
-	for _, want := range []string{
-		`layout {`,
-		`default_tab_template {`,
-		`plugin location="file:~/.config/zellij/plugins/zjstatus.wasm"`,
-		`datetime_timezone "America/Bogota"`,
-	} {
-		if !strings.Contains(layout, want) {
-			t.Fatalf("managed Zellij layout missing portable segment %q:\n%s", want, layout)
-		}
-	}
-
-	for name, content := range map[string]string{
-		"config": config,
-		"layout": layout,
-	} {
-		normalized := strings.ToLower(content)
-		for _, forbidden := range []string{
-			"/users/",
-			"/home/",
-			"argote",
-			"yerson",
-			"password",
-			"secret",
-			"token",
-			"api_key",
-			"hostname",
-		} {
-			if strings.Contains(normalized, forbidden) {
-				t.Fatalf("managed Zellij %s contains machine-specific/private concern %q:\n%s", name, forbidden, content)
-			}
-		}
-	}
-
-	zellijDir := filepath.Join(root, "configs/zellij")
-	if err := filepath.WalkDir(zellijDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case "plugins", "cache", "logs", "sessions":
-				t.Fatalf("repository ships generated Zellij runtime state under %s", path)
-			}
-			return nil
-		}
-		name := strings.ToLower(d.Name())
-		for _, forbiddenSuffix := range []string{".wasm", ".bak", ".log"} {
-			if strings.HasSuffix(name, forbiddenSuffix) {
-				t.Fatalf("repository ships generated Zellij runtime file %s", path)
-			}
-		}
-		for _, forbiddenName := range []string{"plugexit", "plugin-manager"} {
-			if name == forbiddenName {
-				t.Fatalf("repository ships generated Zellij runtime file %s", path)
-			}
-		}
-		return nil
-	}); err != nil {
-		t.Fatalf("WalkDir(%q) error = %v", zellijDir, err)
-	}
-
-	docPath := filepath.Join(root, "configs/zellij/README.md")
-	docBytes, err := os.ReadFile(docPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", docPath, err)
-	}
-	doc := string(docBytes)
-	for _, want := range []string{
-		"Portable",
-		"Machine-specific",
-		"Generated",
-		"Private",
-		"ZELLIJ_CONFIG_FILE",
-		"ZELLIJ_CONFIG_DIR",
-		"zellij --config",
-		"zellij --config-dir",
-		"zjstatus",
-		"manual prerequisite",
-		"America/Bogota",
-		"Sandbox validation",
-		"adaptive-theme",
-		"config-adaptive.kdl",
-	} {
-		if !strings.Contains(doc, want) {
-			t.Fatalf("Zellij config documentation missing %q:\n%s", want, doc)
-		}
-	}
-}
-
-func TestRepositoryTmuxConfigResetsGeneratedCatppuccinStateBeforeReload(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	managedPath := filepath.Join(root, "configs/tmux/tmux.conf")
-	managedBytes, err := os.ReadFile(managedPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", managedPath, err)
-	}
-	managed := string(managedBytes)
-
-	resetLine := `set -g @catppuccin_reset "true"`
-	resetIndex := strings.Index(managed, resetLine)
-	if resetIndex == -1 {
-		t.Fatalf("managed tmux config missing Catppuccin reset line %q:\n%s", resetLine, managed)
-	}
-
-	firstLoadLine := `run "$HOME/.tmux/plugins/tmux/catppuccin.tmux"`
-	firstLoadIndex := strings.Index(managed[resetIndex:], firstLoadLine)
-	if firstLoadIndex == -1 {
-		t.Fatalf("managed tmux config does not load Catppuccin after reset:\n%s", managed)
-	}
-	firstLoadIndex += resetIndex
-
-	for _, generated := range []string{
-		`set -gu @catppuccin_directory_color`,
-		`set -gu @catppuccin_status_directory_icon_bg`,
-		`set -gu @catppuccin_status_directory_text_fg`,
-		`set -gu @catppuccin_status_uptime_text_bg`,
-		`set -gu @cpu_low_bg_color`,
-		`set -gu @ram_medium_bg_color`,
-	} {
-		generatedIndex := strings.Index(managed, generated)
-		if generatedIndex == -1 {
-			t.Fatalf("managed tmux config missing generated module reset %q", generated)
-		}
-		if generatedIndex < firstLoadIndex {
-			t.Fatalf("generated module reset %q occurs before Catppuccin reset load", generated)
-		}
-	}
-
-	customLine := `set -g @catppuccin_status_directory_icon_fg`
-	customIndex := strings.Index(managed, customLine)
-	if customIndex == -1 {
-		t.Fatalf("managed tmux config missing custom Catppuccin option %q", customLine)
-	}
-	if customIndex < firstLoadIndex {
-		t.Fatalf("custom Catppuccin options are set before reset load; reset would discard them")
-	}
-
-	secondLoadIndex := strings.Index(managed[firstLoadIndex+len(firstLoadLine):], firstLoadLine)
-	if secondLoadIndex == -1 {
-		t.Fatalf("managed tmux config does not reload Catppuccin after custom options:\n%s", managed)
-	}
-	secondLoadIndex += firstLoadIndex + len(firstLoadLine)
-	if secondLoadIndex < customIndex {
-		t.Fatalf("Catppuccin reload occurs before custom options; generated modules may ignore dots options")
-	}
-
-	for _, preserved := range []string{
-		`set -g @catppuccin_window_status_style "rounded"`,
-		`set -g @catppuccin_status_background "default"`,
-		`set -g @catppuccin_status_directory_icon_fg`,
-		`set -g @catppuccin_status_uptime_icon_fg`,
-	} {
-		if !strings.Contains(managed, preserved) {
-			t.Fatalf("managed tmux config missing custom Catppuccin option %q", preserved)
-		}
-	}
-}
-
-func TestRepositoryTmuxCatppuccinFlavorCondition(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	managedPath := filepath.Join(root, "configs/tmux/tmux.conf")
-	managedBytes, err := os.ReadFile(managedPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", managedPath, err)
-	}
-
-	condition, ok := tmuxIfShellCondition(string(managedBytes), "@catppuccin_flavor")
-	if !ok {
-		t.Fatalf("managed tmux config missing @catppuccin_flavor if-shell")
-	}
-
-	tests := []struct {
-		name         string
-		uname        string
-		defaults     string
-		defaultsExit int
-		marker       bool
-		wantLatte    bool
-	}{
-		{name: "darwin light with opt-in marker", uname: "Darwin", defaults: "", defaultsExit: 1, marker: true, wantLatte: true},
-		{name: "darwin light without marker", uname: "Darwin", defaults: "", defaultsExit: 1, marker: false, wantLatte: false},
-		{name: "darwin dark with marker", uname: "Darwin", defaults: "Dark", marker: true, wantLatte: false},
-		{name: "darwin unknown with marker", uname: "Darwin", defaults: "Blue", marker: true, wantLatte: false},
-		{name: "linux with marker", uname: "Linux", defaults: "", marker: true, wantLatte: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			bin := t.TempDir()
-			writeExecutable(t, filepath.Join(bin, "uname"), "#!/bin/sh\nprintf '%s\\n' '"+tt.uname+"'\n")
-			writeDefaultsStub(t, filepath.Join(bin, "defaults"), tt.defaults, tt.defaultsExit)
-
-			home := t.TempDir()
-			installAdaptiveThemeHelperForCondition(t, root, home, tt.marker)
-
-			gotLatte := shellConditionSucceeds(t, condition, bin, home)
-			if gotLatte != tt.wantLatte {
-				t.Fatalf("condition selected latte = %v, want %v; condition: %s", gotLatte, tt.wantLatte, condition)
-			}
-		})
-	}
-
-	t.Run("darwin missing defaults falls back to mocha", func(t *testing.T) {
-		bin := t.TempDir()
-		writeExecutable(t, filepath.Join(bin, "uname"), "#!/bin/sh\nprintf '%s\\n' 'Darwin'\n")
-
-		home := t.TempDir()
-		installAdaptiveThemeHelperForCondition(t, root, home, true)
-
-		gotLatte := shellConditionSucceeds(t, condition, bin, home)
-		if gotLatte {
-			t.Fatalf("condition selected latte when defaults(1) was unavailable; condition: %s", condition)
-		}
-	})
-}
-
 func tmuxIfShellCondition(config, marker string) (string, bool) {
 	for _, line := range strings.Split(config, "\n") {
 		line = strings.TrimSpace(line)
@@ -3602,30 +2748,20 @@ func TestRepositoryManifestRemainingSymlinksMatchAuditedClassifications(t *testi
 		conditionalInitializer = "conditional-initializer"
 	)
 	want := map[string]string{
-		"configs/zsh/zshrc\x00~/.config/dots/zsh/zshrc":                                                                readUnderOrdinaryUse,
-		"configs/zsh/zimrc\x00~/.config/dots/zsh/zimrc":                                                                readUnderOrdinaryUse,
-		"configs/zsh/zshenv\x00~/.config/dots/zsh/zshenv":                                                              readUnderOrdinaryUse,
-		"configs/git/gitconfig\x00~/.config/dots/git/gitconfig":                                                        readUnderOrdinaryUse,
-		"configs/dots/theme-carbonfox\x00~/.config/dots/theme-carbonfox":                                               readUnderOrdinaryUse,
-		"configs/tmux/carbonfox.conf\x00~/.config/tmux/carbonfox.conf":                                                 readUnderOrdinaryUse,
-		"configs/ghostty/themes/Carbonfox\x00~/.config/ghostty/themes/Carbonfox":                                       readUnderOrdinaryUse,
-		"configs/zellij/themes/carbonfox.kdl\x00~/.config/zellij/themes/carbonfox.kdl":                                 readUnderOrdinaryUse,
-		"configs/warp/themes/carbonfox/carbonfox.yaml\x00~/.warp/themes/carbonfox/carbonfox.yaml":                      readUnderOrdinaryUse,
-		"configs/warp/themes/carbonfox/carbonfox.yaml\x00~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml": readUnderOrdinaryUse,
-		"configs/atuin/themes/carbonfox.toml\x00~/.config/atuin/themes/carbonfox.toml":                                 readUnderOrdinaryUse,
-		"configs/tuicr/themes/carbonfox.toml\x00~/.config/tuicr/themes/carbonfox.toml":                                 readUnderOrdinaryUse,
-		"configs/themes/carbonfox.tmTheme\x00~/.config/tuicr/themes/carbonfox.tmTheme":                                 readUnderOrdinaryUse,
-		"configs/zed/themes/carbonfox.json\x00~/.config/zed/themes/carbonfox.json":                                     explicitOperatorOutput,
-		"configs/dots/theme.sh\x00~/.config/dots/theme.sh":                                                             readUnderOrdinaryUse,
-		"configs/dots/adaptive-theme\x00~/.config/dots/adaptive-theme":                                                 readUnderOrdinaryUse,
-		"configs/starship/starship.toml\x00~/.config/starship.toml":                                                    explicitOperatorOutput,
-		"configs/tmux/tmux.conf\x00~/.tmux.conf":                                                                       readUnderOrdinaryUse,
-		"configs/zellij/layouts/default.kdl\x00~/.config/zellij/layouts/default.kdl":                                   explicitOperatorOutput,
-		"configs/ghostty/config.ghostty\x00~/.config/ghostty/config.ghostty":                                           conditionalInitializer,
-		"configs/ghostty/adaptive/adaptive-theme.ghostty\x00~/.config/ghostty/adaptive-theme.ghostty":                  readUnderOrdinaryUse,
-		"configs/atuin/themes/catppuccin-mocha.toml\x00~/.config/atuin/themes/catppuccin-mocha.toml":                   readUnderOrdinaryUse,
-		"configs/nvim\x00~/.config/dots/nvim":                                                                          readUnderOrdinaryUse,
-		"configs/zed/themes/catppuccin-blue.json\x00~/.config/zed/themes/catppuccin-blue.json":                         explicitOperatorOutput,
+		"configs/zsh/zshrc\x00~/.config/dots/zsh/zshrc":                                               readUnderOrdinaryUse,
+		"configs/zsh/zimrc\x00~/.config/dots/zsh/zimrc":                                               readUnderOrdinaryUse,
+		"configs/zsh/zshenv\x00~/.config/dots/zsh/zshenv":                                             readUnderOrdinaryUse,
+		"configs/git/gitconfig\x00~/.config/dots/git/gitconfig":                                       readUnderOrdinaryUse,
+		"configs/dots/theme-carbonfox\x00~/.config/dots/theme-carbonfox":                              readUnderOrdinaryUse,
+		"configs/ghostty/themes/Carbonfox\x00~/.config/ghostty/themes/Carbonfox":                      readUnderOrdinaryUse,
+		"configs/atuin/themes/carbonfox.toml\x00~/.config/atuin/themes/carbonfox.toml":                readUnderOrdinaryUse,
+		"configs/dots/theme.sh\x00~/.config/dots/theme.sh":                                            readUnderOrdinaryUse,
+		"configs/dots/adaptive-theme\x00~/.config/dots/adaptive-theme":                                readUnderOrdinaryUse,
+		"configs/starship/starship.toml\x00~/.config/starship.toml":                                   explicitOperatorOutput,
+		"configs/ghostty/config.ghostty\x00~/.config/ghostty/config.ghostty":                          conditionalInitializer,
+		"configs/ghostty/adaptive/adaptive-theme.ghostty\x00~/.config/ghostty/adaptive-theme.ghostty": readUnderOrdinaryUse,
+		"configs/atuin/themes/catppuccin-mocha.toml\x00~/.config/atuin/themes/catppuccin-mocha.toml":  readUnderOrdinaryUse,
+		"configs/nvim\x00~/.config/dots/nvim":                                                         readUnderOrdinaryUse,
 	}
 
 	found := make(map[string]string)
@@ -3649,12 +2785,9 @@ func TestRepositoryManifestRemainingSymlinksMatchAuditedClassifications(t *testi
 		{"configs/zsh/loader.zsh", "~/.zshrc"},
 		{"configs/git/loader.gitconfig", "~/.gitconfig"},
 		{"configs/herdr/config.toml", "~/.config/herdr/config.toml"},
-		{"configs/zellij/config.kdl", "~/.config/zellij/config.kdl"},
 		{"configs/atuin/config.toml", "~/.config/atuin/config.toml"},
 		{"configs/bat/config", "~/.config/bat/config"},
 		{"configs/nvim/lazy-lock.json", "nvim/lazy-lock.json"},
-		{"configs/zed/settings.json", "~/.config/zed/settings.json"},
-		{"configs/zed/keymap.json", "~/.config/zed/keymap.json"},
 	} {
 		for _, entry := range got.Entries {
 			if entry.Source == writer.source && entry.Target == writer.target && entry.Strategy == "symlink" {
@@ -3715,25 +2848,6 @@ func TestRepositoryManifestNeovimEntry(t *testing.T) {
 	if !info.IsDir() {
 		t.Fatalf("source %q is not a directory, want managed Neovim directory", sourcePath)
 	}
-}
-
-func TestRepositoryManifestZedKeymapIsSeededRuntimeState(t *testing.T) {
-	root := filepath.Clean(filepath.Join("..", ".."))
-	got, err := manifest.LoadFile(filepath.Join(root, "dots.yaml"))
-	if err != nil {
-		t.Fatalf("LoadFile() error = %v", err)
-	}
-
-	for _, entry := range got.Entries {
-		if entry.Target != "~/.config/zed/keymap.json" {
-			continue
-		}
-		if entry.Source != "configs/zed/keymap.json" || entry.Strategy != "copy" || entry.Ownership != "seeded" {
-			t.Fatalf("Zed keymap entry = %#v, want seeded copy from configs/zed/keymap.json", entry)
-		}
-		return
-	}
-	t.Fatal("repository manifest missing Zed keymap entry")
 }
 
 func TestDirectorySourceSymlinkStrategyPassesValidation(t *testing.T) {
@@ -3874,8 +2988,8 @@ func TestRepositoryManifestDeclaresAtomicCoreCapabilitySelection(t *testing.T) {
 	}
 
 	wantTags := []string{
-		"zsh", "zimfw", "git", "starship", "tmux", "herdr", "zellij", "atuin",
-		"neovim", "tuicr", "bat", "node", "rust", "go", "uv", "pnpm", "bun",
+		"zsh", "zimfw", "git", "starship", "herdr", "atuin",
+		"neovim", "bat", "node", "rust", "go", "uv", "pnpm", "bun",
 		"fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "fd", "gh", "jq",
 	}
 	for _, name := range wantTags {
@@ -3900,7 +3014,7 @@ func TestRepositoryManifestDeclaresAtomicCoreCapabilitySelection(t *testing.T) {
 		t.Fatalf("core Profile Tags = %#v, want %#v", profile.Tags, wantTags)
 	}
 	wantWorkstation := append(append([]string(nil), wantTags...),
-		"ghostty", "warp", "zed", "rex", "codex", "claude", "opencode", "antigravity", "copilot")
+		"ghostty", "rex", "codex", "claude")
 	if profile := got.Profiles["workstation"]; !reflect.DeepEqual(profile.Tags, wantWorkstation) {
 		t.Fatalf("workstation Profile Tags = %#v, want %#v", profile.Tags, wantWorkstation)
 	}
@@ -4194,7 +3308,6 @@ func TestAgentStatuslinePalettesUseAdaptiveHelper(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	for _, script := range []string{
 		"configs/claude/statusline-command.sh",
-		"configs/copilot/statusline-command.sh",
 	} {
 		t.Run(script, func(t *testing.T) {
 			bin := t.TempDir()

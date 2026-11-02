@@ -16,10 +16,6 @@ tags:
     description: Starship prompt configuration.
     kind: surface
     status: current
-  tmux:
-    description: Tmux terminal multiplexer configuration.
-    kind: surface
-    status: current
   herdr:
     description: Herdr terminal layout and pinned workspace plugins on macOS.
     kind: surface
@@ -34,20 +30,12 @@ tags:
     description: Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS.
     kind: surface
     status: current
-  zellij:
-    description: Zellij terminal workspace configuration and default layout.
-    kind: surface
-    status: current
   atuin:
     description: Atuin shell history configuration and Catppuccin theme.
     kind: surface
     status: current
   neovim:
     description: Neovim configuration and seeded plugin lockfile.
-    kind: surface
-    status: current
-  tuicr:
-    description: tuicr terminal interface configuration.
     kind: surface
     status: current
   bat:
@@ -123,12 +111,9 @@ tags:
       - zimfw
       - git
       - starship
-      - tmux
       - herdr
-      - zellij
       - atuin
       - neovim
-      - tuicr
       - bat
       - node
       - rust
@@ -153,26 +138,16 @@ tags:
     description: Ghostty terminal configuration and application requirement.
     kind: surface
     status: current
-  warp:
-    description: Warp terminal settings and keybindings.
-    kind: surface
-    status: current
-  zed:
-    description: Zed editor settings, keybindings, and authored theme.
-    kind: surface
-    status: current
   codexbar:
     description: CodexBar menu-bar monitor for AI coding-provider usage limits.
     kind: surface
     status: current
   desktop:
-    description: Legacy desktop alias; use the Ghostty, Warp, and Zed capability Tags.
+    description: Legacy desktop alias; use the Ghostty capability Tag.
     kind: compatibility
     status: legacy
     replaced_by:
       - ghostty
-      - warp
-      - zed
   codex:
     description: Codex CLI requirement and dots-owned native configuration.
     kind: surface
@@ -181,63 +156,13 @@ tags:
     description: Claude Code CLI requirement and dots-owned native configuration.
     kind: surface
     status: current
-  opencode:
-    description: OpenCode CLI requirement and dots-owned native configuration.
-    kind: surface
-    status: current
-  antigravity:
-    description: Antigravity CLI requirement and dots-owned native configuration.
-    kind: surface
-    status: current
-  copilot:
-    description: Copilot CLI requirement and dots-owned native configuration.
-    kind: surface
-    status: current
   agents:
-    description: Legacy Agent CLI Baseline alias; use the five atomic Agent capability Tags.
+    description: Legacy Agent CLI Baseline alias; use the Codex and Claude capability Tags.
     kind: compatibility
     status: legacy
     replaced_by:
       - codex
       - claude
-      - opencode
-      - antigravity
-      - copilot
-  playwright:
-    description: Playwright CLI dependency and upstream agent skill.
-    kind: surface
-    status: current
-  frontend-design:
-    description: Anthropic frontend design skill for supported agents.
-    kind: surface
-    status: current
-  vercel-web-skills:
-    description: Vercel React and web design skills for supported agents.
-    kind: surface
-    status: current
-  claude-chrome-devtools:
-    description: Claude Chrome DevTools marketplace and plugin integration.
-    kind: surface
-    status: current
-  codex-chrome-devtools:
-    description: Codex Chrome DevTools MCP integration.
-    kind: surface
-    status: current
-  opencode-chrome-devtools:
-    description: OpenCode Chrome DevTools JSON subset integration.
-    kind: surface
-    status: current
-  web:
-    description: Legacy Web workbench alias; use the atomic web capability Tags.
-    kind: compatibility
-    status: legacy
-    replaced_by:
-      - playwright
-      - frontend-design
-      - vercel-web-skills
-      - claude-chrome-devtools
-      - codex-chrome-devtools
-      - opencode-chrome-devtools
   dart-skills:
     description: Dart agent skills for Codex and Claude Code.
     kind: surface
@@ -281,25 +206,18 @@ tags:
     description: Opt-in adaptive-theme marker and supported app-specific sources or fragments.
     kind: surface
     status: current
-  codegraph:
-    description: Opt-in CodeGraph provisioner and Codex SessionStart hook source override.
-    kind: surface
-    status: current
 profiles:
   core:
-    description: Core dotfiles and general developer tooling without agent, web, or mobile provisioners.
+    description: Core dotfiles and general developer tooling without agent or mobile provisioners.
     status: current
     tags:
       - zsh
       - zimfw
       - git
       - starship
-      - tmux
       - herdr
-      - zellij
       - atuin
       - neovim
-      - tuicr
       - bat
       - node
       - rust
@@ -321,29 +239,14 @@ profiles:
     status: current
     tags:
       - ghostty
-      - warp
-      - zed
       - rex
       - codexbar
   agents:
-    description: Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
+    description: Native configuration for Codex and Claude Code.
     status: current
     tags:
       - codex
       - claude
-      - opencode
-      - antigravity
-      - copilot
-  web:
-    description: Optional frontend and browser workbench.
-    status: current
-    tags:
-      - playwright
-      - frontend-design
-      - vercel-web-skills
-      - claude-chrome-devtools
-      - codex-chrome-devtools
-      - opencode-chrome-devtools
   mobile:
     description: Optional Dart and Flutter mobile development capabilities.
     status: current
@@ -355,19 +258,16 @@ profiles:
       - codex-dart-mcp
       - vscode-mobile
   workstation:
-    description: Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in.
+    description: Composite core, desktop, and Agent CLI Baseline selection; mobile stays opt-in.
     status: current
     tags:
       - zsh
       - zimfw
       - git
       - starship
-      - tmux
       - herdr
-      - zellij
       - atuin
       - neovim
-      - tuicr
       - bat
       - node
       - rust
@@ -385,19 +285,12 @@ profiles:
       - gh
       - jq
       - ghostty
-      - warp
-      - zed
       - rex
       - codex
       - claude
-      - opencode
-      - antigravity
-      - copilot
 dependencies:
   - tags:
       - ghostty
-      - warp
-      - zed
     os:
       - darwin
       - linux
@@ -415,16 +308,6 @@ dependencies:
       - name: CodexBar
         darwin_app: CodexBar.app
         brew_cask: codexbar
-  - tags:
-      - playwright
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: Playwright CLI
-        command: playwright-cli
-        brew: playwright-cli
-        linux_homebrew: true
   - tags:
       - node
     os:
@@ -689,38 +572,7 @@ dependencies:
         rolling_user_local:
           recipe: claude
   - tags:
-      - opencode
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: OpenCode
-        command: opencode
-        rolling_user_local:
-          recipe: opencode
-  - tags:
-      - antigravity
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: Antigravity
-        command: agy
-        rolling_user_local:
-          recipe: antigravity
-  - tags:
-      - copilot
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: Copilot CLI
-        command: copilot
-        rolling_user_local:
-          recipe: copilot
-  - tags:
       - claude
-      - copilot
     os:
       - darwin
       - linux
@@ -824,27 +676,10 @@ entries:
     os:
       - darwin
       - linux
-  - source: configs/tuicr/config.toml
-    source_overrides:
-      theme-carbonfox: configs/tuicr/config-carbonfox.toml
-    target: ~/.config/tuicr/config.toml
-    strategy: copy
-    ownership: toml-subset
-    tags:
-      - tuicr
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: tuicr
-        command: tuicr
-        brew: agavra/tap/tuicr
-        linux_homebrew: true
   - source: configs/dots/theme.sh
     target: ~/.config/dots/theme.sh
     strategy: symlink
     tags:
-      - tmux
       - neovim
     os:
       - darwin
@@ -879,20 +714,6 @@ entries:
           checksums:
             linux_amd64: 4488c11ca632327d1f1f16fb2f102c0646094c35479cd5435991385da43c61ac
             linux_arm64: 01517aab398959ea9ea73bdb4f032ea4dbb51dff5c8e5eb05b4a1b9b7ab872b8
-  - source: configs/tmux/tmux.conf
-    target: ~/.tmux.conf
-    strategy: symlink
-    tags:
-      - tmux
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: tmux
-        brew: tmux
-        apt: tmux
-        dnf: tmux
-        pacman: tmux
   - source: configs/herdr/config.toml
     source_overrides:
       theme-carbonfox: configs/herdr/config-carbonfox.toml
@@ -943,51 +764,6 @@ entries:
       - herdr-metrics
     os:
       - darwin
-  - source: configs/zellij/config.kdl
-    source_overrides:
-      theme-carbonfox: configs/zellij/config-carbonfox.kdl
-      adaptive-theme: configs/zellij/config-adaptive.kdl
-    target: ~/.config/zellij/config.kdl
-    strategy: copy
-    tags:
-      - zellij
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: zellij
-        brew: zellij
-        linux_homebrew: true
-        dnf: zellij
-        pacman: zellij
-        user_local:
-          recipe: zellij
-          version: v0.44.3
-          checksums:
-            linux_amd64: 0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751
-            linux_arm64: 15e6534d42644d66973d136c590c49739dcfd6a1a2a0d3d917973f16c81b45fb
-  - source: configs/zellij/layouts/default.kdl
-    source_overrides:
-      theme-carbonfox: configs/zellij/layouts/default-carbonfox.kdl
-    target: ~/.config/zellij/layouts/default.kdl
-    strategy: symlink
-    tags:
-      - zellij
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: zellij
-        brew: zellij
-        linux_homebrew: true
-        dnf: zellij
-        pacman: zellij
-        user_local:
-          recipe: zellij
-          version: v0.44.3
-          checksums:
-            linux_amd64: 0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751
-            linux_arm64: 15e6534d42644d66973d136c590c49739dcfd6a1a2a0d3d917973f16c81b45fb
   - source: configs/rex/init.lua
     target: ~/.config/rex/init.lua
     strategy: copy
@@ -1042,44 +818,6 @@ entries:
       - adaptive-theme
     os:
       - darwin
-  - source: configs/warp/settings.toml
-    source_overrides:
-      theme-carbonfox: configs/warp/settings-carbonfox.toml
-    target: ~/.warp/settings.toml
-    strategy: copy
-    tags:
-      - warp
-    os:
-      - darwin
-  - source: configs/warp/keybindings.yaml
-    target: ~/.warp/keybindings.yaml
-    strategy: copy
-    tags:
-      - warp
-    os:
-      - darwin
-  - source: configs/warp/settings.toml
-    source_overrides:
-      theme-carbonfox: configs/warp/settings-carbonfox.toml
-    target: ~/.config/warp-terminal/settings.toml
-    strategy: copy
-    tags:
-      - warp
-    os:
-      - linux
-    dependencies:
-      - name: Warp
-        command: warp-terminal
-  - source: configs/warp/keybindings.yaml
-    target: ~/.config/warp-terminal/keybindings.yaml
-    strategy: copy
-    tags:
-      - warp
-    os:
-      - linux
-    dependencies:
-      - name: Warp
-        command: warp-terminal
   - source: configs/atuin/config.toml
     source_overrides:
       theme-carbonfox: configs/atuin/config-carbonfox.toml
@@ -1184,46 +922,6 @@ entries:
     os:
       - darwin
       - linux
-  - source: configs/zed/settings.json
-    source_overrides:
-      theme-carbonfox: configs/zed/settings-carbonfox.json
-    target: ~/.config/zed/settings.json
-    strategy: copy
-    ownership: jsonc-subset
-    tags:
-      - zed
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: zed
-        command: zed
-        brew: zed
-  - source: configs/zed/keymap.json
-    target: ~/.config/zed/keymap.json
-    strategy: copy
-    ownership: seeded
-    tags:
-      - zed
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: zed
-        command: zed
-        brew: zed
-  - source: configs/zed/themes/catppuccin-blue.json
-    target: ~/.config/zed/themes/catppuccin-blue.json
-    strategy: symlink
-    tags:
-      - zed
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: zed
-        command: zed
-        brew: zed
   - source: configs/claude/settings.json
     source_overrides:
       theme-carbonfox: configs/claude/settings-carbonfox.json
@@ -1244,39 +942,11 @@ entries:
       - darwin
       - linux
   - source: configs/codex/config.toml
-    source_overrides:
-      codegraph: configs/codex/config-codegraph.toml
     target: ~/.codex/config.toml
     strategy: copy
     ownership: toml-subset
     tags:
       - codex
-    os:
-      - darwin
-      - linux
-  - source: configs/copilot/settings.json
-    target: ~/.copilot/settings.json
-    strategy: copy
-    ownership: json-subset
-    tags:
-      - copilot
-    os:
-      - darwin
-      - linux
-  - source: configs/copilot/statusline-command.sh
-    target: ~/.copilot/statusline-command.sh
-    strategy: copy
-    tags:
-      - copilot
-    os:
-      - darwin
-      - linux
-  - source: configs/antigravity/settings.json
-    target: ~/.gemini/antigravity-cli/settings.json
-    strategy: copy
-    ownership: json-subset
-    tags:
-      - antigravity
     os:
       - darwin
       - linux
@@ -1296,42 +966,11 @@ entries:
       - vscode-mobile
     os:
       - linux
-  - source: configs/opencode/opencode.json
-    target: ~/.config/opencode/opencode.json
-    strategy: copy
-    ownership: json-subset
-    tags:
-      - opencode
-    os:
-      - darwin
-      - linux
-  # The optional web integration contributes a second JSON subset to the same
-  # native global target without replacing baseline or user-owned keys.
-  - source: configs/opencode/mcp.json
-    target: ~/.config/opencode/opencode.json
-    strategy: copy
-    ownership: json-subset
-    tags:
-      - opencode-chrome-devtools
-    os:
-      - darwin
-      - linux
-    dependencies:
-      - name: opencode
-        command: opencode
   - source: configs/dots/theme-carbonfox
     target: ~/.config/dots/theme-carbonfox
     strategy: symlink
     tags:
       - theme-carbonfox
-    os:
-      - darwin
-      - linux
-  - source: configs/tmux/carbonfox.conf
-    target: ~/.config/tmux/carbonfox.conf
-    strategy: symlink
-    tags:
-      - tmux
     os:
       - darwin
       - linux
@@ -1342,28 +981,6 @@ entries:
       - ghostty
     os:
       - darwin
-      - linux
-  - source: configs/zellij/themes/carbonfox.kdl
-    target: ~/.config/zellij/themes/carbonfox.kdl
-    strategy: symlink
-    tags:
-      - zellij
-    os:
-      - darwin
-      - linux
-  - source: configs/warp/themes/carbonfox/carbonfox.yaml
-    target: ~/.warp/themes/carbonfox/carbonfox.yaml
-    strategy: symlink
-    tags:
-      - warp
-    os:
-      - darwin
-  - source: configs/warp/themes/carbonfox/carbonfox.yaml
-    target: ~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml
-    strategy: symlink
-    tags:
-      - warp
-    os:
       - linux
   - source: configs/atuin/themes/carbonfox.toml
     target: ~/.config/atuin/themes/carbonfox.toml
@@ -1379,30 +996,6 @@ entries:
     tags:
       - bat
       - zsh
-    os:
-      - darwin
-      - linux
-  - source: configs/tuicr/themes/carbonfox.toml
-    target: ~/.config/tuicr/themes/carbonfox.toml
-    strategy: symlink
-    tags:
-      - tuicr
-    os:
-      - darwin
-      - linux
-  - source: configs/themes/carbonfox.tmTheme
-    target: ~/.config/tuicr/themes/carbonfox.tmTheme
-    strategy: symlink
-    tags:
-      - tuicr
-    os:
-      - darwin
-      - linux
-  - source: configs/zed/themes/carbonfox.json
-    target: ~/.config/zed/themes/carbonfox.json
-    strategy: symlink
-    tags:
-      - zed
     os:
       - darwin
       - linux
@@ -1638,61 +1231,6 @@ provisioners:
         pacman: curl
   - tool: skills
     tags:
-      - playwright
-    spec:
-      package: microsoft/playwright-cli
-      agents:
-        - codex
-        - claude-code
-        - antigravity
-        - opencode
-        - github-copilot
-      skills:
-        - playwright-cli
-      global: true
-      copy: true
-    dependencies:
-      - name: npx
-        command: npx
-  - tool: skills
-    tags:
-      - frontend-design
-    spec:
-      package: anthropics/skills
-      agents:
-        - codex
-        - claude-code
-        - antigravity
-        - opencode
-        - github-copilot
-      skills:
-        - frontend-design
-      global: true
-    dependencies:
-      - name: npx
-        command: npx
-  - tool: skills
-    tags:
-      - vercel-web-skills
-    spec:
-      package: vercel-labs/agent-skills
-      agents:
-        - codex
-        - claude-code
-        - antigravity
-        - opencode
-        - github-copilot
-      skills:
-        - vercel-react-best-practices
-        - vercel-composition-patterns
-        - vercel-react-view-transitions
-        - web-design-guidelines
-      global: true
-    dependencies:
-      - name: npx
-        command: npx
-  - tool: skills
-    tags:
       - dart-skills
     spec:
       package: dart-lang/skills
@@ -1774,70 +1312,3 @@ provisioners:
           add the SDK's bin directory (for example ~/develop/flutter/bin) to
           PATH, verify with dart --version, then rerun dots deps check and dots
           install --profile mobile.
-  - tool: claude
-    tags:
-      - claude-chrome-devtools
-    os:
-      - darwin
-      - linux
-    spec:
-      marketplace: ChromeDevTools/chrome-devtools-mcp
-    dependencies:
-      - name: claude
-        command: claude
-        rolling_user_local:
-          recipe: claude
-  - tool: claude
-    tags:
-      - claude-chrome-devtools
-    os:
-      - darwin
-      - linux
-    spec:
-      plugin: chrome-devtools-mcp
-      from: chrome-devtools-plugins
-    dependencies:
-      - name: claude
-        command: claude
-        rolling_user_local:
-          recipe: claude
-  - tool: codex
-    tags:
-      - codex-chrome-devtools
-    os:
-      - darwin
-      - linux
-    spec:
-      mcp: chrome-devtools
-      command:
-        - npx
-        - -y
-        - chrome-devtools-mcp@latest
-        - --no-performance-crux
-      env:
-        CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1"
-        CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1"
-    dependencies:
-      - name: codex
-        command: codex
-  - tool: codegraph
-    tags:
-      - codegraph
-    os:
-      - darwin
-      - linux
-    spec:
-      scope: global
-      agents:
-        - codex
-        - claude
-        - antigravity
-        - opencode
-      yes: true
-    dependencies:
-      - name: curl
-        command: curl
-        brew: curl
-        apt: curl
-        dnf: curl
-        pacman: curl

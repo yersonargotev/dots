@@ -269,13 +269,13 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		{tag: "zimfw", osName: "linux", entries: []string{"~/.zimrc", "~/.config/dots/zsh/zimrc"}, dependencies: []string{"fzf", "zsh", "git", "curl"}, provisioners: []string{"zimfw"}},
 		{tag: "git", osName: "linux", entries: []string{"~/.gitconfig", "~/.config/dots/git/gitconfig"}, dependencies: []string{"git"}},
 		{tag: "starship", osName: "linux", entries: []string{"~/.config/starship.toml"}, dependencies: []string{"starship"}},
-		{tag: "tmux", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "~/.tmux.conf", "~/.config/tmux/carbonfox.conf"}, dependencies: []string{"tmux"}},
+
 		{tag: "herdr", osName: "darwin", entries: []string{"~/.config/herdr/config.toml", "~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml"}, dependencies: []string{"lazygit", "fzf", "fd", "bat", "herdr", "git", "Node LTS (fnm)", "python3", "Rust stable (rustup)", "curl", "tar", "pbcopy", "open"}, provisioners: []string{"herdr", "herdr", "herdr"}},
 		{tag: "herdr", osName: "linux"},
-		{tag: "zellij", osName: "linux", entries: []string{"~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/zellij/themes/carbonfox.kdl"}, dependencies: []string{"zellij"}},
+
 		{tag: "atuin", osName: "linux", entries: []string{"~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/atuin/themes/carbonfox.toml"}, dependencies: []string{"atuin"}},
 		{tag: "neovim", osName: "linux", entries: []string{"~/.config/dots/theme.sh", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim"}, dependencies: []string{"neovim"}},
-		{tag: "tuicr", osName: "linux", entries: []string{"~/.config/tuicr/config.toml", "~/.config/tuicr/themes/carbonfox.toml", "~/.config/tuicr/themes/carbonfox.tmTheme"}, dependencies: []string{"tuicr"}},
+
 		{tag: "bat", osName: "linux", entries: []string{"~/.config/bat/config", "~/.config/bat/themes/Carbonfox.tmTheme"}, dependencies: []string{"bat"}},
 		{tag: "node", osName: "linux", dependencies: []string{"Node LTS (fnm)", "unzip"}},
 		{tag: "rust", osName: "linux", dependencies: []string{"Rust stable (rustup)"}},
@@ -294,19 +294,10 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		{tag: "jq", osName: "linux", dependencies: []string{"jq"}},
 		{tag: "rex", osName: "linux", entries: []string{"~/.config/rex/init.lua", "~/.config/rex/themes/Catppuccin Mocha Blue.ghostty"}, dependencies: []string{"rex"}},
 		{tag: "ghostty", osName: "linux", entries: []string{"~/.config/ghostty/config.ghostty", "~/.config/ghostty/themes/Carbonfox"}, dependencies: []string{"Desktop Nerd Font", "ghostty"}},
-		{tag: "warp", osName: "linux", entries: []string{"~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml", "~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml"}, dependencies: []string{"Desktop Nerd Font", "Warp"}},
-		{tag: "zed", osName: "linux", entries: []string{"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json", "~/.config/zed/themes/carbonfox.json"}, dependencies: []string{"Desktop Nerd Font", "zed"}},
+
 		{tag: "codex", osName: "linux", entries: []string{"~/.codex/config.toml"}, dependencies: []string{"Codex"}},
 		{tag: "claude", osName: "linux", entries: []string{"~/.claude/settings.json", "~/.claude/statusline-command.sh", "~/.claude/themes/carbonfox.json"}, dependencies: []string{"Claude Code", "jq"}},
-		{tag: "opencode", osName: "linux", entries: []string{"~/.config/opencode/opencode.json"}, dependencies: []string{"OpenCode"}},
-		{tag: "antigravity", osName: "linux", entries: []string{"~/.gemini/antigravity-cli/settings.json"}, dependencies: []string{"Antigravity"}},
-		{tag: "copilot", osName: "linux", entries: []string{"~/.copilot/settings.json", "~/.copilot/statusline-command.sh"}, dependencies: []string{"Copilot CLI", "jq"}},
-		{tag: "playwright", osName: "linux", dependencies: []string{"Playwright CLI", "npx"}, provisioners: []string{"skills"}},
-		{tag: "frontend-design", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
-		{tag: "vercel-web-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
-		{tag: "claude-chrome-devtools", osName: "linux", dependencies: []string{"claude"}, provisioners: []string{"claude", "claude"}},
-		{tag: "codex-chrome-devtools", osName: "linux", dependencies: []string{"codex"}, provisioners: []string{"codex"}},
-		{tag: "opencode-chrome-devtools", osName: "linux", entries: []string{"~/.config/opencode/opencode.json"}, dependencies: []string{"opencode"}},
+
 		{tag: "dart-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
 		{tag: "flutter-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
 		{tag: "android-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
@@ -352,42 +343,34 @@ func TestRepositoryDesktopAndAgentProfilesPreserveCapabilitySurfaces(t *testing.
 			osName:  "darwin",
 			entries: []string{
 				"~/.config/rex/init.lua", "~/.config/rex/themes/Catppuccin Mocha Blue.ghostty",
-				"~/.config/ghostty/config.ghostty", "~/.warp/settings.toml", "~/.warp/keybindings.yaml",
-				"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json",
-				"~/.config/ghostty/themes/Carbonfox", "~/.warp/themes/carbonfox/carbonfox.yaml", "~/.config/zed/themes/carbonfox.json",
-			},
-			dependencies: []string{"Desktop Nerd Font", "CodexBar", "rex", "ghostty", "zed"},
+				"~/.config/ghostty/config.ghostty", "~/.config/ghostty/themes/Carbonfox"},
+			dependencies: []string{"Desktop Nerd Font", "CodexBar", "rex", "ghostty"},
 		},
 		{
 			profile: "desktop",
 			osName:  "linux",
 			entries: []string{
 				"~/.config/rex/init.lua", "~/.config/rex/themes/Catppuccin Mocha Blue.ghostty",
-				"~/.config/ghostty/config.ghostty", "~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml",
-				"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json",
-				"~/.config/ghostty/themes/Carbonfox", "~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml", "~/.config/zed/themes/carbonfox.json",
-			},
-			dependencies: []string{"Desktop Nerd Font", "rex", "ghostty", "Warp", "zed"},
+				"~/.config/ghostty/config.ghostty", "~/.config/ghostty/themes/Carbonfox"},
+			dependencies: []string{"Desktop Nerd Font", "rex", "ghostty"},
 		},
 		{
 			profile: "agents",
 			osName:  "darwin",
 			entries: []string{
 				"~/.claude/settings.json", "~/.claude/statusline-command.sh", "~/.codex/config.toml",
-				"~/.copilot/settings.json", "~/.copilot/statusline-command.sh", "~/.gemini/antigravity-cli/settings.json",
-				"~/.config/opencode/opencode.json", "~/.claude/themes/carbonfox.json",
+				"~/.claude/themes/carbonfox.json",
 			},
-			dependencies: []string{"Codex", "Claude Code", "OpenCode", "Antigravity", "Copilot CLI", "jq"},
+			dependencies: []string{"Codex", "Claude Code", "jq"},
 		},
 		{
 			profile: "agents",
 			osName:  "linux",
 			entries: []string{
 				"~/.claude/settings.json", "~/.claude/statusline-command.sh", "~/.codex/config.toml",
-				"~/.copilot/settings.json", "~/.copilot/statusline-command.sh", "~/.gemini/antigravity-cli/settings.json",
-				"~/.config/opencode/opencode.json", "~/.claude/themes/carbonfox.json",
+				"~/.claude/themes/carbonfox.json",
 			},
-			dependencies: []string{"Codex", "Claude Code", "OpenCode", "Antigravity", "Copilot CLI", "jq"},
+			dependencies: []string{"Codex", "Claude Code", "jq"},
 		},
 	}
 
@@ -411,7 +394,7 @@ func TestRepositoryDesktopAndAgentProfilesPreserveCapabilitySurfaces(t *testing.
 	}
 }
 
-func TestRepositoryWebAndMobileProfilesPreserveCapabilitySurfaces(t *testing.T) {
+func TestRepositoryMobileProfilePreservesCapabilitySurfaces(t *testing.T) {
 	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -424,20 +407,6 @@ func TestRepositoryWebAndMobileProfilesPreserveCapabilitySurfaces(t *testing.T) 
 		dependencies []string
 		provisioners []string
 	}{
-		{
-			profile:      "web",
-			osName:       "darwin",
-			entries:      []string{"~/.config/opencode/opencode.json"},
-			dependencies: []string{"Playwright CLI", "opencode", "npx", "claude", "codex"},
-			provisioners: []string{"skills", "skills", "skills", "claude", "claude", "codex"},
-		},
-		{
-			profile:      "web",
-			osName:       "linux",
-			entries:      []string{"~/.config/opencode/opencode.json"},
-			dependencies: []string{"Playwright CLI", "opencode", "npx", "claude", "codex"},
-			provisioners: []string{"skills", "skills", "skills", "claude", "claude", "codex"},
-		},
 		{
 			profile:      "mobile",
 			osName:       "darwin",
@@ -485,12 +454,12 @@ func TestRepositoryCoreProfilePreservesCapabilitySurface(t *testing.T) {
 	}
 
 	wantEntries := map[string][]string{
-		"darwin": {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.config/dots/zsh/zimrc", "~/.zshenv", "~/.config/dots/zsh/zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/herdr/config.toml", "~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim", "~/.config/tmux/carbonfox.conf", "~/.config/zellij/themes/carbonfox.kdl", "~/.config/atuin/themes/carbonfox.toml", "~/.config/bat/themes/Carbonfox.tmTheme", "~/.config/tuicr/themes/carbonfox.toml", "~/.config/tuicr/themes/carbonfox.tmTheme"},
-		"linux":  {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.config/dots/zsh/zimrc", "~/.zshenv", "~/.config/dots/zsh/zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/tuicr/config.toml", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.tmux.conf", "~/.config/zellij/config.kdl", "~/.config/zellij/layouts/default.kdl", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim", "~/.config/tmux/carbonfox.conf", "~/.config/zellij/themes/carbonfox.kdl", "~/.config/atuin/themes/carbonfox.toml", "~/.config/bat/themes/Carbonfox.tmTheme", "~/.config/tuicr/themes/carbonfox.toml", "~/.config/tuicr/themes/carbonfox.tmTheme"},
+		"darwin": {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.config/dots/zsh/zimrc", "~/.zshenv", "~/.config/dots/zsh/zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.config/herdr/config.toml", "~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim", "~/.config/atuin/themes/carbonfox.toml", "~/.config/bat/themes/Carbonfox.tmTheme"},
+		"linux":  {"~/.zshrc", "~/.config/dots/zsh/zshrc", "~/.zimrc", "~/.config/dots/zsh/zimrc", "~/.zshenv", "~/.config/dots/zsh/zshenv", "~/.gitconfig", "~/.config/dots/git/gitconfig", "~/.config/dots/theme.sh", "~/.config/starship.toml", "~/.config/atuin/config.toml", "~/.config/atuin/themes/catppuccin-mocha.toml", "~/.config/bat/config", "nvim/lazy-lock.json", "~/.config/nvim/init.lua", "~/.config/dots/nvim", "~/.config/atuin/themes/carbonfox.toml", "~/.config/bat/themes/Carbonfox.tmTheme"},
 	}
 	wantDependencies := map[string][]string{
-		"darwin": {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "bat", "GitHub CLI", "jq", "zsh", "git", "tuicr", "starship", "tmux", "herdr", "zellij", "atuin", "neovim", "python3", "curl", "tar", "pbcopy", "open"},
-		"linux":  {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "GitHub CLI", "jq", "zsh", "git", "tuicr", "starship", "tmux", "zellij", "atuin", "bat", "neovim", "curl"},
+		"darwin": {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "bat", "GitHub CLI", "jq", "zsh", "git", "starship", "herdr", "atuin", "neovim", "python3", "curl", "tar", "pbcopy", "open"},
+		"linux":  {"Node LTS (fnm)", "Rust stable (rustup)", "go", "uv", "pnpm", "bun", "fzf", "zoxide", "lazygit", "eza", "ripgrep", "delta", "unzip", "fd", "GitHub CLI", "jq", "zsh", "git", "starship", "atuin", "bat", "neovim", "curl"},
 	}
 
 	for _, osName := range []string{"darwin", "linux"} {

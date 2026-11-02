@@ -13,10 +13,7 @@ func stubManifestProvisionerTools(t *testing.T) {
 
 	stubDir := t.TempDir()
 	writeManifestDependencyStubs(t, stubDir)
-	// claude backs the chrome-devtools marketplace/plugin provisioners and codex
-	// backs the chrome-devtools MCP provisioner, both selected by the web
-	// profile. The stubs exit cleanly so the sandboxed install never reaches the
-	// network or the real agent config.
+	// Mobile MCP provisioners must never invoke real agents or their config.
 	writeExecStub(t, filepath.Join(stubDir, "claude"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codex"), "#!/bin/sh\nexit 0\n")
 	writeExecStub(t, filepath.Join(stubDir, "codegraph"), "#!/bin/sh\nexit 0\n")

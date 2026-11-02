@@ -194,18 +194,12 @@ func TestRepositoryCarbonfoxConsumerInstallMatrix(t *testing.T) {
 	}{
 		{name: "Ghostty", tag: "ghostty", hostOS: "linux", target: ".config/ghostty/config.ghostty", source: "configs/ghostty/config-carbonfox.ghostty", contains: "theme = Carbonfox"},
 		{name: "Herdr", tag: "herdr", hostOS: "darwin", target: ".config/herdr/config.toml", source: "configs/herdr/config-carbonfox.toml", contains: "#78a9ff"},
-		{name: "tmux", tag: "tmux", hostOS: "linux", target: ".config/tmux/carbonfox.conf", source: "configs/tmux/carbonfox.conf", contains: "#0c0c0c"},
-		{name: "Zellij", tag: "zellij", hostOS: "linux", target: ".config/zellij/config.kdl", source: "configs/zellij/config-carbonfox.kdl", contains: `theme "carbonfox"`},
 		{name: "Neovim", tag: "neovim", hostOS: "linux", target: ".config/dots/nvim", source: "configs/nvim", additional: map[string]string{".config/dots/nvim/lua/plugins/colorscheme.lua": `colorscheme = carbonfox and "carbonfox"`}},
 		{name: "Starship", tag: "starship", hostOS: "linux", target: ".config/starship.toml", source: "configs/starship/starship-carbonfox.toml", contains: `palette = "carbonfox"`},
 		{name: "Atuin", tag: "atuin", hostOS: "linux", target: ".config/atuin/config.toml", source: "configs/atuin/config-carbonfox.toml", contains: `name = "carbonfox"`},
 		{name: "bat", tag: "bat", hostOS: "linux", target: ".config/bat/config", source: "configs/bat/config-carbonfox", contains: `--theme="Carbonfox"`, additional: map[string]string{".config/bat/themes/Carbonfox.tmTheme": "<string>Carbonfox</string>", ".cache/bat/themes.bin": "themes"}},
-		{name: "tuicr", tag: "tuicr", hostOS: "linux", target: ".config/tuicr/config.toml", source: "configs/tuicr/config-carbonfox.toml", contains: `theme = "carbonfox"`, additional: map[string]string{".config/tuicr/themes/carbonfox.toml": `syntax_theme = "carbonfox.tmTheme"`}},
-		{name: "Zed", tag: "zed", hostOS: "linux", target: ".config/zed/settings.json", source: "configs/zed/settings-carbonfox.json", contains: `"dark": "Carbonfox"`, additional: map[string]string{".config/zed/themes/carbonfox.json": `"name": "Carbonfox"`}},
-		{name: "Warp", tag: "warp", hostOS: "linux", target: ".config/warp-terminal/settings.toml", source: "configs/warp/settings-carbonfox.toml", contains: `name = "Carbonfox"`, additional: map[string]string{".local/share/warp-terminal/themes/carbonfox/carbonfox.yaml": "background: '#161616'"}},
 		{name: "Zsh and both fzf paths", tag: "zsh", hostOS: "linux", target: ".config/bat/config", source: "configs/bat/config-carbonfox", contains: `--theme="Carbonfox"`, additional: map[string]string{".config/dots/zsh/zshrc": "rc.d/pre", ".config/dots/theme-carbonfox": "dots_carbonfox_fzf_colors"}},
 		{name: "Claude", tag: "claude", hostOS: "linux", target: ".claude/settings.json", source: "configs/claude/settings-carbonfox.json", contains: `"theme": "custom:carbonfox"`, additional: map[string]string{".claude/statusline-command.sh": "dots_apply_catppuccin_ansi_palette", ".claude/themes/carbonfox.json": `"name": "Carbonfox"`}},
-		{name: "Copilot", tag: "copilot", hostOS: "linux", target: ".copilot/statusline-command.sh", source: "configs/copilot/statusline-command.sh", contains: "dots_apply_carbonfox_ansi_palette"},
 	}
 
 	for _, test := range tests {
@@ -269,20 +263,18 @@ func TestRepositoryCarbonfoxProfileAndExplicitTagsHaveEquivalentEffectiveTags(t 
 		"--file", profile.manifestPath, "--home", profile.home, "--source-root", profile.repositoryRoot, "--state-root", profile.stateRoot,
 	)
 	explicit := newCarbonfoxFixture(t, "linux")
-	explicit.install(t, false, "ghostty", "warp", "zed", "rex", "codexbar", carbonfoxTag)
+	explicit.install(t, false, "ghostty", "rex", "codexbar", carbonfoxTag)
 
 	profileSelection := profile.metadata(t).InstalledSelection
 	explicitSelection := explicit.metadata(t).InstalledSelection
 	if profileSelection == nil || explicitSelection == nil || !reflect.DeepEqual(profileSelection.ResolvedTags, explicitSelection.ResolvedTags) {
 		t.Fatalf("profile effective Tags = %#v, explicit effective Tags = %#v", profileSelection, explicitSelection)
 	}
-	if want := []string{"ghostty", "warp", "zed", "rex", "codexbar", carbonfoxTag}; !reflect.DeepEqual(profileSelection.ResolvedTags, want) {
+	if want := []string{"ghostty", "rex", "codexbar", carbonfoxTag}; !reflect.DeepEqual(profileSelection.ResolvedTags, want) {
 		t.Fatalf("desktop + Carbonfox effective Tags = %#v, want %#v", profileSelection.ResolvedTags, want)
 	}
 	for _, item := range []struct{ target, source string }{
 		{".config/ghostty/config.ghostty", "configs/ghostty/config-carbonfox.ghostty"},
-		{".config/warp-terminal/settings.toml", "configs/warp/settings-carbonfox.toml"},
-		{".config/zed/settings.json", "configs/zed/settings-carbonfox.json"},
 	} {
 		assertCarbonfoxRecord(t, profile.metadata(t), profile.home, item.target, item.source)
 		assertCarbonfoxRecord(t, explicit.metadata(t), explicit.home, item.target, item.source)
@@ -325,8 +317,6 @@ func TestCarbonfoxSymlinkThemeTransitions(t *testing.T) {
 		{name: "Ghostty adaptive", hostOS: "darwin", consumer: "ghostty", adaptive: true, target: ".config/ghostty/config.ghostty", baselineSource: "configs/ghostty/config.ghostty", carbonfoxSource: "configs/ghostty/config-carbonfox.ghostty"},
 		{name: "Starship baseline", hostOS: "linux", consumer: "starship", target: ".config/starship.toml", baselineSource: "configs/starship/starship.toml", carbonfoxSource: "configs/starship/starship-carbonfox.toml"},
 		{name: "Starship adaptive", hostOS: "linux", consumer: "starship", adaptive: true, target: ".config/starship.toml", baselineSource: "configs/starship/starship.toml", carbonfoxSource: "configs/starship/starship-carbonfox.toml"},
-		{name: "Zellij layout baseline", hostOS: "linux", consumer: "zellij", target: ".config/zellij/layouts/default.kdl", baselineSource: "configs/zellij/layouts/default.kdl", carbonfoxSource: "configs/zellij/layouts/default-carbonfox.kdl"},
-		{name: "Zellij layout adaptive", hostOS: "linux", consumer: "zellij", adaptive: true, target: ".config/zellij/layouts/default.kdl", baselineSource: "configs/zellij/layouts/default.kdl", carbonfoxSource: "configs/zellij/layouts/default-carbonfox.kdl"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newCarbonfoxFixture(t, test.hostOS)
@@ -650,11 +640,6 @@ func TestRepositoryCarbonfoxNativePreflightRunsWithSkipDepsBeforeApply(t *testin
 		want       []string
 		removeStub bool
 	}{
-		{
-			name: "old tuicr", tag: "tuicr", tool: "tuicr",
-			stub: "#!/bin/sh\nprintf '%s\\n' 'tuicr 0.15.0'\n",
-			want: []string{"Carbonfox requires tuicr", "0.16.1"},
-		},
 		{
 			name: "missing Claude", tag: "claude", tool: "claude", removeStub: true,
 			want: []string{"claude is missing from the selected environment PATH"},
