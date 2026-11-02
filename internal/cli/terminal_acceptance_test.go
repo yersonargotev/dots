@@ -96,8 +96,8 @@ func TestTerminalInstalledZshStarshipIntegration(t *testing.T) {
 	}
 	for target, source := range map[string]string{
 		".config/dots/zsh/zshenv": "configs/zsh/zshenv",
-		".config/dots/zsh/zshrc": "configs/zsh/zshrc",
-		".config/starship.toml":  "configs/starship/starship.toml",
+		".config/dots/zsh/zshrc":  "configs/zsh/zshrc",
+		".config/starship.toml":   "configs/starship/starship.toml",
 	} {
 		got, err := os.Readlink(filepath.Join(home, target))
 		if err != nil || got != filepath.Join(sourceRoot, source) {
