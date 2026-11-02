@@ -73,6 +73,7 @@ func TestMetadataCommitTransitionComparesExactInstalledSelection(t *testing.T) {
 		wantOK   bool
 	}{
 		{name: "nil matches nil", wantOK: true},
+		{name: "exclusions differ", current: &state.InstalledSelection{Profiles: []string{"core"}, ExcludedTags: []string{"git"}}, expected: &state.InstalledSelection{Profiles: []string{"core"}}},
 		{name: "nil differs from explicit empty", expected: &state.InstalledSelection{}},
 		{name: "explicit empty differs from nil", current: &state.InstalledSelection{}},
 		{

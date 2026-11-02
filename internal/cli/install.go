@@ -35,8 +35,8 @@ var (
 	installHostArch                          = runtime.GOARCH
 	packageManagerDetector                   = pkgmgr.Detector{}
 	packageManagerSetupRunner  pkgmgr.Runner = pkgmgr.ExecRunner{}
-	commitInstallationMetadata               = func(commit install.MetadataCommit, installed state.InstalledSelection) error {
-		return commit.Commit(&installed)
+	commitInstallationMetadata               = func(commit install.MetadataCommit, expected *state.InstalledSelection, installed state.InstalledSelection) error {
+		return commit.CommitTransition(expected, &installed)
 	}
 	commitSelectorInstallationMetadata = func(commit install.MetadataCommit, expected *state.InstalledSelection, installed state.InstalledSelection) error {
 		return commit.CommitTransition(expected, &installed)
@@ -48,6 +48,7 @@ func newInstallCommand() *cobra.Command {
 		file             string
 		profiles         []string
 		extraTags        []string
+		excludedTags     []string
 		sourceRoot       string
 		home             string
 		stateRoot        string
@@ -75,7 +76,7 @@ func newInstallCommand() *cobra.Command {
 			if backupAndReplace && !dryRun && !yes {
 				return fmt.Errorf("--backup-and-replace requires --yes for non-interactive conflict replacement")
 			}
-			hasExplicitSelection := len(profiles) > 0 || len(extraTags) > 0 || clearSelection
+			hasExplicitSelection := len(profiles) > 0 || len(extraTags) > 0 || len(excludedTags) > 0 || clearSelection
 			selectorPreview := false
 			if !hasExplicitSelection {
 				if installTagSelectorRequested(cmd, yes, noTUI) {
@@ -129,7 +130,7 @@ func newInstallCommand() *cobra.Command {
 				effective, err = selection.ResolveIntent(*m, selection.Intent{
 					Source:    selection.SourceExplicit,
 					Profiles:  profiles,
-					ExtraTags: extraTags,
+					ExtraTags: extraTags, ExcludedTags: excludedTags,
 				})
 			}
 			if err != nil {
@@ -199,7 +200,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			p.Selection = &effective.Report
-			p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, hostOS, hostArch, paths, prep.SourceReadRoot, len(profiles) > 0 || len(extraTags) > 0 || clearSelection)
+			p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, hostOS, hostArch, paths, prep.SourceReadRoot, len(profiles) > 0 || len(extraTags) > 0 || len(excludedTags) > 0 || clearSelection)
 			if err != nil {
 				return err
 			}
@@ -310,7 +311,7 @@ func newInstallCommand() *cobra.Command {
 			if err := validateCarbonfoxNativeSupport(cmd.Context(), p, paths.Home, hostOS, dependencyEnvironment); err != nil {
 				return err
 			}
-			installOptions := install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}
+			installOptions := install.Options{CheckSelection: true, ExpectedSelection: meta.InstalledSelection, SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}
 			var batInput *batcache.Input
 			var batCaptures map[install.SourceCaptureKey]install.CapturedSource
 			if hasBatCacheStep(provPlan) {
@@ -366,7 +367,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			installedSelection.Provenance = state.CaptureProvenance(paths.SourceRoot, version.Value)
-			if err := commitInstallationMetadata(metadataCommit, installedSelection); err != nil {
+			if err := commitInstallationMetadata(metadataCommit, meta.InstalledSelection, installedSelection); err != nil {
 				return err
 			}
 			if releaseErr := install.ReleaseCapturedSources(batCaptures); releaseErr != nil {
@@ -387,6 +388,7 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to install")
 	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, selectionProfileHelp)
 	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, selectionTagHelp)
+	cmd.Flags().StringArrayVar(&excludedTags, "exclude-tag", nil, selectionExcludeTagHelp)
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")
@@ -395,10 +397,11 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
 	cmd.Flags().BoolVar(&skipDeps, "skip-deps", false, "skip dependency provisioning before applying managed configuration")
 	cmd.Flags().BoolVar(&backupAndReplace, "backup-and-replace", false, "with --yes, replace every conflict after creating Backup Sets")
-	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of previously selected Profiles or extra Tags")
+	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of selected Profiles/extra Tags or addition of exclusions")
 	cmd.Flags().BoolVar(&clearSelection, "clear-selection", false, "request an explicitly empty Installed Selection")
 	cmd.MarkFlagsMutuallyExclusive("clear-selection", "profile")
 	cmd.MarkFlagsMutuallyExclusive("clear-selection", "tag")
+	cmd.MarkFlagsMutuallyExclusive("clear-selection", "exclude-tag")
 	registerSelectionFlagCompletion(cmd)
 	return cmd
 }

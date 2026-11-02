@@ -73,7 +73,14 @@ entries:
 					args = append(args, "--tag", "theme-carbonfox")
 				}
 				if continuation {
-					args = append(args, "--continue")
+					fp, err := installedSelectionFingerprint(&previous)
+					if err != nil {
+						t.Fatal(err)
+					}
+					args = append(args, "--continue", "--selection-source", "explicit", "--selection-profile", "core", "--selection-previous", fp)
+					if !removing {
+						args = append(args, "--selection-tag", "theme-carbonfox")
+					}
 				}
 				cmd := NewRootCommand()
 				var out bytes.Buffer

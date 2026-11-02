@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -1297,18 +1298,18 @@ func SelectedProfileNames(profile string, profiles []string) []string {
 // ResolveSelection validates selected Profile and Tag names and returns their
 // ordered, de-duplicated current Tag union. A legacy default Profile is inferred
 // only when neither Profiles nor explicit Tags supply selection intent.
-func ResolveSelection(m Manifest, profileNames []string, extraTags []string) (Selection, error) {
-	return resolveSelection(m, profileNames, extraTags, true)
+func ResolveSelection(m Manifest, profileNames []string, extraTags []string, excludedTags ...string) (Selection, error) {
+	return resolveSelection(m, profileNames, extraTags, excludedTags, true)
 }
 
 // ResolveReadOnlySelection validates a read-only command selection without
 // inferring a legacy default Profile. Explicit Tags may form the complete
 // selection when no Profile was supplied.
-func ResolveReadOnlySelection(m Manifest, profileNames []string, extraTags []string) (Selection, error) {
-	return resolveSelection(m, profileNames, extraTags, false)
+func ResolveReadOnlySelection(m Manifest, profileNames []string, extraTags []string, excludedTags ...string) (Selection, error) {
+	return resolveSelection(m, profileNames, extraTags, excludedTags, false)
 }
 
-func resolveSelection(m Manifest, profileNames []string, extraTags []string, allowDefault bool) (Selection, error) {
+func resolveSelection(m Manifest, profileNames []string, extraTags, excludedTags []string, allowDefault bool) (Selection, error) {
 	profiles := make([]string, 0, len(profileNames))
 	profileSeen := make(map[string]bool, len(profileNames))
 	tags := make([]string, 0, len(extraTags))
@@ -1344,6 +1345,10 @@ func resolveSelection(m Manifest, profileNames []string, extraTags []string, all
 			return Selection{}, fmt.Errorf("at least one --profile is required; choose one or repeat --profile to compose profiles (for example: --profile core, --profile workstation, or --profile agents --profile web)")
 		}
 	}
+	profileTags, _, err := NormalizeTags(m, tags)
+	if err != nil {
+		return Selection{}, err
+	}
 	for _, tag := range extraTags {
 		if m.Tags != nil {
 			if _, declared := m.Tags[tag]; !declared {
@@ -1352,9 +1357,42 @@ func resolveSelection(m Manifest, profileNames []string, extraTags []string, all
 		}
 		addTag(tag)
 	}
-	normalizedTags, replacements, err := NormalizeTags(m, tags)
+	for _, tag := range excludedTags {
+		if strings.TrimSpace(tag) == "" {
+			return Selection{}, fmt.Errorf("excluded tags must not be empty")
+		}
+	}
+	normalizationTags := append(append([]string(nil), tags...), excludedTags...)
+	normalizedTags, replacements, err := NormalizeTags(m, normalizationTags)
 	if err != nil {
 		return Selection{}, err
+	}
+	if len(excludedTags) > 0 {
+		excluded, _, err := NormalizeTags(m, excludedTags)
+		if err != nil {
+			return Selection{}, fmt.Errorf("exclude tag: %w", err)
+		}
+		explicit, _, err := NormalizeTags(m, extraTags)
+		if err != nil {
+			return Selection{}, err
+		}
+		excludedSet := make(map[string]bool, len(excluded))
+		for _, tag := range excluded {
+			if slices.Contains(explicit, tag) {
+				return Selection{}, fmt.Errorf("tag %q is explicitly added and excluded", tag)
+			}
+			if !slices.Contains(profileTags, tag) {
+				return Selection{}, fmt.Errorf("excluded tag %q is not selected by the requested Profiles", tag)
+			}
+			excludedSet[tag] = true
+		}
+		retained := make([]string, 0, len(normalizedTags))
+		for _, tag := range normalizedTags {
+			if !excludedSet[tag] {
+				retained = append(retained, tag)
+			}
+		}
+		normalizedTags = retained
 	}
 	selected := Selection{Profile: strings.Join(profiles, ","), Profiles: profiles, Tags: normalizedTags, Replacements: replacements}
 	if err := validateTagConflicts(m, selected.Tags); err != nil {

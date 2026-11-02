@@ -154,6 +154,7 @@ func TestSaveThenLoadRoundTripsInstalledSelectionV3(t *testing.T) {
 		Version: 3,
 		InstalledSelection: &state.InstalledSelection{
 			Profiles:     []string{"core", "agents"},
+			ExcludedTags: []string{"official"},
 			ExtraTags:    []string{"agents", "web"},
 			ResolvedTags: []string{"core", "agents", "web"},
 			Provenance: state.Provenance{

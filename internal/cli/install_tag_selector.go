@@ -748,10 +748,11 @@ func resolveInstallTagSelectorInitial(m manifest.Manifest, installed *state.Inst
 		return []string{}, nil
 	}
 	effective, err := selection.ResolveIntent(m, selection.Intent{
-		Source:     selection.SourceRecorded,
-		Profiles:   installed.Profiles,
-		ExtraTags:  installed.ExtraTags,
-		AllowEmpty: len(installed.Profiles) == 0 && len(installed.ExtraTags) == 0,
+		Source:       selection.SourceRecorded,
+		Profiles:     installed.Profiles,
+		ExtraTags:    installed.ExtraTags,
+		ExcludedTags: installed.ExcludedTags,
+		AllowEmpty:   len(installed.Profiles) == 0 && len(installed.ExtraTags) == 0,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("load Installed Selection for Tag selector: %w", err)
@@ -957,6 +958,7 @@ func applyInstallTagSelectorCandidate(cmd *cobra.Command, candidate installTagSe
 		return err
 	}
 	installOptions := install.Options{
+		CheckSelection: true, ExpectedSelection: candidate.Metadata.InstalledSelection,
 		SourceRoot: candidate.Paths.SourceRoot, Home: candidate.Paths.Home, StateRoot: candidate.Paths.StateRoot,
 		ConflictDecisions: conflictDecisions,
 		CapturedSources:   selectorCapturedSourcesForDecisions(candidate.CapturedSources, conflictDecisions),

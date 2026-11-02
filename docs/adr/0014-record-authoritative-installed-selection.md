@@ -164,3 +164,55 @@ metadata-write failure preserves the previous Installed Selection. Only
 terminal success records the requested intent. Read-only explicit selection
 remains invocation-scoped and never produces a persistent Installed Selection
 Change.
+
+
+## Profile Tag exclusions amendment
+
+Issue #574 adds ordered `excluded_tags` as optional Installed Selection intent
+alongside Profiles and explicit extra Tags. Resolution normalizes aliases,
+subtracts exclusions from the ordered Profile Tag union, appends explicit Tags,
+and then validates conflicts. Explicit Tags cannot be masked by exclusions;
+unknown, unselected and empty exclusions fail before mutation. Legacy exclusion
+aliases contribute the same migration evidence and confirmation gate as other
+recorded Tags; they cannot silently broaden an excluded constraint. Blocking
+Profile/registry evolution includes the retained exclusion snapshots and optional
+`stale_excluded_tags` in the structured evolution delta. Duplicate
+exclusions preserve first-use order. A named Profile whose entire surface is
+excluded still retains its Profile identity.
+
+Any public selection flag supplies the complete request. Exclusions alone do
+not amend recorded intent. Commands that reuse Installed Selection also reuse
+its exclusions, including Profile refresh and hidden binary continuation.
+Exclusions remain constraints: a Tag removed from its Profile or registry blocks
+resolution until the operator supplies a valid complete request. Old metadata
+without the optional field means no exclusions and remains readable, with no
+inference from historical inventory. The current metadata version and JSON
+envelope version remain unchanged because the new field is optional.
+
+Adding an exclusion is an Installed Selection reduction, requiring the existing
+distinct acknowledgement even when overlap leaves the effective surface
+unchanged. Reports include exclusion intent in previous/current snapshots and
+added/removed exclusion deltas. Read-only commands and dependency installation
+do not persist Installed Selection. Install, update and upgrade persist the
+complete intent only at terminal success.
+
+The exact Installed Selection that supplied resolution and acknowledgement
+remains the authority snapshot. Managed Entry mutations compare it while holding
+the metadata lock, including shared-contribution subtraction and symlink source
+switches delegated to the forward installer. Whole-target retirement checks the
+same snapshot under its mutation lock. Terminal commit uses an exact
+compare-and-set. Update carries the initial snapshot across repository refresh;
+upgrade carries its canonical SHA-256 identity across binary continuation and
+rejects missing identity or a changed snapshot before configuration effects. A
+continuation claiming recorded intent must match that recorded intent after
+normalization; hidden flags cannot bypass reduction acknowledgement.
+
+This preserves partial-success recovery: before an atomic ownership prune, a
+retry checks the existing exact record and live target; after pruning, absence
+of the record durably releases deletion authority. A terminal failure preserves
+the previous Installed Selection while applied inventory/retirement progress may
+remain. A retry preserves externally recreated or edited targets. Existing
+shared reconciliation receipts remain necessary for their existing cases. No
+new retirement receipt, whole-run rollback, package removal, or
+manifest-evolution retirement authority is introduced. Update/upgrade retain
+their existing non-retirement behavior.

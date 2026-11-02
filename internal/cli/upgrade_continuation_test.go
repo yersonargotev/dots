@@ -22,12 +22,14 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 		t.Skip("git not available on PATH")
 	}
 	tests := []struct {
-		name    string
-		channel string
-		action  string
+		name     string
+		channel  string
+		action   string
+		explicit bool
 	}{
 		{name: "homebrew", channel: upgrade.ChannelHomebrew, action: upgrade.ActionHomebrewUpgrade},
 		{name: "release", channel: upgrade.ChannelRelease, action: upgrade.ActionReplaceBinary},
+		{name: "explicit release", channel: upgrade.ChannelRelease, action: upgrade.ActionReplaceBinary, explicit: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -39,7 +41,8 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 			previous := state.InstalledSelection{
 				Profiles:     []string{"core"},
 				ExtraTags:    []string{"extra"},
-				ResolvedTags: []string{"core", "extra"},
+				ExcludedTags: []string{"core"},
+				ResolvedTags: []string{"extra"},
 			}
 			if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
 				t.Fatalf("save metadata: %v", err)
@@ -78,13 +81,19 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 			var firstOut bytes.Buffer
 			first.SetOut(&firstOut)
 			first.SetErr(&firstOut)
-			first.SetArgs([]string{"upgrade", "--yes", "--output", "json",
+			firstArgs := []string{"upgrade", "--yes", "--output", "json",
 				"--file", filepath.Join(sourceRoot, "dots.yaml"),
-				"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+				"--home", home, "--source-root", sourceRoot, "--state-root", stateRoot}
+			source := selection.SourceRecorded
+			if tt.explicit {
+				source = selection.SourceExplicit
+				firstArgs = append(firstArgs, "--profile", "core", "--tag", "extra", "--exclude-tag", "core", "--exclude-tag", "core")
+			}
+			first.SetArgs(firstArgs)
 			if err := first.Execute(); !errors.Is(err, execErr) {
 				t.Fatalf("initial upgrade error = %v, want fake exec boundary\noutput:\n%s", err, firstOut.String())
 			}
-			assertContinuationSelectionArgs(t, continuationArgs)
+			assertContinuationSelectionArgs(t, continuationArgs, source)
 			meta, err := state.Load(state.Path(stateRoot))
 			if err != nil {
 				t.Fatalf("load metadata after exec failure: %v", err)
@@ -94,6 +103,29 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 			}
 			advanceContinuationRepo(t, origin)
 
+			// A concurrent authority change across exec must fail before refresh or
+			// Managed Entry effects, including changes to provenance alone.
+			concurrent := previous
+			concurrent.Provenance.RecordedAt = "concurrent"
+			meta.InstalledSelection = &concurrent
+			if err := state.Save(state.Path(stateRoot), meta); err != nil {
+				t.Fatal(err)
+			}
+			rejected := NewRootCommand()
+			rejected.SetOut(&bytes.Buffer{})
+			rejected.SetErr(&bytes.Buffer{})
+			rejected.SetArgs(continuationArgs[1:])
+			if err := rejected.Execute(); err == nil || !strings.Contains(err.Error(), "changed concurrently across upgrade continuation") {
+				t.Fatalf("exec interleaving error = %v", err)
+			}
+			if _, err := os.Lstat(filepath.Join(home, ".new")); !os.IsNotExist(err) {
+				t.Fatalf("rejected continuation mutated home: %v", err)
+			}
+			meta.InstalledSelection = &previous
+			if err := state.Save(state.Path(stateRoot), meta); err != nil {
+				t.Fatal(err)
+			}
+
 			continued := NewRootCommand()
 			var continuedOut bytes.Buffer
 			continued.SetOut(&continuedOut)
@@ -102,10 +134,13 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 			if err := continued.Execute(); err != nil {
 				t.Fatalf("continued upgrade error = %v\noutput:\n%s", err, continuedOut.String())
 			}
-			for _, target := range []string{".core", ".extra", ".new"} {
+			for _, target := range []string{".extra", ".new"} {
 				if _, err := os.Readlink(filepath.Join(home, target)); err != nil {
 					t.Fatalf("continuation did not apply %s: %v", target, err)
 				}
+			}
+			if _, err := os.Lstat(filepath.Join(home, ".core")); !os.IsNotExist(err) {
+				t.Fatalf("excluded target installed: %v", err)
 			}
 			var env struct {
 				Data struct {
@@ -115,10 +150,11 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 			if err := json.Unmarshal(continuedOut.Bytes(), &env); err != nil {
 				t.Fatalf("unmarshal continuation JSON: %v\n%s", err, continuedOut.String())
 			}
-			if env.Data.Selection.Source != selection.SourceRecorded ||
+			if env.Data.Selection.Source != source ||
 				!reflect.DeepEqual(env.Data.Selection.Profiles, previous.Profiles) ||
 				!reflect.DeepEqual(env.Data.Selection.ExtraTags, previous.ExtraTags) ||
-				!reflect.DeepEqual(env.Data.Selection.EffectiveTags, []string{"core", "new", "extra"}) {
+				!reflect.DeepEqual(env.Data.Selection.ExcludedTags, previous.ExcludedTags) ||
+				!reflect.DeepEqual(env.Data.Selection.EffectiveTags, []string{"new", "extra"}) {
 				t.Fatalf("continuation selection = %#v, want recorded intent %#v", env.Data.Selection, previous)
 			}
 			if env.Data.Selection.Delta == nil ||
@@ -130,15 +166,15 @@ func TestUpgradeBinaryReplacementContinuationPreservesRecordedSelection(t *testi
 	}
 }
 
-func assertContinuationSelectionArgs(t *testing.T, args []string) {
+func assertContinuationSelectionArgs(t *testing.T, args []string, source selection.Source) {
 	t.Helper()
 	joined := strings.Join(args, "\x00")
-	for _, expected := range []string{"--selection-source\x00recorded", "--selection-profile\x00core", "--selection-tag\x00extra"} {
+	for _, expected := range []string{"--selection-source\x00" + string(source), "--selection-profile\x00core", "--selection-tag\x00extra", "--selection-exclude-tag\x00core", "--selection-previous"} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("continuation args missing %q: %#v", expected, args)
 		}
 	}
-	for _, publicFlag := range []string{"--profile", "--tag"} {
+	for _, publicFlag := range []string{"--profile", "--tag", "--exclude-tag"} {
 		for _, arg := range args {
 			if arg == publicFlag {
 				t.Fatalf("recorded selection leaked through public flag %q: %#v", publicFlag, args)

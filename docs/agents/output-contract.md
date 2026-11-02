@@ -115,18 +115,19 @@ prose the text surface prints:
   setup. Read dependency readiness for those commands from `doctor`.
 - `status`, `doctor`, `plan`, `deps check`, `deps plan`, `update`, and `upgrade` include
   `data.selection` with `source` (`explicit`, `recorded`, or `migration`), ordered `profiles`,
-  explicit `extra_tags`, and recomputed `effective_tags`. When no selection
+  explicit `extra_tags`, optional ordered `excluded_tags`, and recomputed `effective_tags`. When no selection
   flags are supplied, these commands resolve the recorded Profile names and
-  extra Tags against the current Install Manifest; the stored `resolved_tags`
+  extra Tags and exclusions against the current Install Manifest; the stored `resolved_tags`
   remains audit-only. Update and upgrade resolve the same intent again after
   Source of Truth refresh and preserve its source across binary continuation.
   Their selection report also includes `delta` with deterministic `previous`
   and `current` snapshots; `added` and `removed` effective Tags, Managed
   Entries, Dependencies, and Provisioners; and ordered `missing_profiles` and
-  `stale_extra_tags` arrays. Empty arrays remain present whenever `delta` is
+  `stale_extra_tags` arrays, plus optional `stale_excluded_tags` when exclusions
+  become undeclared or unselected. Empty existing arrays remain present whenever `delta` is
   emitted. A blocking evolution error returns the same delta as
   `data.selection_delta`.
-  Any explicit Profile or Tag selection wins completely for that invocation and
+  Any explicit Profile, Tag or exclusion selection wins completely for that invocation and
   is never merged with recorded intent. `migration` means the operator confirmed
   a change from previously recorded intent: either normalization of legacy Tag
   intent to current replacement Tags or adoption of an unambiguous Installation
@@ -139,7 +140,7 @@ prose the text surface prints:
 - `installed` is a read-only report over Installation Metadata. Its optional
   `data.installed_selection` is the authoritative machine-level intent recorded
   by the last successful explicit install: ordered `profiles`, ordered
-  `extra_tags`, the ordered `resolved_tags` snapshot, Source of Truth
+  `extra_tags`, optional ordered `excluded_tags`, the ordered `resolved_tags` snapshot, Source of Truth
   `provenance`, and the selection recording time in
   `provenance.recorded_at`. The text surface renders the same information in a
   distinct **Installed Selection** section.
@@ -192,18 +193,27 @@ prose the text surface prints:
   `data.selection.change` when a complete explicit request differs from the
   authoritative Installed Selection. `change.delta` contains stable
   `previous`/`current` intent snapshots and `added`/`removed` arrays for
-  `profiles`, `extra_tags`, `effective_tags`, `managed_entries`,
+  `profiles`, `extra_tags`, optional `excluded_tags`, `effective_tags`, `managed_entries`,
   `dependencies`, and `provisioners`. The sibling booleans
   `acknowledgement_required` and `acknowledgement_accepted` let automation
   distinguish a preview, an accepted change, and a blocked reduction.
   `install` exposes the same portable `data.selection` object as update and
   upgrade.
 - A non-interactive explicit request that removes a recorded Profile or extra
-  Tag requires both `--yes` and `--acknowledge-selection-change`. Without both,
+  Tag, or adds an exclusion, requires both `--yes` and `--acknowledge-selection-change`. Without both,
   the command exits `1` before mutation with
   `selection-change-acknowledgement-required`; error `data` contains `code` and
   the complete `selection_change`. This acknowledgement is independent from
   Conflict Resolution and `--backup-and-replace`.
+- `excluded_tags` subtracts only Profile-derived Tags before conflict validation.
+  Empty exclusion arrays are omitted for compatibility with existing envelope
+  version `10` and Installation Metadata. Unknown, unselected, empty, or
+  explicitly added-and-excluded Tags return execution error (`1`). An exclusion
+  alone cannot borrow recorded Profiles. A stale recorded exclusion blocks
+  resolution without committing intent. Exclusion delta `added` means an added
+  constraint (a reduction); `removed` means lifting a constraint. Manifest
+  evolution remains report-only. A named Profile may resolve to an empty
+  effective surface when all its Tags are excluded.
 - `install --clear-selection` is the only explicit empty-selection request.
   Interactive execution requires typing `clear`; non-interactive and JSON
   execution, including `--dry-run`, requires `--clear-selection`, `--yes`, and

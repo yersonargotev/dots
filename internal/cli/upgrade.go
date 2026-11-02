@@ -24,6 +24,7 @@ func newUpgradeCommand() *cobra.Command {
 		file         string
 		profiles     []string
 		extraTags    []string
+		excludedTags []string
 		sourceRoot   string
 		home         string
 		stateRoot    string
@@ -33,16 +34,18 @@ func newUpgradeCommand() *cobra.Command {
 		ackSelection bool
 		continue_    bool
 
-		binaryChannel        string
-		binaryCurrentVersion string
-		binaryLatestVersion  string
-		binaryAction         string
-		binaryExecutable     string
-		binaryArtifact       string
-		binaryChecksum       string
-		selectionSource      string
-		selectionProfiles    []string
-		selectionTags        []string
+		binaryChannel                string
+		binaryCurrentVersion         string
+		binaryLatestVersion          string
+		binaryAction                 string
+		binaryExecutable             string
+		binaryArtifact               string
+		binaryChecksum               string
+		selectionSource              string
+		selectionProfiles            []string
+		selectionTags                []string
+		selectionExcludedTags        []string
+		previousSelectionFingerprint string
 	)
 
 	cmd := &cobra.Command{
@@ -52,10 +55,17 @@ func newUpgradeCommand() *cobra.Command {
 			"Managed Entries, and Provisioners. It never performs a broad system package upgrade.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts := updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI, ackSelection: ackSelection}
+			opts := updateOptions{file: file, profiles: profiles, extraTags: extraTags, excludedTags: excludedTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI, ackSelection: ackSelection}
 			if continue_ {
+				if selectionSource == "" {
+					return fmt.Errorf("upgrade continuation requires a selection source; restart dots upgrade")
+				}
+				if previousSelectionFingerprint == "" {
+					return fmt.Errorf("upgrade continuation requires the previous selection identity; restart dots upgrade")
+				}
+				opts.previousSelectionFingerprint = previousSelectionFingerprint
 				if selectionSource != "" {
-					intent := selection.Intent{Source: selection.Source(selectionSource), Profiles: selectionProfiles, ExtraTags: selectionTags}
+					intent := selection.Intent{Source: selection.Source(selectionSource), Profiles: selectionProfiles, ExtraTags: selectionTags, ExcludedTags: selectionExcludedTags}
 					opts.selectionIntent = &intent
 				}
 				updateReport, err := runUpdateWorkflow(cmd, opts, !wantsJSON(cmd))
@@ -102,7 +112,7 @@ func newUpgradeCommand() *cobra.Command {
 				_, err := executeUpgrade(cmd.Context(), binOpts)
 				return err
 			}
-			effective, err := resolveUpgradeSelection(cmd, opts)
+			effective, err := resolveUpgradeSelection(cmd, &opts)
 			if err != nil {
 				return err
 			}
@@ -141,13 +151,14 @@ func newUpgradeCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to install after upgrading")
 	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, selectionProfileHelp)
 	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, selectionTagHelp)
+	cmd.Flags().StringArrayVar(&excludedTags, "exclude-tag", nil, selectionExcludeTagHelp)
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root to update (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata and Backup Sets (default ~/.local/state/dots)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview the binary upgrade and Source of Truth update without modifying either phase")
 	cmd.Flags().BoolVar(&yes, "yes", false, "apply safe install actions without prompting; conflicts default to skip")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
-	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of previously selected Profiles or extra Tags")
+	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of selected Profiles/extra Tags or addition of exclusions")
 	cmd.Flags().BoolVar(&continue_, "continue", false, "continue Source of Truth upgrade after binary replacement")
 	cmd.Flags().StringVar(&binaryChannel, "binary-channel", "", "binary phase channel preserved across upgrade continuation")
 	cmd.Flags().StringVar(&binaryCurrentVersion, "binary-current-version", "", "binary phase current version preserved across upgrade continuation")
@@ -159,6 +170,8 @@ func newUpgradeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&selectionSource, "selection-source", "", "selection source preserved across upgrade continuation")
 	cmd.Flags().StringArrayVar(&selectionProfiles, "selection-profile", nil, "selection Profile preserved across upgrade continuation")
 	cmd.Flags().StringArrayVar(&selectionTags, "selection-tag", nil, "selection extra Tag preserved across upgrade continuation")
+	cmd.Flags().StringArrayVar(&selectionExcludedTags, "selection-exclude-tag", nil, "selection exclusion preserved across upgrade continuation")
+	cmd.Flags().StringVar(&previousSelectionFingerprint, "selection-previous", "", "exact previous selection identity across upgrade continuation")
 	_ = cmd.Flags().MarkHidden("continue")
 	_ = cmd.Flags().MarkHidden("binary-channel")
 	_ = cmd.Flags().MarkHidden("binary-current-version")
@@ -170,11 +183,13 @@ func newUpgradeCommand() *cobra.Command {
 	_ = cmd.Flags().MarkHidden("selection-source")
 	_ = cmd.Flags().MarkHidden("selection-profile")
 	_ = cmd.Flags().MarkHidden("selection-tag")
+	_ = cmd.Flags().MarkHidden("selection-exclude-tag")
+	_ = cmd.Flags().MarkHidden("selection-previous")
 	registerSelectionFlagCompletion(cmd)
 	return cmd
 }
 
-func resolveUpgradeSelection(cmd *cobra.Command, opts updateOptions) (selection.Effective, error) {
+func resolveUpgradeSelection(cmd *cobra.Command, opts *updateOptions) (selection.Effective, error) {
 	paths, err := resolvePaths(opts.home, opts.sourceRoot, opts.stateRoot)
 	if err != nil {
 		return selection.Effective{}, err
@@ -183,7 +198,15 @@ func resolveUpgradeSelection(cmd *cobra.Command, opts updateOptions) (selection.
 	if !cmd.Flags().Changed("file") {
 		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
 	}
-	_, effective, err := resolveUpdateSelection(cmd, manifestPath, paths, opts)
+	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
+	if err != nil {
+		return selection.Effective{}, err
+	}
+	opts.previousSelectionFingerprint, err = installedSelectionFingerprint(meta.InstalledSelection)
+	if err != nil {
+		return selection.Effective{}, err
+	}
+	_, effective, err := resolveUpdateSelection(cmd, manifestPath, paths, meta, *opts)
 	return effective, err
 }
 
@@ -198,6 +221,12 @@ func upgradeContinuationArgs(opts updateOptions, fileChanged bool, intent select
 	}
 	for _, tag := range intent.ExtraTags {
 		args = append(args, "--selection-tag", tag)
+	}
+	for _, tag := range intent.ExcludedTags {
+		args = append(args, "--selection-exclude-tag", tag)
+	}
+	if opts.previousSelectionFingerprint != "" {
+		args = append(args, "--selection-previous", opts.previousSelectionFingerprint)
 	}
 	if opts.sourceRoot != "" {
 		args = append(args, "--source-root", opts.sourceRoot)

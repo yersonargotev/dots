@@ -31,7 +31,7 @@ type selectionChangePolicy struct {
 
 func (e *selectionChangeAcknowledgementError) Error() string {
 	return selectionChangeAcknowledgementRequiredCode +
-		": removing previously selected Profiles or extra Tags requires --yes and --acknowledge-selection-change"
+		": removing previously selected Profiles or extra Tags, or adding exclusions, requires --yes and --acknowledge-selection-change"
 }
 
 func (e *selectionChangeAcknowledgementError) JSONErrorData() any {
@@ -125,6 +125,7 @@ func renderSelectionChange(w io.Writer, change selection.Change) {
 }
 
 func renderSelectionDelta(w io.Writer, delta selection.Delta) {
+	renderSelectionExclusions(w, delta)
 	fmt.Fprintf(w, "  Previous: profiles=%s extra-tags=%s effective-tags=%s\n",
 		renderSelectionValues(delta.Previous.Profiles), renderSelectionValues(delta.Previous.ExtraTags), renderSelectionValues(delta.Previous.EffectiveTags))
 	fmt.Fprintf(w, "  Requested: profiles=%s extra-tags=%s effective-tags=%s\n",
@@ -155,5 +156,13 @@ func confirmSelectionChange(r io.Reader, w io.Writer) (bool, error) {
 		return false, nil
 	default:
 		return false, nil
+	}
+}
+
+func renderSelectionExclusions(w io.Writer, delta selection.Delta) {
+	if len(delta.Previous.ExcludedTags)+len(delta.Current.ExcludedTags) > 0 {
+		fmt.Fprintf(w, "  Excluded Tags: previous=%s requested=%s added=%s removed=%s\n",
+			renderSelectionValues(delta.Previous.ExcludedTags), renderSelectionValues(delta.Current.ExcludedTags),
+			renderSelectionValues(delta.Added.ExcludedTags), renderSelectionValues(delta.Removed.ExcludedTags))
 	}
 }

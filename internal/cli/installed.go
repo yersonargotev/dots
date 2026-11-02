@@ -121,6 +121,9 @@ func renderInstalled(w io.Writer, report inst.Report) {
 		fmt.Fprintln(w, "Installed Selection (authoritative)")
 		fmt.Fprintf(w, "  Profiles: %s\n", renderListOrNone(selection.Profiles))
 		fmt.Fprintf(w, "  Extra Tags: %s\n", renderListOrNone(selection.ExtraTags))
+		if len(selection.ExcludedTags) > 0 {
+			fmt.Fprintf(w, "  Excluded Tags: %s\n", renderListOrNone(selection.ExcludedTags))
+		}
 		fmt.Fprintf(w, "  Resolved Tags: %s\n", renderListOrNone(selection.ResolvedTags))
 		fmt.Fprintf(w, "  Source of Truth: %s\n", renderProvenance(selection.Provenance, false))
 		fmt.Fprintf(w, "  Recorded At: %s\n", renderValueOrUnknown(selection.Provenance.RecordedAt))

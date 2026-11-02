@@ -154,6 +154,9 @@ func renderEffectiveSelection(profile string, profiles, tags []string, report *s
 		return rendered
 	}
 	rendered = fmt.Sprintf("%s [selection: %s]", rendered, report.Source)
+	if len(report.ExcludedTags) > 0 {
+		rendered += " [excluded Tags: " + strings.Join(report.ExcludedTags, ",") + "]"
+	}
 	if report.Source == selection.SourceMigration {
 		return rendered
 	}
@@ -167,6 +170,9 @@ func renderEffectiveSelection(profile string, profiles, tags []string, report *s
 func renderSelectionReport(w io.Writer, report selection.Report) {
 	fmt.Fprintf(w, "Selection: source=%s profiles=%s extra-tags=%s effective-tags=%s\n\n",
 		report.Source, renderSelectionValues(report.Profiles), renderSelectionValues(report.ExtraTags), renderSelectionValues(report.EffectiveTags))
+	if len(report.ExcludedTags) > 0 {
+		fmt.Fprintf(w, "Excluded Tags: %s\n\n", renderSelectionValues(report.ExcludedTags))
+	}
 	if report.Source != selection.SourceMigration {
 		renderTagMigrations(w, report.TagMigrations)
 	}
@@ -178,6 +184,7 @@ func renderSelectionReport(w io.Writer, report selection.Report) {
 
 func renderSelectionEvolution(w io.Writer, delta selection.Delta) {
 	fmt.Fprintln(w, "Selection evolution:")
+	renderSelectionExclusions(w, delta)
 	fmt.Fprintf(w, "  Previous: profiles=%s extra-tags=%s effective-tags=%s\n",
 		renderSelectionValues(delta.Previous.Profiles), renderSelectionValues(delta.Previous.ExtraTags), renderSelectionValues(delta.Previous.EffectiveTags))
 	fmt.Fprintf(w, "  Current: profiles=%s extra-tags=%s effective-tags=%s\n",
@@ -188,7 +195,10 @@ func renderSelectionEvolution(w io.Writer, delta selection.Delta) {
 	fmt.Fprintf(w, "  Removed: effective-tags=%s managed-entries=%s dependencies=%s provisioners=%s\n",
 		renderSelectionValues(delta.Removed.EffectiveTags), renderSelectionValues(delta.Removed.ManagedEntries),
 		renderSelectionValues(delta.Removed.Dependencies), renderSelectionValues(delta.Removed.Provisioners))
-	if len(delta.MissingProfiles) > 0 || len(delta.StaleExtraTags) > 0 {
+	if len(delta.StaleExcludedTags) > 0 {
+		fmt.Fprintf(w, "  Stale excluded Tags: %s\n", renderSelectionValues(delta.StaleExcludedTags))
+	}
+	if len(delta.MissingProfiles) > 0 || len(delta.StaleExtraTags) > 0 || len(delta.StaleExcludedTags) > 0 {
 		fmt.Fprintf(w, "  Blocking validation: missing-profiles=%s stale-extra-tags=%s\n\n",
 			renderSelectionValues(delta.MissingProfiles), renderSelectionValues(delta.StaleExtraTags))
 	} else {

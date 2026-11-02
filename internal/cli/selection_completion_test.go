@@ -29,6 +29,11 @@ func TestSelectionFlagCompletionCoversEveryPublicCommand(t *testing.T) {
 			out, errOut := runCompletion(t, args...)
 			assertCompletion(t, out, errOut, []string{"workstation\tComplete workstation preset"}, []string{"legacy"})
 		})
+		t.Run(name+" exclusion", func(t *testing.T) {
+			args := append(append([]string{}, command...), "--file", manifestPath, "--exclude-tag", "z")
+			out, errOut := runCompletion(t, args...)
+			assertCompletion(t, out, errOut, []string{"zed\tZed editor", "zsh\tZ shell"}, []string{"legacy"})
+		})
 		t.Run(name+" tag", func(t *testing.T) {
 			args := append(append([]string{}, command...), "--file", manifestPath, "--tag", "z")
 			out, errOut := runCompletion(t, args...)
@@ -97,6 +102,9 @@ func TestSelectionHelpIsConsistentAcrossPublicCommands(t *testing.T) {
 		}
 		if flag := cmd.Flag("profile"); flag == nil || flag.Usage != selectionProfileHelp {
 			t.Errorf("%s --profile help = %#v", strings.Join(path, " "), flag)
+		}
+		if flag := cmd.Flag("exclude-tag"); flag == nil || flag.Usage != selectionExcludeTagHelp {
+			t.Errorf("%s --exclude-tag help = %#v", strings.Join(path, " "), flag)
 		}
 		if flag := cmd.Flag("tag"); flag == nil || flag.Usage != selectionTagHelp {
 			t.Errorf("%s --tag help = %#v", strings.Join(path, " "), flag)

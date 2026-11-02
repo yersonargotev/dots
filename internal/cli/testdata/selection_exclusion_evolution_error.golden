@@ -1,0 +1,58 @@
+{
+  "schema_version": "10",
+  "command": "update",
+  "status": "error",
+  "data": {
+    "selection_delta": {
+      "previous": {
+        "profiles": [
+          "workstation"
+        ],
+        "extra_tags": [
+          "custom"
+        ],
+        "excluded_tags": [
+          "official"
+        ],
+        "effective_tags": [
+          "base",
+          "custom"
+        ]
+      },
+      "current": {
+        "profiles": [
+          "workstation"
+        ],
+        "extra_tags": [
+          "custom"
+        ],
+        "excluded_tags": [
+          "official"
+        ],
+        "effective_tags": []
+      },
+      "added": {
+        "profiles": [],
+        "extra_tags": [],
+        "effective_tags": [],
+        "managed_entries": [],
+        "dependencies": [],
+        "provisioners": []
+      },
+      "removed": {
+        "profiles": [],
+        "extra_tags": [],
+        "effective_tags": [],
+        "managed_entries": [],
+        "dependencies": [],
+        "provisioners": []
+      },
+      "missing_profiles": [],
+      "stale_extra_tags": [],
+      "stale_excluded_tags": [
+        "official"
+      ]
+    }
+  },
+  "error": "recorded selection: excluded Tag \"official\" is no longer declared or selected by the requested Profiles; update the selection before refreshing"
+}

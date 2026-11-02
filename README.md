@@ -88,7 +88,22 @@ Carbonfox is an optional global preference for supported selected applications:
 dots install --profile workstation --tag theme-carbonfox
 ```
 
-Explicit Profile and Tag flags are the complete selection for that invocation.
+Explicit Profile, Tag and exclusion flags are the complete selection for that
+invocation. Repeat `--exclude-tag` to subtract Tags supplied by the requested
+Profiles while keeping their identity. For example, choose Herdr custom instead
+of the official Herdr capability in workstation:
+
+```bash
+dots plan --profile workstation --exclude-tag herdr --tag herdr-custom
+dots install --profile workstation --exclude-tag herdr --tag herdr-custom
+```
+
+Exclusions apply before conflict validation. Unknown Tags, Tags not supplied by
+the requested Profiles, and Tags explicitly both added and excluded are errors.
+An exclusion alone does not borrow a recorded Profile; repeat the complete
+selection. The flag is available wherever `--tag` is offered, including
+`deps check`, `deps plan` and `deps install`. Dependency installation keeps its
+existing selection/default behavior and never records an Installed Selection.
 See [Carbonfox support and activation](docs/carbonfox-theme.md) for arbitrary
 application Tags, version requirements, reload steps, and removal.
 
@@ -146,17 +161,24 @@ dots doctor
 
 After a successful explicit install, `status`, `doctor`, `plan`, `deps check`,
 `deps plan`, `update`, and `upgrade` reuse the recorded Installed Selection when
-no `--profile` or `--tag` is supplied. Supplying either flag makes that
+no `--profile`, `--tag` or `--exclude-tag` is supplied. Supplying any of these flags makes that
 invocation's complete explicit selection win. Read-only commands never change
 Installation Metadata. Mutating commands show an Installed Selection Change
 before applying a differing explicit selection. Removing a recorded Profile or
-explicit extra Tag requires a distinct interactive confirmation; Confirmed
+explicit extra Tag, or adding an exclusion, requires a distinct interactive confirmation; Confirmed
 Install mode requires both `--yes` and
 `--acknowledge-selection-change`. Successful
-install/update/upgrade records the requested selection only after Managed
+install/update/upgrade records Profiles, explicit extra Tags and exclusions only after Managed
 Entries and Provisioners finish. A machine with no recorded
 selection must pass an explicit `--profile` or `--tag`; selection-aware commands
-never invent an implicit Profile.
+never invent an implicit Profile. Recorded exclusions are reapplied when
+Profiles evolve during update/upgrade. If an excluded Tag is no longer declared
+or supplied by those Profiles, resolution stops and keeps the recorded intent;
+repeat the intended complete selection to resolve it. Dry runs, cancellation and
+failures do not commit new intent. A failed run may retain safely applied
+inventory or retirement progress; a retry revalidates ownership and preserves
+externally recreated files. Manifest evolution never authorizes retirement by
+itself, and exclusions never uninstall external packages or Provisioner effects.
 
 Machines with Installation Metadata v1/v2 may receive a non-authoritative
 Selection Migration Candidate derived from historical Managed Entry and

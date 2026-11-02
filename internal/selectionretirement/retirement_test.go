@@ -691,3 +691,31 @@ func TestApplyRemovalFailureLeavesMetadataRepairableAndRerunConverges(t *testing
 		t.Fatalf("metadata after rerun = %#v, %v", got, loadErr)
 	}
 }
+
+func TestApplyRejectsConcurrentInstalledExclusionsBeforeRemoval(t *testing.T) {
+	home := t.TempDir()
+	stateRoot := filepath.Join(home, ".state")
+	target := writeTarget(t, home, ".owned", "owned")
+	previous := &state.InstalledSelection{Profiles: []string{"workstation"}, ResolvedTags: []string{"base", "official"}}
+	meta := state.Metadata{Version: state.CurrentVersion, Entries: []state.Record{wholeRecord(target, "owned")}, InstalledSelection: previous}
+	if err := state.Save(state.Path(stateRoot), meta); err != nil {
+		t.Fatal(err)
+	}
+	opts := Options{Home: home, SourceRoot: t.TempDir(), StateRoot: stateRoot}
+	p, err := Build(explicitReport(retirementAction(target, selectionreconciliation.OutcomeRemove)), meta, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := *previous
+	current.ExcludedTags = []string{"base"}
+	meta.InstalledSelection = &current
+	if err := state.Save(state.Path(stateRoot), meta); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(p, opts); err == nil || !strings.Contains(err.Error(), "selection changed concurrently") {
+		t.Fatalf("Apply error=%v", err)
+	}
+	if data, err := os.ReadFile(target); err != nil || string(data) != "owned" {
+		t.Fatalf("concurrent selection consumed stale authority: %s %v", data, err)
+	}
+}

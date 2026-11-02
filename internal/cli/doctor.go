@@ -11,12 +11,13 @@ import (
 
 func newDoctorCommand() *cobra.Command {
 	var (
-		file       string
-		profiles   []string
-		extraTags  []string
-		sourceRoot string
-		home       string
-		stateRoot  string
+		file         string
+		profiles     []string
+		extraTags    []string
+		excludedTags []string
+		sourceRoot   string
+		home         string
+		stateRoot    string
 	)
 
 	cmd := &cobra.Command{
@@ -54,7 +55,7 @@ func newDoctorCommand() *cobra.Command {
 			effective, err := resolveReadOnlySelection(*m, meta, profiles, extraTags, readOnlySelectionOptions{
 				Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
 				XDGStateHome: paths.XDGStateHome,
-			})
+			}, excludedTags...)
 			if err != nil {
 				return err
 			}
@@ -85,6 +86,7 @@ func newDoctorCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to inspect")
 	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, selectionProfileHelp)
 	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, selectionTagHelp)
+	cmd.Flags().StringArrayVar(&excludedTags, "exclude-tag", nil, selectionExcludeTagHelp)
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to inspect (default: the current user's home); use a sandbox path to inspect without touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata (default ~/.local/state/dots)")

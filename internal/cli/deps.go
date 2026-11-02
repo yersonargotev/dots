@@ -28,8 +28,9 @@ var (
 
 func newDepsCommand() *cobra.Command {
 	var (
-		profiles  []string
-		extraTags []string
+		profiles     []string
+		extraTags    []string
+		excludedTags []string
 	)
 
 	cmd := &cobra.Command{
@@ -39,14 +40,15 @@ func newDepsCommand() *cobra.Command {
 	}
 	cmd.PersistentFlags().StringArrayVarP(&profiles, "profile", "p", nil, selectionProfileHelp)
 	cmd.PersistentFlags().StringArrayVar(&extraTags, "tag", nil, selectionTagHelp)
+	cmd.PersistentFlags().StringArrayVar(&excludedTags, "exclude-tag", nil, selectionExcludeTagHelp)
 	registerSelectionFlagCompletion(cmd)
-	cmd.AddCommand(newDepsCheckCommand(&profiles, &extraTags))
-	cmd.AddCommand(newDepsPlanCommand(&profiles, &extraTags))
-	cmd.AddCommand(newDepsInstallCommand(&profiles, &extraTags))
+	cmd.AddCommand(newDepsCheckCommand(&profiles, &extraTags, &excludedTags))
+	cmd.AddCommand(newDepsPlanCommand(&profiles, &extraTags, &excludedTags))
+	cmd.AddCommand(newDepsInstallCommand(&profiles, &extraTags, &excludedTags))
 	return cmd
 }
 
-func newDepsCheckCommand(profiles *[]string, extraTags *[]string) *cobra.Command {
+func newDepsCheckCommand(profiles *[]string, extraTags *[]string, excludedTags *[]string) *cobra.Command {
 	var (
 		file string
 		home string
@@ -65,7 +67,7 @@ func newDepsCheckCommand(profiles *[]string, extraTags *[]string) *cobra.Command
 				return err
 			}
 
-			effective, err := resolveDepsReadOnlySelection(*m, resolvedHome, *profiles, *extraTags)
+			effective, err := resolveDepsReadOnlySelection(*m, resolvedHome, *profiles, *extraTags, (*excludedTags)...)
 			if err != nil {
 				return err
 			}
@@ -94,7 +96,7 @@ func newDepsCheckCommand(profiles *[]string, extraTags *[]string) *cobra.Command
 	return cmd
 }
 
-func newDepsPlanCommand(profiles *[]string, extraTags *[]string) *cobra.Command {
+func newDepsPlanCommand(profiles *[]string, extraTags *[]string, excludedTags *[]string) *cobra.Command {
 	var (
 		file string
 		tier string
@@ -115,7 +117,7 @@ func newDepsPlanCommand(profiles *[]string, extraTags *[]string) *cobra.Command 
 				return err
 			}
 
-			effective, err := resolveDepsReadOnlySelection(*m, resolvedHome, *profiles, *extraTags)
+			effective, err := resolveDepsReadOnlySelection(*m, resolvedHome, *profiles, *extraTags, (*excludedTags)...)
 			if err != nil {
 				return err
 			}
@@ -154,7 +156,7 @@ func newDepsPlanCommand(profiles *[]string, extraTags *[]string) *cobra.Command 
 	return cmd
 }
 
-func newDepsInstallCommand(profiles *[]string, extraTags *[]string) *cobra.Command {
+func newDepsInstallCommand(profiles *[]string, extraTags *[]string, excludedTags *[]string) *cobra.Command {
 	var (
 		file      string
 		tier      string
@@ -189,6 +191,7 @@ func newDepsInstallCommand(profiles *[]string, extraTags *[]string) *cobra.Comma
 			options := deps.Options{
 				Profiles:          *profiles,
 				ExtraTags:         *extraTags,
+				ExcludedTags:      *excludedTags,
 				OS:                runtime.GOOS,
 				Arch:              runtime.GOARCH,
 				Home:              resolvedHome,
@@ -269,9 +272,9 @@ func loadDepsManifest(cmd *cobra.Command, file, home string) (*manifest.Manifest
 	return loadManifestForCommand(cmd, file, defaultSourceRoot(home))
 }
 
-func resolveDepsReadOnlySelection(m manifest.Manifest, home string, profiles, extraTags []string) (selection.Effective, error) {
-	if len(profiles) > 0 || len(extraTags) > 0 {
-		return selection.ResolveReadOnly(m, profiles, extraTags, nil)
+func resolveDepsReadOnlySelection(m manifest.Manifest, home string, profiles, extraTags []string, excludedTags ...string) (selection.Effective, error) {
+	if len(profiles) > 0 || len(extraTags) > 0 || len(excludedTags) > 0 {
+		return selection.ResolveReadOnly(m, profiles, extraTags, nil, excludedTags...)
 	}
 	paths, err := resolvePaths(home, "", "")
 	if err != nil {
@@ -284,7 +287,7 @@ func resolveDepsReadOnlySelection(m manifest.Manifest, home string, profiles, ex
 	return resolveReadOnlySelection(m, meta, profiles, extraTags, readOnlySelectionOptions{
 		Home: paths.Home, SourceRoot: paths.SourceRoot, StatePath: state.Path(paths.StateRoot),
 		XDGStateHome: paths.XDGStateHome,
-	})
+	}, excludedTags...)
 }
 
 func runDepsInstall(cmd *cobra.Command, m manifest.Manifest, options deps.Options, tier deps.Tier) error {
