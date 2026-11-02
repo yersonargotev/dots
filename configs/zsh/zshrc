@@ -18,8 +18,9 @@ unset _zrc
 # shell usable if the runtime is removed or provisioning was skipped.
 ZIM_HOME="${ZDOTDIR:-${HOME}}/.zim"
 if [[ -e "${ZIM_HOME}/init.zsh" ]]; then
-  # Recompile init.zsh when ~/.zimrc is newer than the compiled init.
-  if [[ ! "${ZIM_HOME}/init.zsh" -nt "${ZIM_CONFIG_FILE:-${ZDOTDIR:-${HOME}}/.zimrc}" ]]; then
+  # Recompile when either the native module loader or portable modules change.
+  if [[ ! "${ZIM_HOME}/init.zsh" -nt "${ZIM_CONFIG_FILE:-${ZDOTDIR:-${HOME}}/.zimrc}" ||
+        ( -r "${HOME}/.config/dots/zsh/zimrc" && ! "${ZIM_HOME}/init.zsh" -nt "${HOME}/.config/dots/zsh/zimrc" ) ]]; then
     source "${ZIM_HOME}/zimfw.zsh" init -q
   fi
   source "${ZIM_HOME}/init.zsh"

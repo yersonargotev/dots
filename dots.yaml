@@ -472,12 +472,8 @@ dependencies:
         command: uv
         brew: uv
         linux_homebrew: true
-        user_local:
+        rolling_user_local:
           recipe: uv
-          version: 0.11.25
-          checksums:
-            linux_amd64: 1db18b5e76fa645a7f3865773139bdec8e2d46adbdbb35e7410b34fa8015ccd2
-            linux_arm64: e0e9d73f74e06a7dcd53910d5962146ab48f0af9c92cc8df33a37baa0121014d
   - tags:
       - pnpm
     os:
@@ -488,12 +484,8 @@ dependencies:
         command: pnpm
         brew: pnpm
         linux_homebrew: true
-        user_local:
-          recipe: pnpm
-          version: 11.9.0
-          checksums:
-            linux_amd64: 69af6c012a5f12b4460f8e2280368cbe10551ab328516fc5b665f292b5991017
-            linux_arm64: ced48cd1bab413bdde54fee686eaa1c98bb50ee47a518c91d1decb5f2578737b
+        rolling_user_local:
+          recipe: pnpm-standalone
   - tags:
       - bun
     os:
@@ -504,12 +496,8 @@ dependencies:
         command: bun
         brew: bun
         linux_homebrew: true
-        user_local:
+        rolling_user_local:
           recipe: bun
-          version: bun-v1.3.14
-          checksums:
-            linux_amd64: 951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f
-            linux_arm64: a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b
   - tags:
       - fzf
       - zsh
@@ -666,6 +654,8 @@ dependencies:
         command: gh
         brew: gh
         linux_homebrew: true
+        rolling_user_local:
+          recipe: gh
   - tags:
       - jq
     os:
@@ -765,9 +755,10 @@ entries:
     os:
       - darwin
       - linux
-  - source: configs/zsh/zimrc
+  - source: configs/zsh/loader.zimrc
     target: ~/.zimrc
-    strategy: symlink
+    strategy: copy
+    ownership: marked-block
     tags:
       - zimfw
     os:
@@ -779,9 +770,18 @@ entries:
         apt: zsh
         dnf: zsh
         pacman: zsh
-  - source: configs/zsh/zshenv
-    target: ~/.zshenv
+  - source: configs/zsh/zimrc
+    target: ~/.config/dots/zsh/zimrc
     strategy: symlink
+    tags:
+      - zimfw
+    os:
+      - darwin
+      - linux
+  - source: configs/zsh/loader.zshenv
+    target: ~/.zshenv
+    strategy: copy
+    ownership: marked-block
     tags:
       - zsh
     os:
@@ -793,6 +793,14 @@ entries:
         apt: zsh
         dnf: zsh
         pacman: zsh
+  - source: configs/zsh/zshenv
+    target: ~/.config/dots/zsh/zshenv
+    strategy: symlink
+    tags:
+      - zsh
+    os:
+      - darwin
+      - linux
   - source: configs/git/loader.gitconfig
     target: ~/.gitconfig
     strategy: copy

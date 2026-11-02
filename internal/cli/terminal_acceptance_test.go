@@ -95,7 +95,7 @@ func TestTerminalInstalledZshStarshipIntegration(t *testing.T) {
 		t.Fatalf("installed .zshrc does not load portable config: %v\n%s", err, loader)
 	}
 	for target, source := range map[string]string{
-		".zshenv":                "configs/zsh/zshenv",
+		".config/dots/zsh/zshenv": "configs/zsh/zshenv",
 		".config/dots/zsh/zshrc": "configs/zsh/zshrc",
 		".config/starship.toml":  "configs/starship/starship.toml",
 	} {

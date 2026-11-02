@@ -5,28 +5,34 @@ workstation configuration slice (issue #38, epic #37).
 
 ## Managed targets
 
-`dots` installs a co-owned native loader and three portable symlinks:
+`dots` installs three co-owned native loaders and three portable symlinks:
 
 | Source                | Target       |
 | --------------------- | ------------ |
 | `configs/zsh/loader.zsh` | `~/.zshrc` (`copy`, marked block) |
+| `configs/zsh/loader.zshenv` | `~/.zshenv` (`copy`, marked block) |
+| `configs/zsh/loader.zimrc` | `~/.zimrc` (`copy`, marked block) |
 | `configs/zsh/zshrc`   | `~/.config/dots/zsh/zshrc` |
-| `configs/zsh/zimrc`   | `~/.zimrc`   |
-| `configs/zsh/zshenv`  | `~/.zshenv`  |
+| `configs/zsh/zimrc`   | `~/.config/dots/zsh/zimrc` |
+| `configs/zsh/zshenv`  | `~/.config/dots/zsh/zshenv` |
 
-The native `~/.zshrc` remains a regular file so third-party installers can
-append their own shell content without writing into the Installed Repository.
-Its initial dots-owned block loads the portable symlink; dots preserves all
-content outside that block.
+The native `~/.zshrc`, `~/.zshenv` and `~/.zimrc` remain regular files. Installers
+and personal additions can extend them without writing into the Installed Repository.
+Each initial dots-owned block loads its portable symlink; dots preserves all
+content outside that block. Proven legacy symlinks migrate through the existing
+Source of Truth provenance and Backup Set checks. Unproven links, malformed or
+edited blocks remain Conflicts; uninstall subtracts only the owned block.
 
 ## Layout
 
 ```
 configs/zsh/
 ├── loader.zsh             # native marked block loading the portable entrypoint
+├── loader.zshenv          # native environment loader
+├── loader.zimrc           # native Zim module loader
 ├── zshrc                  # portable entrypoint: pre-init → Zim → post-init → local
 ├── zimrc                  # Zim module list
-├── zshenv                 # environment for all shells (editor, cargo, foundry)
+├── zshenv                 # environment for all shells (editor, cargo)
 ├── rc.d/
 │   ├── pre/               # sourced BEFORE Zim loads its modules
 │   │   ├── 00-history.zsh
@@ -74,9 +80,11 @@ IDE shell integrations live.
 
 ## Zim runtime
 
-dots provisions the Zim runtime as part of the core install. `~/.zimrc` remains
-the Source of Truth for module selection, and the generated runtime lives under
-`~/.zim/`.
+dots provisions the Zim runtime with the existing curl bootstrap when the zimfw
+Tag is selected. The portable `configs/zsh/zimrc` remains the Source of Truth
+for project modules, loaded through `~/.zimrc`; personal modules may follow its
+managed block. The generated runtime lives under `~/.zim/`. Missing runtime
+files produce a warning and shell startup continues without modules.
 
 If `~/.zim/` is missing, rerun `dots install --profile default` or another
 profile that includes `core`, then restart your shell. The following are

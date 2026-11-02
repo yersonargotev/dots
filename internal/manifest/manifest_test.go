@@ -1235,7 +1235,12 @@ func TestRepositoryManifestLinuxHomebrewReviewBoundary(t *testing.T) {
 			if (name == "bat" || name == "starship" || name == "zellij" || name == "atuin" || name == "pnpm") && dep.Apt != "" {
 				t.Fatalf("%s dependency = %#v, want no Ubuntu apt package declaration", name, dep)
 			}
-			if name == "bat" || name == "starship" || name == "atuin" || name == "pnpm" {
+			if name == "pnpm" {
+				if dep.RollingUserLocal == nil || dep.RollingUserLocal.Recipe != "pnpm-standalone" {
+					t.Fatalf("pnpm dependency = %#v, want reviewed rolling bundle", dep)
+				}
+			}
+			if name == "bat" || name == "starship" || name == "atuin" {
 				if dep.UserLocal == nil || dep.UserLocal.Recipe != name || dep.UserLocal.Version == "" {
 					t.Fatalf("%s dependency = %#v, want reviewed user-local policy", name, dep)
 				}
@@ -2800,7 +2805,7 @@ func TestRepositoryGitConfigClassifiesPortableAndLocalConcerns(t *testing.T) {
 
 	for _, want := range []string{
 		"defaultBranch = main",
-		"rebase = false",
+		"rebase = true",
 		"conflictStyle = diff3",
 	} {
 		if !strings.Contains(managed, want) {
@@ -3598,8 +3603,8 @@ func TestRepositoryManifestRemainingSymlinksMatchAuditedClassifications(t *testi
 	)
 	want := map[string]string{
 		"configs/zsh/zshrc\x00~/.config/dots/zsh/zshrc":                                                                readUnderOrdinaryUse,
-		"configs/zsh/zimrc\x00~/.zimrc":                                                                                readUnderOrdinaryUse,
-		"configs/zsh/zshenv\x00~/.zshenv":                                                                              readUnderOrdinaryUse,
+		"configs/zsh/zimrc\x00~/.config/dots/zsh/zimrc":                                                                readUnderOrdinaryUse,
+		"configs/zsh/zshenv\x00~/.config/dots/zsh/zshenv":                                                              readUnderOrdinaryUse,
 		"configs/git/gitconfig\x00~/.config/dots/git/gitconfig":                                                        readUnderOrdinaryUse,
 		"configs/dots/theme-carbonfox\x00~/.config/dots/theme-carbonfox":                                               readUnderOrdinaryUse,
 		"configs/tmux/carbonfox.conf\x00~/.config/tmux/carbonfox.conf":                                                 readUnderOrdinaryUse,

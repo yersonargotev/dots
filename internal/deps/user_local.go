@@ -67,6 +67,22 @@ const (
 )
 
 var userLocalRecipes = map[string]userLocalRecipe{
+	"pnpm-standalone": {
+		archiveName: func(version, goarch string) (string, bool) { return "", false },
+		url:         func(version, archive string) string { return "" },
+		layout:      userLocalLayoutBundle, command: "pnpm", archiveType: userLocalArchiveTarGzip,
+		binaryPath: func(_ string, command string) string { return command },
+		links:      []string{"pnpm"},
+	},
+	"gh": {
+		archiveName: func(version, goarch string) (string, bool) { return "", false },
+		url:         func(version, archive string) string { return "" },
+		layout:      userLocalLayoutBundle, command: "gh", archiveType: userLocalArchiveTarGzip,
+		binaryPath: func(archive, command string) string {
+			return strings.TrimSuffix(archive, ".tar.gz") + "/bin/" + command
+		},
+		links: []string{"gh"},
+	},
 	"herdr-custom": {layout: userLocalLayoutBundle, command: "herdr-custom", archiveType: userLocalArchiveTarGzip, binaryPath: func(archive, _ string) string { return strings.TrimSuffix(archive, ".tar.gz") + "/dots/herdr-custom" }, links: []string{"herdr-custom"}},
 	"codex": {
 		archiveName: func(version, goarch string) (string, bool) { return "", false },
