@@ -246,13 +246,10 @@ func (s *receiptSession) validate(c capturedReceipt) error {
 	if err := s.validateLocks(); err != nil {
 		return err
 	}
-	if s.home.path != c.Home || s.state.path != c.State {
-		return errors.New("pending operation belongs to another home/state")
-	}
-	if err := s.home.validate(c.HomeIdentity); err != nil {
+	if err := validateCapturedRootName(s.home, c.Home, c.HomeIdentity); err != nil {
 		return err
 	}
-	if err := s.state.validate(c.StateIdentity); err != nil {
+	if err := validateCapturedRootName(s.state, c.State, c.StateIdentity); err != nil {
 		return err
 	}
 	heldState, err := fileIdentity(s.stateLock)
@@ -306,7 +303,14 @@ func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() b
 		return err
 	}
 	for _, op := range ops {
-		if !op.Complete && op.Captured.Home == s.home.path && op.Captured.Action.Dependency == action.Dependency {
+		if op.Complete || op.Captured.Action.Dependency != action.Dependency {
+			continue
+		}
+		matches, err := homeScopeMatches(s.home, op.Captured)
+		if err != nil {
+			return err
+		}
+		if matches {
 			if artifactSelection(action) != op.Captured.Selection {
 				return errors.New("pending operation conflicts with selected provider identity")
 			}
@@ -396,9 +400,9 @@ func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() b
 	if err := s.validate(c); err != nil {
 		return err
 	}
-	if err := i.writeReceipt(s.state, operationPath(id, "captured"), c); err != nil {
+	if err := i.writeReceipt(s.state, operationPath(id, "authority-"+receiptDigest(c)), c); err != nil {
 		var saved capturedReceipt
-		found, readErr := readReceiptJSON(s.state, operationPath(id, "captured"), &saved)
+		found, readErr := readReceiptJSON(s.state, operationPath(id, "authority-"+receiptDigest(c)), &saved)
 		if readErr == nil && !found {
 			journal, openErr := openReceiptDir(s.state.file, receiptJournal, false)
 			if openErr != nil {
@@ -408,9 +412,6 @@ func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() b
 			return errors.Join(err, removeErr, journal.Sync(), journal.Close())
 		}
 		return errors.Join(err, readErr)
-	}
-	if err := i.check("after-captured"); err != nil {
-		return err
 	}
 	return i.resume(s, journalOperation{Captured: c, Progress: map[int]bool{}})
 }
@@ -445,7 +446,14 @@ func (i *UserLocalInstaller) WithUserLocalBoundary(selected []UserLocalSelection
 	}
 	var actions []InstallAction
 	for _, op := range ops {
-		if op.Complete || op.Captured.Home != s.home.path {
+		if op.Complete {
+			continue
+		}
+		matches, err := homeScopeMatches(s.home, op.Captured)
+		if err != nil {
+			return err
+		}
+		if !matches {
 			continue
 		}
 		for _, selection := range selected {
@@ -717,6 +725,16 @@ func (i *UserLocalInstaller) resume(s *receiptSession, op journalOperation) erro
 	if err := s.validate(c); err != nil {
 		return err
 	}
+	if !op.CapturedProjection {
+		if err := i.writeReceipt(s.state, operationPath(c.ID, "captured"), c); err != nil {
+			return err
+		}
+		op.CapturedProjection = true
+	}
+	if err := i.check("after-captured"); err != nil {
+		return err
+	}
+
 	if op.Ready == nil {
 		ready, err := i.prepare(s, c)
 		if err != nil {
@@ -816,4 +834,31 @@ func validateSourceParents(c capturedReceipt, ready readyReceipt) error {
 		}
 	}
 	return nil
+}
+
+func homeScopeMatches(root *receiptRoot, c capturedReceipt) (bool, error) {
+	actual, err := fileIdentity(root.file)
+	if err != nil {
+		return false, err
+	}
+	if actual.Device == c.HomeIdentity.Device && actual.Inode == c.HomeIdentity.Inode {
+		return true, nil
+	}
+	if root.path == c.Home {
+		return false, errors.New("selected home identity changed since capture")
+	}
+	return false, nil
+}
+func validateCapturedRootName(current *receiptRoot, path string, expected PublicationEvidence) error {
+	if err := current.validate(expected); err != nil {
+		return err
+	}
+	if current.path == path {
+		return nil
+	}
+	original, err := openReceiptRoot(path, false)
+	if err != nil {
+		return err
+	}
+	return errors.Join(original.validate(expected), original.file.Close())
 }

@@ -381,6 +381,10 @@ func InstallUserLocal(home string, action InstallAction) error {
 	if action.Dependency == "" {
 		action.Dependency = a.Recipe
 	}
+	if action.Probe == "" && len(action.Probes) == 0 {
+		action.Probe = a.Command
+		action.Probes = []string{a.Command}
+	}
 	action.Provider = TierUserLocal
 	action.Status = InstallActionStatusInstallable
 	if action.Requirement == "" {
@@ -398,7 +402,8 @@ func InstallUserLocal(home string, action InstallAction) error {
 			return false
 		}
 		for _, command := range recipe.links {
-			if _, err := os.Stat(filepath.Join(home, ".local", "bin", command)); err != nil {
+			info, err := os.Stat(filepath.Join(home, ".local", "bin", command))
+			if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
 				return false
 			}
 		}

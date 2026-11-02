@@ -699,9 +699,9 @@ func (r realTransactionRunner) WithUserLocalBoundary(selected []UserLocalSelecti
 }
 
 func TestUserLocalTransactionReDurabilizesVisiblePhases(t *testing.T) {
-	for _, phase := range []string{"captured", "ready", "final", "complete"} {
+	for _, phase := range []string{"authority", "captured", "ready", "final", "complete"} {
 		t.Run(phase, func(t *testing.T) {
-			i, a, _ := transactionFixture(t, "uv")
+			i, a, downloads := transactionFixture(t, "uv")
 			i.Fault = func(point string) error {
 				if point == phase+":dir-sync" {
 					return errors.New("directory sync failed")
@@ -712,7 +712,7 @@ func TestUserLocalTransactionReDurabilizesVisiblePhases(t *testing.T) {
 				t.Fatal("expected sync error")
 			}
 			i.Fault = func(point string) error {
-				if point == "replay:operation-dir-sync" {
+				if point == "replay:operation-dir-sync" || (phase == "authority" && strings.HasPrefix(point, "replay:authority-") && strings.HasSuffix(point, ":file-sync")) {
 					return errors.New("replay sync failed")
 				}
 				return nil
@@ -720,9 +720,18 @@ func TestUserLocalTransactionReDurabilizesVisiblePhases(t *testing.T) {
 			if _, err := i.RecoverUserLocal([]UserLocalSelection{artifactSelection(a)}); err == nil {
 				t.Fatal("relied on non-durable visible phase")
 			}
-			if phase == "captured" || phase == "ready" {
+			if phase == "authority" || phase == "captured" || phase == "ready" {
 				if _, err := os.Lstat(a.UserLocal.InstalledPath); !os.IsNotExist(err) {
 					t.Fatal("published before durable authority")
+				}
+			}
+			if phase == "authority" {
+				if *downloads != 0 {
+					t.Fatal("downloaded before canonical authority replay sync")
+				}
+				ops := loadTransactionOps(t, i.StateRoot)
+				if ops[0].CapturedProjection || ops[0].Ready != nil {
+					t.Fatal("repaired or staged before authority replay sync")
 				}
 			}
 			i.Fault = nil
@@ -1235,6 +1244,7 @@ func TestUserLocalOnDiskReceiptChainConflictsPreserveState(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
+				write("authority-"+receiptDigest(c), c)
 				write("captured", c)
 				if node.complete {
 					ready := *original.Ready
@@ -1281,7 +1291,7 @@ func TestUserLocalDirectHerdrWrapperRecoversPendingReceipt(t *testing.T) {
 	data, a := customFixture(t, false, false, false)
 	fakeCustomDownload(t, data)
 	a.Destination, a.InstalledPath = userLocalPaths(home, a.Recipe, a.Version, a.Layout, a.Command)
-	action := InstallAction{Dependency: "herdr-custom", Requirement: manifest.DependencyRequirementRequired, Status: InstallActionStatusInstallable, Provider: TierUserLocal, UserLocal: &a}
+	action := InstallAction{Dependency: "herdr-custom", Requirement: manifest.DependencyRequirementRequired, Status: InstallActionStatusInstallable, Provider: TierUserLocal, Probe: "herdr-custom", Probes: []string{"herdr-custom"}, UserLocal: &a}
 	installer := UserLocalInstaller{Home: home, StateRoot: filepath.Join(home, ".local/state/dots"), Download: func(string, string) ([]byte, error) { return data, nil }, Fault: func(point string) error {
 		if point == "final:before" {
 			return errors.New("receipt unavailable")
@@ -1330,6 +1340,254 @@ func TestUserLocalTransactionPostPublicationParentChange(t *testing.T) {
 			}
 			if _, err := os.Stat(filepath.Join(bin, "starship")); err != nil {
 				t.Fatal("external replacement removed")
+			}
+		})
+	}
+}
+
+func TestUserLocalSemanticAuthorityCorruptionFailsBeforeDownload(t *testing.T) {
+	for _, which := range []string{"projection", "canonical", "missing", "multiple"} {
+		t.Run(which, func(t *testing.T) {
+			i, a, _ := transactionFixture(t, "uv")
+			i.Fault = func(point string) error {
+				if point == "after-captured" {
+					return errors.New("interrupted")
+				}
+				return nil
+			}
+			if err := i.RunUserLocal(a, nil); err == nil {
+				t.Fatal("expected captured interruption")
+			}
+			op := loadTransactionOps(t, i.StateRoot)[0]
+			canonical := filepath.Join(i.StateRoot, operationPath(op.Captured.ID, "authority-"+receiptDigest(op.Captured)))
+			path := filepath.Join(i.StateRoot, operationPath(op.Captured.ID, "captured"))
+			corrupted := op.Captured
+			artifact := *corrupted.Action.UserLocal
+			corrupted.Action.UserLocal = &artifact
+			artifact.URL = "https://example.invalid/substituted"
+			artifact.Checksum = strings.Repeat("a", 64)
+			data, err := json.Marshal(corrupted)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch which {
+			case "canonical":
+				path = canonical
+			case "missing":
+				if err := os.Remove(canonical); err != nil {
+					t.Fatal(err)
+				}
+			case "multiple":
+				path = filepath.Join(i.StateRoot, operationPath(op.Captured.ID, "authority-"+receiptDigest(corrupted)))
+			}
+			if which != "missing" {
+				if err := os.WriteFile(path, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			i.Fault = nil
+			i.Download = func(string, string) ([]byte, error) {
+				t.Error("downloaded corrupted authority")
+				return nil, errors.New("unexpected download")
+			}
+			if _, err := LoadDependencyMetadata(DependencyMetadataPath(i.StateRoot)); err == nil {
+				t.Fatal("read accepted semantic authority corruption")
+			}
+			if _, err := i.RecoverUserLocal([]UserLocalSelection{artifactSelection(a)}); err == nil {
+				t.Fatal("recovery accepted semantic authority corruption")
+			}
+			if _, err := os.Stat(a.UserLocal.InstalledPath); !os.IsNotExist(err) {
+				t.Fatal("published substituted artifact")
+			}
+		})
+	}
+}
+
+func TestUserLocalAuthorityAndProjectionPersistenceRecovery(t *testing.T) {
+	for _, point := range []string{"authority:write", "authority:sync", "authority:close", "authority:link", "authority:dir-sync", "captured:write", "captured:sync", "captured:close", "captured:link", "captured:dir-sync"} {
+		t.Run(point, func(t *testing.T) {
+			i, a, _ := transactionFixture(t, "starship")
+			i.Fault = func(actual string) error {
+				if actual == point {
+					return errors.New("persist failure")
+				}
+				return nil
+			}
+			if err := i.RunUserLocal(a, nil); err == nil {
+				t.Fatal("ignored authority persistence failure")
+			}
+			if _, err := os.Stat(a.UserLocal.InstalledPath); !os.IsNotExist(err) {
+				t.Fatal("published before complete authority")
+			}
+			i.Fault = nil
+			if err := i.RunUserLocal(a, nil); err != nil {
+				t.Fatalf("exact captured retry failed: %v", err)
+			}
+			if !loadTransactionOps(t, i.StateRoot)[0].Complete {
+				t.Fatal("retry did not finalize")
+			}
+		})
+	}
+}
+
+func TestUserLocalPendingRecoveryUsesPhysicalHomeAndStateIdentity(t *testing.T) {
+	i, a, _ := transactionFixture(t, "uv")
+	actualHome, actualState := i.Home, i.StateRoot
+	aliases := t.TempDir()
+	i.Home = filepath.Join(aliases, "home-alias")
+	i.StateRoot = filepath.Join(aliases, "state-alias")
+	if err := os.Symlink(actualHome, i.Home); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(actualState, i.StateRoot); err != nil {
+		t.Fatal(err)
+	}
+	a.UserLocal.Destination, a.UserLocal.InstalledPath = userLocalPaths(i.Home, a.UserLocal.Recipe, a.UserLocal.Version, a.UserLocal.Layout, a.UserLocal.Command)
+	i.Fault = func(point string) error {
+		if point == "final:before" {
+			return errors.New("receipt failed")
+		}
+		return nil
+	}
+	if err := i.RunUserLocal(a, nil); err == nil {
+		t.Fatal("expected pending")
+	}
+	i.Home, i.StateRoot = actualHome, actualState
+	i.Fault = nil
+	i.Download = func(string, string) ([]byte, error) { return nil, errors.New("alias retry downloaded") }
+	opts := Options{Profile: "default", OS: "linux", Arch: "amd64", Home: actualHome, StateRoot: actualState}
+	prepared, err := PrepareInstall(transactionManifest(a), opts, func(string) bool { return true }, func(string) bool { return false }, TierGeneric)
+	if err != nil || len(prepared.Plan.Actions) != 1 {
+		t.Fatalf("alias plan skipped pending %+v %v", prepared, err)
+	}
+	report, err := InstallPrepared(prepared, opts, func(string) bool { return true }, func(string) bool { return false }, realTransactionRunner{&i})
+	if err != nil || len(report.Items) != 1 {
+		t.Fatalf("alias execution skipped pending %+v %v", report, err)
+	}
+	if !loadTransactionOps(t, actualState)[0].Complete {
+		t.Fatal("alias recovery did not finalize")
+	}
+}
+
+func TestUserLocalDirectPresenceRequiresExecutableFile(t *testing.T) {
+	for _, kind := range []string{"file", "directory", "executable"} {
+		t.Run(kind, func(t *testing.T) {
+			i, a, downloads := transactionFixture(t, "starship")
+			oldDownload := downloadUserLocalArtifact
+			downloadUserLocalArtifact = func(string, string) ([]byte, error) {
+				*downloads++
+				return nil, errors.New("unexpected direct download")
+			}
+			t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
+			bin := filepath.Join(i.Home, ".local/bin")
+			if err := os.MkdirAll(bin, 0755); err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(bin, "starship")
+			if kind == "directory" {
+				if err := os.Mkdir(target, 0755); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				mode := os.FileMode(0644)
+				if kind == "executable" {
+					mode = 0755
+				}
+				if err := os.WriteFile(target, []byte("external"), mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := InstallUserLocal(i.Home, a)
+			if kind == "executable" && err != nil {
+				t.Fatal(err)
+			}
+			if kind != "executable" && err == nil {
+				t.Fatal("non-command satisfied dependency")
+			}
+			if *downloads != 0 {
+				t.Fatal("replaced external state")
+			}
+			meta, err := LoadDependencyMetadata(DependencyMetadataPath(filepath.Join(i.Home, ".local/state/dots")))
+			if err != nil || len(meta.Dependencies) != 0 {
+				t.Fatalf("invented receipt %+v %v", meta, err)
+			}
+		})
+	}
+}
+
+func TestUserLocalCapturedAliasRetargetFailsPlanningAndExecution(t *testing.T) {
+	for _, scope := range []string{"home", "state"} {
+		t.Run(scope, func(t *testing.T) {
+			i, a, _ := transactionFixture(t, "uv")
+			actualHome, actualState := i.Home, i.StateRoot
+			aliases := t.TempDir()
+			homeAlias, stateAlias := filepath.Join(aliases, "home"), filepath.Join(aliases, "state")
+			if err := os.Symlink(actualHome, homeAlias); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(actualState, stateAlias); err != nil {
+				t.Fatal(err)
+			}
+			i.Home, i.StateRoot = homeAlias, stateAlias
+			a.UserLocal.Destination, a.UserLocal.InstalledPath = userLocalPaths(i.Home, a.UserLocal.Recipe, a.UserLocal.Version, a.UserLocal.Layout, a.UserLocal.Command)
+			i.Fault = func(point string) error {
+				if point == "final:before" {
+					return errors.New("receipt failure")
+				}
+				return nil
+			}
+			if err := i.RunUserLocal(a, nil); err == nil {
+				t.Fatal("expected pending")
+			}
+			i.Home, i.StateRoot = actualHome, actualState
+			i.Fault = nil
+			i.Download = func(string, string) ([]byte, error) {
+				t.Error("download after alias retarget")
+				return nil, errors.New("unexpected download")
+			}
+			selected := homeAlias
+			if scope == "state" {
+				selected = stateAlias
+			}
+			if err := os.Remove(selected); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(t.TempDir(), selected); err != nil {
+				t.Fatal(err)
+			}
+			roots := []*receiptRoot{}
+			for _, path := range []string{actualHome, actualState} {
+				root, err := openReceiptRoot(path, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				roots = append(roots, root)
+			}
+			before := []PublicationEvidence{}
+			for _, root := range roots {
+				node, err := root.evidence(".", false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				before = append(before, node)
+			}
+			opts := Options{Profile: "default", OS: "linux", Arch: "amd64", Home: actualHome, StateRoot: actualState}
+			if _, err := PrepareInstall(transactionManifest(a), opts, func(string) bool { return true }, func(string) bool { return false }, TierGeneric); err == nil {
+				t.Fatal("planning accepted captured alias retarget")
+			}
+			prepared := PreparedInstall{Plan: PlanReport{selected: []UserLocalSelection{artifactSelection(a)}}}
+			if _, err := InstallPrepared(prepared, opts, func(string) bool { return true }, func(string) bool { return false }, realTransactionRunner{&i}); err == nil {
+				t.Fatal("execution accepted captured alias retarget")
+			}
+			for n, root := range roots {
+				after, err := root.evidence(".", false)
+				closeErr := root.file.Close()
+				if err := errors.Join(err, closeErr); err != nil {
+					t.Fatal(err)
+				}
+				if !sameEvidence(before[n], after) {
+					t.Fatal("alias rejection changed published/journal bytes")
+				}
 			}
 		})
 	}

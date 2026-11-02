@@ -69,11 +69,12 @@ type receiptMarker struct {
 	Digest string `json:"digest"`
 }
 type journalOperation struct {
-	Captured capturedReceipt
-	Ready    *readyReceipt
-	Final    *finalReceipt
-	Complete bool
-	Progress map[int]bool
+	CapturedProjection bool
+	Captured           capturedReceipt
+	Ready              *readyReceipt
+	Final              *finalReceipt
+	Complete           bool
+	Progress           map[int]bool
 }
 
 func receiptDigest(value any) string {
@@ -151,6 +152,9 @@ func (i *UserLocalInstaller) writeReceipt(root *receiptRoot, path string, value 
 	}
 	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
 	phase := strings.TrimSuffix(name, ".json")
+	if strings.HasPrefix(phase, "authority-") {
+		phase = "authority"
+	}
 	if err := i.check(phase + ":before"); err != nil {
 		return err
 	}
@@ -270,18 +274,17 @@ func readJournal(root *receiptRoot) (operations []journalOperation, resultErr er
 			return nil, fmt.Errorf("invalid receipt operation %s", id)
 		}
 		op := journalOperation{Progress: map[int]bool{}}
-		found, err := readReceiptJSON(root, operationPath(id, "captured"), &op.Captured)
+		captured, authorityName, projection, err := readCapturedAuthority(root, id)
 		if err != nil {
 			return nil, err
 		}
-		if !found || op.Captured.ID != id || op.Captured.Format != 1 {
-			return nil, fmt.Errorf("missing or conflicting pending authority %s", id)
-		}
+		op.Captured = captured
+		op.CapturedProjection = projection
 		if err := validateCaptured(op.Captured); err != nil {
 			return nil, err
 		}
 		var ready readyReceipt
-		found, err = readReceiptJSON(root, operationPath(id, "ready"), &ready)
+		found, err := readReceiptJSON(root, operationPath(id, "ready"), &ready)
 		if err != nil {
 			return nil, err
 		}
@@ -345,7 +348,7 @@ func readJournal(root *receiptRoot) (operations []journalOperation, resultErr er
 		if err := errors.Join(readErr, closeErr); err != nil {
 			return nil, err
 		}
-		allowed := map[string]bool{"captured.json": true, "ready.json": op.Ready != nil, "final.json": op.Final != nil, "complete.json": op.Complete}
+		allowed := map[string]bool{authorityName: true, "captured.json": true, "ready.json": op.Ready != nil, "final.json": op.Final != nil, "complete.json": op.Complete}
 		if op.Ready != nil {
 			for n := range op.Ready.Units {
 				allowed[fmt.Sprintf("unit-%d.json", n)] = true
@@ -376,7 +379,9 @@ func allProgress(op journalOperation) bool {
 	return true
 }
 
-func receiptKey(c capturedReceipt) string { return c.Home + "\x00" + c.Action.Dependency }
+func receiptKey(c capturedReceipt) string {
+	return fmt.Sprintf("%d:%d\x00%s", c.HomeIdentity.Device, c.HomeIdentity.Inode, c.Action.Dependency)
+}
 func validateReceiptChains(ops []journalOperation) error {
 	byID := map[string]journalOperation{}
 	next := map[string]string{}
@@ -481,24 +486,38 @@ func pendingSelections(home, state string, selected []UserLocalSelection) (actio
 		return nil, err
 	}
 	for _, op := range ops {
-		if op.Complete || op.Captured.Home != absolute {
+		if op.Complete {
 			continue
 		}
 		for _, selection := range selected {
 			if selection.Dependency != op.Captured.Action.Dependency {
 				continue
 			}
+			h, openErr := openReceiptRoot(home, false)
+			if errors.Is(openErr, os.ErrNotExist) && op.Captured.Home != absolute {
+				continue
+			}
+			if openErr != nil {
+				return nil, openErr
+			}
+			matches, matchErr := homeScopeMatches(h, op.Captured)
+			if err := errors.Join(matchErr, h.file.Close()); err != nil {
+				return nil, err
+			}
+			if !matches {
+				continue
+			}
 			if selection != op.Captured.Selection {
 				return nil, fmt.Errorf("pending dependency %q no longer matches selected provider/recipe/platform; preserve %s and restore the declaration before retrying", selection.Dependency, op.Captured.ID)
 			}
-			if err := root.validate(op.Captured.StateIdentity); err != nil {
+			if err := validateCapturedRootName(root, op.Captured.State, op.Captured.StateIdentity); err != nil {
 				return nil, err
 			}
 			h, err := openReceiptRoot(home, false)
 			if err != nil {
 				return nil, err
 			}
-			checkErr := h.validate(op.Captured.HomeIdentity)
+			checkErr := validateCapturedRootName(h, op.Captured.Home, op.Captured.HomeIdentity)
 			if err := errors.Join(checkErr, h.file.Close()); err != nil {
 				return nil, err
 			}
@@ -646,4 +665,55 @@ func validateReceiptJSON(data []byte) error {
 		return errors.New("trailing receipt data")
 	}
 	return nil
+}
+
+func readCapturedAuthority(root *receiptRoot, id string) (captured capturedReceipt, authorityName string, projection bool, resultErr error) {
+	parent, _, err := root.parent(filepath.Join(receiptJournal, id, "unused"), false)
+	if err != nil {
+		return captured, "", false, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	info, err := parent.Stat()
+	if err != nil {
+		return captured, "", false, err
+	}
+	if !exactPrivateMode(info.Mode(), 0700) {
+		return captured, "", false, errors.New("private operation permissions changed")
+	}
+	files, err := parent.ReadDir(-1)
+	if err != nil {
+		return captured, "", false, err
+	}
+	for _, file := range files {
+		if !strings.HasPrefix(file.Name(), "authority-") {
+			continue
+		}
+		if authorityName != "" {
+			return captured, "", false, errors.New("multiple canonical pending authorities")
+		}
+		authorityName = file.Name()
+	}
+	if authorityName == "" || !strings.HasSuffix(authorityName, ".json") {
+		return captured, "", false, errors.New("missing canonical pending authority")
+	}
+	digest := strings.TrimSuffix(strings.TrimPrefix(authorityName, "authority-"), ".json")
+	if len(digest) != 64 {
+		return captured, "", false, errors.New("invalid canonical authority name")
+	}
+	found, err := readReceiptJSON(root, filepath.Join(receiptJournal, id, authorityName), &captured)
+	if err != nil {
+		return captured, "", false, err
+	}
+	if !found || captured.ID != id || captured.Format != 1 || receiptDigest(captured) != digest {
+		return captured, "", false, errors.New("canonical pending authority hash/identity mismatch")
+	}
+	var projected capturedReceipt
+	projection, err = readReceiptJSON(root, operationPath(id, "captured"), &projected)
+	if err != nil {
+		return captured, "", false, err
+	}
+	if projection && receiptDigest(projected) != digest {
+		return captured, "", false, errors.New("captured projection conflicts with canonical authority")
+	}
+	return captured, authorityName, projection, nil
 }
