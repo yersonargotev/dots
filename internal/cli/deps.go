@@ -134,6 +134,7 @@ func newDepsPlanCommand(profiles *[]string, extraTags *[]string, excludedTags *[
 				OS:                runtime.GOOS,
 				Arch:              runtime.GOARCH,
 				Home:              resolvedHome,
+				StateRoot:         defaultStateRoot(resolvedHome),
 				AppLookup:         appInstalled(runtime.GOOS, resolvedHome),
 				HTTPClient:        depsHTTPClient,
 				RollingReleaseURL: depsRollingReleaseURL,
@@ -221,6 +222,10 @@ func newDepsInstallCommand(profiles *[]string, extraTags *[]string, excludedTags
 
 			if yes {
 				if !hasInstallablePreviewAction(report) {
+					runner := &depsExecRunner{ctx: cmd.Context(), stdin: cmd.InOrStdin(), stdout: cmd.ErrOrStderr(), stderr: cmd.ErrOrStderr(), home: resolvedHome, stateRoot: resolvedStateRoot}
+					if err := deps.RecoverSelectedUserLocal(*m, options, runner.Lookup, fontInstalled(runtime.GOOS, resolvedHome), runner); err != nil {
+						return err
+					}
 					if wantsJSON(cmd) {
 						return emitOK(cmd, depsInstallDryRunReport{DryRun: false, Report: report})
 					}
@@ -348,14 +353,15 @@ func confirmDepsInstall(r io.Reader, w io.Writer) (bool, error) {
 }
 
 type depsExecRunner struct {
-	ctx       context.Context
-	stdin     io.Reader
-	stdout    io.Writer
-	stderr    io.Writer
-	home      string
-	stateRoot string
-	brewPath  string
-	env       []string
+	ctx            context.Context
+	stdin          io.Reader
+	stdout         io.Writer
+	stderr         io.Writer
+	home           string
+	stateRoot      string
+	localInstaller *deps.UserLocalInstaller
+	brewPath       string
+	env            []string
 }
 
 func (r *depsExecRunner) Run(executable string, args []string) error {
@@ -398,12 +404,17 @@ func (r *depsExecRunner) AddHomebrewFormulaToPATH(formula string) error {
 	return nil
 }
 
-func (r *depsExecRunner) RunUserLocal(action deps.InstallAction) error {
-	return deps.InstallUserLocal(r.home, action)
+func (r *depsExecRunner) userLocalInstaller() *deps.UserLocalInstaller {
+	if r.localInstaller == nil {
+		r.localInstaller = &deps.UserLocalInstaller{Context: r.ctx, Home: r.home, StateRoot: r.stateRoot}
+	}
+	return r.localInstaller
 }
-
-func (r *depsExecRunner) RecordUserLocal(action deps.InstallAction) error {
-	return deps.RecordDependencyInstallation(r.stateRoot, r.home, action)
+func (r *depsExecRunner) RunUserLocal(action deps.InstallAction, present func() bool) error {
+	return r.userLocalInstaller().RunUserLocal(action, present)
+}
+func (r *depsExecRunner) WithUserLocalBoundary(selected []deps.UserLocalSelection, consume func([]deps.InstallAction) error) error {
+	return r.userLocalInstaller().WithUserLocalBoundary(selected, consume)
 }
 
 func (r *depsExecRunner) Lookup(command string) bool {

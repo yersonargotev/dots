@@ -194,7 +194,7 @@ func TestRollingOpenCodeInstallsTarAndZipArtifacts(t *testing.T) {
 			downloadUserLocalArtifact = func(string, string) ([]byte, error) { return data, nil }
 			t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
 
-			artifact := UserLocalArtifact{Recipe: "opencode", Version: "v1.2.3", URL: "https://example.invalid/" + tt.archive, Checksum: "fixture", Layout: userLocalLayoutBundle, Command: "opencode"}
+			artifact := UserLocalArtifact{Recipe: "opencode", Version: "v1.2.3", URL: "https://example.invalid/" + tt.archive, Checksum: strings.Repeat("a", 64), Layout: userLocalLayoutBundle, Command: "opencode"}
 			if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err != nil {
 				t.Fatalf("InstallUserLocal() error = %v", err)
 			}
@@ -213,7 +213,7 @@ func TestRollingAntigravityInstallsVendorBinaryAsAgy(t *testing.T) {
 	downloadUserLocalArtifact = func(string, string) ([]byte, error) { return data, nil }
 	t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
 
-	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: "fixture", Layout: userLocalLayoutBundle, Command: "agy"}
+	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: strings.Repeat("a", 64), Layout: userLocalLayoutBundle, Command: "agy"}
 	if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err != nil {
 		t.Fatalf("InstallUserLocal() error = %v", err)
 	}
@@ -280,7 +280,7 @@ func TestRollingGitHubRecipesRejectMismatchedDependencyCommands(t *testing.T) {
 	}
 }
 
-func TestInstallRollingBundleReplacesPreexistingVersionWithVerifiedArtifact(t *testing.T) {
+func TestInstallRollingBundlePreservesDestinationWithoutPendingAuthority(t *testing.T) {
 	home := t.TempDir()
 	optDir := filepath.Join(home, ".local", "opt", "antigravity", "1.1.0")
 	if err := os.MkdirAll(optDir, 0o755); err != nil {
@@ -294,13 +294,13 @@ func TestInstallRollingBundleReplacesPreexistingVersionWithVerifiedArtifact(t *t
 	downloadUserLocalArtifact = func(string, string) ([]byte, error) { return data, nil }
 	t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
 
-	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: "verified", Layout: userLocalLayoutBundle, Command: "agy"}
-	if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err != nil {
-		t.Fatalf("InstallUserLocal() error = %v", err)
+	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: strings.Repeat("a", 64), Layout: userLocalLayoutBundle, Command: "agy"}
+	if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err == nil || !strings.Contains(err.Error(), "occupied") {
+		t.Fatalf("expected fail closed for pre-existing destination: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(optDir, "antigravity"))
-	if err != nil || string(got) != "verified bytes\n" {
-		t.Fatalf("installed binary = (%q, %v), want verified artifact bytes", got, err)
+	if err != nil || string(got) != "stale bytes\n" {
+		t.Fatalf("external bundle changed %q %v", got, err)
 	}
 }
 
@@ -319,9 +319,9 @@ func TestInstallRollingBundlePreservesPreexistingVersionWhenVerifiedArchiveIsInv
 	downloadUserLocalArtifact = func(string, string) ([]byte, error) { return data, nil }
 	t.Cleanup(func() { downloadUserLocalArtifact = oldDownload })
 
-	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: "verified", Layout: userLocalLayoutBundle, Command: "agy"}
-	if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err == nil || !strings.Contains(err.Error(), "stat extracted executable") {
-		t.Fatalf("InstallUserLocal() error = %v, want invalid layout rejection", err)
+	artifact := UserLocalArtifact{Recipe: "antigravity", Version: "1.1.0", URL: "https://example.invalid/agy_cli_linux_x64.tar.gz", Checksum: strings.Repeat("a", 64), Layout: userLocalLayoutBundle, Command: "agy"}
+	if err := InstallUserLocal(home, InstallAction{UserLocal: &artifact}); err == nil || !strings.Contains(err.Error(), "occupied") {
+		t.Fatalf("InstallUserLocal() error = %v, want occupied destination rejection before download", err)
 	}
 	got, err := os.ReadFile(oldBinary)
 	if err != nil || string(got) != "previous bytes\n" {
@@ -405,7 +405,7 @@ type preparedUserLocalRunner struct {
 
 func (r *preparedUserLocalRunner) Run(string, []string) error { return nil }
 
-func (r *preparedUserLocalRunner) RunUserLocal(action InstallAction) error {
+func (r *preparedUserLocalRunner) RunUserLocal(action InstallAction, _ func() bool) error {
 	r.actions = append(r.actions, action)
 	r.afterRun()
 	return nil
@@ -570,4 +570,12 @@ func lookupSetInternal(commands ...string) Lookup {
 		present[command] = true
 	}
 	return func(command string) bool { return present[command] }
+}
+
+func (r *preparedUserLocalRunner) RecoverUserLocal([]UserLocalSelection) ([]InstallAction, error) {
+	return nil, nil
+}
+
+func (r *preparedUserLocalRunner) WithUserLocalBoundary(_ []UserLocalSelection, consume func([]InstallAction) error) error {
+	return consume(nil)
 }

@@ -195,71 +195,35 @@ func TestHerdrCustomRejectsInvalidBundleBeforeCommit(t *testing.T) {
 	}
 }
 
-func TestHerdrCustomUpgradePreservesPriorUntilValidated(t *testing.T) {
-	for _, failure := range []string{"", "checksum", "missing-runtime"} {
-		t.Run("upgrade-"+failure, func(t *testing.T) {
-			home := t.TempDir()
-			bin := filepath.Join(home, ".local/bin")
-			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-			oldData, old := customFixture(t, false, false, false)
-			fakeCustomDownload(t, oldData)
-			if err := InstallUserLocal(home, InstallAction{UserLocal: &old}); err != nil {
-				t.Fatal(err)
-			}
-			public := filepath.Join(bin, "herdr-custom")
-			oldTarget, err := os.Readlink(public)
-			if err != nil {
-				t.Fatal(err)
-			}
-			oldRuntime := filepath.Join(filepath.Dir(filepath.Dir(oldTarget)), "libexec/herdr")
-			oldBytes, err := os.ReadFile(oldRuntime)
-			if err != nil {
-				t.Fatal(err)
-			}
-			data, next := customFixtureVersion(t, "v0.9.3-custom.5", failure == "missing-runtime", false, false)
-			dep := customDependency()
-			dep.UserLocal.Version = next.Version
-			opts := Options{OS: "linux", Arch: "amd64", Home: home}
-			if DependencyPresent(dep, opts, func(string) bool { return true }, nil) {
-				t.Fatal("old version satisfies new pin")
-			}
-			action, err := actionFor(dep, opts, TierHomebrew, func(string) bool { return true })
-			if err != nil || action.UserLocal == nil {
-				t.Fatalf("upgrade plan %+v %v", action, err)
-			}
-			if actionPresent(action, opts, func(string) bool { return true }, nil) {
-				t.Fatal("execution recheck must not let the old version satisfy the new action")
-			}
-			downloadUserLocalArtifact = func(string, string) ([]byte, error) {
-				if failure == "checksum" {
-					return nil, fmt.Errorf("verify user-local artifact: sha256 mismatch")
-				}
-				return data, nil
-			}
-			err = InstallUserLocal(home, action)
-			gotTarget, linkErr := os.Readlink(public)
-			if linkErr != nil {
-				t.Fatal(linkErr)
-			}
-			if failure != "" {
-				if err == nil || gotTarget != oldTarget {
-					t.Fatalf("failed upgrade changed link: %s %v", gotTarget, err)
-				}
-			} else {
-				if err != nil || gotTarget == oldTarget {
-					t.Fatalf("upgrade failed: %s %v", gotTarget, err)
-				}
-				if !DependencyPresent(dep, opts, func(string) bool { return true }, nil) {
-					t.Fatal("new version not detected")
-				}
-				if !actionPresent(action, opts, func(string) bool { return true }, nil) {
-					t.Fatal("installed pinned action must satisfy the execution recheck")
-				}
-			}
-			if got, err := os.ReadFile(oldRuntime); err != nil || !bytes.Equal(got, oldBytes) {
-				t.Fatalf("prior runtime changed: %v", err)
-			}
-		})
+func TestHerdrCustomUpgradePreservesOccupiedPriorLink(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, ".local/bin")
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	data, old := customFixture(t, false, false, false)
+	fakeCustomDownload(t, data)
+	if err := InstallUserLocal(home, InstallAction{UserLocal: &old}); err != nil {
+		t.Fatal(err)
+	}
+	public := filepath.Join(bin, "herdr-custom")
+	before, err := os.Readlink(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, next := customFixtureVersion(t, "v0.9.3-custom.5", false, false, false)
+	dep := customDependency()
+	dep.UserLocal.Version = next.Version
+	if _, err := actionFor(dep, Options{OS: "linux", Arch: "amd64", Home: home}, TierHomebrew, func(string) bool { return true }); err == nil || !strings.Contains(err.Error(), "public symlink explicitly") {
+		t.Fatalf("upgrade preview did not fail closed: %v", err)
+	}
+	if err := InstallUserLocal(home, InstallAction{UserLocal: &next}); err == nil || !strings.Contains(err.Error(), "public symlink explicitly") {
+		t.Fatalf("upgrade publication did not fail closed: %v", err)
+	}
+	after, err := os.Readlink(public)
+	if err != nil || before != after {
+		t.Fatalf("changed prior link %q %v", after, err)
+	}
+	if !DependencyPresent(customDependency(), Options{OS: "linux", Arch: "amd64", Home: home}, func(string) bool { return true }, nil) {
+		t.Fatal("prior installed version no longer satisfies its declaration")
 	}
 }
 

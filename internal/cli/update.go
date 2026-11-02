@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/backups"
 	"github.com/yersonargotev/dots/internal/batcache"
+	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/gitrepo"
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
@@ -347,6 +348,11 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (resul
 		return report, nil
 	}
 	if err := validateCarbonfoxNativeSupport(cmd.Context(), p, paths.Home, runtime.GOOS, nil); err != nil {
+		return updateReport{}, err
+	}
+	dependencyRunner := &depsExecRunner{ctx: cmd.Context(), stdin: cmd.InOrStdin(), stdout: cmd.ErrOrStderr(), stderr: cmd.ErrOrStderr(), home: paths.Home, stateRoot: paths.StateRoot}
+	dependencyOptions := deps.Options{Selection: &effective.Selection, OS: runtime.GOOS, Arch: runtime.GOARCH, Home: paths.Home, StateRoot: paths.StateRoot}
+	if err := deps.RecoverSelectedUserLocal(*m, dependencyOptions, dependencyRunner.Lookup, fontInstalled(runtime.GOOS, paths.Home), dependencyRunner); err != nil {
 		return updateReport{}, err
 	}
 	installOptions := install.Options{CheckSelection: true, ExpectedSelection: meta.InstalledSelection, SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}
