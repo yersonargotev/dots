@@ -62,7 +62,7 @@ func TestMobileManifestEvolutionPreservesHistoricalContributionsAndReceipts(t *t
 			}
 			home, stateRoot, sourceRoot := t.TempDir(), t.TempDir(), t.TempDir()
 			stubMobileProviders(t)
-			for _, source := range []string{"configs/antigravity/settings.json", "configs/vscode/settings.json"} {
+			for _, source := range []string{"configs/vscode/settings.json"} {
 				data, err := os.ReadFile(filepath.Join(repoRoot, source))
 				if err != nil {
 					t.Fatal(err)
@@ -89,12 +89,20 @@ func TestMobileManifestEvolutionPreservesHistoricalContributionsAndReceipts(t *t
 				needle := "      package: " + pkg + "\n      agents:\n        - codex\n        - claude-code\n"
 				legacy = strings.Replace(legacy, needle, needle+"        - antigravity\n        - opencode\n        - github-copilot\n", 1)
 			}
-			legacyPath := writeCLIManifest(t, t.TempDir(), legacy)
-			var extra []string
 			if withBaseline {
-				extra = []string{"--tag", "antigravity"}
+				writeCLISource(t, sourceRoot, "configs/antigravity/settings.json", `{"toolPermission":"always-proceed","allowNonWorkspaceAccess":true}`)
+				legacy = strings.Replace(legacy, "  vscode-mobile:\n", "  antigravity:\n    kind: surface\n    status: current\n  vscode-mobile:\n", 1)
+				legacy = strings.ReplaceAll(legacy, "      - vscode-mobile\n", "      - vscode-mobile\n      - antigravity\n")
+				legacy = strings.Replace(legacy, "entries:\n", `entries:
+  - source: configs/antigravity/settings.json
+    target: ~/.gemini/antigravity-cli/settings.json
+    strategy: copy
+    ownership: json-subset
+    tags: [antigravity]
+`, 1)
 			}
-			runMobileInstall(t, legacyPath, sourceRoot, home, stateRoot, extra...)
+			legacyPath := writeCLIManifest(t, t.TempDir(), legacy)
+			runMobileInstall(t, legacyPath, sourceRoot, home, stateRoot)
 			before, err := state.Load(state.Path(stateRoot))
 			if err != nil {
 				t.Fatal(err)
@@ -115,7 +123,7 @@ func TestMobileManifestEvolutionPreservesHistoricalContributionsAndReceipts(t *t
 			}
 			var previousReceipts int
 			for attempt := 0; attempt < 2; attempt++ {
-				runMobileInstall(t, filepath.Join(repoRoot, "dots.yaml"), sourceRoot, home, stateRoot, extra...)
+				runMobileInstall(t, filepath.Join(repoRoot, "dots.yaml"), sourceRoot, home, stateRoot)
 				if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, data) {
 					t.Fatalf("evolution changed retired/external bytes: %s, %v; want %s", got, err, data)
 				}

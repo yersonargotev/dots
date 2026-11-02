@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/cli"
-	"github.com/yersonargotev/dots/internal/state"
 )
 
 func TestAgentsProfileInstallsNativeBaselineWithoutAuthorizingHistoricalCleanup(t *testing.T) {
@@ -73,13 +72,9 @@ Keep this unmarked user-owned content.
 	}
 
 	managed := map[string]string{
-		filepath.Join(home, ".claude", "settings.json"):                    "configs/claude/settings.json",
-		filepath.Join(home, ".claude", "statusline-command.sh"):            "configs/claude/statusline-command.sh",
-		filepath.Join(home, ".codex", "config.toml"):                       "configs/codex/config.toml",
-		filepath.Join(home, ".copilot", "settings.json"):                   "configs/copilot/settings.json",
-		filepath.Join(home, ".copilot", "statusline-command.sh"):           "configs/copilot/statusline-command.sh",
-		filepath.Join(home, ".gemini", "antigravity-cli", "settings.json"): "configs/antigravity/settings.json",
-		filepath.Join(home, ".config", "opencode", "opencode.json"):        "configs/opencode/opencode.json",
+		filepath.Join(home, ".claude", "settings.json"):         "configs/claude/settings.json",
+		filepath.Join(home, ".claude", "statusline-command.sh"): "configs/claude/statusline-command.sh",
+		filepath.Join(home, ".codex", "config.toml"):            "configs/codex/config.toml",
 	}
 	for target, source := range managed {
 		got, err := os.ReadFile(target)
@@ -107,56 +102,9 @@ Keep this unmarked user-owned content.
 		t.Errorf("agents selection reported historical retirement without evidence:\n%s", output.String())
 	}
 
-	opencodeTarget := filepath.Join(home, ".config", "opencode", "opencode.json")
-	coOwnedOpenCode := []byte(`{"$schema":"https://opencode.ai/config.json","userOwned":{"keep":true}}`)
-	if err := os.WriteFile(opencodeTarget, coOwnedOpenCode, 0o600); err != nil {
-		t.Fatalf("write co-owned OpenCode config: %v", err)
-	}
-	composed := cli.NewRootCommand()
-	var composedOutput bytes.Buffer
-	composed.SetOut(&composedOutput)
-	composed.SetErr(&composedOutput)
-	composed.SetArgs([]string{
-		"install",
-		"--file", filepath.Join(repoRoot, "dots.yaml"),
-		"--profile", "agents",
-		"--profile", "web",
-		"--source-root", repoRoot,
-		"--home", home,
-		"--state-root", stateRoot,
-		"--yes",
-	})
-	if err := composed.Execute(); err != nil {
-		t.Fatalf("agents + web install failed in sandbox: %v\noutput:\n%s", err, composedOutput.String())
-	}
-	gotOpenCode, err := os.ReadFile(opencodeTarget)
-	if err != nil {
-		t.Fatalf("read composed OpenCode baseline: %v", err)
-	}
-	if !strings.Contains(string(gotOpenCode), `"userOwned"`) || !strings.Contains(string(gotOpenCode), `"chrome-devtools"`) {
-		t.Errorf("native OpenCode baseline was clobbered by web overlay:\n%s", gotOpenCode)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".config", "opencode-dots.json")); !os.IsNotExist(err) {
-		t.Errorf("agents + web left obsolete standalone OpenCode overlay; stat error = %v", err)
-	}
-	meta, err := state.Load(state.Path(stateRoot))
-	if err != nil {
-		t.Fatalf("load OpenCode contribution metadata: %v", err)
-	}
-	opencodeRecord, ok := meta.FindByTarget(opencodeTarget)
-	if !ok || len(opencodeRecord.Contributions) != 2 {
-		t.Fatalf("OpenCode metadata = %+v, want two attributed contributions", opencodeRecord)
-	}
-	for i, want := range []struct {
-		source string
-		tag    string
-	}{
-		{source: "configs/opencode/opencode.json", tag: "opencode"},
-		{source: "configs/opencode/mcp.json", tag: "opencode-chrome-devtools"},
-	} {
-		contribution := opencodeRecord.Contributions[i]
-		if contribution.Source != want.source || len(contribution.SelectorTags) != 1 || contribution.SelectorTags[0] != want.tag || contribution.Ownership != "json-subset" {
-			t.Fatalf("OpenCode contribution[%d] = %+v, want %s selected by %s", i, contribution, want.source, want.tag)
+	for _, retired := range []string{".copilot/settings.json", ".gemini/antigravity-cli/settings.json", ".config/opencode/opencode.json"} {
+		if _, err := os.Lstat(filepath.Join(home, retired)); !os.IsNotExist(err) {
+			t.Errorf("agents installed retired target %s: %v", retired, err)
 		}
 	}
 

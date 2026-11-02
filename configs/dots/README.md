@@ -1,6 +1,6 @@
 # dots runtime configuration
 
-`configs/dots/theme.sh` is selected by the `tmux` and `neovim` Tags and is
+`configs/dots/theme.sh` is selected by the `neovim` Tag and is
 installed as `~/.config/dots/theme.sh`. Shell-readable Managed Configuration
 sources it to answer one question: should this session use Catppuccin Latte or
 Mocha?

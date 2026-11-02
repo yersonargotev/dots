@@ -1,7 +1,7 @@
 version = 1
 
 [commands]
-additional_significant = ["pi", "agent", "opencode"]
+additional_significant = ["pi", "agent"]
 
 [labels]
 command_format = "directory_and_command"

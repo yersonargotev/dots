@@ -105,41 +105,34 @@ from compact discovery unless `--all` is supplied.
 
 | Profile | Status | Tags | Description |
 |---------|--------|------|-------------|
-| `agents` | current | `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |
-| `core` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` | Core dotfiles and general developer tooling without agent, web, or mobile provisioners. |
-| `desktop` | current | `ghostty`, `warp`, `zed`, `rex`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
+| `agents` | current | `codex`, `claude` | Native configuration for Codex and Claude Code. |
+| `core` | current | `zsh`, `zimfw`, `git`, `starship`, `herdr`, `atuin`, `neovim`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` | Core dotfiles and general developer tooling without agent or mobile provisioners. |
+| `desktop` | current | `ghostty`, `rex`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
 | `mobile` | current | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `vscode-mobile` | Optional Dart and Flutter mobile development capabilities. |
-| `web` | current | `playwright`, `frontend-design`, `vercel-web-skills`, `claude-chrome-devtools`, `codex-chrome-devtools`, `opencode-chrome-devtools` | Optional frontend and browser workbench. |
-| `workstation` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq`, `ghostty`, `warp`, `zed`, `rex`, `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
+| `workstation` | current | `zsh`, `zimfw`, `git`, `starship`, `herdr`, `atuin`, `neovim`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq`, `ghostty`, `rex`, `codex`, `claude` | Composite core, desktop, and Agent CLI Baseline selection; mobile stays opt-in. |
 
 ### Tags
 
 | Tag | Kind | Status | Description | Replacement |
 |-----|------|--------|-------------|-------------|
 | `adaptive-theme` | surface | current | Opt-in adaptive-theme marker and supported app-specific sources or fragments. |  |
-| `agents` | compatibility | legacy | Legacy Agent CLI Baseline alias; use the five atomic Agent capability Tags. | `codex`, `claude`, `opencode`, `antigravity`, `copilot` |
+| `agents` | compatibility | legacy | Legacy Agent CLI Baseline alias; use the Codex and Claude capability Tags. | `codex`, `claude` |
 | `android-skills` | surface | current | Android CLI agent skill for Codex and Claude Code. |  |
-| `antigravity` | surface | current | Antigravity CLI requirement and dots-owned native configuration. |  |
 | `atuin` | surface | current | Atuin shell history configuration and Catppuccin theme. |  |
 | `bat` | surface | current | bat syntax-highlighting pager configuration. |  |
 | `bun` | surface | current | Bun JavaScript runtime and toolkit. |  |
 | `claude` | surface | current | Claude Code CLI requirement and dots-owned native configuration. |  |
-| `claude-chrome-devtools` | surface | current | Claude Chrome DevTools marketplace and plugin integration. |  |
 | `claude-dart-mcp` | surface | current | Claude Dart and Flutter MCP integration. |  |
-| `codegraph` | surface | current | Opt-in CodeGraph provisioner and Codex SessionStart hook source override. |  |
 | `codex` | surface | current | Codex CLI requirement and dots-owned native configuration. |  |
-| `codex-chrome-devtools` | surface | current | Codex Chrome DevTools MCP integration. |  |
 | `codex-dart-mcp` | surface | current | Codex Dart and Flutter MCP integration. |  |
 | `codexbar` | surface | current | CodexBar menu-bar monitor for AI coding-provider usage limits. |  |
-| `copilot` | surface | current | Copilot CLI requirement and dots-owned native configuration. |  |
-| `core` | compatibility | legacy | Legacy Core Development Baseline alias; use the atomic replacement Tags. | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` |
+| `core` | compatibility | legacy | Legacy Core Development Baseline alias; use the atomic replacement Tags. | `zsh`, `zimfw`, `git`, `starship`, `herdr`, `atuin`, `neovim`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` |
 | `dart-skills` | surface | current | Dart agent skills for Codex and Claude Code. |  |
 | `delta` | surface | current | Delta syntax-highlighting pager for Git diffs. |  |
-| `desktop` | compatibility | legacy | Legacy desktop alias; use the Ghostty, Warp, and Zed capability Tags. | `ghostty`, `warp`, `zed` |
+| `desktop` | compatibility | legacy | Legacy desktop alias; use the Ghostty capability Tag. | `ghostty` |
 | `eza` | surface | current | eza modern directory listing utility. |  |
 | `fd` | surface | current | fd filesystem search utility. |  |
 | `flutter-skills` | surface | current | Flutter agent skills for Codex and Claude Code. |  |
-| `frontend-design` | surface | current | Anthropic frontend design skill for supported agents. |  |
 | `fzf` | surface | current | fzf command-line fuzzy finder. |  |
 | `gh` | surface | current | GitHub CLI for repository and workflow operations. |  |
 | `ghostty` | surface | current | Ghostty terminal configuration and application requirement. |  |
@@ -153,24 +146,14 @@ from compact discovery unless `--all` is supplied.
 | `mobile` | compatibility | legacy | Legacy Mobile workbench alias; use the atomic mobile capability Tags. | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `vscode-mobile` |
 | `neovim` | surface | current | Neovim configuration and seeded plugin lockfile. |  |
 | `node` | surface | current | Node.js LTS toolchain managed through fnm. |  |
-| `opencode` | surface | current | OpenCode CLI requirement and dots-owned native configuration. |  |
-| `opencode-chrome-devtools` | surface | current | OpenCode Chrome DevTools JSON subset integration. |  |
-| `playwright` | surface | current | Playwright CLI dependency and upstream agent skill. |  |
 | `pnpm` | surface | current | pnpm JavaScript package manager. |  |
 | `rex` | surface | current | Rex terminal configuration and manually installed application. |  |
 | `ripgrep` | surface | current | ripgrep recursive text search utility. |  |
 | `rust` | surface | current | Rust stable toolchain managed through rustup. |  |
 | `starship` | surface | current | Starship prompt configuration. |  |
 | `theme-carbonfox` | surface | current | Optional dark Carbonfox palette for selected supported applications; overrides adaptive-theme. |  |
-| `tmux` | surface | current | Tmux terminal multiplexer configuration. |  |
-| `tuicr` | surface | current | tuicr terminal interface configuration. |  |
 | `uv` | surface | current | uv Python project and package manager. |  |
-| `vercel-web-skills` | surface | current | Vercel React and web design skills for supported agents. |  |
 | `vscode-mobile` | surface | current | VS Code Dart MCP settings for mobile development. |  |
-| `warp` | surface | current | Warp terminal settings and keybindings. |  |
-| `web` | compatibility | legacy | Legacy Web workbench alias; use the atomic web capability Tags. | `playwright`, `frontend-design`, `vercel-web-skills`, `claude-chrome-devtools`, `codex-chrome-devtools`, `opencode-chrome-devtools` |
-| `zed` | surface | current | Zed editor settings, keybindings, and authored theme. |  |
-| `zellij` | surface | current | Zellij terminal workspace configuration and default layout. |  |
 | `zimfw` | surface | current | Zim framework module configuration and managed runtime provisioning. |  |
 | `zoxide` | surface | current | zoxide smarter directory navigator. |  |
 | `zsh` | surface | current | Portable Zsh entrypoints and shell environment configuration. |  |
@@ -182,8 +165,8 @@ that invocation; they are not merged with an Installed Selection. These
 examples therefore repeat every intended Profile and Tag:
 
 ```bash
-# Compose core configuration with the optional web workbench.
-dots install --profile core --profile web
+# Compose core configuration with the optional mobile workbench.
+dots install --profile core --profile mobile
 
 # Add an optional capability to the complete workstation selection.
 dots install --profile workstation --tag adaptive-theme
@@ -212,16 +195,21 @@ Provisioners, and source overrides, but never authorize hidden built-in cleanup
 or historical migration behavior. Historical retirement uses sufficiently
 specific Installation Metadata receipts independently from current selection.
 
-The `web` and `mobile` Profiles are ordered presets over
-their atomic skill and agent-integration Tags. Their former broad Tags are
-hidden compatibility aliases with the same ordered replacements. The
-`adaptive-theme` and `codegraph` Tags remain single current global opt-ins:
-they apply only at supported consumer seams instead of multiplying into
-consumer-specific variants.
+The `mobile` Profile remains an ordered preset over its atomic skill and
+agent-integration Tags. Its former broad Tag remains a hidden compatibility
+alias. `adaptive-theme` and `theme-carbonfox` remain explicit opt-ins.
+See the [adaptive theme audit](adaptive-theme-audit.md) and
+[Carbonfox theme guide](carbonfox-theme.md).
 
-See the [adaptive theme audit](adaptive-theme-audit.md) and the
-[`codegraph` Provisioner specification](#codegraph-spec) for the detailed
-behavior behind those focused capabilities.
+The `web` Profile and retired tool/integration Tags are no longer offered.
+A saved explicit retired Tag or removed Profile stops selection resolution;
+choose a complete current selection with `dots install --profile workstation`
+(and optional `--profile mobile`, extra Tags or exclusions as needed) after
+reviewing `dots plan` with those same flags. dots does not silently rewrite the
+old intent. Any explicit reduction still needs its acknowledgement and ownership
+checks. Packages and Provisioner effects remain Retained External State.
+Inactive historical symlink sources stay at their original paths, as documented
+in [configuration sources](../configs/README.md).
 
 ## Tag-scoped Dependency Sets
 
@@ -231,11 +219,10 @@ ADR 0010 is now composed from atomic Dependency-only Tags: `node`, `rust`,
 `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`,
 `delta`, `fd`, `gh`, and `jq`. The internal `unzip` prerequisite follows the
 `node` Tag because the constrained fnm bootstrap consumes it; it is not an
-artificial catalog capability. The atomic `codex`, `claude`, `opencode`,
-`antigravity`, and `copilot` sets each pair one Agent CLI requirement with its
-Managed Configuration. An internal set selected by `claude` and `copilot`
-shares `jq` without making it a compulsory standalone selection. The Desktop
-Nerd Font is similarly selected by `ghostty`, `warp`, and `zed`. Linux Homebrew
+artificial catalog capability. The atomic `codex` and `claude` sets each pair one Agent CLI requirement with
+its Managed Configuration. An internal set selected by `claude` shares `jq`
+without making it a compulsory standalone selection. The Desktop Nerd Font is
+selected by `ghostty`. Linux Homebrew
 fallback is explicit with `linux_homebrew: true`; GUI apps and fonts stay manual
 unless they have validated Linux support. Node and Rust use constrained
 built-in toolchain bootstrap commands after manager installation:
@@ -247,7 +234,7 @@ must run first.
 The `codexbar` set is Darwin-only. It detects `CodexBar.app` in the supported
 macOS application locations and uses the Homebrew cask `codexbar` when the app
 is missing. The `desktop` Profile includes this independently selectable Tag;
-the legacy `desktop` alias expands only to `ghostty`, `warp`, and `zed`.
+the legacy `desktop` alias expands only to `ghostty`.
 Linux selections remain valid and omit the CodexBar Dependency.
 
 The `zsh` Selected Surface also selects `fzf`, `bat`, and `eza`, because its
@@ -378,44 +365,39 @@ Current Managed Entries:
 |--------|--------|----------|------|----|--------------|
 | `configs/zsh/loader.zsh` | `~/.zshrc` | `copy` (`marked-block`) | `zsh` | `darwin`, `linux` | `zsh` |
 | `configs/zsh/zshrc` | `~/.config/dots/zsh/zshrc` | `symlink` | `zsh` | `darwin`, `linux` | None |
-| `configs/zsh/zimrc` | `~/.zimrc` | `symlink` | `zimfw` | `darwin`, `linux` | `zsh` |
-| `configs/zsh/zshenv` | `~/.zshenv` | `symlink` | `zsh` | `darwin`, `linux` | `zsh` |
+| `configs/zsh/loader.zimrc` | `~/.zimrc` | `copy` (`marked-block`) | `zimfw` | `darwin`, `linux` | `zsh` |
+| `configs/zsh/zimrc` | `~/.config/dots/zsh/zimrc` | `symlink` | `zimfw` | `darwin`, `linux` | None |
+| `configs/zsh/loader.zshenv` | `~/.zshenv` | `copy` (`marked-block`) | `zsh` | `darwin`, `linux` | `zsh` |
+| `configs/zsh/zshenv` | `~/.config/dots/zsh/zshenv` | `symlink` | `zsh` | `darwin`, `linux` | None |
 | `configs/git/loader.gitconfig` | `~/.gitconfig` | `copy` (`marked-block`) | `git` | `darwin`, `linux` | `git` |
 | `configs/git/gitconfig` | `~/.config/dots/git/gitconfig` | `symlink` | `git` | `darwin`, `linux` | None |
-| `configs/tuicr/config.toml` | `~/.config/tuicr/config.toml` | `copy` | `tuicr` | `darwin`, `linux` | `tuicr`; owns TOML subset |
-| `configs/dots/theme.sh` | `~/.config/dots/theme.sh` | `symlink` | `tmux`, `neovim` | `darwin`, `linux` | None |
+| `configs/dots/theme.sh` | `~/.config/dots/theme.sh` | `symlink` | `neovim` | `darwin`, `linux` | None |
 | `configs/dots/adaptive-theme` | `~/.config/dots/adaptive-theme` | `symlink` | `adaptive-theme` | `darwin`, `linux` | None |
-| `configs/starship/starship.toml` | `~/.config/starship.toml` | `symlink` | `starship` | `darwin`, `linux` | `starship` |
-| `configs/tmux/tmux.conf` | `~/.tmux.conf` | `symlink` | `tmux` | `darwin`, `linux` | `tmux` |
-| `configs/herdr/config.toml` (`adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` | `herdr` | `darwin` | `herdr`; owns TOML subset |
-| `configs/herdr/status.sh` | `~/.config/herdr/status.sh` | `copy` | `herdr-metrics` | `darwin` | None; Tag-scoped optional `macmon` |
-| `configs/zellij/config.kdl` (`adaptive-theme` override: `configs/zellij/config-adaptive.kdl`) | `~/.config/zellij/config.kdl` | `copy` | `zellij` | `darwin`, `linux` | `zellij`; whole-target ownership |
-| `configs/zellij/layouts/default.kdl` | `~/.config/zellij/layouts/default.kdl` | `symlink` | `zellij` | `darwin`, `linux` | `zellij` |
-| `configs/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | `symlink` | `ghostty` | `darwin`, `linux` | `ghostty` |
+| `configs/starship/starship.toml` (`theme-carbonfox` override: `configs/starship/starship-carbonfox.toml`) | `~/.config/starship.toml` | `symlink` | `starship` | `darwin`, `linux` | `starship` |
+| `configs/herdr/config.toml` (`theme-carbonfox` override: `configs/herdr/config-carbonfox.toml`; `adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` (`toml-subset`) | `herdr` | `darwin` | `herdr` |
+| `configs/herdr-custom/config.toml` (`theme-carbonfox` override: `configs/herdr-custom/config-carbonfox.toml`; `adaptive-theme` override: `configs/herdr-custom/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` (`toml-subset`) | `herdr-custom` | `darwin`, `linux` | `herdr-custom` |
+| `configs/herdr/plugins/tabby.toml` | `~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml` | `copy` (`toml-subset`) | `herdr`, `herdr-custom` | `darwin` | None |
+| `configs/herdr/status.sh` | `~/.config/herdr/status.sh` | `copy` | `herdr-metrics` | `darwin` | None |
+| `configs/rex/init.lua` | `~/.config/rex/init.lua` | `copy` | `rex` | `darwin`, `linux` | `rex` |
+| `configs/rex/themes/Catppuccin Mocha Blue.ghostty` | `~/.config/rex/themes/Catppuccin Mocha Blue.ghostty` | `copy` | `rex` | `darwin`, `linux` | None |
+| `configs/ghostty/config.ghostty` (`theme-carbonfox` override: `configs/ghostty/config-carbonfox.ghostty`) | `~/.config/ghostty/config.ghostty` | `symlink` | `ghostty` | `darwin`, `linux` | `ghostty` |
 | `configs/ghostty/adaptive/adaptive-theme.ghostty` | `~/.config/ghostty/adaptive-theme.ghostty` | `symlink` | `adaptive-theme` | `darwin` | None |
-| `configs/warp/settings.toml` | `~/.warp/settings.toml` | `copy` | `warp` | `darwin` | None |
-| `configs/warp/keybindings.yaml` | `~/.warp/keybindings.yaml` | `copy` | `warp` | `darwin` | None |
-| `configs/warp/settings.toml` | `~/.config/warp-terminal/settings.toml` | `copy` | `warp` | `linux` | `Warp` |
-| `configs/warp/keybindings.yaml` | `~/.config/warp-terminal/keybindings.yaml` | `copy` | `warp` | `linux` | `Warp` |
-| `configs/atuin/config.toml` | `~/.config/atuin/config.toml` | `copy` | `atuin` | `darwin`, `linux` | `atuin`; owns TOML subset |
+| `configs/atuin/config.toml` (`theme-carbonfox` override: `configs/atuin/config-carbonfox.toml`) | `~/.config/atuin/config.toml` | `copy` (`toml-subset`) | `atuin` | `darwin`, `linux` | `atuin` |
 | `configs/atuin/themes/catppuccin-mocha.toml` | `~/.config/atuin/themes/catppuccin-mocha.toml` | `symlink` | `atuin` | `darwin`, `linux` | `atuin` |
-| `configs/bat/config` | `~/.config/bat/config` | `copy` | `bat`, `zsh` | `darwin`, `linux` | `bat`; whole-target ownership |
+| `configs/bat/config` (`theme-carbonfox` override: `configs/bat/config-carbonfox`) | `~/.config/bat/config` | `copy` | `bat`, `zsh` | `darwin`, `linux` | `bat` |
 | `configs/nvim/lazy-lock.json` | `$XDG_STATE_HOME/nvim/lazy-lock.json` | `copy` (`seeded`) | `neovim` | `darwin`, `linux` | None |
 | `configs/nvim/loader.lua` | `~/.config/nvim/init.lua` | `copy` | `neovim` | `darwin`, `linux` | `neovim` |
 | `configs/nvim` | `~/.config/dots/nvim` | `symlink` | `neovim` | `darwin`, `linux` | None |
-| `configs/zed/settings.json` | `~/.config/zed/settings.json` | `copy` (`jsonc-subset`) | `zed` | `darwin`, `linux` | `zed` |
-| `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | `copy` (`seeded`) | `zed` | `darwin`, `linux` | `zed` |
-| `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | `symlink` | `zed` | `darwin`, `linux` | `zed` |
-| `configs/claude/settings.json` | `~/.claude/settings.json` | `copy` | `claude` | `darwin`, `linux` | None; owns JSON subset |
+| `configs/claude/settings.json` (`theme-carbonfox` override: `configs/claude/settings-carbonfox.json`) | `~/.claude/settings.json` | `copy` (`json-subset`) | `claude` | `darwin`, `linux` | None |
 | `configs/claude/statusline-command.sh` | `~/.claude/statusline-command.sh` | `copy` | `claude` | `darwin`, `linux` | None |
-| `configs/codex/config.toml` (`codegraph` override: `configs/codex/config-codegraph.toml`) | `~/.codex/config.toml` | `copy` | `codex` | `darwin`, `linux` | None; owns TOML subset; CodeGraph tag adds a Codex SessionStart hook |
-| `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `copilot` | `darwin`, `linux` | None; owns JSON subset |
-| `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `copilot` | `darwin`, `linux` | None |
-| `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `antigravity` | `darwin`, `linux` | None; owns the broad Antigravity JSON baseline |
-| `configs/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` | `copy` | `vscode-mobile` | `darwin` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
-| `configs/vscode/settings.json` | `~/.config/Code/User/settings.json` | `copy` | `vscode-mobile` | `linux` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
-| `configs/opencode/opencode.json` | `~/.config/opencode/opencode.json` | `copy` | `opencode` | `darwin`, `linux` | None; owns only the native JSON baseline subset |
-| `configs/opencode/mcp.json` | `~/.config/opencode/opencode.json` | `copy` | `opencode-chrome-devtools` | `darwin`, `linux` | `opencode`; contributes the Chrome DevTools JSON subset alongside the native baseline |
+| `configs/codex/config.toml` | `~/.codex/config.toml` | `copy` (`toml-subset`) | `codex` | `darwin`, `linux` | None |
+| `configs/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` | `copy` (`json-subset`) | `vscode-mobile` | `darwin` | None |
+| `configs/vscode/settings.json` | `~/.config/Code/User/settings.json` | `copy` (`json-subset`) | `vscode-mobile` | `linux` | None |
+| `configs/dots/theme-carbonfox` | `~/.config/dots/theme-carbonfox` | `symlink` | `theme-carbonfox` | `darwin`, `linux` | None |
+| `configs/ghostty/themes/Carbonfox` | `~/.config/ghostty/themes/Carbonfox` | `symlink` | `ghostty` | `darwin`, `linux` | None |
+| `configs/atuin/themes/carbonfox.toml` | `~/.config/atuin/themes/carbonfox.toml` | `symlink` | `atuin` | `darwin`, `linux` | None |
+| `configs/themes/carbonfox.tmTheme` | `~/.config/bat/themes/Carbonfox.tmTheme` | `copy` | `bat`, `zsh` | `darwin`, `linux` | None |
+| `configs/claude/themes/carbonfox.json` | `~/.claude/themes/carbonfox.json` | `copy` | `claude` | `darwin`, `linux` | None |
 
 ## Dependencies
 
@@ -474,8 +456,6 @@ Current dependency package coverage:
 | `zsh` | `zsh` | `zsh` | `zsh` | `zsh` | `zsh` |
 | `git` | `git` | `git` | `git` | `git` | `git` |
 | `starship` | `starship` | `starship` | User-local / Linuxbrew opt-in/manual | `starship` | `starship` |
-| `tmux` | `tmux` | `tmux` | `tmux` | `tmux` | `tmux` |
-| `zellij` | `zellij` | `zellij` | User-local / Linuxbrew opt-in/manual | `zellij` | `zellij` |
 | `Node LTS (fnm)` | `fnm`, `node`; bootstrap `fnm install --lts` | `fnm` | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) | Linuxbrew opt-in or official fnm installer (`curl`, `bash`, `unzip`) |
 | `Rust stable (rustup)` | `rustup`, `rustc`, `cargo`; bootstrap `rustup default stable` | `rustup` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `go` | `go` | `go` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
@@ -491,18 +471,12 @@ Current dependency package coverage:
 | `unzip` | `unzip` | `unzip` | `unzip` | `unzip` | `unzip` |
 | `fd` | `fd` | `fd` | Linuxbrew opt-in/manual | `fd-find` | `fd` |
 | `GitHub CLI` | `gh` | `gh` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
-| `Playwright CLI` | `playwright-cli` | `playwright-cli` | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual | Linuxbrew opt-in/manual |
 | `ghostty` | `ghostty` or macOS `Ghostty.app` | `brew install --cask ghostty` | Manual; Ubuntu guidance includes Ghostty upstream binary docs, the community `.deb` installer command, and notes `snap install ghostty --classic` requires sudo/password interactivity | Manual | Manual |
-| `Warp` | `warp-terminal` | Manual | Manual | Manual | Manual |
 | `atuin` | `atuin` | `atuin` | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual | User-local / Linuxbrew opt-in/manual |
 | `bat` | `bat` | `bat` | User-local / Linuxbrew opt-in/manual | `bat` | `bat` |
 | `neovim` | `nvim` | `neovim` | User-local / Linuxbrew opt-in/manual | `neovim` | `neovim` |
-| `zed` | `zed` | `zed` | Manual | Manual | Manual |
 | `jq` | `jq` | `jq` | `jq` | `jq` | `jq` |
 | `macmon` (optional) | `macmon` | `macmon` (Apple Silicon only) | Not selected | Not selected | Not selected |
-| `OpenCode` | `opencode` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
-| `Antigravity` | `agy` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
-| `Copilot CLI` | `copilot` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `Claude Code` | `claude` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `Codex` | `codex` | Rolling user-local | Rolling user-local | Rolling user-local | Rolling user-local |
 | `dart` | `dart` | Manual | Manual; Ubuntu guidance points to Flutter SDK installation because `dart mcp-server` ships with Dart/Flutter tooling, then asks users to verify `dart --version` | Manual | Manual |
@@ -511,8 +485,7 @@ Current dependency package coverage:
 
 Reviewed Linuxbrew opt-ins include CLI/runtime tools whose Homebrew formulas are
 expected to work on Linuxbrew: Starship, the core runtimes/package tools, GitHub CLI,
-Playwright CLI, lazygit, delta, fd, and atuin. Brew-only GUI apps such
-as Ghostty and Zed remain manual on Linux.
+lazygit, delta, fd, and atuin. Ghostty remains manual on Linux.
 
 Homebrew dependencies declared with a fully-qualified tap formula may require
 explicit Homebrew Tap Trust on fresh macOS machines. `dots deps plan` and
@@ -578,6 +551,9 @@ Constraints:
 - Codex specs must not mix shared CodeGraph/skills fields or Claude fields.
 
 ### `codegraph` spec
+
+This provider remains supported for custom Install Manifests. The repository
+Source of Truth does not select or configure CodeGraph.
 
 Supported fields: `scope`, `agents`, and `yes`.
 
@@ -672,18 +648,19 @@ Current Provisioners:
 | Tool | Tags | OS | Rendered intent | Dependencies |
 |------|------|----|-----------------|--------------|
 | `zimfw` | `zimfw` | all | Install the ZimFW runtime under `~/.zim` when missing and run `zimfw init -q` using the dots-managed `~/.zimrc`. | `zsh`, `git`, `curl` |
-| `skills` | `playwright` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
-| `skills` | `frontend-design` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
-| `skills` | `vercel-web-skills` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `dart-skills` | all | Install the upstream Dart skill package from `dart-lang/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `flutter-skills` | all | Install the upstream Flutter skill package from `flutter/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `android-skills` | all | Install `android-cli` from `android/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `claude-dart-mcp` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `claude mcp add --transport stdio dart -- dart mcp-server`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `claude`, `dart` |
 | `codex` | `codex-dart-mcp` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `codex mcp add dart -- dart mcp-server --force-roots-fallback`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `codex`, `dart` |
-| `claude` | `claude-chrome-devtools` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
-| `claude` | `claude-chrome-devtools` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
-| `codex` | `codex-chrome-devtools` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
-| `codegraph` | `codegraph` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. Select with `--tag codegraph`. | `curl` |
+| `bat` | `bat`, `zsh` | `darwin`, `linux` | Build and validate the user-local Carbonfox theme cache only when `theme-carbonfox` is also selected. | `bat` |
+| `herdr` | `herdr` | `darwin` | Install `yersonargotev/herdr-tab-git` at pinned revision `21b2baa278f571fafa7a1247851a17754fbeedf0`. | `herdr`, `git`, `Node LTS (fnm)` |
+| `herdr` | `herdr` | `darwin` (arm64) | Install `yersonargotev/tabby` at pinned revision `19031d668f0f8a79b58591db4ce8bc8f8846e329`. | `herdr`, `git`, `python3`, `Rust stable (rustup)` |
+| `herdr` | `herdr` | `darwin` (arm64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr`, `git`, `curl`, `tar`, `pbcopy`, `open`, `Rust stable (rustup)` |
+| `herdr-custom` | `herdr-custom` | `darwin`, `linux` | Install `yersonargotev/herdr-tab-git` at pinned revision `21b2baa278f571fafa7a1247851a17754fbeedf0`. | `herdr-custom`, `git`, `Node LTS (fnm)` |
+| `herdr-custom` | `herdr-custom` | `darwin` (arm64) | Install `yersonargotev/tabby` at pinned revision `19031d668f0f8a79b58591db4ce8bc8f8846e329`. | `herdr-custom`, `git`, `python3`, `Rust stable (rustup)` |
+| `herdr-custom` | `herdr-custom` | `darwin` (arm64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr-custom`, `git`, `curl`, `tar`, `pbcopy`, `open`, `Rust stable (rustup)` |
+| `herdr-custom` | `herdr-custom` | `linux` (amd64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr-custom`, `git`, `curl`, `Rust stable (rustup)`, `C toolchain`, `tar`, `xdg-open`, `wl-copy`, `xclip`, `xsel` |
 
 ## Selection rules
 

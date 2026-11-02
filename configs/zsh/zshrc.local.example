@@ -7,7 +7,6 @@
 # --- Secrets ---------------------------------------------------------------
 
 # --- Machine-specific PATH -------------------------------------------------
-# export PATH="${HOME}/.antigravity/antigravity/bin:${PATH}"
 # export PATH="${HOME}/Documents/dev/yersonargotev/hippo/bin:${PATH}"
 # export PATH="${HOME}/.local/bin:${PATH}"
 

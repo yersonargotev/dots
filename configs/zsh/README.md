@@ -42,7 +42,7 @@ configs/zsh/
 │       ├── 30-path.zsh    # portable PATH additions (guarded)
 │       ├── 40-tools.zsh   # fzf/editor/zoxide/starship/atuin/fnm (guarded)
 │       ├── 50-aliases.zsh # eza listings (guarded)
-│       └── 60-ai.zsh      # Claude/Copilot knobs (no secrets)
+│       └── 60-ai.zsh      # Claude rendering knob (no secrets)
 └── zshrc.local.example    # template for machine-specific values + secrets
 ```
 

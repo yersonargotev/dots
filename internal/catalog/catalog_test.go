@@ -8,7 +8,7 @@ import (
 	"github.com/yersonargotev/dots/internal/manifest"
 )
 
-func TestRepositoryCatalogExposesAtomicWebAndMobileInventory(t *testing.T) {
+func TestRepositoryCatalogExposesFocusedAndMobileInventory(t *testing.T) {
 	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -19,10 +19,9 @@ func TestRepositoryCatalogExposesAtomicWebAndMobileInventory(t *testing.T) {
 	}
 
 	wantCurrent := []string{
-		"playwright", "frontend-design", "vercel-web-skills", "claude-chrome-devtools",
-		"codex-chrome-devtools", "opencode-chrome-devtools", "dart-skills", "flutter-skills",
-		"android-skills", "claude-dart-mcp", "codex-dart-mcp", "vscode-mobile",
-		"adaptive-theme", "codegraph", "herdr-metrics",
+		"codex", "claude", "ghostty", "rex", "codexbar", "herdr", "herdr-custom",
+		"dart-skills", "flutter-skills", "android-skills", "claude-dart-mcp",
+		"codex-dart-mcp", "vscode-mobile", "adaptive-theme", "theme-carbonfox", "herdr-metrics",
 	}
 	visible := make(map[string]bool, len(report.Tags))
 	for _, tag := range report.Tags {
@@ -47,11 +46,22 @@ func TestRepositoryCatalogExposesAtomicWebAndMobileInventory(t *testing.T) {
 	for _, tag := range all.Tags {
 		allNames[tag.Name] = true
 	}
-	for _, name := range []string{"web", "mobile"} {
+	for _, name := range []string{"mobile"} {
 		if !allNames[name] {
 			t.Errorf("legacy-inclusive repository catalog omitted compatibility Tag %q", name)
 		}
 	}
+	for _, retired := range []string{"web", "tmux", "zellij", "tuicr", "warp", "zed", "copilot", "opencode", "antigravity", "codegraph", "playwright", "frontend-design", "vercel-web-skills", "claude-chrome-devtools", "codex-chrome-devtools", "opencode-chrome-devtools"} {
+		if allNames[retired] {
+			t.Errorf("legacy-inclusive catalog offers retired Tag %q", retired)
+		}
+		for _, profile := range all.Profiles {
+			if profile.Name == retired {
+				t.Errorf("catalog offers retired Profile %q", retired)
+			}
+		}
+	}
+
 }
 
 func TestBuildHidesLegacyAndSortsDeclaredCatalog(t *testing.T) {

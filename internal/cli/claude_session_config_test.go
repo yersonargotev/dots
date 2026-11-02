@@ -24,7 +24,7 @@ func TestClaudeAutoModePreservesCoOwnedSettings(t *testing.T) {
 			settings["runtimeOnly"] = "keep"
 			permissions := settings["permissions"].(map[string]any)
 			permissions["ask"] = []string{"Bash(git push *)"}
-			permissions["allow"] = append(permissions["allow"].([]any), "Read(~/notes/**)")
+			permissions["allow"] = []any{"Read(~/notes/**)"}
 			data, err = json.Marshal(settings)
 			if err != nil {
 				t.Fatal(err)
