@@ -41,7 +41,7 @@ func linuxIncarnation(boot string, mask uint32, mount uint64, kind int32, handle
 		return "", errors.New("missing or invalid Linux boot UUID")
 	}
 	if mask&unix.STATX_MNT_ID_UNIQUE == 0 || mount == 0 || len(handle) == 0 || len(handle) > 128 {
-		return "", errors.New("Linux requires export handles and STATX_MNT_ID_UNIQUE (kernel 6.8+)")
+		return "", errors.New("linux requires export handles and STATX_MNT_ID_UNIQUE (kernel 6.8+)")
 	}
 	return fmt.Sprintf("linux:%s:%d:%d:%x", compact, mount, kind, handle), nil
 }
