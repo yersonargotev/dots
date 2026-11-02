@@ -37,6 +37,14 @@ The live `~/.config/ghostty/config` file was classified before adoption:
 | **Private** | secrets, authenticated state, private paths, hostnames, machine IDs | Excluded. |
 
 
+## Native terminal shortcuts
+
+Ghostty implements the [shared Rex/Ghostty shortcut table](../rex/README.md#shared-shortcuts)
+with its own split, tab and window actions. These replace the old Cmd+Shift+h/j/k/l
+Herdr forwarding sequences. Ghostty does not require or control Rex. The resize
+key table requires Ghostty 1.3 or later; Catppuccin and Carbonfox variants use the
+same bindings. Other portable preferences and local overrides are retained.
+
 ## Adaptive theme opt-in
 
 Fresh installs keep the Mocha theme from `config.ghostty`. When the user selects

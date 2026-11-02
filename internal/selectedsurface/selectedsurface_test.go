@@ -231,6 +231,7 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		{tag: "fd", osName: "linux", dependencies: []string{"fd"}},
 		{tag: "gh", osName: "linux", dependencies: []string{"GitHub CLI"}},
 		{tag: "jq", osName: "linux", dependencies: []string{"jq"}},
+		{tag: "rex", osName: "linux", entries: []string{"~/.config/rex/init.lua", "~/.config/rex/themes/Catppuccin Mocha Blue.ghostty"}, dependencies: []string{"rex"}},
 		{tag: "ghostty", osName: "linux", entries: []string{"~/.config/ghostty/config.ghostty", "~/.config/ghostty/themes/Carbonfox"}, dependencies: []string{"Desktop Nerd Font", "ghostty"}},
 		{tag: "warp", osName: "linux", entries: []string{"~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml", "~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml"}, dependencies: []string{"Desktop Nerd Font", "Warp"}},
 		{tag: "zed", osName: "linux", entries: []string{"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json", "~/.config/zed/themes/carbonfox.json"}, dependencies: []string{"Desktop Nerd Font", "zed"}},
@@ -290,21 +291,23 @@ func TestRepositoryDesktopAndAgentProfilesPreserveCapabilitySurfaces(t *testing.
 			profile: "desktop",
 			osName:  "darwin",
 			entries: []string{
+				"~/.config/rex/init.lua", "~/.config/rex/themes/Catppuccin Mocha Blue.ghostty",
 				"~/.config/ghostty/config.ghostty", "~/.warp/settings.toml", "~/.warp/keybindings.yaml",
 				"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json",
 				"~/.config/ghostty/themes/Carbonfox", "~/.warp/themes/carbonfox/carbonfox.yaml", "~/.config/zed/themes/carbonfox.json",
 			},
-			dependencies: []string{"Desktop Nerd Font", "CodexBar", "ghostty", "zed"},
+			dependencies: []string{"Desktop Nerd Font", "CodexBar", "rex", "ghostty", "zed"},
 		},
 		{
 			profile: "desktop",
 			osName:  "linux",
 			entries: []string{
+				"~/.config/rex/init.lua", "~/.config/rex/themes/Catppuccin Mocha Blue.ghostty",
 				"~/.config/ghostty/config.ghostty", "~/.config/warp-terminal/settings.toml", "~/.config/warp-terminal/keybindings.yaml",
 				"~/.config/zed/settings.json", "~/.config/zed/keymap.json", "~/.config/zed/themes/catppuccin-blue.json",
 				"~/.config/ghostty/themes/Carbonfox", "~/.local/share/warp-terminal/themes/carbonfox/carbonfox.yaml", "~/.config/zed/themes/carbonfox.json",
 			},
-			dependencies: []string{"Desktop Nerd Font", "ghostty", "Warp", "zed"},
+			dependencies: []string{"Desktop Nerd Font", "rex", "ghostty", "Warp", "zed"},
 		},
 		{
 			profile: "agents",

@@ -876,7 +876,7 @@ func TestRepositoryManifestDeclaresAtomicDesktopCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveSelection(desktop) error = %v", err)
 	}
-	if want := []string{"ghostty", "warp", "zed", "codexbar"}; !reflect.DeepEqual(selection.Tags, want) {
+	if want := []string{"ghostty", "warp", "zed", "rex", "codexbar"}; !reflect.DeepEqual(selection.Tags, want) {
 		t.Fatalf("desktop selection tags = %#v, want %#v", selection.Tags, want)
 	}
 	legacySelection, err := manifest.ResolveSelection(*got, nil, []string{"desktop"})
@@ -1006,9 +1006,9 @@ func TestRepositoryManifestDeclaresAtomicAgentCapabilities(t *testing.T) {
 		t.Errorf("agents selected legacy Provisioners = %#v, want none", selected)
 	}
 
-	wantWorkstation := append(append(append([]string(nil), got.Profiles["core"].Tags...), got.Profiles["desktop"].Tags[:3]...), capabilityTags...)
+	wantWorkstation := append(append(append([]string(nil), got.Profiles["core"].Tags...), got.Profiles["desktop"].Tags[:4]...), capabilityTags...)
 	if profile := got.Profiles["workstation"]; !reflect.DeepEqual(profile.Tags, wantWorkstation) {
-		t.Fatalf("workstation Profile Tags = %#v, want core + Ghostty/Warp/Zed + Agent capability Tags %#v", profile.Tags, wantWorkstation)
+		t.Fatalf("workstation Profile Tags = %#v, want core + Ghostty/Warp/Zed/Rex + Agent capability Tags %#v", profile.Tags, wantWorkstation)
 	}
 
 	for i, set := range got.Dependencies {
@@ -3897,7 +3897,7 @@ func TestRepositoryManifestDeclaresAtomicCoreCapabilitySelection(t *testing.T) {
 		t.Fatalf("core Profile Tags = %#v, want %#v", profile.Tags, wantTags)
 	}
 	wantWorkstation := append(append([]string(nil), wantTags...),
-		"ghostty", "warp", "zed", "codex", "claude", "opencode", "antigravity", "copilot")
+		"ghostty", "warp", "zed", "rex", "codex", "claude", "opencode", "antigravity", "copilot")
 	if profile := got.Profiles["workstation"]; !reflect.DeepEqual(profile.Tags, wantWorkstation) {
 		t.Fatalf("workstation Profile Tags = %#v, want %#v", profile.Tags, wantWorkstation)
 	}

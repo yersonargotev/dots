@@ -269,14 +269,14 @@ func TestRepositoryCarbonfoxProfileAndExplicitTagsHaveEquivalentEffectiveTags(t 
 		"--file", profile.manifestPath, "--home", profile.home, "--source-root", profile.repositoryRoot, "--state-root", profile.stateRoot,
 	)
 	explicit := newCarbonfoxFixture(t, "linux")
-	explicit.install(t, false, "ghostty", "warp", "zed", "codexbar", carbonfoxTag)
+	explicit.install(t, false, "ghostty", "warp", "zed", "rex", "codexbar", carbonfoxTag)
 
 	profileSelection := profile.metadata(t).InstalledSelection
 	explicitSelection := explicit.metadata(t).InstalledSelection
 	if profileSelection == nil || explicitSelection == nil || !reflect.DeepEqual(profileSelection.ResolvedTags, explicitSelection.ResolvedTags) {
 		t.Fatalf("profile effective Tags = %#v, explicit effective Tags = %#v", profileSelection, explicitSelection)
 	}
-	if want := []string{"ghostty", "warp", "zed", "codexbar", carbonfoxTag}; !reflect.DeepEqual(profileSelection.ResolvedTags, want) {
+	if want := []string{"ghostty", "warp", "zed", "rex", "codexbar", carbonfoxTag}; !reflect.DeepEqual(profileSelection.ResolvedTags, want) {
 		t.Fatalf("desktop + Carbonfox effective Tags = %#v, want %#v", profileSelection.ResolvedTags, want)
 	}
 	for _, item := range []struct{ target, source string }{
