@@ -346,6 +346,7 @@ func TestSelectionExclusionsUpdateProfileEvolutionAndStaleIntent(t *testing.T) {
 					if err := json.Unmarshal([]byte(out), &env); err != nil {
 						t.Fatal(err)
 					}
+					assertGolden(t, "selection_exclusion_evolution_error.golden", []byte(out))
 					if !reflect.DeepEqual(env.Data.Delta.StaleExcludedTags, []string{"official"}) || !reflect.DeepEqual(env.Data.Delta.Previous.ExcludedTags, []string{"official"}) || !reflect.DeepEqual(env.Data.Delta.Current.ExcludedTags, []string{"official"}) {
 						t.Fatalf("missing blocking exclusion delta: %s", out)
 					}
