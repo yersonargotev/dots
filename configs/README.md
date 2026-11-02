@@ -1,13 +1,13 @@
 # Configuration sources
 
-`dots.yaml` defines the offered Managed Entries. Files outside that manifest
-are not selected or installed by the current Profiles or Tags.
+`dots.yaml` defines the offered Managed Entries. The inactive directories
+described below are not selected or installed by current Profiles or Tags.
 
-The retired tmux, Zellij, tuicr, Warp and Zed directories retain only sources
-that earlier manifests installed as symlinks (including their source override
+The retired tmux, Zellij, tuicr, Warp, Zed and OpenCode directories retain only sources
+that any earlier manifest installed as symlinks (including their source override
 variants). They remain at their original paths so refreshing the Source of Truth
 does not break existing workstation links. The shared TextMate Carbonfox asset
-also remains in use by bat. Retired copied configuration and integrations have
+also remains in use by bat. Retired sources that have always been installed as copies have
 been removed from the Source of Truth.
 
 These inactive files do not restore retired capabilities to the catalog. Their

@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,47 +29,58 @@ func TestRepositoryRetainedAgentConfigurationOmitsRetiredIntegrations(t *testing
 
 func TestRepositoryProfileEvolutionRetainsPreviouslyInstalledConfiguration(t *testing.T) {
 	f := newCarbonfoxFixture(t, "linux")
-	previousRoot := t.TempDir()
-	previousManifest := filepath.Join(previousRoot, "dots.yaml")
-	for name, content := range map[string]string{
-		"dots.yaml": `version: 1
-tags:
-  tmux:
-    kind: surface
-    status: current
-profiles:
-  core:
-    tags: [tmux]
-entries:
-  - source: configs/tmux/tmux.conf
-    target: ~/.tmux.conf
-    strategy: symlink
-    tags: [tmux]
-`,
-	} {
-		if err := os.WriteFile(filepath.Join(previousRoot, name), []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	previousManifest := filepath.Join(t.TempDir(), "dots.yaml")
+	// Distinct sandbox targets cover former baseline and source-override links
+	// together, including installations predating the copy/seeded migrations.
+	sources := []string{
+		"configs/tmux/tmux.conf",
+		"configs/zellij/layouts/default.kdl",
+		"configs/zellij/layouts/default-carbonfox.kdl",
+		"configs/zed/themes/catppuccin-blue.json",
+		"configs/tmux/carbonfox.conf",
+		"configs/zellij/themes/carbonfox.kdl",
+		"configs/warp/themes/carbonfox/carbonfox.yaml",
+		"configs/tuicr/themes/carbonfox.toml",
+		"configs/zed/themes/carbonfox.json",
+		"configs/zellij/config.kdl",
+		"configs/zellij/config-adaptive.kdl",
+		"configs/zed/keymap.json",
+		"configs/zed/settings.json",
+		"configs/opencode/mcp.json",
+	}
+	previous := "version: 1\nprofiles:\n  core:\n    tags: [retired]\nentries:\n"
+	for i, source := range sources {
+		previous += fmt.Sprintf("  - source: %s\n    target: ~/.retired-sources/%d\n    strategy: symlink\n    tags: [retired]\n", source, i)
+	}
+	if err := os.WriteFile(previousManifest, []byte(previous), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	f.run(t, ExitOK, "install", "--yes", "--skip-deps", "--profile", "core",
 		"--file", previousManifest, "--source-root", f.repositoryRoot, "--home", f.home, "--state-root", f.stateRoot)
-	target := filepath.Join(f.home, ".tmux.conf")
-	before := mustReadCarbonfoxFile(t, target)
+	before := make(map[string][]byte)
+	for i := range sources {
+		target := filepath.Join(f.home, ".retired-sources", fmt.Sprint(i))
+		before[target] = mustReadCarbonfoxFile(t, target)
+	}
 	args := []string{"--profile", "core", "--file", f.manifestPath, "--source-root", f.repositoryRoot, "--home", f.home, "--state-root", f.stateRoot}
 	f.run(t, ExitOK, append([]string{"install", "--yes", "--skip-deps"}, args...)...)
-	if got := mustReadCarbonfoxFile(t, target); !bytes.Equal(got, before) {
-		t.Fatalf("Profile evolution changed retired target: %q", got)
-	}
-	if _, ok := f.metadata(t).FindByTarget(target); !ok {
-		t.Fatal("Profile evolution discarded ownership of the retired target")
+	for target, content := range before {
+		assertCarbonfoxFileBytes(t, target, content, "Profile evolution changed historical symlink content")
+		if _, ok := f.metadata(t).FindByTarget(target); !ok {
+			t.Fatalf("Profile evolution discarded historical ownership: %s", target)
+		}
 	}
 	metadataBefore := mustReadCarbonfoxFile(t, state.Path(f.stateRoot))
 	// An explicit reduction still requires acknowledgement before mutation.
 	reduced := []string{"install", "--yes", "--skip-deps", "--tag", "starship", "--file", f.manifestPath, "--source-root", f.repositoryRoot, "--home", f.home, "--state-root", f.stateRoot}
 	f.run(t, ExitError, reduced...)
 	assertCarbonfoxFileBytes(t, state.Path(f.stateRoot), metadataBefore, "unacknowledged reduction changed Installation Metadata")
-	assertCarbonfoxFileBytes(t, target, before, "unacknowledged reduction changed retired target")
+	for target, content := range before {
+		assertCarbonfoxFileBytes(t, target, content, "unacknowledged reduction changed retired target")
+	}
 	f.run(t, ExitOK, append(reduced, "--acknowledge-selection-change")...)
-	assertCarbonfoxFileBytes(t, target, before, "explicit reduction removed manifest-retired historical target")
+	for target, content := range before {
+		assertCarbonfoxFileBytes(t, target, content, "explicit reduction removed historical target")
+	}
 	assertCarbonfoxInheritedHomeEmpty(t, f.realHome)
 }
