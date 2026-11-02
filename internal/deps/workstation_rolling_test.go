@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -246,6 +247,73 @@ func TestWorkstationRollingProvidersRejectUnverifiableMetadata(t *testing.T) {
 				_, err := Plan(rollingManifest(rollingDependency(tt.recipe, tt.command)), Options{Profile: "default", OS: "linux", Arch: "amd64", Home: t.TempDir(), HTTPClient: server.Client(), RollingReleaseURL: server.URL}, func(string) bool { return false }, nil, TierGeneric)
 				if err == nil {
 					t.Fatal("unverifiable metadata was accepted")
+				}
+			})
+		}
+	}
+}
+
+type workstationMetadataTransport func(*http.Request) (*http.Response, error)
+
+func (f workstationMetadataTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestWorkstationRollingProvidersRequireOfficialImmutableURLs(t *testing.T) {
+	for _, tt := range []struct{ recipe, command, repository, version, asset string }{
+		{"uv", "uv", "astral-sh/uv", "0.13.6", "uv-x86_64-unknown-linux-gnu.tar.gz"},
+		{"pnpm-standalone", "pnpm", "pnpm/pnpm", "v12.16.1", "pnpm-linux-x64.tar.gz"},
+		{"bun", "bun", "oven-sh/bun", "bun-v1.4.4", "bun-linux-x64.zip"},
+		{"gh", "gh", "cli/cli", "v2.103.3", "gh_2.103.3_linux_amd64.tar.gz"},
+	} {
+		for _, scenario := range []string{"valid", "wrong repository", "wrong version", "wrong asset", "wrong host", "insecure URL", "malformed digest"} {
+			t.Run(tt.recipe+"/"+scenario, func(t *testing.T) {
+				url := "https://github.com/" + tt.repository + "/releases/download/" + tt.version + "/" + tt.asset
+				digest := "sha256:" + strings.Repeat("a", 64)
+				switch scenario {
+				case "wrong repository":
+					url = strings.Replace(url, "/"+tt.repository+"/", "/untrusted/fork/", 1)
+				case "wrong version":
+					url = strings.Replace(url, "/"+tt.version+"/", "/other-version/", 1)
+				case "wrong asset":
+					url += ".unexpected"
+				case "wrong host":
+					url = strings.Replace(url, "github.com", "untrusted.invalid", 1)
+				case "insecure URL":
+					url = strings.Replace(url, "https:", "http:", 1)
+				case "malformed digest":
+					digest = "sha256:invalid"
+				}
+				body, err := json.Marshal(githubRelease{TagName: tt.version, Assets: []githubReleaseAsset{{Name: tt.asset, BrowserDownloadURL: url, Digest: digest}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				client := &http.Client{Transport: workstationMetadataTransport(func(r *http.Request) (*http.Response, error) {
+					if r.URL.String() != "https://api.github.com/repos/"+tt.repository+"/releases/latest" {
+						t.Errorf("unexpected metadata authority: %s", r.URL)
+					}
+					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(body))), Header: make(http.Header)}, nil
+				})}
+				opts := Options{Profile: "default", OS: "linux", Arch: "amd64", Home: t.TempDir(), HTTPClient: client}
+				m := rollingManifest(rollingDependency(tt.recipe, tt.command))
+				report, err := Plan(m, opts, func(string) bool { return false }, nil, TierGeneric)
+				if scenario != "valid" {
+					if err == nil {
+						t.Fatal("untrusted official artifact identity accepted")
+					}
+					return
+				}
+				if err != nil || len(report.Actions) != 1 || report.Actions[0].UserLocal.URL != url {
+					t.Fatalf("official immutable identity rejected: %+v, %v", report, err)
+				}
+				// A prepared version-qualified gh asset must remain pinned too.
+				opts.ResolvedUserLocal = map[string]UserLocalArtifact{tt.recipe: *report.Actions[0].UserLocal}
+				opts.HTTPClient = &http.Client{Transport: workstationMetadataTransport(func(*http.Request) (*http.Response, error) {
+					return nil, errors.New("prepared artifact must not resolve latest again")
+				})}
+				report, err = Plan(m, opts, func(string) bool { return false }, nil, TierGeneric)
+				if err != nil || len(report.Actions) != 1 || report.Actions[0].UserLocal.URL != url {
+					t.Fatalf("prepared artifact changed: %+v, %v", report, err)
 				}
 			})
 		}
