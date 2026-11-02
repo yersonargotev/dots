@@ -108,7 +108,7 @@ from compact discovery unless `--all` is supplied.
 | `agents` | current | `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |
 | `core` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` | Core dotfiles and general developer tooling without agent, web, or mobile provisioners. |
 | `desktop` | current | `ghostty`, `warp`, `zed`, `rex`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
-| `mobile` | current | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `antigravity-dart-mcp`, `vscode-mobile` | Optional Dart and Flutter mobile development capabilities. |
+| `mobile` | current | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `vscode-mobile` | Optional Dart and Flutter mobile development capabilities. |
 | `web` | current | `playwright`, `frontend-design`, `vercel-web-skills`, `claude-chrome-devtools`, `codex-chrome-devtools`, `opencode-chrome-devtools` | Optional frontend and browser workbench. |
 | `workstation` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq`, `ghostty`, `warp`, `zed`, `rex`, `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
 
@@ -118,9 +118,8 @@ from compact discovery unless `--all` is supplied.
 |-----|------|--------|-------------|-------------|
 | `adaptive-theme` | surface | current | Opt-in adaptive-theme marker and supported app-specific sources or fragments. |  |
 | `agents` | compatibility | legacy | Legacy Agent CLI Baseline alias; use the five atomic Agent capability Tags. | `codex`, `claude`, `opencode`, `antigravity`, `copilot` |
-| `android-skills` | surface | current | Android CLI agent skill for supported agents. |  |
+| `android-skills` | surface | current | Android CLI agent skill for Codex and Claude Code. |  |
 | `antigravity` | surface | current | Antigravity CLI requirement and dots-owned native configuration. |  |
-| `antigravity-dart-mcp` | surface | current | Antigravity Dart and Flutter MCP settings contribution. |  |
 | `atuin` | surface | current | Atuin shell history configuration and Catppuccin theme. |  |
 | `bat` | surface | current | bat syntax-highlighting pager configuration. |  |
 | `bun` | surface | current | Bun JavaScript runtime and toolkit. |  |
@@ -134,12 +133,12 @@ from compact discovery unless `--all` is supplied.
 | `codexbar` | surface | current | CodexBar menu-bar monitor for AI coding-provider usage limits. |  |
 | `copilot` | surface | current | Copilot CLI requirement and dots-owned native configuration. |  |
 | `core` | compatibility | legacy | Legacy Core Development Baseline alias; use the atomic replacement Tags. | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` |
-| `dart-skills` | surface | current | Dart agent skills for supported agents. |  |
+| `dart-skills` | surface | current | Dart agent skills for Codex and Claude Code. |  |
 | `delta` | surface | current | Delta syntax-highlighting pager for Git diffs. |  |
 | `desktop` | compatibility | legacy | Legacy desktop alias; use the Ghostty, Warp, and Zed capability Tags. | `ghostty`, `warp`, `zed` |
 | `eza` | surface | current | eza modern directory listing utility. |  |
 | `fd` | surface | current | fd filesystem search utility. |  |
-| `flutter-skills` | surface | current | Flutter agent skills for supported agents. |  |
+| `flutter-skills` | surface | current | Flutter agent skills for Codex and Claude Code. |  |
 | `frontend-design` | surface | current | Anthropic frontend design skill for supported agents. |  |
 | `fzf` | surface | current | fzf command-line fuzzy finder. |  |
 | `gh` | surface | current | GitHub CLI for repository and workflow operations. |  |
@@ -151,7 +150,7 @@ from compact discovery unless `--all` is supplied.
 | `herdr-metrics` | surface | current | Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS. |  |
 | `jq` | surface | current | jq command-line JSON processor. |  |
 | `lazygit` | surface | current | Lazygit terminal interface for Git. |  |
-| `mobile` | compatibility | legacy | Legacy Mobile workbench alias; use the atomic mobile capability Tags. | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `antigravity-dart-mcp`, `vscode-mobile` |
+| `mobile` | compatibility | legacy | Legacy Mobile workbench alias; use the atomic mobile capability Tags. | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `vscode-mobile` |
 | `neovim` | surface | current | Neovim configuration and seeded plugin lockfile. |  |
 | `node` | surface | current | Node.js LTS toolchain managed through fnm. |  |
 | `opencode` | surface | current | OpenCode CLI requirement and dots-owned native configuration. |  |
@@ -213,7 +212,7 @@ Provisioners, and source overrides, but never authorize hidden built-in cleanup
 or historical migration behavior. Historical retirement uses sufficiently
 specific Installation Metadata receipts independently from current selection.
 
-The `web` and `mobile` Profiles are behavior-preserving ordered presets over
+The `web` and `mobile` Profiles are ordered presets over
 their atomic skill and agent-integration Tags. Their former broad Tags are
 hidden compatibility aliases with the same ordered replacements. The
 `adaptive-theme` and `codegraph` Tags remain single current global opt-ins:
@@ -413,7 +412,6 @@ Current Managed Entries:
 | `configs/copilot/settings.json` | `~/.copilot/settings.json` | `copy` | `copilot` | `darwin`, `linux` | None; owns JSON subset |
 | `configs/copilot/statusline-command.sh` | `~/.copilot/statusline-command.sh` | `copy` | `copilot` | `darwin`, `linux` | None |
 | `configs/antigravity/settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `antigravity` | `darwin`, `linux` | None; owns the broad Antigravity JSON baseline |
-| `configs/antigravity/mobile-mcp-settings.json` | `~/.gemini/antigravity-cli/settings.json` | `copy` | `antigravity-dart-mcp` | `darwin`, `linux` | None; owns only the Dart/Flutter MCP JSON subset |
 | `configs/vscode/settings.json` | `~/Library/Application Support/Code/User/settings.json` | `copy` | `vscode-mobile` | `darwin` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
 | `configs/vscode/settings.json` | `~/.config/Code/User/settings.json` | `copy` | `vscode-mobile` | `linux` | None; owns JSON subset enabling Dart MCP for GitHub Copilot in VS Code |
 | `configs/opencode/opencode.json` | `~/.config/opencode/opencode.json` | `copy` | `opencode` | `darwin`, `linux` | None; owns only the native JSON baseline subset |
@@ -677,9 +675,9 @@ Current Provisioners:
 | `skills` | `playwright` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
 | `skills` | `frontend-design` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `vercel-web-skills` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
-| `skills` | `dart-skills` | all | Install the upstream Dart skill package from `dart-lang/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
-| `skills` | `flutter-skills` | all | Install the upstream Flutter skill package from `flutter/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
-| `skills` | `android-skills` | all | Install `android-cli` from `android/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `dart-skills` | all | Install the upstream Dart skill package from `dart-lang/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `flutter-skills` | all | Install the upstream Flutter skill package from `flutter/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
+| `skills` | `android-skills` | all | Install `android-cli` from `android/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `claude-dart-mcp` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `claude mcp add --transport stdio dart -- dart mcp-server`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `claude`, `dart` |
 | `codex` | `codex-dart-mcp` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `codex mcp add dart -- dart mcp-server --force-roots-fallback`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `codex`, `dart` |
 | `claude` | `claude-chrome-devtools` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |

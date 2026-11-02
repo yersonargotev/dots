@@ -791,7 +791,6 @@ func TestRepositoryManifestIncludesMobileAgentMCPConfigEntries(t *testing.T) {
 		target string
 		tag    string
 	}{
-		{source: "configs/antigravity/mobile-mcp-settings.json", target: "~/.gemini/antigravity-cli/settings.json", tag: "antigravity-dart-mcp"},
 		{source: "configs/vscode/settings.json", target: "~/Library/Application Support/Code/User/settings.json", tag: "vscode-mobile"},
 		{source: "configs/vscode/settings.json", target: "~/.config/Code/User/settings.json", tag: "vscode-mobile"},
 	}
@@ -1041,7 +1040,7 @@ func TestRepositoryManifestDeclaresAtomicWebAndMobileCapabilities(t *testing.T) 
 		},
 		"mobile": {
 			"dart-skills", "flutter-skills", "android-skills", "claude-dart-mcp",
-			"codex-dart-mcp", "antigravity-dart-mcp", "vscode-mobile",
+			"codex-dart-mcp", "vscode-mobile",
 		},
 	}
 	for name, wantTags := range wantProfiles {
@@ -1149,7 +1148,6 @@ func TestRepositoryAtomicAgentCompositionAndCodexSourceOverride(t *testing.T) {
 		sources []string
 	}{
 		{name: "OpenCode baseline plus Chrome DevTools subset", tags: []string{"opencode", "opencode-chrome-devtools"}, target: "~/.config/opencode/opencode.json", sources: []string{"configs/opencode/opencode.json", "configs/opencode/mcp.json"}},
-		{name: "Antigravity baseline plus Dart MCP subset", tags: []string{"antigravity", "antigravity-dart-mcp"}, target: "~/.gemini/antigravity-cli/settings.json", sources: []string{"configs/antigravity/settings.json", "configs/antigravity/mobile-mcp-settings.json"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1379,7 +1377,7 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 	if !ok {
 		t.Fatal("repository manifest missing mobile profile")
 	}
-	wantMobileTags := []string{"dart-skills", "flutter-skills", "android-skills", "claude-dart-mcp", "codex-dart-mcp", "antigravity-dart-mcp", "vscode-mobile"}
+	wantMobileTags := []string{"dart-skills", "flutter-skills", "android-skills", "claude-dart-mcp", "codex-dart-mcp", "vscode-mobile"}
 	if !sameStrings(mobile.Tags, wantMobileTags) {
 		t.Fatalf("mobile profile tags = %#v, want %#v", mobile.Tags, wantMobileTags)
 	}
@@ -1410,8 +1408,8 @@ func TestRepositoryManifestMobileProfileIncludesMobileSkills(t *testing.T) {
 			if !sameStrings(skills.Tags, []string{pkg.tag}) {
 				t.Errorf("skills provisioner tags = %#v, want [%s]", skills.Tags, pkg.tag)
 			}
-			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code", "antigravity", "opencode", "github-copilot"}) {
-				t.Errorf("skills provisioner agents = %#v, want [codex claude-code antigravity opencode github-copilot]", skills.Spec.Agents)
+			if !sameStrings(skills.Spec.Agents, []string{"codex", "claude-code"}) {
+				t.Errorf("skills provisioner agents = %#v, want [codex claude-code]", skills.Spec.Agents)
 			}
 			if !sameStrings(skills.Spec.Skills, pkg.wantSkills) {
 				t.Errorf("skills provisioner skills = %#v, want %#v", skills.Spec.Skills, pkg.wantSkills)
