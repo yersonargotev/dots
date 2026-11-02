@@ -191,6 +191,67 @@ func TestRepositoryProfilesMatchEquivalentExplicitTagsAcrossSupportedOS(t *testi
 	}
 }
 
+func TestRepositoryMobileSurfaceIsOptionalAndLimitedToCodexClaudeAndVSCode(t *testing.T) {
+	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.Tags["antigravity-dart-mcp"]; ok {
+		t.Fatal("retired Antigravity mobile Tag is still offered")
+	}
+	for _, osName := range []string{"darwin", "linux"} {
+		t.Run(osName, func(t *testing.T) {
+			selection, err := manifest.ResolveReadOnlySelection(*m, []string{"mobile"}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mobile := selectedsurface.Evaluate(*m, selection.Tags, osName)
+			if len(mobile.Entries) != 1 || mobile.Entries[0].Source != "configs/vscode/settings.json" {
+				t.Fatalf("mobile Managed Entries = %#v, want VS Code only", mobile.Entries)
+			}
+			if len(mobile.Provisioners) != 5 {
+				t.Fatalf("mobile Provisioners = %#v, want three skills and two MCP providers", mobile.Provisioners)
+			}
+			for _, provider := range mobile.Provisioners {
+				if provider.Tool == "skills" {
+					if !reflect.DeepEqual(provider.Spec.Agents, []string{"codex", "claude-code"}) {
+						t.Fatalf("mobile skills consumers = %#v", provider.Spec.Agents)
+					}
+				} else if (provider.Tool != "claude" && provider.Tool != "codex") || provider.Spec.MCP != "dart" {
+					t.Fatalf("unexpected mobile provider: %#v", provider)
+				}
+			}
+			foundDart := false
+			for _, dep := range mobile.Dependencies {
+				if dep.Name == "dart" {
+					foundDart = true
+					if dep.Brew != "" || dep.BrewCask != "" || dep.Apt != "" || dep.Dnf != "" || dep.Pacman != "" || dep.Toolchain != "" || dep.UserLocal != nil || dep.RollingUserLocal != nil {
+						t.Fatalf("Dart SDK must remain manual: %#v", dep)
+					}
+				}
+			}
+			if !foundDart {
+				t.Fatal("mobile lost its manual Dart prerequisite")
+			}
+			workstation, err := manifest.ResolveReadOnlySelection(*m, []string{"workstation"}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, tag := range selection.Tags {
+				for _, baseline := range workstation.Tags {
+					if tag == baseline {
+						t.Fatalf("workstation implicitly selects mobile capability %s", tag)
+					}
+				}
+			}
+			legacy, err := manifest.ResolveReadOnlySelection(*m, nil, []string{"mobile"})
+			if err != nil || !reflect.DeepEqual(mobile, selectedsurface.Evaluate(*m, legacy.Tags, osName)) {
+				t.Fatalf("legacy mobile alias differs from Profile: %v", err)
+			}
+		})
+	}
+}
+
 func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T) {
 	m, err := manifest.LoadFile(filepath.Join("..", "..", "dots.yaml"))
 	if err != nil {
@@ -251,7 +312,6 @@ func TestRepositoryAtomicCapabilityTagsSelectOnlyTheirCapabilities(t *testing.T)
 		{tag: "android-skills", osName: "linux", dependencies: []string{"npx"}, provisioners: []string{"skills"}},
 		{tag: "claude-dart-mcp", osName: "linux", dependencies: []string{"claude", "dart"}, provisioners: []string{"claude"}},
 		{tag: "codex-dart-mcp", osName: "linux", dependencies: []string{"codex", "dart"}, provisioners: []string{"codex"}},
-		{tag: "antigravity-dart-mcp", osName: "linux", entries: []string{"~/.gemini/antigravity-cli/settings.json"}},
 		{tag: "vscode-mobile", osName: "linux", entries: []string{"~/.config/Code/User/settings.json"}},
 	}
 
@@ -381,14 +441,14 @@ func TestRepositoryWebAndMobileProfilesPreserveCapabilitySurfaces(t *testing.T) 
 		{
 			profile:      "mobile",
 			osName:       "darwin",
-			entries:      []string{"~/.gemini/antigravity-cli/settings.json", "~/Library/Application Support/Code/User/settings.json"},
+			entries:      []string{"~/Library/Application Support/Code/User/settings.json"},
 			dependencies: []string{"npx", "claude", "dart", "codex"},
 			provisioners: []string{"skills", "skills", "skills", "claude", "codex"},
 		},
 		{
 			profile:      "mobile",
 			osName:       "linux",
-			entries:      []string{"~/.gemini/antigravity-cli/settings.json", "~/.config/Code/User/settings.json"},
+			entries:      []string{"~/.config/Code/User/settings.json"},
 			dependencies: []string{"npx", "claude", "dart", "codex"},
 			provisioners: []string{"skills", "skills", "skills", "claude", "codex"},
 		},

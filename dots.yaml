@@ -239,15 +239,15 @@ tags:
       - codex-chrome-devtools
       - opencode-chrome-devtools
   dart-skills:
-    description: Dart agent skills for supported agents.
+    description: Dart agent skills for Codex and Claude Code.
     kind: surface
     status: current
   flutter-skills:
-    description: Flutter agent skills for supported agents.
+    description: Flutter agent skills for Codex and Claude Code.
     kind: surface
     status: current
   android-skills:
-    description: Android CLI agent skill for supported agents.
+    description: Android CLI agent skill for Codex and Claude Code.
     kind: surface
     status: current
   claude-dart-mcp:
@@ -256,10 +256,6 @@ tags:
     status: current
   codex-dart-mcp:
     description: Codex Dart and Flutter MCP integration.
-    kind: surface
-    status: current
-  antigravity-dart-mcp:
-    description: Antigravity Dart and Flutter MCP settings contribution.
     kind: surface
     status: current
   vscode-mobile:
@@ -276,7 +272,6 @@ tags:
       - android-skills
       - claude-dart-mcp
       - codex-dart-mcp
-      - antigravity-dart-mcp
       - vscode-mobile
   theme-carbonfox:
     description: Optional dark Carbonfox palette for selected supported applications; overrides adaptive-theme.
@@ -358,7 +353,6 @@ profiles:
       - android-skills
       - claude-dart-mcp
       - codex-dart-mcp
-      - antigravity-dart-mcp
       - vscode-mobile
   workstation:
     description: Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in.
@@ -1278,15 +1272,6 @@ entries:
     os:
       - darwin
       - linux
-  - source: configs/antigravity/mobile-mcp-settings.json
-    target: ~/.gemini/antigravity-cli/settings.json
-    strategy: copy
-    ownership: json-subset
-    tags:
-      - antigravity-dart-mcp
-    os:
-      - darwin
-      - linux
   - source: configs/vscode/settings.json
     target: "~/Library/Application Support/Code/User/settings.json"
     strategy: copy
@@ -1706,9 +1691,6 @@ provisioners:
       agents:
         - codex
         - claude-code
-        - antigravity
-        - opencode
-        - github-copilot
       global: true
     dependencies:
       - name: npx
@@ -1721,9 +1703,6 @@ provisioners:
       agents:
         - codex
         - claude-code
-        - antigravity
-        - opencode
-        - github-copilot
       global: true
     dependencies:
       - name: npx
@@ -1736,9 +1715,6 @@ provisioners:
       agents:
         - codex
         - claude-code
-        - antigravity
-        - opencode
-        - github-copilot
       skills:
         - android-cli
       global: true

@@ -21,3 +21,19 @@ This keeps profile names aligned with user intent. Choosing `--profile mobile` m
 guidance remain valid, but its Profile is now an ordered preset over atomic
 skills and agent-integration Tags. The broad `mobile` Tag is transitional
 compatibility only.
+
+## Mobile consumer amendment (#576)
+
+The optional `mobile` Profile and legacy `mobile` Tag now select
+`dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`,
+`codex-dart-mcp`, and `vscode-mobile`. The three mobile skills packages target
+only Codex and Claude Code; Antigravity Dart MCP configuration is retired from
+the offered Source of Truth. Claude and Codex Dart MCP commands and the VS Code
+`dart.mcpServer` setting remain available, and Flutter/Dart SDK installation
+remains a manual prerequisite. This supersedes the broader mobile consumer
+list above.
+
+Manifest evolution does not authorize removal of previously installed Managed
+Entries, external skills, or Provisioner effects. Historical contribution and
+Provisioner records remain ownership/history evidence; explicit selection
+reductions keep the existing acknowledgement and reconciliation safeguards.
