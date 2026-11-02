@@ -107,14 +107,14 @@ func identityAt(root *receiptRoot, path string) (identity PublicationEvidence, r
 		return identity, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
-	var st unix.Stat_t
-	if err := unix.Fstatat(int(parent.Fd()), name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+	identity, err = namedIdentity(parent, name)
+	if err != nil {
 		return identity, err
 	}
-	if st.Mode&unix.S_IFMT != unix.S_IFDIR && st.Mode&unix.S_IFMT != unix.S_IFREG {
+	if identity.Mode&unix.S_IFMT != unix.S_IFDIR && identity.Mode&unix.S_IFMT != unix.S_IFREG {
 		return identity, fmt.Errorf("unsafe authority path %s", path)
 	}
-	return PublicationEvidence{Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode)}, nil
+	return identity, nil
 }
 
 func artifactSelection(action InstallAction) UserLocalSelection {
@@ -177,11 +177,11 @@ func validateCaptured(c capturedReceipt) error {
 	if a.Destination != destination || a.InstalledPath != installed {
 		return errors.New("captured artifact escapes selected home")
 	}
-	if c.HomeIdentity.Inode == 0 || c.StateIdentity.Inode == 0 || c.StateLockIdentity.Inode == 0 || len(c.Parents) == 0 {
+	if c.Ordinal == 0 || !validEvidenceIdentity(c.HomeIdentity) || !validEvidenceIdentity(c.StateIdentity) || !validEvidenceIdentity(c.StateLockIdentity) || len(c.Parents) == 0 {
 		return errors.New("missing captured root identity")
 	}
 	for _, name := range authorityParents(*a) {
-		if c.Parents[name].Inode == 0 {
+		if !validEvidenceIdentity(c.Parents[name]) {
 			return fmt.Errorf("missing parent authority %s", name)
 		}
 	}
@@ -217,7 +217,7 @@ func validateUnits(c capturedReceipt, units []publicationUnit) error {
 		return errors.New("incomplete captured command surface")
 	}
 	for n, unit := range units {
-		if unit.Source != expected[n].Source || unit.Target != expected[n].Target || unit.Evidence.Inode == 0 {
+		if unit.Source != expected[n].Source || unit.Target != expected[n].Target || !validEvidenceIdentity(unit.Evidence) {
 			return errors.New("conflicting publication surface")
 		}
 		typ := unit.Evidence.Mode & unix.S_IFMT
@@ -306,7 +306,7 @@ func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() b
 		if op.Complete || op.Captured.Action.Dependency != action.Dependency {
 			continue
 		}
-		matches, err := homeScopeMatches(s.home, op.Captured)
+		matches, err := homeScopeMatchesChecked(s.home, op.Captured, i.check)
 		if err != nil {
 			return err
 		}
@@ -323,6 +323,13 @@ func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() b
 	if action.UserLocal == nil {
 		return errors.New("missing user-local artifact")
 	}
+	if err := i.check("identity"); err != nil {
+		return err
+	}
+	ordinal, err := nextReceiptOrdinal(ops)
+	if err != nil {
+		return err
+	}
 	artifact := *action.UserLocal
 	action.UserLocal = &artifact
 	destination, installed := userLocalPaths(s.home.path, artifact.Recipe, artifact.Version, artifact.Layout, artifact.Command)
@@ -334,7 +341,7 @@ func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() b
 	if err != nil {
 		return err
 	}
-	c := capturedReceipt{Format: 1, ID: id, Home: s.home.path, State: s.state.path, Action: action, Selection: artifactSelection(action), Parents: map[string]PublicationEvidence{}}
+	c := capturedReceipt{Format: 1, ID: id, Ordinal: ordinal, Home: s.home.path, State: s.state.path, Action: action, Selection: artifactSelection(action), Parents: map[string]PublicationEvidence{}}
 	c.HomeIdentity, err = rootIdentity(s.home)
 	if err != nil {
 		return err
@@ -449,15 +456,15 @@ func (i *UserLocalInstaller) WithUserLocalBoundary(selected []UserLocalSelection
 		if op.Complete {
 			continue
 		}
-		matches, err := homeScopeMatches(s.home, op.Captured)
-		if err != nil {
-			return err
-		}
-		if !matches {
-			continue
-		}
 		for _, selection := range selected {
 			if selection.Dependency != op.Captured.Action.Dependency {
+				continue
+			}
+			matches, err := homeScopeMatchesChecked(s.home, op.Captured, i.check)
+			if err != nil {
+				return err
+			}
+			if !matches {
 				continue
 			}
 			if selection != op.Captured.Selection {
@@ -824,7 +831,7 @@ func validateSourceParents(c capturedReceipt, ready readyReceipt) error {
 	stage := filepath.Join(".local", ".dots-deps-"+c.ID)
 	for _, path := range expected {
 		node, ok := ready.Parents[path]
-		if !ok || node.Inode == 0 || node.Mode&unix.S_IFMT != unix.S_IFDIR {
+		if !ok || !validEvidenceIdentity(node) || node.Mode&unix.S_IFMT != unix.S_IFDIR {
 			return errors.New("invalid private source-parent evidence")
 		}
 		if path == stage || path == filepath.Join(stage, "links") || path == filepath.Join(stage, "payload") {
@@ -837,17 +844,53 @@ func validateSourceParents(c capturedReceipt, ready readyReceipt) error {
 }
 
 func homeScopeMatches(root *receiptRoot, c capturedReceipt) (bool, error) {
+	return homeScopeMatchesChecked(root, c, nil)
+}
+
+func homeScopeMatchesChecked(root *receiptRoot, c capturedReceipt, check func(string) error) (bool, error) {
+	// The held descriptor pins this transient scope precheck. A different inode
+	// is not this operation's home, so unrelated pending history does not demand
+	// strong filesystem capabilities from an externally satisfied home.
+	var st unix.Stat_t
+	if err := unix.Fstat(int(root.file.Fd()), &st); err != nil {
+		return false, err
+	}
+	if uint64(st.Dev) != c.HomeIdentity.Device || st.Ino != c.HomeIdentity.Inode {
+		if root.path == c.Home {
+			return false, errors.New("selected home identity changed since capture")
+		}
+		// A remount may change device numbers. A different spelling can still
+		// name the same current root; that is changed authority, not an unrelated
+		// home whose external commands may bypass this pending operation.
+		original, err := openReceiptRoot(c.Home, false)
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		var binding unix.Stat_t
+		if err := errors.Join(unix.Fstat(int(original.file.Fd()), &binding), original.file.Close()); err != nil {
+			return false, err
+		}
+		if binding.Dev != st.Dev || binding.Ino != st.Ino {
+			return false, nil
+		}
+	}
+	if err := durabilityCheck(check, "identity"); err != nil {
+		return false, err
+	}
 	actual, err := fileIdentity(root.file)
 	if err != nil {
 		return false, err
 	}
 	if actual.Device == c.HomeIdentity.Device && actual.Inode == c.HomeIdentity.Inode {
+		if actual.Incarnation != c.HomeIdentity.Incarnation {
+			return false, errors.New("selected home filesystem incarnation changed since capture")
+		}
 		return true, nil
 	}
-	if root.path == c.Home {
-		return false, errors.New("selected home identity changed since capture")
-	}
-	return false, nil
+	return false, errors.New("selected home identity changed since capture")
 }
 func validateCapturedRootName(current *receiptRoot, path string, expected PublicationEvidence) error {
 	if err := current.validate(expected); err != nil {

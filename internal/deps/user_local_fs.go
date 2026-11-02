@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,12 +20,13 @@ import (
 // PublicationEvidence identifies an entire publication unit, including empty
 // files. Content equality alone never establishes ownership of another inode.
 type PublicationEvidence struct {
-	Device   uint64                         `json:"device"`
-	Inode    uint64                         `json:"inode"`
-	Mode     uint32                         `json:"mode"`
-	Digest   string                         `json:"sha256,omitempty"`
-	Link     string                         `json:"link,omitempty"`
-	Children map[string]PublicationEvidence `json:"children,omitempty"`
+	Device      uint64                         `json:"device"`
+	Inode       uint64                         `json:"inode"`
+	Mode        uint32                         `json:"mode"`
+	Incarnation string                         `json:"incarnation"`
+	Digest      string                         `json:"sha256,omitempty"`
+	Link        string                         `json:"link,omitempty"`
+	Children    map[string]PublicationEvidence `json:"children,omitempty"`
 }
 
 type receiptRoot struct {
@@ -210,12 +212,12 @@ func (r *receiptRoot) parent(path string, create bool) (result *os.File, name st
 }
 
 func captureEvidence(parent *os.File, name string, sync bool) (node PublicationEvidence, resultErr error) {
-	var st unix.Stat_t
-	if err := unix.Fstatat(int(parent.Fd()), name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+	node, err := namedIdentity(parent, name)
+	if err != nil {
 		return node, err
 	}
-	node = PublicationEvidence{Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode)}
-	switch st.Mode & unix.S_IFMT {
+	identity := node
+	switch node.Mode & unix.S_IFMT {
 	case unix.S_IFLNK:
 		buf := make([]byte, 4096)
 		n, err := unix.Readlinkat(int(parent.Fd()), name, buf)
@@ -228,7 +230,7 @@ func captureEvidence(parent *os.File, name string, sync bool) (node PublicationE
 		node.Link = string(buf[:n])
 	case unix.S_IFREG, unix.S_IFDIR:
 		flags := unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_CLOEXEC | unix.O_NONBLOCK
-		if st.Mode&unix.S_IFMT == unix.S_IFDIR {
+		if node.Mode&unix.S_IFMT == unix.S_IFDIR {
 			flags |= unix.O_DIRECTORY
 		}
 		fd, err := unix.Openat(int(parent.Fd()), name, flags, 0)
@@ -237,14 +239,14 @@ func captureEvidence(parent *os.File, name string, sync bool) (node PublicationE
 		}
 		f := os.NewFile(uintptr(fd), name)
 		defer func() { resultErr = errors.Join(resultErr, f.Close()) }()
-		var opened unix.Stat_t
-		if err := unix.Fstat(fd, &opened); err != nil {
+		opened, err := fileIdentity(f)
+		if err != nil {
 			return node, err
 		}
-		if opened.Dev != st.Dev || opened.Ino != st.Ino || opened.Mode != st.Mode {
+		if !sameEvidence(opened, identity) {
 			return node, errors.New("publication identity changed while opening")
 		}
-		if st.Mode&unix.S_IFMT == unix.S_IFDIR {
+		if node.Mode&unix.S_IFMT == unix.S_IFDIR {
 			children, err := f.ReadDir(-1)
 			if err != nil {
 				return node, err
@@ -278,11 +280,11 @@ func captureEvidence(parent *os.File, name string, sync bool) (node PublicationE
 	default:
 		return node, errors.New("unsupported publication file type")
 	}
-	var after unix.Stat_t
-	if err := unix.Fstatat(int(parent.Fd()), name, &after, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+	after, err := namedIdentity(parent, name)
+	if err != nil {
 		return node, err
 	}
-	if after.Ino != st.Ino || after.Dev != st.Dev || after.Mode != st.Mode {
+	if !sameEvidence(after, identity) {
 		return node, errors.New("publication identity changed during capture")
 	}
 	return node, nil
@@ -304,7 +306,59 @@ func rootIdentity(r *receiptRoot) (PublicationEvidence, error) {
 	if err := unix.Fstat(int(r.file.Fd()), &st); err != nil {
 		return PublicationEvidence{}, err
 	}
-	return PublicationEvidence{Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode)}, nil
+	incarnation, err := filesystemIncarnation(r.file, st.Ino)
+	if err != nil {
+		return PublicationEvidence{}, fmt.Errorf("filesystem cannot prove persistent object identity: %w", err)
+	}
+	return PublicationEvidence{Device: uint64(st.Dev), Inode: st.Ino, Mode: uint32(st.Mode), Incarnation: incarnation}, nil
+}
+
+func namedIdentity(parent *os.File, name string) (identity PublicationEvidence, resultErr error) {
+	fd, err := openIdentityAt(int(parent.Fd()), name)
+	if err != nil {
+		return identity, err
+	}
+	file := os.NewFile(uintptr(fd), name)
+	defer func() { resultErr = errors.Join(resultErr, file.Close()) }()
+	return fileIdentity(file)
+}
+
+func validEvidenceIdentity(node PublicationEvidence) bool {
+	if node.Inode == 0 || !validIncarnation(node.Incarnation, node.Inode) {
+		return false
+	}
+	for _, child := range node.Children {
+		if !validEvidenceIdentity(child) {
+			return false
+		}
+	}
+	return true
+}
+
+func validIncarnation(value string, inode uint64) bool {
+	if len(value) > 1024 {
+		return false
+	}
+	parts := strings.Split(value, ":")
+	hexValue := func(s string, size int) bool {
+		data, err := hex.DecodeString(s)
+		return err == nil && len(data) == size && s == strings.ToLower(s)
+	}
+	uuid := func(s string) bool { return hexValue(s, 16) && s != strings.Repeat("0", 32) }
+	unsigned := func(s string) (uint64, bool) {
+		n, err := strconv.ParseUint(s, 10, 64)
+		return n, err == nil && n != 0 && strconv.FormatUint(n, 10) == s
+	}
+	if len(parts) == 3 && parts[0] == "darwin" {
+		id, ok := unsigned(parts[2])
+		return uuid(parts[1]) && ok && id == inode
+	}
+	if len(parts) != 5 || parts[0] != "linux" || !uuid(parts[1]) {
+		return false
+	}
+	_, mountOK := unsigned(parts[2])
+	kind, err := strconv.ParseInt(parts[3], 10, 32)
+	return mountOK && err == nil && strconv.FormatInt(kind, 10) == parts[3] && len(parts[4]) > 0 && len(parts[4]) <= 256 && hexValue(parts[4], len(parts[4])/2)
 }
 
 func (r *receiptRoot) validate(identity PublicationEvidence) error {

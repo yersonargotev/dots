@@ -882,7 +882,7 @@ func TestUserLocalTransactionCrossStateBoundarySerializesAbsence(t *testing.T) {
 func TestUserLocalReceiptChainConflicts(t *testing.T) {
 	id := func(n byte) string { return strings.Repeat(string(n), 32) }
 	op := func(n byte, prior string, complete bool) journalOperation {
-		return journalOperation{Captured: capturedReceipt{ID: id(n), Previous: prior, Home: "/selected", Action: InstallAction{Dependency: "uv"}}, Complete: complete}
+		return journalOperation{Captured: capturedReceipt{ID: id(n), Ordinal: uint64(n), Previous: prior, Home: "/selected", Action: InstallAction{Dependency: "uv"}}, Complete: complete}
 	}
 	tests := map[string][]journalOperation{
 		"missing-prior":       {op('a', id('b'), false)},
@@ -1226,8 +1226,9 @@ func TestUserLocalOnDiskReceiptChainConflictsPreserveState(t *testing.T) {
 			case "cycle":
 				graph = []link{{id("a"), id("b"), true}, {id("b"), id("a"), true}}
 			}
-			for _, node := range graph {
+			for index, node := range graph {
 				c := original.Captured
+				c.Ordinal = uint64(index + 1)
 				c.ID = node.id
 				c.Previous = node.previous
 				dir := filepath.Join(i.StateRoot, receiptJournal, c.ID)

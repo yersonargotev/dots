@@ -42,6 +42,7 @@ type publicationUnit struct {
 type capturedReceipt struct {
 	Format            int                            `json:"format"`
 	ID                string                         `json:"id"`
+	Ordinal           uint64                         `json:"ordinal"`
 	Previous          string                         `json:"previous,omitempty"`
 	Home              string                         `json:"home"`
 	State             string                         `json:"state"`
@@ -380,20 +381,38 @@ func allProgress(op journalOperation) bool {
 }
 
 func receiptKey(c capturedReceipt) string {
-	return fmt.Sprintf("%d:%d\x00%s", c.HomeIdentity.Device, c.HomeIdentity.Inode, c.Action.Dependency)
+	return fmt.Sprintf("%d:%d:%s\x00%s", c.HomeIdentity.Device, c.HomeIdentity.Inode, c.HomeIdentity.Incarnation, c.Action.Dependency)
+}
+
+func nextReceiptOrdinal(ops []journalOperation) (uint64, error) {
+	var maximum uint64
+	for _, op := range ops {
+		if op.Captured.Ordinal > maximum {
+			maximum = op.Captured.Ordinal
+		}
+	}
+	if maximum == ^uint64(0) {
+		return 0, errors.New("receipt ordinal exhausted; preserve journal")
+	}
+	return maximum + 1, nil
 }
 func validateReceiptChains(ops []journalOperation) error {
 	byID := map[string]journalOperation{}
 	next := map[string]string{}
 	pending := map[string]string{}
+	ordinals := map[uint64]bool{}
 	for _, op := range ops {
+		if op.Captured.Ordinal == 0 || ordinals[op.Captured.Ordinal] {
+			return errors.New("missing or duplicate receipt ordinal")
+		}
+		ordinals[op.Captured.Ordinal] = true
 		byID[op.Captured.ID] = op
 	}
 	for _, op := range ops {
 		c := op.Captured
 		if c.Previous != "" {
 			prior, ok := byID[c.Previous]
-			if !ok || !prior.Complete || receiptKey(prior.Captured) != receiptKey(c) {
+			if !ok || !prior.Complete || receiptKey(prior.Captured) != receiptKey(c) || prior.Captured.Ordinal >= c.Ordinal {
 				return fmt.Errorf("conflicting prior receipt %s", c.ID)
 			}
 		}
@@ -438,6 +457,11 @@ func latestCompleted(ops []journalOperation, key string) string {
 }
 
 func projectJournal(meta DependencyMetadata, ops []journalOperation) DependencyMetadata {
+	// Capture order is audit-only and remains comparable across incarnation
+	// epochs. Random operation IDs and wall-clock changes cannot select a stale
+	// completed record. Pending operations never displace completed metadata.
+	ops = append([]journalOperation(nil), ops...)
+	sort.Slice(ops, func(a, b int) bool { return ops[a].Captured.Ordinal < ops[b].Captured.Ordinal })
 	for _, op := range ops {
 		if !op.Complete || latestCompleted(ops, receiptKey(op.Captured)) != op.Captured.ID {
 			continue
