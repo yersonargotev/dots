@@ -1,9 +1,11 @@
 package deps
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"golang.org/x/sys/unix"
 )
 
 // This launcher leaves the published launcher and its provenance intact.
@@ -106,55 +109,49 @@ type herdrCustomIntegration struct {
 	Runtime  string `json:"runtime_sha256"`
 }
 
-func stageHerdrCustom(staging string, a UserLocalArtifact) error {
-	root := herdrCustomRoot(staging, a)
-	for _, p := range []string{"bin/herdr-custom", "libexec/herdr"} {
-		if err := regularExecutable(filepath.Join(root, p)); err != nil {
-			return fmt.Errorf("validate staged herdr-custom bundle: %w", err)
+func stageHerdrCustomAt(root *receiptRoot, a UserLocalArtifact) error {
+	base := strings.TrimSuffix(a.archiveName(), ".tar.gz")
+	evidence := map[string]PublicationEvidence{}
+	for _, name := range []string{"bin/herdr-custom", "libexec/herdr"} {
+		node, err := root.evidence(filepath.Join(base, name), false)
+		if err != nil {
+			return err
 		}
+		if node.Mode&unix.S_IFMT != unix.S_IFREG || node.Mode&0111 == 0 {
+			return fmt.Errorf("custom executable %s must be a regular executable file", name)
+		}
+		evidence[name] = node
 	}
-	// Provenance is published by the recipe and remains unchanged in the bundle.
-	provenance, err := os.ReadFile(filepath.Join(root, "provenance.json"))
+	provenance, err := readRootBytes(root, filepath.Join(base, "provenance.json"))
 	if err != nil {
-		return fmt.Errorf("read herdr-custom provenance: %w", err)
+		return err
 	}
 	var published struct {
 		BinarySHA256 string `json:"binary_sha256"`
 	}
 	if err := json.Unmarshal(provenance, &published); err != nil {
-		return fmt.Errorf("decode herdr-custom provenance: %w", err)
+		return err
 	}
-	binaryHash, err := fileSHA256(filepath.Join(root, "libexec/herdr"))
+	if published.BinarySHA256 != evidence["libexec/herdr"].Digest {
+		return errors.New("herdr-custom runtime does not match published provenance")
+	}
+	parent, name, err := root.parent(filepath.Join(base, "dots"), false)
 	if err != nil {
-		return fmt.Errorf("hash custom runtime: %w", err)
+		return err
 	}
-	if published.BinarySHA256 != binaryHash {
-		return fmt.Errorf("herdr-custom runtime does not match published provenance")
+	mkdirErr := unix.Mkdirat(int(parent.Fd()), name, 0755)
+	closeErr := parent.Close()
+	if err := errors.Join(mkdirErr, closeErr); err != nil {
+		return fmt.Errorf("create reserved custom integration path: %w", err)
 	}
-	launcherHash, err := fileSHA256(filepath.Join(root, "bin/herdr-custom"))
+	if err := writeExtractedFile(root, filepath.Join(base, "dots/herdr-custom"), 0755, strings.NewReader(herdrCustomLauncher)); err != nil {
+		return err
+	}
+	marker, err := json.Marshal(herdrCustomIntegration{a.Checksum, evidence["bin/herdr-custom"].Digest, evidence["libexec/herdr"].Digest})
 	if err != nil {
-		return fmt.Errorf("hash original custom launcher: %w", err)
+		return err
 	}
-	integration := filepath.Join(root, "dots")
-	if _, err := os.Lstat(integration); err == nil {
-		return fmt.Errorf("herdr-custom archive reserves unexpected dots integration path")
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("inspect staged integration path %s: %w", integration, err)
-	}
-	if err := os.Mkdir(integration, 0755); err != nil {
-		return fmt.Errorf("create custom integration directory %s: %w", integration, err)
-	}
-	if err := os.WriteFile(filepath.Join(integration, "herdr-custom"), []byte(herdrCustomLauncher), 0755); err != nil {
-		return fmt.Errorf("write custom integration launcher in %s: %w", integration, err)
-	}
-	marker, err := json.Marshal(herdrCustomIntegration{a.Checksum, launcherHash, binaryHash})
-	if err != nil {
-		return fmt.Errorf("encode custom integration marker: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(integration, "integration.json"), marker, 0644); err != nil {
-		return fmt.Errorf("write custom integration marker in %s: %w", integration, err)
-	}
-	return nil
+	return writeExtractedFile(root, filepath.Join(base, "dots/integration.json"), 0644, bytes.NewReader(marker))
 }
 
 func validHerdrCustomBundle(a UserLocalArtifact) bool {
@@ -220,10 +217,12 @@ func herdrCustomInstallGuard(home string, a UserLocalArtifact) error {
 	}
 	a.Destination, a.InstalledPath = userLocalPaths(home, "herdr-custom", a.Version, userLocalLayoutBundle, "herdr-custom")
 	conflict := func() error {
-		return fmt.Errorf("herdr-custom integration conflict at %s; preserve or move the existing custom installation explicitly, then retry", a.InstalledPath)
+		return fmt.Errorf("herdr-custom integration conflict at %s; preserve or move the existing public symlink explicitly before retrying", a.InstalledPath)
 	}
 	if _, err := os.Lstat(a.InstalledPath); err == nil {
-		if _, ok := priorHerdrCustomArtifact(a); !ok {
+		target, linkErr := os.Readlink(a.InstalledPath)
+		expected := filepath.Join(herdrCustomRoot(a.Destination, a), "dots/herdr-custom")
+		if linkErr != nil || target != expected || !validHerdrCustomBundle(a) {
 			return conflict()
 		}
 	} else if !os.IsNotExist(err) {

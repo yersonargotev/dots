@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/yersonargotev/dots/internal/manifest"
+	"golang.org/x/sys/unix"
 )
 
 // UserLocalArtifact is the resolved, reviewed user-local install recipe for a
@@ -357,158 +359,93 @@ func (a UserLocalArtifact) archiveName() string {
 	return name
 }
 
+// InstallUserLocal preserves the direct recipe entrypoint while using the same
+// pending/final lifecycle as CLI orchestration.
 func InstallUserLocal(home string, action InstallAction) error {
 	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
+		resolved, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("resolve home directory: %w", err)
+			return err
 		}
+		home = resolved
 	}
-	artifact := action.UserLocal
-	if artifact == nil {
+	if action.UserLocal == nil {
 		return errors.New("missing user-local artifact")
 	}
-	recipe, ok := userLocalRecipes[artifact.Recipe]
-	if !ok {
-		return fmt.Errorf("unknown user-local recipe %q", artifact.Recipe)
+	a := *action.UserLocal
+	action.UserLocal = &a
+	if a.Platform == "" {
+		a.Platform = platformKey(runtime.GOOS, runtime.GOARCH)
 	}
-
-	if artifact.Recipe == "herdr-custom" {
-		if err := herdrCustomInstallGuard(home, *artifact); err != nil {
+	a.Destination, a.InstalledPath = userLocalPaths(home, a.Recipe, a.Version, a.Layout, a.Command)
+	if action.Dependency == "" {
+		action.Dependency = a.Recipe
+	}
+	action.Provider = TierUserLocal
+	action.Status = InstallActionStatusInstallable
+	if action.Requirement == "" {
+		action.Requirement = manifest.DependencyRequirementRequired
+	}
+	if a.Recipe == "herdr-custom" {
+		if err := herdrCustomInstallGuard(home, a); err != nil {
 			return err
 		}
 	}
-	data, err := downloadUserLocalArtifact(artifact.URL, artifact.Checksum)
-	if err != nil {
-		return err
-	}
-	archive := artifact.archiveName()
-	binDir := filepath.Join(home, ".local", "bin")
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		return fmt.Errorf("create user-local bin directory: %w", err)
-	}
-
-	installedPath := filepath.Join(binDir, artifact.Command)
-	if artifact.Layout == userLocalLayoutBundle {
-		optDir := filepath.Join(home, ".local", "opt", artifact.Recipe, artifact.Version)
-		parent := filepath.Dir(optDir)
-		if err := os.MkdirAll(parent, 0o755); err != nil {
-			return fmt.Errorf("create user-local opt parent: %w", err)
+	installer := UserLocalInstaller{Home: home, StateRoot: filepath.Join(home, ".local", "state", "dots"), Download: downloadUserLocalArtifact}
+	return installer.RunUserLocal(action, func() bool {
+		recipe, ok := userLocalRecipes[a.Recipe]
+		if !ok {
+			return false
 		}
-		staging, err := os.MkdirTemp(parent, ".dots-"+artifact.Recipe+"-*")
-		if err != nil {
-			return fmt.Errorf("create user-local staging directory: %w", err)
-		}
-		defer os.RemoveAll(staging)
-		if err := stageUserLocalArtifact(data, archive, recipe, staging); err != nil {
-			return err
-		}
-		if artifact.Recipe == "herdr-custom" {
-			if err := stageHerdrCustom(staging, *artifact); err != nil {
-				return err
+		for _, command := range recipe.links {
+			if _, err := os.Stat(filepath.Join(home, ".local", "bin", command)); err != nil {
+				return false
 			}
 		}
-		for _, link := range recipe.links {
-			if err := ensureExecutable(filepath.Join(staging, recipe.binaryPath(archive, link))); err != nil {
-				return err
-			}
-		}
-		if artifact.Recipe == "herdr-custom" {
-			if err := herdrCustomInstallGuard(home, *artifact); err != nil {
-				return err
-			}
-		}
-		if err := replaceUserLocalBundle(staging, optDir); err != nil {
-			return err
-		}
-		for _, link := range recipe.links {
-			target := filepath.Join(optDir, recipe.binaryPath(archive, link))
-			if err := replaceSymlink(target, filepath.Join(binDir, link)); err != nil {
-				return err
-			}
-		}
-	} else {
-		tmpDir, err := os.MkdirTemp("", "dots-user-local-*")
-		if err != nil {
-			return fmt.Errorf("create extraction directory: %w", err)
-		}
-		defer os.RemoveAll(tmpDir)
-		if err := extractArchive(data, recipe.archiveType, tmpDir); err != nil {
-			return err
-		}
-		source := filepath.Join(tmpDir, recipe.binaryPath(archive, artifact.Command))
-		if err := ensureExecutable(source); err != nil {
-			return err
-		}
-		if err := copyFile(source, installedPath, 0o755); err != nil {
-			return err
-		}
-	}
-
-	return nil
+		return true
+	})
 }
 
-func replaceUserLocalBundle(staging, destination string) error {
-	if _, err := os.Lstat(destination); os.IsNotExist(err) {
-		if err := os.Rename(staging, destination); err != nil {
-			return fmt.Errorf("promote user-local bundle: %w", err)
+func stageUserLocalArtifactAt(data []byte, archive string, recipe userLocalRecipe, root *receiptRoot, check func() error) error {
+	commands := map[string]bool{}
+	for _, command := range recipe.links {
+		commands[recipe.binaryPath(archive, command)] = true
+	}
+	write := func(name string, mode os.FileMode, reader io.Reader) error {
+		if recipe.command != "herdr-custom" && commands[filepath.Clean(name)] {
+			mode |= 0755
 		}
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("inspect user-local bundle: %w", err)
-	}
-
-	backup, err := os.MkdirTemp(filepath.Dir(destination), ".dots-previous-"+filepath.Base(destination)+"-*")
-	if err != nil {
-		return fmt.Errorf("reserve previous user-local bundle path: %w", err)
-	}
-	if err := os.Remove(backup); err != nil {
-		return fmt.Errorf("prepare previous user-local bundle path: %w", err)
-	}
-	if err := os.Rename(destination, backup); err != nil {
-		return fmt.Errorf("preserve previous user-local bundle: %w", err)
-	}
-	if err := os.Rename(staging, destination); err != nil {
-		if rollbackErr := os.Rename(backup, destination); rollbackErr != nil {
-			return fmt.Errorf("promote user-local bundle: %v (restore previous bundle: %w)", err, rollbackErr)
-		}
-		return fmt.Errorf("promote user-local bundle: %w", err)
-	}
-	if err := os.RemoveAll(backup); err != nil {
-		return fmt.Errorf("remove previous user-local bundle: %w", err)
-	}
-	return nil
-}
-
-func stageUserLocalArtifact(data []byte, archive string, recipe userLocalRecipe, dest string) error {
-	if recipe.archiveType != userLocalArchiveRaw {
-		archiveType := recipe.archiveType
-		if archiveType == userLocalArchiveByExtension {
-			switch {
-			case strings.HasSuffix(archive, ".tar.gz"):
-				archiveType = userLocalArchiveTarGzip
-			case strings.HasSuffix(archive, ".zip"):
-				archiveType = userLocalArchiveZip
-			default:
-				return fmt.Errorf("unsupported user-local archive %q", archive)
+		if check != nil {
+			if err := check(); err != nil {
+				return err
 			}
+			reader = &receiptContextReader{reader: reader, check: check}
 		}
-		return extractArchive(data, archiveType, dest)
+		return writeExtractedFile(root, name, mode, reader, commands[filepath.Clean(name)])
 	}
-	path := filepath.Join(dest, recipe.binaryPath(archive, recipe.command))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create raw artifact directory: %w", err)
+	if recipe.archiveType == userLocalArchiveRaw {
+		return write(recipe.binaryPath(archive, recipe.command), 0755, bytes.NewReader(data))
 	}
-	if err := os.WriteFile(path, data, 0o755); err != nil {
-		return fmt.Errorf("write raw executable artifact: %w", err)
+	typ := recipe.archiveType
+	if typ == userLocalArchiveByExtension {
+		switch {
+		case strings.HasSuffix(archive, ".tar.gz"):
+			typ = userLocalArchiveTarGzip
+		case strings.HasSuffix(archive, ".zip"):
+			typ = userLocalArchiveZip
+		default:
+			return fmt.Errorf("unsupported user-local archive %q", archive)
+		}
 	}
-	return nil
+	return extractArchiveWith(data, typ, write, check)
 }
 
 var downloadUserLocalArtifact = downloadAndVerify
 
 func downloadAndVerify(url, checksum string) ([]byte, error) {
+	return downloadAndVerifyContext(context.Background(), url, checksum)
+}
+func downloadAndVerifyContext(ctx context.Context, url, checksum string) (data []byte, resultErr error) {
 	initial, err := parseArtifactURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("download user-local artifact: %w", err)
@@ -525,15 +462,19 @@ func downloadAndVerify(url, checksum string) ([]byte, error) {
 			return fmt.Errorf("redirect outside allowed artifact hosts: %s", req.URL.Host)
 		},
 	}
-	resp, err := client.Get(url)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("download user-local artifact: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { resultErr = errors.Join(resultErr, resp.Body.Close()) }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download user-local artifact: %s", resp.Status)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxArtifactBytes+1))
+	data, err = io.ReadAll(io.LimitReader(resp.Body, maxArtifactBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read user-local artifact: %w", err)
 	}
@@ -579,18 +520,46 @@ func redirectAllowed(initial, redirect *url.URL) bool {
 	}
 }
 
-func extractArchive(data []byte, typ userLocalArchiveType, dest string) error {
+func extractArchive(data []byte, typ userLocalArchiveType, dest string) (resultErr error) {
+	root, err := openReceiptRoot(dest, true)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, root.file.Close()) }()
+	return extractArchiveWith(data, typ, func(name string, mode os.FileMode, reader io.Reader) error {
+		return writeExtractedFile(root, name, mode, reader)
+	})
+}
+
+func extractArchiveWith(data []byte, typ userLocalArchiveType, write func(string, os.FileMode, io.Reader) error, checks ...func() error) (resultErr error) {
+	check := func() error {
+		if len(checks) > 0 && checks[0] != nil {
+			return checks[0]()
+		}
+		return nil
+	}
 	files := 0
 	var extracted int64
+	checkSize := func(size int64) error {
+		files++
+		extracted += size
+		if files > maxArchiveFiles || size < 0 || extracted > maxExtractedBytes {
+			return errors.New("archive exceeds extraction limits")
+		}
+		return nil
+	}
 	switch typ {
 	case userLocalArchiveTarGzip:
-		gz, err := gzip.NewReader(bytes.NewReader(data))
+		gz, err := gzip.NewReader(&receiptContextReader{reader: bytes.NewReader(data), check: check})
 		if err != nil {
 			return fmt.Errorf("open tar.gz artifact: %w", err)
 		}
-		defer gz.Close()
+		defer func() { resultErr = errors.Join(resultErr, gz.Close()) }()
 		tr := tar.NewReader(gz)
 		for {
+			if err := check(); err != nil {
+				return err
+			}
 			h, err := tr.Next()
 			if errors.Is(err, io.EOF) {
 				return nil
@@ -601,29 +570,11 @@ func extractArchive(data []byte, typ userLocalArchiveType, dest string) error {
 			if h.Typeflag != tar.TypeReg {
 				continue
 			}
-			files++
-			extracted += h.Size
-			if files > maxArchiveFiles || h.Size < 0 || extracted > maxExtractedBytes {
-				return errors.New("extract tar.gz artifact: archive exceeds extraction limits")
-			}
-			path, err := safeJoin(dest, h.Name)
-			if err != nil {
+			if err := checkSize(h.Size); err != nil {
 				return err
 			}
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return fmt.Errorf("create extraction directory: %w", err)
-			}
-			out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(h.Mode)&0o777)
-			if err != nil {
-				return fmt.Errorf("create extracted file: %w", err)
-			}
-			_, copyErr := io.Copy(out, tr)
-			closeErr := out.Close()
-			if copyErr != nil {
-				return fmt.Errorf("extract file: %w", copyErr)
-			}
-			if closeErr != nil {
-				return fmt.Errorf("close extracted file: %w", closeErr)
+			if err := write(h.Name, os.FileMode(h.Mode)&0777, tr); err != nil {
+				return err
 			}
 		}
 	case userLocalArchiveZip:
@@ -632,47 +583,60 @@ func extractArchive(data []byte, typ userLocalArchiveType, dest string) error {
 			return fmt.Errorf("open zip artifact: %w", err)
 		}
 		for _, f := range zr.File {
+			if err := check(); err != nil {
+				return err
+			}
 			if f.FileInfo().IsDir() {
 				continue
 			}
-			files++
-			extracted += int64(f.UncompressedSize64)
-			if files > maxArchiveFiles || extracted > maxExtractedBytes {
-				return errors.New("extract zip artifact: archive exceeds extraction limits")
+			if err := checkSize(int64(f.UncompressedSize64)); err != nil {
+				return err
 			}
-			path, err := safeJoin(dest, f.Name)
+			reader, err := f.Open()
 			if err != nil {
 				return err
 			}
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return fmt.Errorf("create extraction directory: %w", err)
-			}
-			r, err := f.Open()
-			if err != nil {
-				return fmt.Errorf("open zipped file: %w", err)
-			}
-			out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode()&0o777)
-			if err != nil {
-				r.Close()
-				return fmt.Errorf("create extracted file: %w", err)
-			}
-			_, copyErr := io.Copy(out, r)
-			closeInErr := r.Close()
-			closeOutErr := out.Close()
-			if copyErr != nil {
-				return fmt.Errorf("extract file: %w", copyErr)
-			}
-			if closeInErr != nil {
-				return fmt.Errorf("close zipped file: %w", closeInErr)
-			}
-			if closeOutErr != nil {
-				return fmt.Errorf("close extracted file: %w", closeOutErr)
+			writeErr := write(f.Name, f.Mode()&0777, reader)
+			closeErr := reader.Close()
+			if err := errors.Join(writeErr, closeErr); err != nil {
+				return err
 			}
 		}
 		return nil
 	default:
 		return fmt.Errorf("unsupported user-local archive type %q", typ)
 	}
+}
+
+func writeExtractedFile(root *receiptRoot, name string, mode os.FileMode, reader io.Reader, exact ...bool) (resultErr error) {
+	joined, err := safeJoin(root.path, name)
+	if err != nil {
+		return err
+	}
+	relative, err := filepath.Rel(root.path, joined)
+	if err != nil {
+		return err
+	}
+	parent, base, err := root.parent(relative, true)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	fd, err := unix.Openat(int(parent.Fd()), base, unix.O_CREAT|unix.O_EXCL|unix.O_WRONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, uint32(mode.Perm()))
+	if err != nil {
+		return fmt.Errorf("create extracted file %s: %w", name, err)
+	}
+	file := os.NewFile(uintptr(fd), base)
+	defer func() { resultErr = errors.Join(resultErr, file.Close()) }()
+	if len(exact) > 0 && exact[0] {
+		if err := file.Chmod(mode.Perm()); err != nil {
+			return err
+		}
+	}
+	if _, err := io.Copy(file, reader); err != nil {
+		return fmt.Errorf("write extracted file %s: %w", name, err)
+	}
+	return nil
 }
 
 func safeJoin(root, name string) (string, error) {
@@ -687,65 +651,16 @@ func safeJoin(root, name string) (string, error) {
 	return path, nil
 }
 
-func ensureExecutable(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("stat extracted executable %s: %w", path, err)
-	}
-	if info.IsDir() {
-		return fmt.Errorf("extracted executable %s is a directory", path)
-	}
-	return os.Chmod(path, info.Mode()|0o755)
+type receiptContextReader struct {
+	reader io.Reader
+	check  func() error
 }
 
-func replaceSymlink(target, link string) error {
-	tmp, err := os.CreateTemp(filepath.Dir(link), ".dots-link-*")
-	if err != nil {
-		return fmt.Errorf("create temporary user-local link: %w", err)
+func (r *receiptContextReader) Read(data []byte) (int, error) {
+	if r.check != nil {
+		if err := r.check(); err != nil {
+			return 0, err
+		}
 	}
-	tmpPath := tmp.Name()
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temporary user-local link: %w", err)
-	}
-	if err := os.Remove(tmpPath); err != nil {
-		return fmt.Errorf("prepare temporary user-local link: %w", err)
-	}
-	defer os.Remove(tmpPath)
-	if err := os.Symlink(target, tmpPath); err != nil {
-		return fmt.Errorf("create user-local symlink: %w", err)
-	}
-	if err := os.Rename(tmpPath, link); err != nil {
-		return fmt.Errorf("replace user-local symlink: %w", err)
-	}
-	return nil
-}
-
-func copyFile(src, dst string, mode os.FileMode) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("open extracted executable: %w", err)
-	}
-	defer in.Close()
-	out, err := os.CreateTemp(filepath.Dir(dst), ".dots-executable-*")
-	if err != nil {
-		return fmt.Errorf("create temporary user-local executable: %w", err)
-	}
-	tmpPath := out.Name()
-	defer os.Remove(tmpPath)
-	if err := out.Chmod(mode); err != nil {
-		out.Close()
-		return fmt.Errorf("set temporary user-local executable mode: %w", err)
-	}
-	_, copyErr := io.Copy(out, in)
-	closeErr := out.Close()
-	if copyErr != nil {
-		return fmt.Errorf("copy user-local executable: %w", copyErr)
-	}
-	if closeErr != nil {
-		return fmt.Errorf("close user-local executable: %w", closeErr)
-	}
-	if err := os.Rename(tmpPath, dst); err != nil {
-		return fmt.Errorf("replace user-local executable: %w", err)
-	}
-	return nil
+	return r.reader.Read(data)
 }

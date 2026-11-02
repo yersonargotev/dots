@@ -72,7 +72,7 @@ func TestInstallUserLocalInstallsNeovimBundleInSandboxHome(t *testing.T) {
 		Recipe:   "nvim",
 		Version:  "v0.12.3",
 		URL:      "https://github.com/neovim/neovim/releases/download/v0.12.3/nvim-linux-x86_64.tar.gz",
-		Checksum: "test-checksum",
+		Checksum: strings.Repeat("a", 64),
 		Layout:   userLocalLayoutBundle,
 		Command:  "nvim",
 	}}

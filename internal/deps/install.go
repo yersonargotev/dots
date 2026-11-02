@@ -162,7 +162,28 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 // InstallPrepared executes the exact actions selected by PrepareInstall. It
 // may re-probe presence to avoid redundant work, but does not re-resolve an
 // action's provider, package, artifact, or command.
-func InstallPrepared(prepared PreparedInstall, opts Options, look Lookup, fontLook FontLookup, runner Runner) (InstallReport, error) {
+func InstallPrepared(prepared PreparedInstall, opts Options, look Lookup, fontLook FontLookup, runner Runner) (report InstallReport, resultErr error) {
+	selected := prepared.Plan.selected
+	if len(selected) == 0 {
+		for _, action := range prepared.Plan.Actions {
+			if action.UserLocal != nil {
+				selected = append(selected, artifactSelection(action))
+			}
+		}
+	}
+	if local, ok := runner.(UserLocalRunner); ok && len(selected) > 0 {
+		report = InstallReport{Profile: prepared.Plan.Profile, Profiles: prepared.Plan.Profiles, Tags: prepared.Plan.Tags, Tier: prepared.Plan.Tier}
+		resultErr = local.WithUserLocalBoundary(selected, func(recovered []InstallAction) error {
+			var err error
+			report, err = installPreparedAtBoundary(prepared, opts, look, fontLook, runner, recovered)
+			return err
+		})
+		return report, resultErr
+	}
+	return installPreparedAtBoundary(prepared, opts, look, fontLook, runner, nil)
+}
+
+func installPreparedAtBoundary(prepared PreparedInstall, opts Options, look Lookup, fontLook FontLookup, runner Runner, recoveredActions []InstallAction) (InstallReport, error) {
 	plan := prepared.Plan
 	report := InstallReport{Profile: plan.Profile, Profiles: plan.Profiles, Tags: plan.Tags, Tier: plan.Tier}
 	requiredUnresolved := false
@@ -171,7 +192,18 @@ func InstallPrepared(prepared PreparedInstall, opts Options, look Lookup, fontLo
 	if hasToolchainEnvironment {
 		executionLook = toolchainEnvironment.Lookup
 	}
+	recovered := map[string]bool{}
+	for _, action := range recoveredActions {
+		if !actionPresent(action, opts, executionLook, fontLook) {
+			return report, fmt.Errorf("recovered %q but commands remain unavailable on PATH; ensure ~/.local/bin is on PATH", action.Dependency)
+		}
+		report.Items = append(report.Items, InstallItem{Dependency: action.Dependency, Requirement: action.Requirement, Status: InstallStatusInstalled, Provider: action.Provider, UserLocal: action.UserLocal})
+		recovered[action.Dependency] = true
+	}
 	for _, action := range plan.Actions {
+		if recovered[action.Dependency] {
+			continue
+		}
 		// A dependency can become present between preview and execution (or after
 		// an earlier toolchain action). It is safe to skip, but never to replace,
 		// the reviewed action.
@@ -199,11 +231,8 @@ func InstallPrepared(prepared PreparedInstall, opts Options, look Lookup, fontLo
 			if !ok {
 				return report, fmt.Errorf("install %q: user-local runner unavailable", action.Dependency)
 			}
-			if err := localRunner.RunUserLocal(action); err != nil {
+			if err := localRunner.RunUserLocal(action, func() bool { return actionPresent(action, opts, executionLook, fontLook) }); err != nil {
 				report.Items = append(report.Items, InstallItem{Dependency: action.Dependency, Requirement: action.Requirement, Status: InstallStatusFailed, Provider: action.Provider, Package: action.Package, UserLocal: action.UserLocal, Candidates: action.Candidates})
-				if action.Requirement == manifest.DependencyRequirementOptional {
-					continue
-				}
 				return report, fmt.Errorf("install %q: %w", action.Dependency, err)
 			}
 		} else if action.Executable != "" {
@@ -306,15 +335,6 @@ func InstallPrepared(prepared PreparedInstall, opts Options, look Lookup, fontLo
 			}
 			continue
 		}
-		if action.UserLocal != nil {
-			localRunner, ok := runner.(UserLocalRunner)
-			if !ok {
-				return report, fmt.Errorf("install %q: user-local runner unavailable", action.Dependency)
-			}
-			if err := localRunner.RecordUserLocal(action); err != nil {
-				return report, fmt.Errorf("record dependency metadata for %q: %w", action.Dependency, err)
-			}
-		}
 		report.Items = append(report.Items, InstallItem{
 			Dependency:   action.Dependency,
 			Requirement:  action.Requirement,
@@ -377,8 +397,8 @@ func missingCommandProbes(probes []string, look Lookup) []string {
 }
 
 type UserLocalRunner interface {
-	RunUserLocal(action InstallAction) error
-	RecordUserLocal(action InstallAction) error
+	RunUserLocal(action InstallAction, present func() bool) error
+	WithUserLocalBoundary(selected []UserLocalSelection, consume func([]InstallAction) error) error
 }
 
 func actionExecutable(action InstallAction) bool {
@@ -426,4 +446,21 @@ func installArgsWithConfirmation(action InstallAction) []string {
 		prefix = append(prefix, "--noconfirm")
 	}
 	return append(prefix, pkg)
+}
+
+// RecoverSelectedUserLocal reconciles only existing captured operations. Refresh
+// commands use it without introducing installation of newly missing packages.
+func RecoverSelectedUserLocal(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, runner UserLocalRunner) error {
+	selected, err := selectDependencies(m, opts)
+	if err != nil {
+		return err
+	}
+	return runner.WithUserLocalBoundary(selectedUserLocals(selected, opts), func(actions []InstallAction) error {
+		for _, action := range actions {
+			if !actionPresent(action, opts, look, fontLook) {
+				return fmt.Errorf("recovered %q but commands remain unavailable on PATH; ensure ~/.local/bin is on PATH", action.Dependency)
+			}
+		}
+		return nil
+	})
 }

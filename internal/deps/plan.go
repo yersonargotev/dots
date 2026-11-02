@@ -78,6 +78,7 @@ type Guidance struct {
 // PlanReport is the Dependency Plan for a Profile: OS-aware guidance for the
 // missing Dependencies under the active Tier. It is advisory only.
 type PlanReport struct {
+	selected  []UserLocalSelection
 	Profile   string            `json:"profile,omitempty"`
 	Profiles  []string          `json:"profiles,omitempty"`
 	Tags      []string          `json:"tags,omitempty"`
@@ -106,8 +107,22 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 		return PlanReport{}, err
 	}
 
-	report := PlanReport{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags, Tier: tier}
+	report := PlanReport{Profile: selection.Profile, Profiles: selection.Profiles, Tags: selection.Tags, Tier: tier, selected: selectedUserLocals(selected, opts)}
+	pending, err := pendingSelections(opts.Home, opts.StateRoot, report.selected)
+	if err != nil {
+		return PlanReport{}, err
+	}
+	recovering := map[string]InstallAction{}
+	for _, action := range pending {
+		recovering[action.Dependency] = action
+	}
 	for _, dep := range selected {
+		if action, ok := recovering[dep.Name]; ok {
+			action.Requirement = dep.RequirementValue()
+			report.Actions = append(report.Actions, action)
+			report.Items = append(report.Items, guidanceFor(action))
+			continue
+		}
 		if DependencyPresent(dep, opts, look, fontLook) {
 			continue
 		}

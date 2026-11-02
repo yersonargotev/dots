@@ -332,7 +332,7 @@ func (r *recordingRunner) Run(executable string, args []string) error {
 	return nil
 }
 
-func (r *recordingRunner) RunUserLocal(action deps.InstallAction) error {
+func (r *recordingRunner) RunUserLocal(action deps.InstallAction, _ func() bool) error {
 	r.userLocalCalls = append(r.userLocalCalls, action)
 	if r.err != nil {
 		return r.err
@@ -340,7 +340,7 @@ func (r *recordingRunner) RunUserLocal(action deps.InstallAction) error {
 	if r.afterUserLocal != nil {
 		r.afterUserLocal(action)
 	}
-	return nil
+	return r.RecordUserLocal(action)
 }
 
 func (r *recordingRunner) RecordUserLocal(action deps.InstallAction) error {
@@ -999,8 +999,8 @@ func TestInstallYesReportsUnresolvedWhenUserLocalBinIsNotOnPath(t *testing.T) {
 	if len(runner.userLocalCalls) != 1 {
 		t.Fatalf("user-local calls len = %d, want 1", len(runner.userLocalCalls))
 	}
-	if len(runner.userLocalRecordCalls) != 0 {
-		t.Fatalf("user-local metadata calls len = %d, want 0 before successful re-probe", len(runner.userLocalRecordCalls))
+	if len(runner.userLocalRecordCalls) != 1 {
+		t.Fatalf("user-local metadata calls len = %d, want finalized publication before PATH re-probe", len(runner.userLocalRecordCalls))
 	}
 	if len(report.Items) != 1 || report.Items[0].Status != deps.InstallStatusUnresolved {
 		t.Fatalf("report items = %#v, want unresolved user-local item", report.Items)
@@ -1026,4 +1026,12 @@ func userLocalInstallManifest() manifest.Manifest {
 			}},
 		}},
 	}
+}
+
+func (r *recordingRunner) RecoverUserLocal([]deps.UserLocalSelection) ([]deps.InstallAction, error) {
+	return nil, nil
+}
+
+func (r *recordingRunner) WithUserLocalBoundary(_ []deps.UserLocalSelection, consume func([]deps.InstallAction) error) error {
+	return consume(nil)
 }
