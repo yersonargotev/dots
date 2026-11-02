@@ -648,18 +648,19 @@ Current Provisioners:
 | Tool | Tags | OS | Rendered intent | Dependencies |
 |------|------|----|-----------------|--------------|
 | `zimfw` | `zimfw` | all | Install the ZimFW runtime under `~/.zim` when missing and run `zimfw init -q` using the dots-managed `~/.zimrc`. | `zsh`, `git`, `curl` |
-| `skills` | `playwright` | all | Install `playwright-cli` from `microsoft/playwright-cli` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`, copying the skill and references into the agent skill roots. | `npx` |
-| `skills` | `frontend-design` | all | Install `frontend-design` from `anthropics/skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
-| `skills` | `vercel-web-skills` | all | Install `vercel-react-best-practices`, `vercel-composition-patterns`, `vercel-react-view-transitions`, and `web-design-guidelines` from `vercel-labs/agent-skills` globally for `codex`, `claude-code`, `antigravity`, `opencode`, and `github-copilot` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `dart-skills` | all | Install the upstream Dart skill package from `dart-lang/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `flutter-skills` | all | Install the upstream Flutter skill package from `flutter/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
 | `skills` | `android-skills` | all | Install `android-cli` from `android/skills` globally for `codex` and `claude-code` through pinned `skills@1.5.12`. | `npx` |
 | `claude` | `claude-dart-mcp` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `claude mcp add --transport stdio dart -- dart mcp-server`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `claude`, `dart` |
 | `codex` | `codex-dart-mcp` | `darwin`, `linux` | Add the Dart and Flutter MCP server using `codex mcp add dart -- dart mcp-server --force-roots-fallback`; on Ubuntu, missing Dart points to Flutter SDK installation and `dart --version` verification before rerunning install. | `codex`, `dart` |
-| `claude` | `claude-chrome-devtools` | `darwin`, `linux` | Register marketplace `ChromeDevTools/chrome-devtools-mcp`. | `claude` |
-| `claude` | `claude-chrome-devtools` | `darwin`, `linux` | Install `chrome-devtools-mcp` from `chrome-devtools-plugins` with user scope. | `claude` |
-| `codex` | `codex-chrome-devtools` | `darwin`, `linux` | Add MCP server `chrome-devtools` using `npx -y chrome-devtools-mcp@latest --no-performance-crux`. | `codex` |
-| `codegraph` | `codegraph` | `darwin`, `linux` | Reuse `codegraph` when already on `PATH`; otherwise install it with the official curl bootstrap, then run `codegraph install --target codex,claude,antigravity,opencode --location global --yes` so CodeGraph configures MCP plus instructions for Codex, Claude Code, Antigravity, and OpenCode. Select with `--tag codegraph`. | `curl` |
+| `bat` | `bat`, `zsh` | `darwin`, `linux` | Build and validate the user-local Carbonfox theme cache only when `theme-carbonfox` is also selected. | `bat` |
+| `herdr` | `herdr` | `darwin` | Install `yersonargotev/herdr-tab-git` at pinned revision `21b2baa278f571fafa7a1247851a17754fbeedf0`. | `herdr`, `git`, `Node LTS (fnm)` |
+| `herdr` | `herdr` | `darwin` (arm64) | Install `yersonargotev/tabby` at pinned revision `19031d668f0f8a79b58591db4ce8bc8f8846e329`. | `herdr`, `git`, `python3`, `Rust stable (rustup)` |
+| `herdr` | `herdr` | `darwin` (arm64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr`, `git`, `curl`, `tar`, `pbcopy`, `open`, `Rust stable (rustup)` |
+| `herdr-custom` | `herdr-custom` | `darwin`, `linux` | Install `yersonargotev/herdr-tab-git` at pinned revision `21b2baa278f571fafa7a1247851a17754fbeedf0`. | `herdr-custom`, `git`, `Node LTS (fnm)` |
+| `herdr-custom` | `herdr-custom` | `darwin` (arm64) | Install `yersonargotev/tabby` at pinned revision `19031d668f0f8a79b58591db4ce8bc8f8846e329`. | `herdr-custom`, `git`, `python3`, `Rust stable (rustup)` |
+| `herdr-custom` | `herdr-custom` | `darwin` (arm64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr-custom`, `git`, `curl`, `tar`, `pbcopy`, `open`, `Rust stable (rustup)` |
+| `herdr-custom` | `herdr-custom` | `linux` (amd64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr-custom`, `git`, `curl`, `Rust stable (rustup)`, `C toolchain`, `tar`, `xdg-open`, `wl-copy`, `xclip`, `xsel` |
 
 ## Selection rules
 
