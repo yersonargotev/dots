@@ -48,6 +48,8 @@ func TestInstalledShellPoliciesPreserveNativeContent(t *testing.T) {
 	operatorHome := t.TempDir()
 	t.Setenv("HOME", operatorHome)
 	t.Setenv("ZDOTDIR", home)
+	t.Setenv("ZIM_HOME", filepath.Join(home, ".zim"))
+	t.Setenv("ZIM_CONFIG_FILE", filepath.Join(home, ".zimrc"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(operatorHome, ".config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(operatorHome, ".local/state"))
 	stubManifestProvisionerTools(t)
