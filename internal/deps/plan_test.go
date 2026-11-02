@@ -1,6 +1,9 @@
 package deps_test
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -583,9 +586,21 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 	if err != nil {
 		t.Fatalf("LoadFile() error = %v", err)
 	}
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assets := make([]map[string]string, 0, 4)
+		for _, name := range []string{"uv-x86_64-unknown-linux-gnu.tar.gz", "pnpm-linux-x64.tar.gz", "bun-linux-x64.zip", "gh_1.2.3_linux_amd64.tar.gz"} {
+			assets = append(assets, map[string]string{"name": name, "browser_download_url": server.URL + "/" + name, "digest": "sha256:" + strings.Repeat("a", 64)})
+		}
+		if err := json.NewEncoder(w).Encode(map[string]any{"tag_name": "v1.2.3", "assets": assets}); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer server.Close()
+	opts := deps.Options{Profile: "core", OS: "linux", Arch: "amd64", Home: t.TempDir(), HTTPClient: server.Client(), RollingReleaseURL: server.URL}
 
-	t.Run("uses Homebrew fallback when available", func(t *testing.T) {
-		report, err := deps.Plan(*m, deps.Options{Profile: "core", OS: "linux"}, noProviderLookup("sudo", "apt-get", "brew"), fontLookupSet(), deps.TierDebian)
+	t.Run("uses verified providers before Homebrew fallback", func(t *testing.T) {
+		report, err := deps.Plan(*m, opts, noProviderLookup("sudo", "apt-get", "brew"), fontLookupSet(), deps.TierDebian)
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
@@ -597,8 +612,8 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 		if githubCLI.Provider == deps.TierDebian || githubCLI.Executable == "sudo" {
 			t.Fatalf("GitHub CLI action = %#v, must not advertise unavailable Ubuntu apt package", githubCLI)
 		}
-		if githubCLI.Status != deps.InstallActionStatusInstallable || githubCLI.Provider != deps.TierHomebrew || githubCLI.Executable != "brew" {
-			t.Fatalf("GitHub CLI action = %#v, want installable Homebrew fallback", githubCLI)
+		if githubCLI.Status != deps.InstallActionStatusInstallable || githubCLI.Provider != deps.TierUserLocal || githubCLI.UserLocal == nil {
+			t.Fatalf("GitHub CLI action = %#v, want verified latest user-local provider", githubCLI)
 		}
 
 		for _, name := range []string{"bat", "starship", "zellij", "pnpm"} {
@@ -615,8 +630,8 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 		}
 	})
 
-	t.Run("stays manual when Homebrew is unavailable", func(t *testing.T) {
-		report, err := deps.Plan(*m, deps.Options{Profile: "core", OS: "linux"}, noProviderLookup("sudo", "apt-get"), fontLookupSet(), deps.TierDebian)
+	t.Run("uses verified providers without Homebrew", func(t *testing.T) {
+		report, err := deps.Plan(*m, opts, noProviderLookup("sudo", "apt-get"), fontLookupSet(), deps.TierDebian)
 		if err != nil {
 			t.Fatalf("Plan() error = %v", err)
 		}
@@ -625,8 +640,8 @@ func TestRepositoryManifestDoesNotAdvertiseUnavailableUbuntuAptPackages(t *testi
 		if !ok {
 			t.Fatalf("missing action for GitHub CLI in %#v", report.Actions)
 		}
-		if githubCLI.Status != deps.InstallActionStatusManual || githubCLI.Provider == deps.TierDebian || githubCLI.Executable == "sudo" || githubCLI.Manual == "" {
-			t.Fatalf("GitHub CLI action = %#v, want manual guidance without Ubuntu apt installability", githubCLI)
+		if githubCLI.Status != deps.InstallActionStatusInstallable || githubCLI.Provider != deps.TierUserLocal || githubCLI.UserLocal == nil {
+			t.Fatalf("GitHub CLI action = %#v, want verified latest without Ubuntu apt or Homebrew", githubCLI)
 		}
 
 		for _, name := range []string{"bat", "starship", "zellij", "pnpm"} {

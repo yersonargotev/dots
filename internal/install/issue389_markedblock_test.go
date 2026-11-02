@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yersonargotev/dots/internal/backups"
@@ -17,13 +18,26 @@ import (
 )
 
 func TestZshMarkedBlockLifecycle(t *testing.T) {
+	for _, name := range []string{"zshrc", "zshenv", "zimrc"} {
+		t.Run(name, func(t *testing.T) { testShellMarkedBlockLifecycle(t, name) })
+	}
+}
+
+func testShellMarkedBlockLifecycle(t *testing.T, name string) {
+	t.Helper()
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
 	stateRoot := filepath.Join(home, ".local", "state", "dots")
-	legacySource := filepath.Join(sourceRoot, "configs/zsh/zshrc")
-	loaderSource := filepath.Join(sourceRoot, "configs/zsh/loader.zsh")
+	legacyRel := "configs/zsh/" + name
+	loaderRel := "configs/zsh/loader." + name
+	if name == "zshrc" {
+		loaderRel = "configs/zsh/loader.zsh"
+	}
+	legacySource := filepath.Join(sourceRoot, legacyRel)
+	loaderSource := filepath.Join(sourceRoot, loaderRel)
 	legacy := []byte("# legacy portable shell\nexport OLD=1\n")
 	loader := []byte("# >>> dots managed block >>>\nsource \"${HOME}/.config/dots/zsh/zshrc\"\n# <<< dots managed block <<<\n")
+	loader = []byte(strings.ReplaceAll(string(loader), "/zshrc", "/"+name))
 	writeMigrationFile(t, legacySource, legacy)
 	runMigrationGit(t, sourceRoot, "init")
 	runMigrationGit(t, sourceRoot, "config", "user.email", "dots@example.test")
@@ -32,7 +46,7 @@ func TestZshMarkedBlockLifecycle(t *testing.T) {
 	runMigrationGit(t, sourceRoot, "commit", "-m", "legacy zsh")
 	revision := runMigrationGit(t, sourceRoot, "rev-parse", "HEAD")
 
-	target := filepath.Join(home, ".zshrc")
+	target := filepath.Join(home, "."+name)
 	if err := os.Symlink(legacySource, target); err != nil {
 		t.Fatalf("symlink legacy zsh: %v", err)
 	}
@@ -41,13 +55,15 @@ func TestZshMarkedBlockLifecycle(t *testing.T) {
 		t.Fatalf("append through legacy target: %v", err)
 	}
 	meta := state.Metadata{Version: state.CurrentVersion, Provenance: state.Provenance{SourceRoot: sourceRoot, SourceRevision: revision}, Entries: []state.Record{{
-		Target: target, Source: "configs/zsh/zshrc", Strategy: "symlink", Ownership: "whole",
+		Target: target, Source: legacyRel, Strategy: "symlink", Ownership: "whole",
 	}}}
 	if err := state.Save(state.Path(stateRoot), meta); err != nil {
 		t.Fatalf("save legacy metadata: %v", err)
 	}
-	oldManifest := zshManifest("configs/zsh/zshrc", "symlink", "")
-	newManifest := zshManifest("configs/zsh/loader.zsh", "copy", "marked-block")
+	oldManifest := zshManifest(legacyRel, "symlink", "")
+	newManifest := zshManifest(loaderRel, "copy", "marked-block")
+	oldManifest.Entries[0].Target = "~/." + name
+	newManifest.Entries[0].Target = "~/." + name
 	captures, err := repositoryrefresh.CaptureLegacyTargets(oldManifest, newManifest, meta, sourceRoot, home, "", revision)
 	if err != nil {
 		t.Fatalf("CaptureLegacyTargets() error = %v", err)
@@ -57,6 +73,10 @@ func TestZshMarkedBlockLifecycle(t *testing.T) {
 	runMigrationGit(t, sourceRoot, "add", ".")
 	runMigrationGit(t, sourceRoot, "commit", "-m", "marked zsh loader")
 
+	unproven, err := plan.Build(newManifest, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home})
+	if err != nil || len(unproven.Actions) != 1 || unproven.Actions[0].Status != plan.StatusConflict {
+		t.Fatalf("unproven symlink plan = (%#v, %v), want conflict", unproven, err)
+	}
 	opts := plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home, Metadata: meta, LegacyMigrations: captures}
 	p, err := plan.Build(newManifest, opts)
 	if err != nil {
@@ -90,6 +110,10 @@ func TestZshMarkedBlockLifecycle(t *testing.T) {
 	report, err := status.Build(newManifest, meta, status.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home})
 	if err != nil || len(report.Entries) != 1 || report.Entries[0].State != status.StateOK {
 		t.Fatalf("status after append = (%#v, %v), want ok", report, err)
+	}
+	repeated, err := plan.Build(newManifest, plan.Options{Profile: "default", OS: "linux", SourceRoot: sourceRoot, Home: home, Metadata: meta})
+	if err != nil || len(repeated.Actions) != 1 || repeated.Actions[0].Status != plan.StatusUnchanged {
+		t.Fatalf("repeat plan = (%#v, %v), want unchanged", repeated, err)
 	}
 
 	for name, content := range map[string][]byte{

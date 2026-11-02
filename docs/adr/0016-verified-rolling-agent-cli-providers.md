@@ -12,6 +12,22 @@ This decision partially supersedes ADR 0011 only for the separately named rollin
 
 **Consequences**: Rolling resolution requires read-only network access when a selected command is absent, official-metadata adapters, deterministic stable/prerelease and platform filtering, safe archive handling, and structured preview fields for the resolved artifact. Vendor auto-update defaults remain outside dots' ownership after installation, so the receipt is audit evidence rather than an enforced current version. Providers do not mutate shell startup files; `~/.local/bin` remains an explicit PATH prerequisite.
 
+**Workstation tool policies (#577)**: Linux uv, pnpm, Bun and GitHub CLI also use
+the latest stable official GitHub release and published asset SHA-256 when a
+missing tool needs a User-Local Provider. Their allowlisted repositories are
+[`astral-sh/uv`](https://github.com/astral-sh/uv/releases),
+[`pnpm/pnpm`](https://github.com/pnpm/pnpm/releases),
+[`oven-sh/bun`](https://github.com/oven-sh/bun/releases) and
+[`cli/cli`](https://github.com/cli/cli/releases). Existing Homebrew selection
+keeps its floating formula policy on macOS and Linux, without rolling metadata
+lookup; existing commands remain satisfied rather than forcibly upgraded.
+The uv bundle retains both uv and uvx. The separate `pnpm-standalone` recipe
+preserves the complete release bundle, including `dist/node-gyp-bin`, while old
+fixed `pnpm` declarations and receipts retain their original layout. GitHub CLI
+selects its version-qualified archive and `bin/gh` path. All four consume the
+pending/final receipt lifecycle in ADR 0021 without changing its authority,
+publication or recovery rules. Other version policies remain unchanged.
+
 **Codex tracer bullet**: The first closed recipe accepts only `rolling_user_local.recipe: codex`, reads stable release metadata from the official `openai/codex` repository, and selects the unique `codex-package-<target>.tar.gz` asset for macOS or Linux on amd64 or arm64. It requires the release asset's official SHA-256 digest before an action is installable. Installation verifies the downloaded bytes, enforces archive traversal and expansion limits, stages the versioned bundle under `~/.local/opt/codex/<version>`, atomically replaces `~/.local/bin/codex`, and records the resolved version, URL, artifact, digest, platform, installed path, provider, and timestamp.
 
 **Claude Code provider**: The closed `rolling_user_local.recipe: claude` adapter reads only Anthropic's official `stable` channel and the selected release's versioned `manifest.json` under `downloads.claude.ai/claude-code-releases`. It selects `darwin-x64`, `darwin-arm64`, `linux-x64`, or `linux-arm64`, requires the platform's SHA-256 checksum, downloads the immutable raw `claude` executable directly, and never invokes Anthropic's installer script or a package manager. The verified binary is staged under `~/.local/opt/claude/<version>/claude`, exposed atomically at `~/.local/bin/claude`, and recorded through the same resolved receipt contract. dots leaves Claude Code's vendor auto-update behavior unchanged.

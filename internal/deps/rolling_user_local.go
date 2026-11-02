@@ -86,6 +86,34 @@ var (
 		"linux_arm64":  "copilot-linux-arm64.tar.gz",
 	}
 	githubRollingSpecs = map[string]githubRollingSpec{
+		"gh": {
+			recipe: "gh", repository: "cli/cli", releasesURL: "https://api.github.com/repos/cli/cli/releases/latest",
+			command: "gh", platformAssets: map[string]string{
+				"linux_amd64": "gh_{version}_linux_amd64.tar.gz",
+				"linux_arm64": "gh_{version}_linux_arm64.tar.gz",
+			},
+		},
+		"bun": {
+			recipe: "bun", repository: "oven-sh/bun", releasesURL: "https://api.github.com/repos/oven-sh/bun/releases/latest",
+			command: "bun", platformAssets: map[string]string{
+				"linux_amd64": "bun-linux-x64.zip",
+				"linux_arm64": "bun-linux-aarch64.zip",
+			},
+		},
+		"pnpm-standalone": {
+			recipe: "pnpm-standalone", repository: "pnpm/pnpm", releasesURL: "https://api.github.com/repos/pnpm/pnpm/releases/latest",
+			command: "pnpm", platformAssets: map[string]string{
+				"linux_amd64": "pnpm-linux-x64.tar.gz",
+				"linux_arm64": "pnpm-linux-arm64.tar.gz",
+			},
+		},
+		"uv": {
+			recipe: "uv", repository: "astral-sh/uv", releasesURL: "https://api.github.com/repos/astral-sh/uv/releases/latest",
+			command: "uv", platformAssets: map[string]string{
+				"linux_amd64": "uv-x86_64-unknown-linux-gnu.tar.gz",
+				"linux_arm64": "uv-aarch64-unknown-linux-gnu.tar.gz",
+			},
+		},
 		codexRollingRecipe: {
 			recipe: codexRollingRecipe, repository: "openai/codex", releasesURL: codexReleasesAPIURL,
 			command: "codex", platformAssets: codexPlatformAssets,
@@ -134,7 +162,7 @@ func rollingGitHubArtifact(dep manifest.Dependency, opts Options, spec githubRol
 		return UserLocalArtifact{}, false, fmt.Errorf("dependency %q rolling_user_local recipe %q does not support %s/%s", dep.Name, spec.recipe, opts.OS, opts.Arch)
 	}
 	if resolved, ok := opts.ResolvedUserLocal[dep.Name]; ok {
-		if resolved.Recipe != spec.recipe || resolved.Version == "" || resolved.URL == "" || resolved.Checksum == "" || resolved.Artifact != artifactName || resolved.Platform != platform {
+		if resolved.Recipe != spec.recipe || resolved.Version == "" || resolved.URL == "" || resolved.Checksum == "" || resolved.Artifact != releaseAssetName(artifactName, resolved.Version) || resolved.Platform != platform {
 			return UserLocalArtifact{}, false, fmt.Errorf("dependency %q has incomplete resolved rolling artifact", dep.Name)
 		}
 		return resolved, true, nil
@@ -152,6 +180,7 @@ func rollingGitHubArtifact(dep manifest.Dependency, opts Options, spec githubRol
 	if err != nil {
 		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: %w", spec.recipe, err)
 	}
+	artifactName = releaseAssetName(artifactName, release.TagName)
 	asset, err := uniqueReleaseAsset(release, artifactName)
 	if err != nil {
 		return UserLocalArtifact{}, false, fmt.Errorf("resolve rolling user-local recipe %q: %w", spec.recipe, err)
@@ -170,6 +199,10 @@ func rollingGitHubArtifact(dep manifest.Dependency, opts Options, spec githubRol
 		Digest: "sha256:" + digest, Checksum: digest, Platform: platform,
 		Layout: userLocalLayoutBundle, Command: spec.command, Destination: destination, InstalledPath: installedPath,
 	}, true, nil
+}
+
+func releaseAssetName(pattern, version string) string {
+	return strings.ReplaceAll(pattern, "{version}", strings.TrimPrefix(version, "v"))
 }
 
 func rollingClaudeArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact, bool, error) {

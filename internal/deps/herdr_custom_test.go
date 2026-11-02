@@ -106,7 +106,7 @@ func TestHerdrCustomInstallPreservesOfficialAndUsesDotsConfig(t *testing.T) {
 	if err := os.WriteFile(official, []byte("official sentinel"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
 	data, a := customFixture(t, false, false, false)
 	fakeCustomDownload(t, data)
 	if err := InstallUserLocal(home, InstallAction{UserLocal: &a}); err != nil {
@@ -160,7 +160,7 @@ func TestHerdrCustomRejectsUnmanagedCommandBeforeDownload(t *testing.T) {
 	if err := os.WriteFile(path, original, 0755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
 	_, a := customFixture(t, false, false, false)
 	old := downloadUserLocalArtifact
 	downloadUserLocalArtifact = func(string, string) ([]byte, error) { t.Fatal("download before conflict validation"); return nil, nil }
@@ -182,6 +182,7 @@ func TestHerdrCustomRejectsInvalidBundleBeforeCommit(t *testing.T) {
 		missing, unsafe, badMode bool
 	}{{"missing-runtime", true, false, false}, {"unsafe-archive", false, true, false}, {"not-executable", false, false, true}} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PATH", "/usr/bin:/bin")
 			home := t.TempDir()
 			data, a := customFixture(t, tc.missing, tc.unsafe, tc.badMode)
 			fakeCustomDownload(t, data)
@@ -198,7 +199,7 @@ func TestHerdrCustomRejectsInvalidBundleBeforeCommit(t *testing.T) {
 func TestHerdrCustomUpgradePreservesOccupiedPriorLink(t *testing.T) {
 	home := t.TempDir()
 	bin := filepath.Join(home, ".local/bin")
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
 	data, old := customFixture(t, false, false, false)
 	fakeCustomDownload(t, data)
 	if err := InstallUserLocal(home, InstallAction{UserLocal: &old}); err != nil {
@@ -232,7 +233,7 @@ func TestHerdrCustomUpgradeRejectsUnconfinedOrUnverifiedPrior(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			home := t.TempDir()
 			bin := filepath.Join(home, ".local/bin")
-			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
 			data, a := customFixture(t, false, false, false)
 			fakeCustomDownload(t, data)
 			if err := InstallUserLocal(home, InstallAction{UserLocal: &a}); err != nil {

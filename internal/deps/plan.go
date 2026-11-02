@@ -304,7 +304,7 @@ func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look L
 		return nil, nil
 	}
 
-	if dep.RollingUserLocal != nil || isHerdrCustom(dep) {
+	if (dep.RollingUserLocal != nil && (tier != TierHomebrew || dep.Brew == "")) || isHerdrCustom(dep) {
 		artifact, ok, err := userLocalArtifact(dep, opts)
 		if err != nil {
 			return nil, err

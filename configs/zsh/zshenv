@@ -6,6 +6,3 @@ command -v nvim >/dev/null 2>&1 && export EDITOR=nvim
 
 # Rust / Cargo.
 [[ -r "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
-
-# Foundry (Ethereum toolchain).
-[[ -d "${HOME}/.foundry/bin" ]] && export PATH="${PATH}:${HOME}/.foundry/bin"

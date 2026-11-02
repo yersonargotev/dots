@@ -35,8 +35,8 @@ documentation, official project documentation, or the repository under review.
 | # | Source | Target | Classification | Evidence |
 |---:|---|---|---|---|
 | 1 | `configs/zsh/zshrc` | `~/.zshrc` | Application-Writable Target | The official Zsh `zsh-newuser-install` guided configuration supports `~/.zshrc`; after choices, it offers to save the file and backs up an existing one. [Zsh User Configuration Functions](https://zsh.sourceforge.io/Doc/Release/User-Contributions.html#User-Configuration-Functions) |
-| 2 | `configs/zsh/zimrc` | `~/.zimrc` | Read under ordinary use | Zimfw calls this its plugin-manager configuration and uses it to build files in `$ZIM_HOME`; its documented install/update commands write modules and `init.zsh` there, not `.zimrc`. No first-party normal writer to `.zimrc` was found. [Zimfw commands](https://zimfw.sh/docs/commands/) |
-| 3 | `configs/zsh/zshenv` | `~/.zshenv` | Read under ordinary use | Zsh documents `.zshenv` as a startup file it tests/loads. The documented new-user configurator handles only `.zshrc`; no normal writer to `.zshenv` was found. [Zsh modules](https://zsh.sourceforge.io/Doc/Release/Zsh-Modules.html), [new-user function](https://zsh.sourceforge.io/Doc/Release/User-Contributions.html#User-Configuration-Functions) |
+| 2 | `configs/zsh/zimrc` | `~/.config/dots/zsh/zimrc` | Read under ordinary use | Zimfw calls this its plugin-manager configuration and uses it to build files in `$ZIM_HOME`; its documented install/update commands write modules and `init.zsh` there, not `.zimrc`. No first-party normal writer to `.zimrc` was found. [Zimfw commands](https://zimfw.sh/docs/commands/) |
+| 3 | `configs/zsh/zshenv` | `~/.config/dots/zsh/zshenv` | Read under ordinary use | Zsh documents `.zshenv` as a startup file it tests/loads. The documented new-user configurator handles only `.zshrc`; no normal writer to `.zshenv` was found. [Zsh modules](https://zsh.sourceforge.io/Doc/Release/Zsh-Modules.html), [new-user function](https://zsh.sourceforge.io/Doc/Release/User-Contributions.html#User-Configuration-Functions) |
 | 4 | `configs/git/gitconfig` | `~/.config/dots/git/gitconfig` | Read under ordinary use | The regular native `~/.gitconfig` loads this portable baseline through its dots-owned initial block. Git reads the fragment, while supported global writes remain in the native file. [Git user manual](https://git-scm.com/docs/user-manual#telling-git-your-name) |
 | 5 | `configs/dots/theme.sh` | `~/.config/dots/theme.sh` | Read under ordinary use | This repository documents it as the helper read by the adaptive-theme setup; `tmux.conf` and statusline scripts source it. It has no external owning application or documented writer in scope. [Repository adaptive-theme audit](adaptive-theme-audit.md) |
 | 6 | `configs/dots/adaptive-theme` | `~/.config/dots/adaptive-theme` | Read under ordinary use | The repository documents it as an opt-in marker read by `theme.sh`; installing the tag creates it. No application writer in scope was found. [Repository adaptive-theme audit](adaptive-theme-audit.md) |
@@ -54,6 +54,12 @@ documentation, official project documentation, or the repository under review.
 | 18 | `configs/zed/settings.json` | `~/.config/zed/settings.json` | Application-Writable Target | Zed’s theme selector saves the selected theme to the settings file, and its settings UI changes settings directly. The Zed FAQ identifies this exact path. [Zed themes](https://zed.dev/docs/themes), [Zed FAQ](https://zed.dev/faq) |
 | 19 | `configs/zed/keymap.json` | `~/.config/zed/keymap.json` | Application-Writable Target | Zed’s keymap editor says edits made there are reflected in `keymap.json`; the same page gives this exact macOS/Linux path. [Zed key bindings](https://zed.dev/docs/key-bindings) |
 | 20 | `configs/zed/themes/catppuccin-blue.json` | `~/.config/zed/themes/catppuccin-blue.json` | Explicit operator output | Zed’s Theme Builder lets the operator export JSON for local use; local theme files are then placed in the themes directory. The documentation does not identify an automatic writer to this filename, so this is an explicit export destination rather than normal-use mutation. [Zed themes](https://zed.dev/docs/themes), [Theme Builder announcement](https://zed.dev/blog/theme-builder) |
+
+Under the explicit configuration policy in #577, native `~/.zimrc` and
+`~/.zshenv` now use regular marked loaders as well. Their portable symlinks
+above remain read under ordinary use; personal additions stay outside the
+native managed blocks. This extends co-ownership without changing the dated
+first-party writer evidence.
 
 ## Special analysis
 

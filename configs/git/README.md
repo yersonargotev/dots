@@ -6,6 +6,9 @@ regular native `~/.gitconfig`. The block loads the portable
 established `~/.gitconfig.local` extension. Native content follows the block and
 therefore has final precedence.
 
+The portable pull policy is `pull.rebase=true`; the local extension and native
+content may override it through the same precedence.
+
 The native file remains writable by `git config --global` and other Git tooling
 without changing the Installed Repository. Dots preserves comments and values
 outside its exact marked block during install, update, migration, and uninstall.
