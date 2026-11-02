@@ -31,11 +31,19 @@ The live `~/.config/ghostty/config` file was classified before adoption:
 
 | Category | Examples | Repository decision |
 | --- | --- | --- |
-| **Portable** | font family, font size, Catppuccin Mocha fallback theme, optional `adaptive-theme` native light/dark include, left-Option-as-Alt behavior for managed terminal bindings, intentional keybindings for terminal workflow and Zellij/tmux/Herdr forwarding | Managed in `configs/ghostty/config.ghostty`. |
+| **Portable** | font family, font size, Catppuccin Mocha fallback theme, optional `adaptive-theme` native light/dark include, left-Option-as-Alt behavior for managed terminal bindings, native split, tab, window and resize shortcuts | Managed in `configs/ghostty/config.ghostty`. |
 | **Machine-specific** | window dimensions, opacity/blur, window padding ergonomics, explicit shell/command paths, initial working directories, OS integrations, display/GPU/host-dependent behavior | Excluded from the shared file; document deliberate host-specific exceptions in `configs/ghostty/config.local.ghostty.example`. |
 | **Generated** | logs, caches, sessions, backups, temporary files, generated state, local shaders | Never committed. |
 | **Private** | secrets, authenticated state, private paths, hostnames, machine IDs | Excluded. |
 
+
+## Native terminal shortcuts
+
+Ghostty implements the [shared Rex/Ghostty shortcut table](../rex/README.md#shared-shortcuts)
+with its own split, tab and window actions. These replace the old Cmd+Shift+h/j/k/l
+Herdr forwarding sequences. Ghostty does not require or control Rex. The resize
+key table requires Ghostty 1.3 or later; Catppuccin and Carbonfox variants use the
+same bindings. Other portable preferences and local overrides are retained.
 
 ## Adaptive theme opt-in
 

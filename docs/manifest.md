@@ -107,10 +107,10 @@ from compact discovery unless `--all` is supplied.
 |---------|--------|------|-------------|
 | `agents` | current | `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI. |
 | `core` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq` | Core dotfiles and general developer tooling without agent, web, or mobile provisioners. |
-| `desktop` | current | `ghostty`, `warp`, `zed`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
+| `desktop` | current | `ghostty`, `warp`, `zed`, `rex`, `codexbar` | Desktop-only configuration and integrations; compose with core when core dotfiles are desired too. |
 | `mobile` | current | `dart-skills`, `flutter-skills`, `android-skills`, `claude-dart-mcp`, `codex-dart-mcp`, `antigravity-dart-mcp`, `vscode-mobile` | Optional Dart and Flutter mobile development capabilities. |
 | `web` | current | `playwright`, `frontend-design`, `vercel-web-skills`, `claude-chrome-devtools`, `codex-chrome-devtools`, `opencode-chrome-devtools` | Optional frontend and browser workbench. |
-| `workstation` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq`, `ghostty`, `warp`, `zed`, `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
+| `workstation` | current | `zsh`, `zimfw`, `git`, `starship`, `tmux`, `herdr`, `zellij`, `atuin`, `neovim`, `tuicr`, `bat`, `node`, `rust`, `go`, `uv`, `pnpm`, `bun`, `fzf`, `zoxide`, `lazygit`, `eza`, `ripgrep`, `delta`, `fd`, `gh`, `jq`, `ghostty`, `warp`, `zed`, `rex`, `codex`, `claude`, `opencode`, `antigravity`, `copilot` | Composite core, desktop, and Agent CLI Baseline selection; web and mobile stay opt-in. |
 
 ### Tags
 
@@ -158,6 +158,7 @@ from compact discovery unless `--all` is supplied.
 | `opencode-chrome-devtools` | surface | current | OpenCode Chrome DevTools JSON subset integration. |  |
 | `playwright` | surface | current | Playwright CLI dependency and upstream agent skill. |  |
 | `pnpm` | surface | current | pnpm JavaScript package manager. |  |
+| `rex` | surface | current | Rex terminal configuration and manually installed application. |  |
 | `ripgrep` | surface | current | ripgrep recursive text search utility. |  |
 | `rust` | surface | current | Rust stable toolchain managed through rustup. |  |
 | `starship` | surface | current | Starship prompt configuration. |  |

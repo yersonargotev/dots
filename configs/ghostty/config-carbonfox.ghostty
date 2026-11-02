@@ -28,8 +28,37 @@ config-file = ?config.local.ghostty
 macos-option-as-alt = left
 keybind = alt+left=unbind
 keybind = alt+right=unbind
-keybind = super+shift+h=esc:H
-keybind = super+shift+j=esc:J
-keybind = super+shift+k=esc:K
-keybind = super+shift+l=esc:L
+# Native terminal actions; no forwarding to Herdr or Rex.
+keybind = ctrl+alt+h=goto_split:left
+keybind = ctrl+alt+j=goto_split:down
+keybind = ctrl+alt+k=goto_split:up
+keybind = ctrl+alt+l=goto_split:right
+keybind = super+shift+h=previous_tab
+keybind = super+shift+l=next_tab
+# Ghostty windows are the nearest equivalent to Rex sessions.
+keybind = super+shift+k=goto_window:previous
+keybind = super+shift+j=goto_window:next
+keybind = super+shift+n=new_window
+keybind = super+t=new_tab
+keybind = super+1=goto_tab:1
+keybind = super+2=goto_tab:2
+keybind = super+3=goto_tab:3
+keybind = super+4=goto_tab:4
+keybind = super+5=goto_tab:5
+keybind = super+6=goto_tab:6
+keybind = super+7=goto_tab:7
+keybind = super+8=goto_tab:8
+keybind = super+9=last_tab
+keybind = super+d=new_split:right
+keybind = super+shift+d=new_split:down
+keybind = super+shift+enter=toggle_split_zoom
+keybind = super+w=close_surface
+keybind = super+shift+w=close_tab
+# Persistent resize mode (Ghostty >= 1.3); Escape leaves it.
+keybind = super+r=activate_key_table:resize
+keybind = resize/h=resize_split:left,10
+keybind = resize/j=resize_split:down,10
+keybind = resize/k=resize_split:up,10
+keybind = resize/l=resize_split:right,10
+keybind = resize/escape=deactivate_key_table
 keybind = alt+s=write_screen_file:paste

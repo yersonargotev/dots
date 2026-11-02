@@ -145,6 +145,10 @@ tags:
       - fd
       - gh
       - jq
+  rex:
+    description: Rex terminal configuration and manually installed application.
+    kind: surface
+    status: current
   ghostty:
     description: Ghostty terminal configuration and application requirement.
     kind: surface
@@ -324,6 +328,7 @@ profiles:
       - ghostty
       - warp
       - zed
+      - rex
       - codexbar
   agents:
     description: Native configuration for Codex, Claude Code, OpenCode, Antigravity, and Copilot CLI.
@@ -388,6 +393,7 @@ profiles:
       - ghostty
       - warp
       - zed
+      - rex
       - codex
       - claude
       - opencode
@@ -980,6 +986,31 @@ entries:
           checksums:
             linux_amd64: 0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751
             linux_arm64: 15e6534d42644d66973d136c590c49739dcfd6a1a2a0d3d917973f16c81b45fb
+  - source: configs/rex/init.lua
+    target: ~/.config/rex/init.lua
+    strategy: copy
+    tags:
+      - rex
+    os:
+      - darwin
+      - linux
+    dependencies:
+      - name: rex
+        command: rex
+        darwin_app: Rex Beta.app
+        requirement: optional
+        manual: >-
+          Install Rex manually from https://www.superlogical.com/rex/ to use
+          the managed configuration. dots manages the configuration and theme
+          even when Rex is absent; dots does not install Rex.
+  - source: configs/rex/themes/Catppuccin Mocha Blue.ghostty
+    target: ~/.config/rex/themes/Catppuccin Mocha Blue.ghostty
+    strategy: copy
+    tags:
+      - rex
+    os:
+      - darwin
+      - linux
   - source: configs/ghostty/config.ghostty
     source_overrides:
       theme-carbonfox: configs/ghostty/config-carbonfox.ghostty
