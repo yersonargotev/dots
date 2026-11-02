@@ -34,15 +34,16 @@ type CommandRunner func(command string, args ...string) (string, error)
 
 // Options carries the resolved inputs needed to select Dependencies.
 type Options struct {
-	Profile   string
-	Profiles  []string
-	ExtraTags []string
-	Selection *manifest.Selection
-	OS        string
-	Arch      string
-	Home      string
-	StateRoot string
-	AppLookup AppLookup
+	Profile      string
+	Profiles     []string
+	ExtraTags    []string
+	ExcludedTags []string
+	Selection    *manifest.Selection
+	OS           string
+	Arch         string
+	Home         string
+	StateRoot    string
+	AppLookup    AppLookup
 	// HTTPClient and RollingReleaseURL are injectable test seams for controlled
 	// release fixtures. Production callers leave both unset, which selects the
 	// allowlisted official metadata endpoint and a bounded default client.
@@ -284,7 +285,7 @@ func resolveOptionsSelection(m manifest.Manifest, opts Options) (manifest.Select
 	}
 	profiles := manifest.SelectedProfileNames(opts.Profile, opts.Profiles)
 	if len(profiles) == 0 && len(opts.ExtraTags) == 0 {
-		return manifest.ResolveSelection(m, profiles, nil)
+		return manifest.ResolveSelection(m, profiles, nil, opts.ExcludedTags...)
 	}
-	return manifest.ResolveReadOnlySelection(m, profiles, opts.ExtraTags)
+	return manifest.ResolveReadOnlySelection(m, profiles, opts.ExtraTags, opts.ExcludedTags...)
 }

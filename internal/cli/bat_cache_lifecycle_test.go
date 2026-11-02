@@ -67,7 +67,7 @@ func TestBatCacheTerminalSelectionFailurePreservesAuthorityAndReruns(t *testing.
 	fixture := newCarbonfoxFixture(t, "linux")
 	fault := errors.New("injected terminal selection failure")
 	originalCommit := commitInstallationMetadata
-	commitInstallationMetadata = func(install.MetadataCommit, state.InstalledSelection) error { return fault }
+	commitInstallationMetadata = func(install.MetadataCommit, *state.InstalledSelection, state.InstalledSelection) error { return fault }
 	t.Cleanup(func() { commitInstallationMetadata = originalCommit })
 
 	args := []string{

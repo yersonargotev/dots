@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -24,18 +25,20 @@ import (
 )
 
 type updateOptions struct {
-	file            string
-	profiles        []string
-	extraTags       []string
-	sourceRoot      string
-	home            string
-	stateRoot       string
-	dryRun          bool
-	yes             bool
-	noTUI           bool
-	ackSelection    bool
-	changeAccepted  bool
-	selectionIntent *selection.Intent
+	file                         string
+	profiles                     []string
+	extraTags                    []string
+	excludedTags                 []string
+	previousSelectionFingerprint string
+	sourceRoot                   string
+	home                         string
+	stateRoot                    string
+	dryRun                       bool
+	yes                          bool
+	noTUI                        bool
+	ackSelection                 bool
+	changeAccepted               bool
+	selectionIntent              *selection.Intent
 }
 
 func newUpdateCommand() *cobra.Command {
@@ -43,6 +46,7 @@ func newUpdateCommand() *cobra.Command {
 		file         string
 		profiles     []string
 		extraTags    []string
+		excludedTags []string
 		sourceRoot   string
 		home         string
 		stateRoot    string
@@ -66,7 +70,7 @@ func newUpdateCommand() *cobra.Command {
 		// conditions, not command misuse, so do not dump the usage block.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := runUpdateWorkflow(cmd, updateOptions{file: file, profiles: profiles, extraTags: extraTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI, ackSelection: ackSelection}, true)
+			_, err := runUpdateWorkflow(cmd, updateOptions{file: file, profiles: profiles, extraTags: extraTags, excludedTags: excludedTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI, ackSelection: ackSelection}, true)
 			return err
 		},
 	}
@@ -74,13 +78,14 @@ func newUpdateCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&file, "file", "f", "dots.yaml", "manifest file to install after updating")
 	cmd.Flags().StringArrayVarP(&profiles, "profile", "p", nil, selectionProfileHelp)
 	cmd.Flags().StringArrayVar(&extraTags, "tag", nil, selectionTagHelp)
+	cmd.Flags().StringArrayVar(&excludedTags, "exclude-tag", nil, selectionExcludeTagHelp)
 	cmd.Flags().StringVar(&sourceRoot, "source-root", "", "installed repository root to update (default ~/.local/share/dots)")
 	cmd.Flags().StringVar(&home, "home", "", "target home directory to install into (default: the current user's home); use a sandbox path to avoid touching real config")
 	cmd.Flags().StringVar(&stateRoot, "state-root", "", "state directory for Installation Metadata and Backup Sets (default ~/.local/state/dots)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "fetch and report the available update and Install Plan without fast-forwarding the working tree or installing files")
 	cmd.Flags().BoolVar(&yes, "yes", false, "apply safe install actions without prompting; conflicts default to skip")
 	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use text prompts instead of the interactive TUI for conflict resolution")
-	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of previously selected Profiles or extra Tags")
+	cmd.Flags().BoolVar(&ackSelection, "acknowledge-selection-change", false, "with --yes, acknowledge removal of selected Profiles/extra Tags or addition of exclusions")
 	registerSelectionFlagCompletion(cmd)
 	return cmd
 }
@@ -142,7 +147,7 @@ func renderUpdate(out io.Writer, upd gitrepo.Update, dryRun bool) {
 	fmt.Fprintln(out)
 }
 
-func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resolvedPaths, opts updateOptions) (*manifest.Manifest, selection.Effective, error) {
+func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resolvedPaths, meta state.Metadata, opts updateOptions) (*manifest.Manifest, selection.Effective, error) {
 	// The pre-update manifest is inventory, not an executable contract. Its
 	// Provisioner dialect may have been retired by the newly installed binary,
 	// so load only the fields needed to resolve intent and report evolution.
@@ -150,9 +155,14 @@ func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resol
 	if err != nil {
 		return nil, selection.Effective{}, err
 	}
-	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
-	if err != nil {
-		return nil, selection.Effective{}, err
+	if opts.previousSelectionFingerprint != "" {
+		fingerprint, err := installedSelectionFingerprint(meta.InstalledSelection)
+		if err != nil {
+			return nil, selection.Effective{}, err
+		}
+		if fingerprint != opts.previousSelectionFingerprint {
+			return nil, selection.Effective{}, fmt.Errorf("installed selection changed concurrently across upgrade continuation")
+		}
 	}
 	if opts.selectionIntent != nil {
 		effective, err := selection.ResolveIntent(*m, *opts.selectionIntent)
@@ -161,14 +171,24 @@ func resolveUpdateSelection(cmd *cobra.Command, manifestPath string, paths resol
 		}
 		if opts.selectionIntent.Source == selection.SourceExplicit {
 			effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, runtime.GOOS)
+		} else if meta.InstalledSelection != nil {
+			recorded, err := selection.ResolveEffective(*m, nil, nil, meta.InstalledSelection)
+			if err != nil {
+				return nil, selection.Effective{}, err
+			}
+			if !slices.Equal(effective.Profiles, recorded.Profiles) || !slices.Equal(effective.ExtraTags, recorded.ExtraTags) || !slices.Equal(effective.ExcludedTags, recorded.ExcludedTags) {
+				return nil, selection.Effective{}, fmt.Errorf("upgrade continuation intent does not match recorded selection; restart dots upgrade")
+			}
+		} else if opts.selectionIntent.Source == selection.SourceRecorded {
+			return nil, selection.Effective{}, fmt.Errorf("upgrade continuation has no recorded selection; restart dots upgrade")
 		}
 		return m, effective, guardCarbonfoxRefreshPreference(meta.InstalledSelection, effective.Selection.Tags, opts.dryRun)
 	}
-	if len(opts.profiles) == 0 && len(opts.extraTags) == 0 && meta.InstalledSelection == nil && (meta.Version == 1 || meta.Version == 2) {
+	if len(opts.profiles) == 0 && len(opts.extraTags) == 0 && len(opts.excludedTags) == 0 && meta.InstalledSelection == nil && (meta.Version == 1 || meta.Version == 2) {
 		effective, err := resolveLegacyUpdateSelection(cmd, *m, meta, paths, opts)
 		return m, effective, err
 	}
-	effective, err := selection.ResolveEffective(*m, opts.profiles, opts.extraTags, meta.InstalledSelection)
+	effective, err := selection.ResolveEffective(*m, opts.profiles, opts.extraTags, meta.InstalledSelection, opts.excludedTags...)
 	if err == nil && effective.Report.Source == selection.SourceExplicit {
 		effective = selection.CompareInstalled(*m, effective, meta.InstalledSelection, runtime.GOOS)
 	}
@@ -193,7 +213,11 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (resul
 	if !cmd.Flags().Changed("file") {
 		manifestPath = filepath.Join(paths.SourceRoot, opts.file)
 	}
-	previousManifest, effective, err := resolveUpdateSelection(cmd, manifestPath, paths, opts)
+	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
+	if err != nil {
+		return updateReport{}, err
+	}
+	previousManifest, effective, err := resolveUpdateSelection(cmd, manifestPath, paths, meta, opts)
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -211,10 +235,6 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (resul
 	if errors.Is(err, gitrepo.ErrNotFastForward) {
 		return updateReport{}, fmt.Errorf("installed repository %s has diverged from its upstream and cannot be fast-forwarded; resolve it manually with git", paths.SourceRoot)
 	}
-	if err != nil {
-		return updateReport{}, err
-	}
-	meta, err := loadInstallationMetadata(paths, opts.stateRoot)
 	if err != nil {
 		return updateReport{}, err
 	}
@@ -329,7 +349,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (resul
 	if err := validateCarbonfoxNativeSupport(cmd.Context(), p, paths.Home, runtime.GOOS, nil); err != nil {
 		return updateReport{}, err
 	}
-	installOptions := install.Options{SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}
+	installOptions := install.Options{CheckSelection: true, ExpectedSelection: meta.InstalledSelection, SourceRoot: paths.SourceRoot, Home: paths.Home, StateRoot: paths.StateRoot, ConflictDecisions: conflictDecisions}
 	var batInput *batcache.Input
 	var batCaptures map[install.SourceCaptureKey]install.CapturedSource
 	if hasBatCacheStep(provPlan) {
@@ -364,7 +384,7 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (resul
 			return updateReport{}, err
 		}
 		installedSelection := effective.InstalledSelection(state.CaptureProvenance(paths.SourceRoot, version.Value))
-		if err := commitInstallationMetadata(metadataCommit, installedSelection); err != nil {
+		if err := commitInstallationMetadata(metadataCommit, meta.InstalledSelection, installedSelection); err != nil {
 			return updateReport{}, err
 		}
 		if releaseErr := install.ReleaseCapturedSources(batCaptures); releaseErr != nil {

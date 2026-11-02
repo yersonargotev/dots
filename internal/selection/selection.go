@@ -31,6 +31,7 @@ type Report struct {
 	Source        Source                    `json:"source"`
 	Profiles      []string                  `json:"profiles"`
 	ExtraTags     []string                  `json:"extra_tags"`
+	ExcludedTags  []string                  `json:"excluded_tags,omitempty"`
 	EffectiveTags []string                  `json:"effective_tags"`
 	TagMigrations []manifest.TagReplacement `json:"tag_migrations,omitempty"`
 	Delta         *Delta                    `json:"delta,omitempty"`
@@ -41,6 +42,7 @@ type Report struct {
 type Snapshot struct {
 	Profiles      []string `json:"profiles"`
 	ExtraTags     []string `json:"extra_tags"`
+	ExcludedTags  []string `json:"excluded_tags,omitempty"`
 	EffectiveTags []string `json:"effective_tags"`
 }
 
@@ -48,6 +50,7 @@ type Snapshot struct {
 type Changes struct {
 	Profiles       []string `json:"profiles"`
 	ExtraTags      []string `json:"extra_tags"`
+	ExcludedTags   []string `json:"excluded_tags,omitempty"`
 	EffectiveTags  []string `json:"effective_tags"`
 	ManagedEntries []string `json:"managed_entries"`
 	Dependencies   []string `json:"dependencies"`
@@ -93,41 +96,45 @@ func (e *EvolutionError) JSONErrorData() any {
 // Effective contains the validated inputs for downstream command builders and
 // their corresponding report.
 type Effective struct {
-	Profiles  []string
-	ExtraTags []string
-	Selection manifest.Selection
-	Report    Report
+	Profiles     []string
+	ExtraTags    []string
+	ExcludedTags []string
+	Selection    manifest.Selection
+	Report       Report
 
 	// intentExtraTags preserves the authoritative pre-normalization input for
 	// repository evolution and binary continuation. Persisted ExtraTags remain
 	// normalized current Tags.
-	intentExtraTags []string
-	allowEmpty      bool
+	intentExtraTags    []string
+	intentExcludedTags []string
+	allowEmpty         bool
 }
 
 // Intent is the authoritative Profile and explicit extra Tag input together
 // with its provenance. It is safe to carry across process boundaries because it
 // excludes the resolved Tag snapshot, which is audit data rather than intent.
 type Intent struct {
-	Source     Source
-	Profiles   []string
-	ExtraTags  []string
-	AllowEmpty bool
+	Source       Source
+	Profiles     []string
+	ExtraTags    []string
+	ExcludedTags []string
+	AllowEmpty   bool
 }
 
 // ResolveEffective chooses and validates the selection for a command. Any
 // explicit Profile or Tag wins over the recorded Installed Selection.
-func ResolveEffective(m manifest.Manifest, explicitProfiles, explicitTags []string, recorded *state.InstalledSelection) (Effective, error) {
-	intent := Intent{Source: SourceExplicit, Profiles: explicitProfiles, ExtraTags: explicitTags}
-	if len(explicitProfiles) == 0 && len(explicitTags) == 0 {
+func ResolveEffective(m manifest.Manifest, explicitProfiles, explicitTags []string, recorded *state.InstalledSelection, excludedTags ...string) (Effective, error) {
+	intent := Intent{Source: SourceExplicit, Profiles: explicitProfiles, ExtraTags: explicitTags, ExcludedTags: excludedTags}
+	if len(explicitProfiles) == 0 && len(explicitTags) == 0 && len(excludedTags) == 0 {
 		if recorded == nil {
 			return Effective{}, ErrSelectionRequired
 		}
 		intent = Intent{
-			Source:     SourceRecorded,
-			Profiles:   recorded.Profiles,
-			ExtraTags:  recorded.ExtraTags,
-			AllowEmpty: len(recorded.Profiles) == 0 && len(recorded.ExtraTags) == 0,
+			Source:       SourceRecorded,
+			Profiles:     recorded.Profiles,
+			ExtraTags:    recorded.ExtraTags,
+			ExcludedTags: recorded.ExcludedTags,
+			AllowEmpty:   len(recorded.Profiles) == 0 && len(recorded.ExtraTags) == 0,
 		}
 	}
 	return ResolveIntent(m, intent)
@@ -135,8 +142,8 @@ func ResolveEffective(m manifest.Manifest, explicitProfiles, explicitTags []stri
 
 // ResolveReadOnly chooses and validates the selection for a read-only command.
 // Any explicit Profile or tag wins over the recorded Installed Selection.
-func ResolveReadOnly(m manifest.Manifest, explicitProfiles, explicitTags []string, recorded *state.InstalledSelection) (Effective, error) {
-	return ResolveEffective(m, explicitProfiles, explicitTags, recorded)
+func ResolveReadOnly(m manifest.Manifest, explicitProfiles, explicitTags []string, recorded *state.InstalledSelection, excludedTags ...string) (Effective, error) {
+	return ResolveEffective(m, explicitProfiles, explicitTags, recorded, excludedTags...)
 }
 
 // ResolveIntent re-resolves authoritative intent against the current Install
@@ -150,7 +157,7 @@ func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
 		return Effective{}, err
 	}
 
-	resolved, err := manifest.ResolveReadOnlySelection(m, intent.Profiles, intent.ExtraTags)
+	resolved, err := manifest.ResolveReadOnlySelection(m, intent.Profiles, intent.ExtraTags, intent.ExcludedTags...)
 	if err != nil {
 		return Effective{}, fmt.Errorf("%s selection: %w", intent.Source, err)
 	}
@@ -159,14 +166,20 @@ func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
 		return Effective{}, fmt.Errorf("%s selection: %w", intent.Source, err)
 	}
 
+	normalizedExcludedTags, _, err := manifest.NormalizeTags(m, intent.ExcludedTags)
+	if err != nil {
+		return Effective{}, fmt.Errorf("%s selection: %w", intent.Source, err)
+	}
 	orderedProfiles := cloneStrings(resolved.Profiles)
 	orderedExtraTags := orderedUnique(normalizedExtraTags)
 	effectiveTags := cloneStrings(resolved.Tags)
 	return Effective{
-		Profiles:        cloneStrings(orderedProfiles),
-		ExtraTags:       cloneStrings(orderedExtraTags),
-		intentExtraTags: cloneStrings(intent.ExtraTags),
-		allowEmpty:      intent.AllowEmpty,
+		Profiles:           cloneStrings(orderedProfiles),
+		ExtraTags:          cloneStrings(orderedExtraTags),
+		ExcludedTags:       append([]string(nil), normalizedExcludedTags...),
+		intentExtraTags:    cloneStrings(intent.ExtraTags),
+		intentExcludedTags: append([]string(nil), intent.ExcludedTags...),
+		allowEmpty:         intent.AllowEmpty,
 		Selection: manifest.Selection{
 			Profile:      resolved.Profile,
 			Profiles:     cloneStrings(orderedProfiles),
@@ -177,6 +190,7 @@ func ResolveIntent(m manifest.Manifest, intent Intent) (Effective, error) {
 			Source:        intent.Source,
 			Profiles:      orderedProfiles,
 			ExtraTags:     orderedExtraTags,
+			ExcludedTags:  append([]string(nil), normalizedExcludedTags...),
 			EffectiveTags: effectiveTags,
 			TagMigrations: cloneTagReplacements(resolved.Replacements),
 		},
@@ -189,11 +203,16 @@ func (e Effective) Intent() Intent {
 	if extraTags == nil {
 		extraTags = e.ExtraTags
 	}
+	excludedTags := e.intentExcludedTags
+	if excludedTags == nil {
+		excludedTags = e.ExcludedTags
+	}
 	return Intent{
-		Source:     e.Report.Source,
-		Profiles:   cloneStrings(e.Profiles),
-		ExtraTags:  cloneStrings(extraTags),
-		AllowEmpty: e.allowEmpty,
+		ExcludedTags: append([]string(nil), excludedTags...),
+		Source:       e.Report.Source,
+		Profiles:     cloneStrings(e.Profiles),
+		ExtraTags:    cloneStrings(extraTags),
+		AllowEmpty:   e.allowEmpty,
 	}
 }
 
@@ -205,6 +224,7 @@ func CompareEvolution(previousManifest, currentManifest manifest.Manifest, previ
 	delta := emptyDelta(snapshot(previous), Snapshot{
 		Profiles:      cloneStrings(intent.Profiles),
 		ExtraTags:     cloneStrings(intent.ExtraTags),
+		ExcludedTags:  append([]string(nil), intent.ExcludedTags...),
 		EffectiveTags: make([]string, 0),
 	})
 	delta.MissingProfiles = missingProfiles(currentManifest, intent.Profiles)
@@ -250,7 +270,7 @@ func CompareInstalled(m manifest.Manifest, requested Effective, recorded *state.
 		return requested
 	}
 	if equalStrings(recorded.Profiles, requested.Profiles) &&
-		equalStrings(recorded.ExtraTags, requested.ExtraTags) {
+		equalStrings(recorded.ExtraTags, requested.ExtraTags) && equalStrings(recorded.ExcludedTags, requested.ExcludedTags) {
 		return requested
 	}
 
@@ -262,6 +282,8 @@ func CompareInstalled(m manifest.Manifest, requested Effective, recorded *state.
 	currentSurface := selectedSurface(m, requested.Selection, osName)
 	previous := surfaceSnapshot(recorded.Profiles, recorded.ExtraTags, previousSurface)
 	current := surfaceSnapshot(requested.Profiles, requested.ExtraTags, currentSurface)
+	previous.ExcludedTags = append([]string(nil), recorded.ExcludedTags...)
+	current.ExcludedTags = append([]string(nil), requested.ExcludedTags...)
 	delta := emptyDelta(previous, current)
 	delta.Added = surfaceDifference(currentSurface, previousSurface)
 	delta.Added.Profiles = difference(current.Profiles, previous.Profiles)
@@ -269,13 +291,19 @@ func CompareInstalled(m manifest.Manifest, requested Effective, recorded *state.
 	delta.Removed = surfaceDifference(previousSurface, currentSurface)
 	delta.Removed.Profiles = difference(previous.Profiles, current.Profiles)
 	delta.Removed.ExtraTags = difference(previous.ExtraTags, current.ExtraTags)
+	if len(current.ExcludedTags) > 0 {
+		delta.Added.ExcludedTags = difference(current.ExcludedTags, previous.ExcludedTags)
+	}
+	if len(previous.ExcludedTags) > 0 {
+		delta.Removed.ExcludedTags = difference(previous.ExcludedTags, current.ExcludedTags)
+	}
 	if deltaIsEmpty(delta) {
 		return requested
 	}
 	requested.Report.Change = &Change{
 		Delta: delta,
 		AcknowledgementRequired: len(delta.Removed.Profiles) > 0 ||
-			len(delta.Removed.ExtraTags) > 0,
+			len(delta.Removed.ExtraTags) > 0 || len(delta.Added.ExcludedTags) > 0,
 	}
 	return requested
 }
@@ -284,6 +312,7 @@ func snapshot(e Effective) Snapshot {
 	return Snapshot{
 		Profiles:      cloneStrings(e.Profiles),
 		ExtraTags:     cloneStrings(e.ExtraTags),
+		ExcludedTags:  append([]string(nil), e.ExcludedTags...),
 		EffectiveTags: cloneStrings(e.Selection.Tags),
 	}
 }
@@ -422,7 +451,7 @@ func surfaceDifference(left, right Changes) Changes {
 }
 
 func deltaIsEmpty(delta Delta) bool {
-	return len(delta.Added.Profiles) == 0 &&
+	return len(delta.Added.ExcludedTags) == 0 && len(delta.Removed.ExcludedTags) == 0 && len(delta.Added.Profiles) == 0 &&
 		len(delta.Added.ExtraTags) == 0 &&
 		len(delta.Added.EffectiveTags) == 0 &&
 		len(delta.Added.ManagedEntries) == 0 &&
@@ -481,8 +510,8 @@ func validateIntent(source Source, profiles, extraTags []string, allowEmpty bool
 
 // Resolve validates the requested Profiles and retains both explicit intent and
 // the resulting ordered Tag snapshot.
-func Resolve(m manifest.Manifest, profiles, extraTags []string) (state.InstalledSelection, error) {
-	resolved, err := manifest.ResolveSelection(m, profiles, extraTags)
+func Resolve(m manifest.Manifest, profiles, extraTags []string, excludedTags ...string) (state.InstalledSelection, error) {
+	resolved, err := manifest.ResolveSelection(m, profiles, extraTags, excludedTags...)
 	if err != nil {
 		return state.InstalledSelection{}, err
 	}
@@ -490,7 +519,11 @@ func Resolve(m manifest.Manifest, profiles, extraTags []string) (state.Installed
 	if err != nil {
 		return state.InstalledSelection{}, err
 	}
-	return installedSelection(resolved.Profiles, normalizedExtraTags, resolved.Tags), nil
+	installed := installedSelection(resolved.Profiles, normalizedExtraTags, resolved.Tags)
+	if len(excludedTags) > 0 {
+		installed.ExcludedTags, _, err = manifest.NormalizeTags(m, excludedTags)
+	}
+	return installed, err
 }
 
 // InstalledSelection converts effective command selection into the
@@ -498,6 +531,7 @@ func Resolve(m manifest.Manifest, profiles, extraTags []string) (state.Installed
 func (e Effective) InstalledSelection(provenance state.Provenance) state.InstalledSelection {
 	installed := installedSelection(e.Profiles, e.ExtraTags, e.Selection.Tags)
 	installed.Provenance = provenance
+	installed.ExcludedTags = append([]string(nil), e.ExcludedTags...)
 	return installed
 }
 

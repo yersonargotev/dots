@@ -157,11 +157,11 @@ The state file stored under `~/.local/state/dots/installed.json` that records wh
 _Avoid_: install log, state file, tracking file
 
 **Installed Selection**:
-The authoritative machine-level installation intent recorded only after terminal success of an explicit install, update, or upgrade, including an operator-confirmed Selection Migration Candidate. It preserves the ordered Profiles and explicit extra Tags selected by the operator, the ordered resolved Tag snapshot, Source of Truth provenance, and recording time. Profiles and explicit extra Tags are intent; resolved Tags are an audit snapshot. Per-Managed-Entry and per-Provisioner Profiles and Tags remain historical inventory and ownership evidence, not a substitute for an Installed Selection.
+The authoritative machine-level installation intent recorded only after terminal success of an explicit install, update, or upgrade, including an operator-confirmed Selection Migration Candidate. It preserves the ordered Profiles, explicit extra Tags and Profile-derived Tag exclusions selected by the operator, the ordered resolved Tag snapshot, Source of Truth provenance, and recording time. Profiles, explicit extra Tags and exclusions are intent; resolved Tags are an audit snapshot. Per-Managed-Entry and per-Provisioner Profiles and Tags remain historical inventory and ownership evidence, not a substitute for an Installed Selection.
 _Avoid_: inferred selection, installed profile, tag inventory
 
 **Installed Selection Change**:
-A complete explicit Profile/Tag request on a mutating command that differs from the authoritative Installed Selection. Its delta reports added and removed Profiles, explicit extra Tags, effective Tags, Managed Entries, Dependencies, and Provisioners before mutation. Removing a recorded Profile or explicit extra Tag is a reduction that requires distinct interactive confirmation or, in Confirmed Install mode, `--acknowledge-selection-change` in addition to `--yes`.
+A complete explicit Profile/Tag request on a mutating command that differs from the authoritative Installed Selection. Its delta reports added and removed Profiles, explicit extra Tags, effective Tags, Managed Entries, Dependencies, and Provisioners before mutation. Removing a recorded Profile or explicit extra Tag, or adding an exclusion, is a reduction that requires distinct interactive confirmation or, in Confirmed Install mode, `--acknowledge-selection-change` in addition to `--yes`.
 _Avoid_: implicit selection update, selection merge, automatic retirement
 
 **Selection Reconciliation Plan**:
@@ -214,6 +214,7 @@ _Avoid_: install profile, machine config, host config
 
 **Tag**:
 The smallest independently meaningful capability that makes sense to install or stop managing, such as `zsh`, `git`, `node`, or `jq`. A Tag may select Managed Entries, Dependencies, Provisioners, or a cohesive combination of them. Tags from repeated Profiles and explicit `--tag` flags are de-duplicated while preserving order. Legacy compatibility Tags normalize to their ordered current replacements before Selected Surface evaluation.
+A Profile-derived Tag may be explicitly excluded while preserving Profile identity; an exclusion cannot mask an explicitly added Tag. Exclusions belong to Installed Selection intent.
 Tags are declarative selection only: they do not authorize built-in cleanup, removal, or historical migrations.
 _Avoid_: category, group, label
 

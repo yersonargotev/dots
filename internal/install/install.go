@@ -163,6 +163,10 @@ type Options struct {
 	// StateRoot is the directory where Installation Metadata is recorded so
 	// dots status can later detect Drift. When empty, metadata is not written.
 	StateRoot string
+	// CheckSelection binds each forward mutation to the exact Installed Selection
+	// that supplied the preview and acknowledgement. Nil expected means absent.
+	CheckSelection    bool
+	ExpectedSelection *state.InstalledSelection
 	// ConflictDecisions contains explicit per-target decisions. Missing conflict
 	// targets default to skip; there is deliberately no global adopt policy.
 	ConflictDecisions map[string]ConflictDecision
@@ -462,7 +466,8 @@ func applyManagedAction(action plan.Action, source string, opts Options) (manage
 
 func applyActionWithReconciliationReceipt(action plan.Action, source string, resolvedSources []string, opts Options, applyAction managedActionApply) (prepared plan.Action, receipt *state.ReconciliationReceipt, resultErr error) {
 	prepared = action
-	if !requiresReconciliationReceipt(action, opts) {
+	needsReceipt := requiresReconciliationReceipt(action, opts)
+	if !needsReceipt && !opts.CheckSelection {
 		_, err := applyAction(action, source, opts)
 		return prepared, nil, err
 	}
@@ -483,6 +488,14 @@ func applyActionWithReconciliationReceipt(action plan.Action, source string, res
 	}()
 	meta, err := locked.Load()
 	if err != nil {
+		return prepared, nil, err
+	}
+	if opts.CheckSelection && !reflect.DeepEqual(meta.InstalledSelection, opts.ExpectedSelection) {
+		return prepared, nil, fmt.Errorf("installed selection changed concurrently before managed entry mutation")
+	}
+	if !needsReceipt {
+		_, err := applyAction(action, source, opts)
+		actionCompleted = err == nil || isCompletedActionCleanup(err)
 		return prepared, nil, err
 	}
 	if err := validateAuthorizingRecord(meta, action, action.PreviousReconciliationReceipt); err != nil {
@@ -902,6 +915,7 @@ func cloneInstalledSelection(installed *state.InstalledSelection) *state.Install
 	cloned := *installed
 	cloned.Profiles = append([]string(nil), installed.Profiles...)
 	cloned.ExtraTags = append([]string(nil), installed.ExtraTags...)
+	cloned.ExcludedTags = append([]string(nil), installed.ExcludedTags...)
 	cloned.ResolvedTags = append([]string(nil), installed.ResolvedTags...)
 	return &cloned
 }
@@ -1160,6 +1174,7 @@ func newMetadataCommit(p plan.Plan, resolvedSources [][]string, opts Options) Me
 }
 
 func cloneOptions(opts Options) Options {
+	opts.ExpectedSelection = cloneInstalledSelection(opts.ExpectedSelection)
 	cloned := opts
 	if opts.ConflictDecisions != nil {
 		cloned.ConflictDecisions = make(map[string]ConflictDecision, len(opts.ConflictDecisions))
@@ -1267,6 +1282,9 @@ func upsertRecord(meta *state.Metadata, rec state.Record) {
 }
 
 func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
+	if opts.CheckSelection && opts.StateRoot == "" {
+		return nil, fmt.Errorf("selection authority check requires a state root")
+	}
 	if opts.Home == "" {
 		return nil, fmt.Errorf("install home is required")
 	}

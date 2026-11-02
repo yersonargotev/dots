@@ -10,13 +10,15 @@ import (
 )
 
 const (
-	selectionProfileHelp = "select an ordered Profile preset; repeat to compose presets; any explicit Profile/Tag request is the complete selection and is not merged with Installed Selection"
-	selectionTagHelp     = "select an independently meaningful Tag capability; repeat to compose a complete selection without a Profile; any explicit Profile/Tag request is the complete selection and is not merged with Installed Selection"
+	selectionProfileHelp    = "select an ordered Profile preset; repeat to compose presets; any explicit Profile/Tag request is the complete selection and is not merged with Installed Selection"
+	selectionExcludeTagHelp = "exclude a Profile-derived Tag; repeat to exclude more; provide the complete selection with --profile and optional --tag; explicit Tags cannot be excluded"
+	selectionTagHelp        = "select an independently meaningful Tag capability; repeat to compose a complete selection without a Profile; any explicit Profile/Tag request is the complete selection and is not merged with Installed Selection"
 )
 
 func registerSelectionFlagCompletion(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("profile", completeSelectionFlag(completion.Profile))
 	_ = cmd.RegisterFlagCompletionFunc("tag", completeSelectionFlag(completion.Tag))
+	_ = cmd.RegisterFlagCompletionFunc("exclude-tag", completeSelectionFlag(completion.Tag))
 }
 
 func completeSelectionFlag(kind completion.Kind) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {

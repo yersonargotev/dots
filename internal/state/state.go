@@ -78,6 +78,7 @@ type Metadata struct {
 type InstalledSelection struct {
 	Profiles     []string   `json:"profiles"`
 	ExtraTags    []string   `json:"extra_tags,omitempty"`
+	ExcludedTags []string   `json:"excluded_tags,omitempty"`
 	ResolvedTags []string   `json:"resolved_tags"`
 	Provenance   Provenance `json:"provenance"`
 }
@@ -573,6 +574,7 @@ func cloneInstalledSelection(installed *InstalledSelection) *InstalledSelection 
 	cloned := *installed
 	cloned.Profiles = append([]string(nil), installed.Profiles...)
 	cloned.ExtraTags = append([]string(nil), installed.ExtraTags...)
+	cloned.ExcludedTags = append([]string(nil), installed.ExcludedTags...)
 	cloned.ResolvedTags = append([]string(nil), installed.ResolvedTags...)
 	return &cloned
 }

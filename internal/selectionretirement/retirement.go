@@ -394,6 +394,7 @@ func cloneInstalledSelection(installed *state.InstalledSelection) *state.Install
 	cloned := *installed
 	cloned.Profiles = append([]string(nil), installed.Profiles...)
 	cloned.ExtraTags = append([]string(nil), installed.ExtraTags...)
+	cloned.ExcludedTags = append([]string(nil), installed.ExcludedTags...)
 	cloned.ResolvedTags = append([]string(nil), installed.ResolvedTags...)
 	return &cloned
 }
@@ -615,6 +616,9 @@ func prevalidateActionMetadata(action Action, records map[string]state.Record, m
 }
 
 func prevalidateMetadata(retirement Plan, meta state.Metadata) error {
+	if !reflect.DeepEqual(meta.InstalledSelection, retirement.expectedInstalledSelection) {
+		return fmt.Errorf("apply selection retirement: installed selection changed concurrently")
+	}
 	seen := make(map[string]bool)
 	for _, action := range retirement.Actions {
 		if seen[action.Target] {

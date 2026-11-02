@@ -51,12 +51,14 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 			Authority:    selectionreconciliation.AuthorityRecorded,
 			Profiles:     append([]string(nil), installed.Profiles...),
 			ExtraTags:    append([]string(nil), installed.ExtraTags...),
+			ExcludedTags: append([]string(nil), installed.ExcludedTags...),
 			ResolvedTags: append([]string(nil), installed.ResolvedTags...),
 		},
 		RequestedIntent: selectionreconciliation.Intent{
 			Authority:    authority,
 			Profiles:     append([]string(nil), effective.Profiles...),
 			ExtraTags:    append([]string(nil), effective.ExtraTags...),
+			ExcludedTags: append([]string(nil), effective.ExcludedTags...),
 			ResolvedTags: append([]string(nil), effective.Selection.Tags...),
 		},
 		PreviousSurface: previousSurface,
@@ -71,7 +73,7 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 }
 
 func installedIntentDiffers(installed state.InstalledSelection, effective selection.Effective) bool {
-	return !slices.Equal(installed.Profiles, effective.Profiles) || !slices.Equal(installed.ExtraTags, effective.ExtraTags)
+	return !slices.Equal(installed.Profiles, effective.Profiles) || !slices.Equal(installed.ExtraTags, effective.ExtraTags) || !slices.Equal(installed.ExcludedTags, effective.ExcludedTags)
 }
 
 func supplementRecordedSurface(previous, current selectedsurface.Surface, meta state.Metadata, installed state.InstalledSelection, paths resolvedPaths) (selectedsurface.Surface, map[string]bool) {

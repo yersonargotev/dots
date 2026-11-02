@@ -1,0 +1,16 @@
+{
+  "source": "explicit",
+  "profiles": [
+    "workstation"
+  ],
+  "extra_tags": [
+    "custom"
+  ],
+  "excluded_tags": [
+    "official"
+  ],
+  "effective_tags": [
+    "base",
+    "custom"
+  ]
+}

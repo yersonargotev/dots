@@ -2,7 +2,9 @@ package cli_test
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -164,7 +166,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"upgrade", "--continue", "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
+	cmd.SetArgs([]string{"upgrade", "--continue", "--selection-source", "recorded", "--selection-profile", "default", "--selection-previous", continuationSelectionFingerprint(t, stateRoot), "--file", filepath.Join(sourceRoot, "dots.yaml"), "--home", home, "--source-root", sourceRoot, "--state-root", stateRoot})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("upgrade --continue error = %v\noutput:\n%s", err, out.String())
 	}
@@ -217,7 +219,7 @@ entries:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs(baseArgs)
+	cmd.SetArgs(append(append([]string(nil), baseArgs...), "--selection-previous", continuationSelectionFingerprint(t, stateRoot)))
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("human continuation error = %v\noutput:\n%s", err, out.String())
 	}
@@ -231,7 +233,7 @@ entries:
 	cmd = cli.NewRootCommand()
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs(append(baseArgs, "--output", "json"))
+	cmd.SetArgs(append(append([]string(nil), baseArgs...), "--output", "json", "--selection-previous", continuationSelectionFingerprint(t, stateRoot)))
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("JSON continuation error = %v\noutput:\n%s", err, out.String())
 	}
@@ -269,6 +271,7 @@ entries:
 	cmd.SetArgs([]string{
 		"upgrade", "--continue", "--yes", "--output", "json",
 		"--selection-source", "recorded", "--selection-profile", "default",
+		"--selection-previous", continuationSelectionFingerprint(t, stateRoot),
 		"--file", filepath.Join(sourceRoot, "dots.yaml"),
 		"--home", home, "--source-root", sourceRoot,
 		"--state-root", stateRoot,
@@ -361,4 +364,17 @@ entries:
 	if env.Command != "upgrade" || env.Status != "ok" || !env.Data.DryRun || env.Data.Binary.Action != "manual-rebuild" {
 		t.Fatalf("envelope = %+v, want upgrade ok dry-run manual rebuild", env)
 	}
+}
+
+func continuationSelectionFingerprint(t *testing.T, stateRoot string) string {
+	t.Helper()
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(meta.InstalledSelection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(data))
 }

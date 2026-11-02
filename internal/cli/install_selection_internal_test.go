@@ -53,7 +53,7 @@ entries:
 	}
 
 	originalCommit := commitInstallationMetadata
-	commitInstallationMetadata = func(install.MetadataCommit, state.InstalledSelection) error {
+	commitInstallationMetadata = func(install.MetadataCommit, *state.InstalledSelection, state.InstalledSelection) error {
 		return errors.New("injected Installed Selection commit failure")
 	}
 	t.Cleanup(func() { commitInstallationMetadata = originalCommit })

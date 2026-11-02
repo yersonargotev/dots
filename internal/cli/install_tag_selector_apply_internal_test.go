@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
@@ -617,5 +619,66 @@ func writeSelectorExecutable(t *testing.T, path, script string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestInstallTagSelectorRejectsSelectionChangedDuringDependencyApply(t *testing.T) {
+	manifestPath, sourceRoot, home, stateRoot := writeTagSelectorTestManifest(t)
+	runExplicitTagSelectorSeed(t, manifestPath, sourceRoot, home, stateRoot, "one")
+	m, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths, err := resolvePaths(home, sourceRoot, stateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, err := buildInstallTagSelectorCandidate(*m, meta, paths, sourceRoot, nil, installHostOS, []string{"one", "two"}, installTagSelectorOptions{SkipDependencies: true, ManifestPath: manifestPath, RequestedStateRoot: stateRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := candidate.releaseCapturedSources(); err != nil {
+			t.Error(err)
+		}
+	})
+	concurrent := *meta.InstalledSelection
+	concurrent.ExcludedTags = []string{"concurrent constraint"}
+	changed := meta
+	changed.InstalledSelection = &concurrent
+	concurrentPath := filepath.Join(t.TempDir(), "concurrent.json")
+	if err := state.Save(concurrentPath, changed); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	tool := filepath.Join(bin, "fixture-tool")
+	template := filepath.Join(bin, "template")
+	writeSelectorExecutable(t, template, "#!/bin/sh\nexit 0\n")
+	runner := filepath.Join(bin, "fixture-dependency")
+	writeSelectorExecutable(t, runner, fmt.Sprintf("#!/bin/sh\n/bin/cp %q %q\n/bin/cp %q %q\n", concurrentPath, state.Path(stateRoot), template, tool))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	candidate.Dependencies = &deps.PreparedInstall{
+		Plan:   deps.PlanReport{Actions: []deps.InstallAction{{Dependency: "fixture", Requirement: manifest.DependencyRequirementRequired, Status: deps.InstallActionStatusInstallable, Probe: "fixture-tool", Executable: runner}}},
+		Report: deps.InstallDryRunReport{Items: []deps.InstallPreview{{Dependency: "fixture", Requirement: manifest.DependencyRequirementRequired, Status: deps.InstallPreviewWouldInstall}}},
+	}
+	cmd := newInstallCommand()
+	cmd.SetContext(context.Background())
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("y\n"))
+	err = applyInstallTagSelectorCandidate(cmd, candidate, installTagSelectorOptions{NoTUI: true}, false)
+	if err == nil || !strings.Contains(err.Error(), "installed selection changed concurrently") {
+		t.Fatalf("apply error=%v\n%s", err, out.String())
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".two")); !os.IsNotExist(err) {
+		t.Fatalf("stale selector candidate created target: %v", err)
+	}
+	if got := loadSelectorSelection(t, stateRoot); !reflect.DeepEqual(*got, concurrent) {
+		t.Fatalf("concurrent selection overwritten: %+v", got)
 	}
 }

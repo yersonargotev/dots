@@ -35,6 +35,7 @@ type Intent struct {
 	Authority    Authority `json:"authority"`
 	Profiles     []string  `json:"profiles"`
 	ExtraTags    []string  `json:"extra_tags"`
+	ExcludedTags []string  `json:"excluded_tags,omitempty"`
 	ResolvedTags []string  `json:"resolved_tags"`
 }
 
@@ -255,11 +256,13 @@ func Build(input Input) (Report, error) {
 func selectionActions(previous, current Intent) []Action {
 	actions := make([]Action, 0, 2)
 	removed := append(difference(previous.Profiles, current.Profiles), difference(previous.ExtraTags, current.ExtraTags)...)
+	removed = append(removed, difference(current.ExcludedTags, previous.ExcludedTags)...)
 	removed = append(removed, difference(previous.ResolvedTags, current.ResolvedTags)...)
 	if len(removed) > 0 {
 		actions = append(actions, newNamedAction(ScopeSelection, OutcomeRemove, orderedUnique(removed)))
 	}
 	added := append(difference(current.Profiles, previous.Profiles), difference(current.ExtraTags, previous.ExtraTags)...)
+	added = append(added, difference(previous.ExcludedTags, current.ExcludedTags)...)
 	added = append(added, difference(current.ResolvedTags, previous.ResolvedTags)...)
 	if len(added) > 0 {
 		actions = append(actions, newNamedAction(ScopeSelection, OutcomeCreate, orderedUnique(added)))
@@ -1007,6 +1010,7 @@ func missingSource(err error) bool {
 
 func cloneIntent(intent Intent) Intent {
 	intent.Profiles = append(make([]string, 0, len(intent.Profiles)), intent.Profiles...)
+	intent.ExcludedTags = append([]string(nil), intent.ExcludedTags...)
 	intent.ExtraTags = append(make([]string, 0, len(intent.ExtraTags)), intent.ExtraTags...)
 	intent.ResolvedTags = append(make([]string, 0, len(intent.ResolvedTags)), intent.ResolvedTags...)
 	return intent

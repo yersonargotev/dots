@@ -82,6 +82,9 @@ func recommendedSelectionCommand(command string, effective selection.Effective) 
 	for _, tag := range effective.ExtraTags {
 		parts = append(parts, "--tag", tag)
 	}
+	for _, tag := range effective.ExcludedTags {
+		parts = append(parts, "--exclude-tag", tag)
+	}
 	return strings.Join(parts, " ")
 }
 

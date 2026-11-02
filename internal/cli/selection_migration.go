@@ -59,12 +59,12 @@ type readOnlySelectionOptions struct {
 	XDGStateHome string
 }
 
-func resolveReadOnlySelection(m manifest.Manifest, meta state.Metadata, profiles, extraTags []string, opts readOnlySelectionOptions) (selection.Effective, error) {
+func resolveReadOnlySelection(m manifest.Manifest, meta state.Metadata, profiles, extraTags []string, opts readOnlySelectionOptions, excludedTags ...string) (selection.Effective, error) {
 	// Explicit intent and an authoritative Installed Selection retain the
 	// existing resolution path. In particular, malformed explicit values must
 	// still be reported by selection.ResolveReadOnly.
-	if len(profiles) > 0 || len(extraTags) > 0 || meta.InstalledSelection != nil {
-		effective, err := selection.ResolveReadOnly(m, profiles, extraTags, meta.InstalledSelection)
+	if len(profiles) > 0 || len(extraTags) > 0 || len(excludedTags) > 0 || meta.InstalledSelection != nil {
+		effective, err := selection.ResolveReadOnly(m, profiles, extraTags, meta.InstalledSelection, excludedTags...)
 		if err != nil {
 			return selection.Effective{}, err
 		}
@@ -77,7 +77,7 @@ func resolveReadOnlySelection(m manifest.Manifest, meta state.Metadata, profiles
 		return effective, nil
 	}
 	if meta.Version != 1 && meta.Version != 2 {
-		return selection.ResolveReadOnly(m, profiles, extraTags, nil)
+		return selection.ResolveReadOnly(m, profiles, extraTags, nil, excludedTags...)
 	}
 
 	analysis, err := selectionmigration.Analyze(m, meta, selectionmigration.Options{

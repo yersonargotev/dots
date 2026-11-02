@@ -860,3 +860,48 @@ func TestResolvePreservesExplicitSelectionIntent(t *testing.T) {
 		t.Fatalf("Resolve() = %+v, want %+v", got, want)
 	}
 }
+
+func TestExclusionsNormalizeAliasesAndPreserveProfileIntent(t *testing.T) {
+	m := manifest.Manifest{Profiles: map[string]manifest.Profile{"workstation": {Tags: []string{"base", "legacy"}}}, Tags: map[string]manifest.Tag{
+		"base": {Status: "current"}, "official": {Status: "current"}, "extra": {Status: "current"}, "legacy": {Status: "legacy", ReplacedBy: []string{"official", "extra"}},
+	}}
+	effective, err := selection.ResolveIntent(m, selection.Intent{Source: selection.SourceExplicit, Profiles: []string{"workstation"}, ExcludedTags: []string{"legacy", "official"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(effective.ExcludedTags, []string{"official", "extra"}) || !reflect.DeepEqual(effective.Selection.Tags, []string{"base"}) {
+		t.Fatalf("normalized exclusion=%+v", effective)
+	}
+	if _, err := selection.ResolveIntent(m, selection.Intent{Source: selection.SourceExplicit, Profiles: []string{"workstation"}, ExtraTags: []string{"legacy"}, ExcludedTags: []string{"official"}}); err == nil || !strings.Contains(err.Error(), "explicitly added and excluded") {
+		t.Fatalf("alias overlap error=%v", err)
+	}
+	recorded := effective.InstalledSelection(state.Provenance{})
+	restored, err := selection.ResolveEffective(m, nil, nil, &recorded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(restored.Selection.Tags, []string{"base"}) || !reflect.DeepEqual(restored.Profiles, []string{"workstation"}) {
+		t.Fatalf("restored=%+v", restored)
+	}
+	// A Profile can retain identity while all of its Tags are explicitly excluded.
+	empty, err := selection.ResolveIntent(m, selection.Intent{Source: selection.SourceExplicit, Profiles: []string{"workstation"}, ExcludedTags: []string{"base", "legacy"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(empty.Selection.Tags) != 0 || !reflect.DeepEqual(empty.Profiles, []string{"workstation"}) {
+		t.Fatalf("empty surface lost intent: %+v", empty)
+	}
+}
+
+func TestExclusionIntentChangeRequiresAcknowledgementEvenWithoutSurfaceRemoval(t *testing.T) {
+	m := manifest.Manifest{Profiles: map[string]manifest.Profile{"workstation": {Tags: []string{"base", "official"}}}}
+	before := &state.InstalledSelection{Profiles: []string{"workstation"}, ResolvedTags: []string{"base"}}
+	requested, err := selection.ResolveIntent(m, selection.Intent{Source: selection.SourceExplicit, Profiles: []string{"workstation"}, ExcludedTags: []string{"official"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requested = selection.CompareInstalled(m, requested, before, "linux")
+	if requested.Report.Change == nil || !requested.Report.Change.AcknowledgementRequired || !reflect.DeepEqual(requested.Report.Change.Delta.Added.ExcludedTags, []string{"official"}) {
+		t.Fatalf("change=%+v", requested.Report.Change)
+	}
+}
