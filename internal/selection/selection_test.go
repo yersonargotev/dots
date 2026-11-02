@@ -905,3 +905,40 @@ func TestExclusionIntentChangeRequiresAcknowledgementEvenWithoutSurfaceRemoval(t
 		t.Fatalf("change=%+v", requested.Report.Change)
 	}
 }
+
+func TestExclusionAliasReplacementEvidenceAndBlockingEvolutionDelta(t *testing.T) {
+	old := manifest.Manifest{Profiles: map[string]manifest.Profile{"workstation": {Tags: []string{"base", "official"}}}, Tags: map[string]manifest.Tag{"base": {Status: "current"}, "official": {Status: "current"}, "custom": {Status: "current"}}}
+	previous, err := selection.ResolveIntent(old, selection.Intent{Source: selection.SourceRecorded, Profiles: []string{"workstation"}, ExcludedTags: []string{"official"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []string{"Profile removal", "registry removal", "alias replacement"} {
+		t.Run(scenario, func(t *testing.T) {
+			current := manifest.Manifest{Profiles: map[string]manifest.Profile{"workstation": {Tags: []string{"base"}}}, Tags: map[string]manifest.Tag{"base": {Status: "current"}, "official": {Status: "current"}, "custom": {Status: "current"}}}
+			if scenario == "registry removal" {
+				delete(current.Tags, "official")
+			}
+			if scenario == "alias replacement" {
+				current.Tags["official"] = manifest.Tag{Status: "legacy", ReplacedBy: []string{"custom"}}
+				current.Profiles["workstation"] = manifest.Profile{Tags: []string{"base", "custom"}}
+			}
+			resolved, err := selection.CompareEvolution(old, current, previous, "linux")
+			if scenario == "alias replacement" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(resolved.Report.TagMigrations) != 1 || resolved.Report.TagMigrations[0].LegacyTag != "official" {
+					t.Fatalf("exclusion migration lost evidence: %+v", resolved.Report)
+				}
+			} else {
+				var evolution *selection.EvolutionError
+				if !errors.As(err, &evolution) {
+					t.Fatalf("error=%v want evolution delta", err)
+				}
+				if !reflect.DeepEqual(evolution.SelectionDelta.StaleExcludedTags, []string{"official"}) || !reflect.DeepEqual(evolution.SelectionDelta.Previous.ExcludedTags, []string{"official"}) || !reflect.DeepEqual(evolution.SelectionDelta.Current.ExcludedTags, []string{"official"}) {
+					t.Fatalf("blocking delta=%+v", evolution.SelectionDelta)
+				}
+			}
+		})
+	}
+}

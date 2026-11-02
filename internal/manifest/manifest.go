@@ -1357,16 +1357,17 @@ func resolveSelection(m Manifest, profileNames []string, extraTags, excludedTags
 		}
 		addTag(tag)
 	}
-	normalizedTags, replacements, err := NormalizeTags(m, tags)
+	for _, tag := range excludedTags {
+		if strings.TrimSpace(tag) == "" {
+			return Selection{}, fmt.Errorf("excluded tags must not be empty")
+		}
+	}
+	normalizationTags := append(append([]string(nil), tags...), excludedTags...)
+	normalizedTags, replacements, err := NormalizeTags(m, normalizationTags)
 	if err != nil {
 		return Selection{}, err
 	}
 	if len(excludedTags) > 0 {
-		for _, tag := range excludedTags {
-			if strings.TrimSpace(tag) == "" {
-				return Selection{}, fmt.Errorf("excluded tags must not be empty")
-			}
-		}
 		excluded, _, err := NormalizeTags(m, excludedTags)
 		if err != nil {
 			return Selection{}, fmt.Errorf("exclude tag: %w", err)

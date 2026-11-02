@@ -123,7 +123,8 @@ prose the text surface prints:
   Their selection report also includes `delta` with deterministic `previous`
   and `current` snapshots; `added` and `removed` effective Tags, Managed
   Entries, Dependencies, and Provisioners; and ordered `missing_profiles` and
-  `stale_extra_tags` arrays. Empty arrays remain present whenever `delta` is
+  `stale_extra_tags` arrays, plus optional `stale_excluded_tags` when exclusions
+  become undeclared or unselected. Empty existing arrays remain present whenever `delta` is
   emitted. A blocking evolution error returns the same delta as
   `data.selection_delta`.
   Any explicit Profile, Tag or exclusion selection wins completely for that invocation and

@@ -56,14 +56,19 @@ entries:
 	}
 	return f
 }
-func (f exclusionFixture) run(t *testing.T, command []string, flags ...string) (string, error) {
-	t.Helper()
+func (f exclusionFixture) args(command []string, flags ...string) []string {
 	args := append([]string(nil), command...)
 	args = append(args, "--file", f.file, "--home", f.home)
 	if command[0] != "deps" {
 		args = append(args, "--source-root", f.source, "--state-root", f.state)
 	}
 	args = append(args, flags...)
+	return args
+}
+
+func (f exclusionFixture) run(t *testing.T, command []string, flags ...string) (string, error) {
+	t.Helper()
+	args := f.args(command, flags...)
 	cmd := NewRootCommand()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -73,6 +78,14 @@ func (f exclusionFixture) run(t *testing.T, command []string, flags ...string) (
 	err := cmd.Execute()
 	return out.String(), err
 }
+
+func (f exclusionFixture) runEnvelope(t *testing.T, command []string, flags ...string) (string, int) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	code := Run(f.args(command, flags...), &out, &errOut)
+	return out.String(), code
+}
+
 func (f exclusionFixture) installed(t *testing.T) *state.InstalledSelection {
 	t.Helper()
 	meta, err := state.Load(state.Path(f.state))
@@ -299,7 +312,11 @@ func TestSelectionExclusionsUpdateProfileEvolutionAndStaleIntent(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			out, err := f.run(t, []string{"update"}, "--yes")
+			out, code := f.runEnvelope(t, []string{"update"}, "--yes", "--output", "json")
+			err = nil
+			if code != ExitOK {
+				err = errors.New(out)
+			}
 			if scenario == "refresh" {
 				if err != nil {
 					t.Fatalf("update: %v\n%s", err, out)
@@ -311,7 +328,7 @@ func TestSelectionExclusionsUpdateProfileEvolutionAndStaleIntent(t *testing.T) {
 					t.Fatalf("new Profile Tag not applied: %v", err)
 				}
 			} else {
-				want := "not selected"
+				want := "excluded Tag"
 				expected := before
 				if scenario == "concurrent refresh" {
 					want = "changed concurrently"
@@ -319,6 +336,19 @@ func TestSelectionExclusionsUpdateProfileEvolutionAndStaleIntent(t *testing.T) {
 				}
 				if err == nil || !strings.Contains(err.Error(), want) {
 					t.Fatalf("%s error: %v\n%s", scenario, err, out)
+				}
+				if scenario == "stale exclusion" {
+					var env struct {
+						Data struct {
+							Delta selection.Delta `json:"selection_delta"`
+						}
+					}
+					if err := json.Unmarshal([]byte(out), &env); err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(env.Data.Delta.StaleExcludedTags, []string{"official"}) || !reflect.DeepEqual(env.Data.Delta.Previous.ExcludedTags, []string{"official"}) || !reflect.DeepEqual(env.Data.Delta.Current.ExcludedTags, []string{"official"}) {
+						t.Fatalf("missing blocking exclusion delta: %s", out)
+					}
 				}
 				if !reflect.DeepEqual(*f.installed(t), expected) {
 					t.Fatalf("failure changed intent: %+v", f.installed(t))
@@ -441,5 +471,40 @@ func TestUpgradeContinuationRejectsBareResume(t *testing.T) {
 	}
 	if f.installed(t) != nil {
 		t.Fatal("bare continuation created selection")
+	}
+}
+
+func TestRecordedLegacyExclusionsRequireMigrationForReadAndRefresh(t *testing.T) {
+	f := newExclusionFixture(t)
+	// Previously current official becomes a legacy exclusion with two current
+	// replacements. The operator must confirm this broader exclusion constraint.
+	data, err := os.ReadFile(f.file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := strings.Replace(string(data), "official: {description: Official, kind: surface, status: current}", "official: {description: Official, kind: compatibility, status: legacy, replaced_by: [custom, unused]}", 1)
+	next = strings.Replace(next, "status: current, conflicts_with: [official]", "status: current", 1)
+	next = strings.Replace(next, "tags: [base, official]", "tags: [base, custom, unused]", 1)
+	next = strings.ReplaceAll(next, "tags: [official]", "tags: [custom]")
+	if err := os.WriteFile(f.file, []byte(next), 0600); err != nil {
+		t.Fatal(err)
+	}
+	previous := &state.InstalledSelection{Profiles: []string{"workstation"}, ExcludedTags: []string{"official"}, ResolvedTags: []string{"base"}}
+	if err := state.Save(state.Path(f.state), state.Metadata{Version: state.CurrentVersion, InstalledSelection: previous}); err != nil {
+		t.Fatal(err)
+	}
+	runContinuationGit(t, f.source, "init", "-b", "main")
+	for _, command := range [][]string{{"plan"}, {"update"}} {
+		flags := []string{"--output", "json"}
+		if command[0] == "update" {
+			flags = append(flags, "--yes")
+		}
+		out, code := f.runEnvelope(t, command, flags...)
+		if code != ExitError || !strings.Contains(out, "legacy-tag-migration-required") || !strings.Contains(out, `"legacy_tag": "official"`) {
+			t.Fatalf("%v bypassed exclusion migration: %v\n%s", command, code, out)
+		}
+		if !reflect.DeepEqual(f.installed(t), previous) {
+			t.Fatal("unconfirmed exclusion migration rewrote intent")
+		}
 	}
 }

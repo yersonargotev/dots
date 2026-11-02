@@ -172,7 +172,11 @@ Issue #574 adds ordered `excluded_tags` as optional Installed Selection intent
 alongside Profiles and explicit extra Tags. Resolution normalizes aliases,
 subtracts exclusions from the ordered Profile Tag union, appends explicit Tags,
 and then validates conflicts. Explicit Tags cannot be masked by exclusions;
-unknown, unselected and empty exclusions fail before mutation. Duplicate
+unknown, unselected and empty exclusions fail before mutation. Legacy exclusion
+aliases contribute the same migration evidence and confirmation gate as other
+recorded Tags; they cannot silently broaden an excluded constraint. Blocking
+Profile/registry evolution includes the retained exclusion snapshots and optional
+`stale_excluded_tags` in the structured evolution delta. Duplicate
 exclusions preserve first-use order. A named Profile whose entire surface is
 excluded still retains its Profile identity.
 

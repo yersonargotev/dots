@@ -60,12 +60,13 @@ type Changes struct {
 // Delta describes how the same selection intent evolves between Install
 // Manifest revisions.
 type Delta struct {
-	Previous        Snapshot `json:"previous"`
-	Current         Snapshot `json:"current"`
-	Added           Changes  `json:"added"`
-	Removed         Changes  `json:"removed"`
-	MissingProfiles []string `json:"missing_profiles"`
-	StaleExtraTags  []string `json:"stale_extra_tags"`
+	Previous          Snapshot `json:"previous"`
+	Current           Snapshot `json:"current"`
+	Added             Changes  `json:"added"`
+	Removed           Changes  `json:"removed"`
+	MissingProfiles   []string `json:"missing_profiles"`
+	StaleExtraTags    []string `json:"stale_extra_tags"`
+	StaleExcludedTags []string `json:"stale_excluded_tags,omitempty"`
 }
 
 // Change describes an explicit replacement of the authoritative Installed
@@ -229,7 +230,8 @@ func CompareEvolution(previousManifest, currentManifest manifest.Manifest, previ
 	})
 	delta.MissingProfiles = missingProfiles(currentManifest, intent.Profiles)
 	delta.StaleExtraTags = staleExtraTags(currentManifest, intent.ExtraTags)
-	if len(delta.MissingProfiles) == 0 {
+	delta.StaleExcludedTags = staleExcludedTags(currentManifest, intent.Profiles, intent.ExcludedTags)
+	if len(delta.MissingProfiles) == 0 && len(delta.StaleExcludedTags) == 0 {
 		current, err := ResolveIntent(currentManifest, intent)
 		if err != nil {
 			return Effective{}, err
@@ -253,6 +255,9 @@ func CompareEvolution(previousManifest, currentManifest manifest.Manifest, previ
 	}
 	for _, tag := range delta.StaleExtraTags {
 		problems = append(problems, fmt.Sprintf(`%s selection: extra Tag %q is no longer declared`, intent.Source, tag))
+	}
+	for _, tag := range delta.StaleExcludedTags {
+		problems = append(problems, fmt.Sprintf(`%s selection: excluded Tag %q is no longer declared or selected by the requested Profiles`, intent.Source, tag))
 	}
 	return Effective{}, &EvolutionError{
 		Message:        strings.Join(problems, "; ") + "; update the selection before refreshing",
@@ -358,6 +363,39 @@ func missingProfiles(m manifest.Manifest, profiles []string) []string {
 		}
 	}
 	return cloneStrings(missing)
+}
+
+func staleExcludedTags(m manifest.Manifest, profiles, excludedTags []string) []string {
+	if len(excludedTags) == 0 {
+		return nil
+	}
+	var profileTags []string
+	for _, name := range profiles {
+		profileTags = append(profileTags, m.Profiles[name].Tags...)
+	}
+	normalizedProfiles, _, err := manifest.NormalizeTags(m, profileTags)
+	if err != nil {
+		return orderedUnique(excludedTags)
+	}
+	selected := make(map[string]bool, len(normalizedProfiles))
+	for _, tag := range normalizedProfiles {
+		selected[tag] = true
+	}
+	var stale []string
+	for _, tag := range orderedUnique(excludedTags) {
+		normalized, _, err := manifest.NormalizeTags(m, []string{tag})
+		if err != nil {
+			stale = append(stale, tag)
+			continue
+		}
+		for _, current := range normalized {
+			if !selected[current] {
+				stale = append(stale, tag)
+				break
+			}
+		}
+	}
+	return stale
 }
 
 func staleExtraTags(m manifest.Manifest, extraTags []string) []string {
