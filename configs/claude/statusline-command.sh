@@ -4,6 +4,7 @@
 input=$(cat)
 
 model=$(echo "$input" | jq -r '.model.display_name // ""')
+effort=$(echo "$input" | jq -r '.effort.level // ""')
 used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 total_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // empty')
 five_h=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
@@ -13,13 +14,8 @@ seven_d_resets=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empt
 vim_mode=$(echo "$input" | jq -r '.vim.mode // ""')
 perm_mode=$(echo "$input" | jq -r '.permission_mode // .permissionMode // ""')
 
-# Carbonfox wins when its global preference marker is installed. Otherwise the
-# existing adaptive Catppuccin helper and Mocha fallback remain unchanged.
-if [ -r "$HOME/.config/dots/theme-carbonfox" ]; then
-  # shellcheck source=/dev/null
-  . "$HOME/.config/dots/theme-carbonfox"
-  dots_apply_carbonfox_ansi_palette
-elif [ -r "$HOME/.config/dots/theme.sh" ]; then
+# This status line always uses Catppuccin, independently of the app theme.
+if [ -r "$HOME/.config/dots/theme.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOME/.config/dots/theme.sh"
   dots_apply_catppuccin_ansi_palette
@@ -35,18 +31,26 @@ else
   reset='\033[0m'
 fi
 
-sep="${overlay} | ${reset}"
+sep=''
+separator() {
+  printf '%b' "$sep"
+  sep="${overlay} | ${reset}"
+}
 
 # --- Build output ---
 
 # Model first
 if [ -n "$model" ]; then
+  separator
   printf "${subtext}%s${reset}" "$model"
+  if [ -n "$effort" ]; then
+    printf " ${mauve}(%s)${reset}" "$effort"
+  fi
 fi
 
 # Vim mode
 if [ -n "$vim_mode" ]; then
-  printf "$sep"
+  separator
   case "$vim_mode" in
   NORMAL) printf "${red}N${reset}" ;;
   INSERT) printf "${pink}I${reset}" ;;
@@ -58,31 +62,45 @@ fi
 
 # Permission mode
 case "$perm_mode" in
+default)
+  separator
+  printf "${subtext}default${reset}"
+  ;;
+auto)
+  separator
+  printf "${green}auto${reset}"
+  ;;
 bypassPermissions)
-  printf "${sep}${pink}bypass${reset}"
+  separator
+  printf "${pink}bypass${reset}"
   ;;
 acceptEdits)
-  printf "${sep}${green}accept edits${reset}"
+  separator
+  printf "${green}accept edits${reset}"
   ;;
 plan)
-  printf "${sep}${yellow}plan${reset}"
+  separator
+  printf "${yellow}plan${reset}"
   ;;
 esac
 
-# Context used
-if [ -n "$used_pct" ]; then
-  ctx_pct=$(printf '%.1f' "$used_pct")
+# Context fields can arrive independently, including valid zero values.
+if [ -n "$used_pct" ] || [ -n "$total_tokens" ]; then
+  separator
+  printf "${yellow}ctx:"
   if [ -n "$total_tokens" ]; then
     ctx_k=$(echo "$total_tokens" | awk '{printf "%.1fk", $1 / 1000}')
-    printf "${sep}${yellow}ctx: ${ctx_k} ${ctx_pct}%%${reset}"
-  else
-    printf "${sep}${yellow}ctx: ${ctx_pct}%%${reset}"
+    printf ' %s' "$ctx_k"
   fi
+  if [ -n "$used_pct" ]; then
+    printf ' %.1f%%' "$used_pct"
+  fi
+  printf '%b' "$reset"
 fi
 
 # 5-hour rate limit
 if [ -n "$five_h" ]; then
-  printf "$sep"
+  separator
   if [ -n "$five_h_resets" ]; then
     now=$(date +%s)
     diff_secs=$(( five_h_resets - now ))
@@ -99,14 +117,20 @@ fi
 
 # 7-day rate limit
 if [ -n "$seven_d" ]; then
-  printf "$sep"
+  separator
   if [ -n "$seven_d_resets" ]; then
     now=$(date +%s)
     diff_secs=$(( seven_d_resets - now ))
     [ "$diff_secs" -lt 0 ] && diff_secs=0
-    days_left=$(( (diff_secs + 86399) / 86400 ))
+    days_left=$(( diff_secs / 86400 ))
+    hours_left=$(( (diff_secs % 86400) / 3600 ))
+    if [ "$days_left" -gt 0 ]; then
+      countdown="${days_left}d ${hours_left}h"
+    else
+      countdown="${hours_left}h"
+    fi
     seven_d_left=$(echo "$seven_d" | awk '{printf "%.0f", 100 - $1}')
-    printf "${blue}${days_left}d ${seven_d_left}%% left${reset} ${overlay}> %s${reset}" "$(date -r "$seven_d_resets" +%d/%m 2>/dev/null || date -d "@$seven_d_resets" +%d/%m 2>/dev/null)"
+    printf "${blue}%s ${seven_d_left}%% left${reset} ${overlay}> %s${reset}" "$countdown" "$(date -r "$seven_d_resets" +%d/%m 2>/dev/null || date -d "@$seven_d_resets" +%d/%m 2>/dev/null)"
   else
     seven_d_left=$(echo "$seven_d" | awk '{printf "%.0f", 100 - $1}')
     printf "${blue}7d ${seven_d_left}%% left${reset}"

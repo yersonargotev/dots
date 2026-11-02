@@ -41,7 +41,7 @@ dots_carbonfox_fzf_colors`, "sh", marker)
 	}
 }
 
-func TestCarbonfoxAgentStatuslinesChangeOnlyPalette(t *testing.T) {
+func TestCarbonfoxCopilotStatuslineChangesOnlyPalette(t *testing.T) {
 	root := repositoryRoot(t)
 	bin := t.TempDir()
 	writeExecutable(t, filepath.Join(bin, "jq"), `#!/bin/sh
@@ -52,7 +52,6 @@ esac
 	ansi := regexp.MustCompile("\\x1b\\[[0-9;]*m")
 
 	for _, script := range []string{
-		"configs/claude/statusline-command.sh",
 		"configs/copilot/statusline-command.sh",
 	} {
 		t.Run(script, func(t *testing.T) {
