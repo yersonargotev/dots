@@ -53,6 +53,9 @@ options. Do not replace it with a selector-free retry when you originally
 requested an explicit selection. Legacy migration continuations also require a
 new public request with the complete explicit selection.
 Recovery for a recorded request continues to reuse recorded intent.
+Malformed continuations carrying only public selectors retain those selectors
+in recovery. If public and internal selection inputs are mixed, dots reports
+both and requires one complete public request without choosing a retry for you.
 
 At that point the binary phase has already completed. A failed or declined
 continuation preserves the previous Installed Selection. Repository or

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/yersonargotev/dots/internal/selection"
 	"github.com/yersonargotev/dots/internal/upgrade"
@@ -31,7 +33,20 @@ func legacyUpgradeContinuation(cmd *cobra.Command, opts updateOptions, intent se
 	}
 }
 
+func upgradeRecoveryHint(cmd *cobra.Command, opts updateOptions, intent selection.Intent) string {
+	public := len(opts.profiles)+len(opts.extraTags)+len(opts.excludedTags) > 0
+	carried := intent.Source != "" || len(intent.Profiles)+len(intent.ExtraTags)+len(intent.ExcludedTags) > 0
+	if public && carried {
+		return fmt.Sprintf("; mixed public and internal selection (public Profiles=%q Tags=%q exclusions=%q; internal source=%q Profiles=%q Tags=%q exclusions=%q); restate one complete request with public selection flags",
+			opts.profiles, opts.extraTags, opts.excludedTags, intent.Source, intent.Profiles, intent.ExtraTags, intent.ExcludedTags)
+	}
+	return "; restart with " + upgradeRecoveryCommand(cmd, opts, intent)
+}
+
 func upgradeRecoveryCommand(cmd *cobra.Command, opts updateOptions, intent selection.Intent) string {
+	if intent.Source == "" && len(intent.Profiles)+len(intent.ExtraTags)+len(intent.ExcludedTags) == 0 {
+		intent = selection.Intent{Source: selection.SourceExplicit, Profiles: opts.profiles, ExtraTags: opts.extraTags, ExcludedTags: opts.excludedTags}
+	}
 	args := []string{"upgrade"}
 	if intent.Source != selection.SourceRecorded {
 		for _, profile := range intent.Profiles {

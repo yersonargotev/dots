@@ -528,6 +528,45 @@ func TestUpgradeV0961ConfirmationReadFailurePreservesState(t *testing.T) {
 	}
 }
 
+func TestUpgradeMalformedContinuationRecoveryPreservesPublicRequest(t *testing.T) {
+	for _, mixed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "public only", true: "mixed intent"}[mixed], func(t *testing.T) {
+			home, source, stateRoot := t.TempDir(), t.TempDir(), t.TempDir()
+			args := []string{"upgrade", "--continue", "--profile", "workstation", "--profile", "mobile", "--tag", "extra", "--exclude-tag", "official",
+				"--file", filepath.Join(source, "custom manifest.yaml"), "--home", home, "--source-root", source, "--state-root", stateRoot, "--yes", "--no-tui", "--output", "json"}
+			if mixed {
+				args = append(args, "--selection-source", "recorded", "--selection-profile", "other", "--selection-tag", "internal-extra")
+			}
+			var out, errOut bytes.Buffer
+			if code := Run(args, &out, &errOut); code != 1 {
+				t.Fatalf("exit=%d\n%s\n%s", code, &out, &errOut)
+			}
+			if mixed {
+				if strings.Contains(out.String(), "restart with dots upgrade") {
+					t.Fatalf("ambiguous executable recovery: %s", &out)
+				}
+				for _, value := range []string{"mixed public and internal selection", "workstation", "mobile", "extra", "official", "other", "internal-extra"} {
+					if !strings.Contains(out.String(), value) {
+						t.Errorf("ambiguous diagnostic lost %q: %s", value, &out)
+					}
+				}
+			} else {
+				for _, value := range []string{"--profile workstation --profile mobile --tag extra --exclude-tag official", "--file '" + filepath.Join(source, "custom manifest.yaml") + "'", "--home " + home, "--source-root " + source, "--state-root " + stateRoot, "--yes", "--no-tui", "--output json"} {
+					if !strings.Contains(out.String(), value) {
+						t.Errorf("public recovery lost %q: %s", value, &out)
+					}
+				}
+			}
+			for _, root := range []string{home, source, stateRoot} {
+				files, err := os.ReadDir(root)
+				if err != nil || len(files) != 0 {
+					t.Fatalf("malformed request mutated %s: %v %v", root, files, err)
+				}
+			}
+		})
+	}
+}
+
 func TestUpgradeV0961FreshSnapshotIsCheckedAtManagedEntryMutation(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	home, stateRoot := t.TempDir(), t.TempDir()

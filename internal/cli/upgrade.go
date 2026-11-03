@@ -60,12 +60,12 @@ func newUpgradeCommand() *cobra.Command {
 			if continue_ {
 				intent := selection.Intent{Source: selection.Source(selectionSource), Profiles: selectionProfiles, ExtraTags: selectionTags, ExcludedTags: selectionExcludedTags}
 				if selectionSource == "" {
-					return fmt.Errorf("upgrade continuation requires a selection source; restart with %s", upgradeRecoveryCommand(cmd, opts, intent))
+					return fmt.Errorf("upgrade continuation requires a selection source%s", upgradeRecoveryHint(cmd, opts, intent))
 				}
 				binPlan := upgrade.Plan{Channel: binaryChannel, CurrentVersion: binaryCurrentVersion, LatestVersion: binaryLatestVersion, Action: binaryAction, Executable: binaryExecutable, Artifact: binaryArtifact, Checksum: binaryChecksum}
 				if previousSelectionFingerprint == "" {
 					if !legacyUpgradeContinuation(cmd, opts, intent, binPlan, args) {
-						return fmt.Errorf("upgrade continuation requires the previous selection identity for this protocol; restart with %s", upgradeRecoveryCommand(cmd, opts, intent))
+						return fmt.Errorf("upgrade continuation requires the previous selection identity for this protocol%s", upgradeRecoveryHint(cmd, opts, intent))
 					}
 					// v0.96.1 cannot bind its acknowledgement to an exact snapshot.
 					// The update workflow captures fresh authority and confirms again.
