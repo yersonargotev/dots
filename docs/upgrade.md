@@ -32,6 +32,38 @@ code. The continuation carries the authoritative Profile and explicit extra Tag
 intent together with its `explicit` or `recorded` source, so recorded intent is
 not reinterpreted as caller-supplied flags.
 
+Current continuations also carry exclusion intent and the exact previous
+Installed Selection identity, rejecting concurrent authority changes before
+configuration effects. The released v0.96.1 caller lacks that identity. Its
+recognized continuation is supported as a fresh request: dots captures current
+authority, preserves the complete carried selection and options, and uses the
+same locked ownership checks and terminal selection commit. This compatibility
+is limited to v0.96.1's complete Release Artifact or Homebrew continuation;
+missing or malformed internal arguments do not enable it.
+
+If that fresh request reduces Installed Selection, interactive execution asks
+for a new, distinct confirmation. An inherited `--acknowledge-selection-change`
+does not count. With `--yes` or JSON output, dots stops before repository,
+configuration or metadata changes and reports
+`selection-change-acknowledgement-required`. Follow its complete public recovery
+command after reviewing the reduction. Text errors include the command; JSON
+also includes `data.remediation.recommended_command`. It preserves repeated
+Profiles, extra Tags, custom roots, manifest and relevant output/execution
+options. Do not replace it with a selector-free retry when you originally
+requested an explicit selection. Legacy migration continuations also require a
+new public request with the complete explicit selection.
+Recovery for a recorded request continues to reuse recorded intent.
+Malformed continuations carrying only public selectors retain those selectors
+in recovery. If public and internal selection inputs are mixed, dots reports
+both and requires one complete public request without choosing a retry for you.
+A rejected continuation preview retains `--dry-run` in its recovery command.
+
+At that point the binary phase has already completed. A failed or declined
+continuation preserves the previous Installed Selection. Repository or
+configuration progress may remain after a later failure; the usual ownership
+checks and safe retry behavior still apply. Compatibility never uninstalls
+packages or automatically retires configuration.
+
 ## Previewing changes
 
 ```bash

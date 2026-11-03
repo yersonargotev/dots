@@ -13,12 +13,18 @@ import (
 const selectionChangeAcknowledgementRequiredCode = "selection-change-acknowledgement-required"
 
 type selectionChangeErrorData struct {
-	Code   string           `json:"code"`
-	Change selection.Change `json:"selection_change"`
+	Code        string                      `json:"code"`
+	Change      selection.Change            `json:"selection_change"`
+	Remediation *selectionChangeRemediation `json:"remediation,omitempty"`
+}
+
+type selectionChangeRemediation struct {
+	RecommendedCommand string `json:"recommended_command"`
 }
 
 type selectionChangeAcknowledgementError struct {
-	change selection.Change
+	change             selection.Change
+	recommendedCommand string
 }
 
 type selectionChangePolicy struct {
@@ -30,15 +36,23 @@ type selectionChangePolicy struct {
 }
 
 func (e *selectionChangeAcknowledgementError) Error() string {
-	return selectionChangeAcknowledgementRequiredCode +
+	message := selectionChangeAcknowledgementRequiredCode +
 		": removing previously selected Profiles or extra Tags, or adding exclusions, requires --yes and --acknowledge-selection-change"
+	if e.recommendedCommand != "" {
+		message += "; restart with " + e.recommendedCommand
+	}
+	return message
 }
 
 func (e *selectionChangeAcknowledgementError) JSONErrorData() any {
-	return selectionChangeErrorData{
+	data := selectionChangeErrorData{
 		Code:   selectionChangeAcknowledgementRequiredCode,
 		Change: e.change,
 	}
+	if e.recommendedCommand != "" {
+		data.Remediation = &selectionChangeRemediation{RecommendedCommand: e.recommendedCommand}
+	}
+	return data
 }
 
 func guardSelectionChange(cmd *cobra.Command, effective *selection.Effective, policy selectionChangePolicy) (bool, bool, error) {
