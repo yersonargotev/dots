@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -57,23 +58,35 @@ func newUpgradeCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := updateOptions{file: file, profiles: profiles, extraTags: extraTags, excludedTags: excludedTags, sourceRoot: sourceRoot, home: home, stateRoot: stateRoot, dryRun: dryRun, yes: yes, noTUI: noTUI, ackSelection: ackSelection}
 			if continue_ {
+				intent := selection.Intent{Source: selection.Source(selectionSource), Profiles: selectionProfiles, ExtraTags: selectionTags, ExcludedTags: selectionExcludedTags}
 				if selectionSource == "" {
-					return fmt.Errorf("upgrade continuation requires a selection source; restart dots upgrade")
+					return fmt.Errorf("upgrade continuation requires a selection source; restart with %s", upgradeRecoveryCommand(cmd, opts, intent))
 				}
+				binPlan := upgrade.Plan{Channel: binaryChannel, CurrentVersion: binaryCurrentVersion, LatestVersion: binaryLatestVersion, Action: binaryAction, Executable: binaryExecutable, Artifact: binaryArtifact, Checksum: binaryChecksum}
 				if previousSelectionFingerprint == "" {
-					return fmt.Errorf("upgrade continuation requires the previous selection identity; restart dots upgrade")
+					if !legacyUpgradeContinuation(cmd, opts, intent, binPlan, args) {
+						return fmt.Errorf("upgrade continuation requires the previous selection identity for this protocol; restart with %s", upgradeRecoveryCommand(cmd, opts, intent))
+					}
+					// v0.96.1 cannot bind its acknowledgement to an exact snapshot.
+					// The update workflow captures fresh authority and confirms again.
+					opts.ackSelection = false
 				}
 				opts.previousSelectionFingerprint = previousSelectionFingerprint
-				if selectionSource != "" {
-					intent := selection.Intent{Source: selection.Source(selectionSource), Profiles: selectionProfiles, ExtraTags: selectionTags, ExcludedTags: selectionExcludedTags}
-					opts.selectionIntent = &intent
-				}
+				opts.selectionIntent = &intent
 				updateReport, err := runUpdateWorkflow(cmd, opts, !wantsJSON(cmd))
 				if err != nil {
+					if previousSelectionFingerprint == "" {
+						recovery := upgradeRecoveryCommand(cmd, opts, intent)
+						var acknowledgement *selectionChangeAcknowledgementError
+						if errors.As(err, &acknowledgement) {
+							acknowledgement.recommendedCommand = recovery
+						} else {
+							return fmt.Errorf("%w; restart with %s", err, recovery)
+						}
+					}
 					return err
 				}
 				if wantsJSON(cmd) {
-					binPlan := upgrade.Plan{Channel: binaryChannel, CurrentVersion: binaryCurrentVersion, LatestVersion: binaryLatestVersion, Action: binaryAction, Executable: binaryExecutable, Artifact: binaryArtifact, Checksum: binaryChecksum}
 					return emitOK(cmd, upgradeReport{DryRun: false, Selection: updateReport.Selection, Binary: binPlan, Update: updateReport.Update, Plan: updateReport.Plan, Provisioners: updateReport.Provisioners, Retirement: updateReport.Retirement})
 				}
 				return nil

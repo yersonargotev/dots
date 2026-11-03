@@ -203,7 +203,9 @@ switches delegated to the forward installer. Whole-target retirement checks the
 same snapshot under its mutation lock. Terminal commit uses an exact
 compare-and-set. Update carries the initial snapshot across repository refresh;
 upgrade carries its canonical SHA-256 identity across binary continuation and
-rejects missing identity or a changed snapshot before configuration effects. A
+rejects a changed snapshot before configuration effects. Current continuations
+require that identity; the bounded v0.96.1 compatibility amendment below defines
+the sole missing-identity exception. A
 continuation claiming recorded intent must match that recorded intent after
 normalization; hidden flags cannot bypass reduction acknowledgement.
 
@@ -216,3 +218,41 @@ shared reconciliation receipts remain necessary for their existing cases. No
 new retirement receipt, whole-run rollback, package removal, or
 manifest-evolution retirement authority is introduced. Update/upgrade retain
 their existing non-retirement behavior.
+
+## v0.96.1 upgrade continuation compatibility amendment
+
+Issue #590 supports the continuation emitted by the released v0.96.1 caller,
+which carries ordered Profiles, explicit extra Tags, selection source, roots,
+manifest and execution/output options, but no previous-selection identity.
+Only its complete binary outcome shape is accepted: current version v0.96.1,
+the release-artifact/replace-binary or homebrew/homebrew-upgrade pair, and all
+binary outcome fields. Release artifact/checksum are nonempty; Homebrew's are
+empty. Public selection flags, exclusions, dry runs, positional arguments,
+explicitly empty identity and other protocol shapes cannot use this exception.
+These markers recognize a protocol; they do not authenticate the older process
+or supply authority for effects.
+
+The accepted continuation begins a fresh request. The update workflow loads
+current authoritative Installed Selection once, resolves the complete carried
+intent against it, and uses that exact snapshot in existing locked Managed Entry
+comparisons and terminal compare-and-set. Recorded intent remains recorded and
+must match current recorded intent after normalization. Historical inventory
+never supplies authority. Explicit intent remains complete, ordered and separate
+from recorded intent; it is never replaced by the previous selection.
+
+An inherited reduction acknowledgement is discarded. Interactive execution must
+give the existing distinct confirmation against the freshly resolved request.
+Confirmed or JSON execution requiring acknowledgement stops before repository,
+configuration or metadata mutation, even with inherited acknowledgement. Its
+existing structured error gains an optional remediation command preserving the
+complete request, roots, manifest and relevant execution/output options. A new
+public invocation can supply fresh acknowledgement. An inherited migration
+confirmation likewise cannot cross this legacy boundary: it requires recovery
+through a complete public selection request.
+
+Current identity-bearing continuations retain their exact identity and recorded
+intent checks, including exclusions. No mutation, ownership, reconciliation,
+rollback or metadata version changes are introduced. Failures and cancellation
+preserve prior Installed Selection; existing partial-success inventory and
+conditional recovery rules remain in force. Only terminal success records the
+complete selection and refreshed provenance.

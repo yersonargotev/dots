@@ -205,6 +205,12 @@ prose the text surface prints:
   `selection-change-acknowledgement-required`; error `data` contains `code` and
   the complete `selection_change`. This acknowledgement is independent from
   Conflict Resolution and `--backup-and-replace`.
+  A supported v0.96.1 upgrade continuation cannot reuse inherited
+  acknowledgement against its fresh authority snapshot. Its blocked reduction
+  additionally includes `remediation.recommended_command`, preserving the
+  complete explicit selection and relevant roots, manifest and execution/output
+  options for a new public invocation. This optional addition retains envelope
+  version `10`.
 - `excluded_tags` subtracts only Profile-derived Tags before conflict validation.
   Empty exclusion arrays are omitted for compatibility with existing envelope
   version `10` and Installation Metadata. Unknown, unselected, empty, or
