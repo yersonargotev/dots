@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -366,7 +368,7 @@ func TestUpgradeV0961RecordedContinuationRefreshesConfiguration(t *testing.T) {
 }
 
 func TestUpgradeV0961FailurePreservesSelectionAndRetryConverges(t *testing.T) {
-	for _, failure := range []string{"repository", "configuration", "provisioner", "terminal authority"} {
+	for _, failure := range []string{"repository", "configuration", "provisioner", "cancellation", "terminal authority"} {
 		t.Run(failure, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			home, stateRoot := t.TempDir(), t.TempDir()
@@ -391,7 +393,7 @@ func TestUpgradeV0961FailurePreservesSelectionAndRetryConverges(t *testing.T) {
 				}
 				runContinuationGit(t, origin, "add", "-A")
 				runContinuationGit(t, origin, "commit", "-m", "missing configuration source")
-			case "provisioner", "terminal authority":
+			case "provisioner", "cancellation", "terminal authority":
 				data, err := os.ReadFile(filepath.Join(origin, "dots.yaml"))
 				if err != nil {
 					t.Fatal(err)
@@ -413,7 +415,22 @@ func TestUpgradeV0961FailurePreservesSelectionAndRetryConverges(t *testing.T) {
 			}
 			args := legacyUpgradeArgs(home, source, stateRoot, "release-artifact", "recorded")
 			var out, errOut bytes.Buffer
-			if code := Run(args, &out, &errOut); code != 1 {
+			code := 1
+			if failure == "cancellation" {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				cmd := NewRootCommand()
+				cmd.SetContext(ctx)
+				cmd.SetOut(&out)
+				cmd.SetErr(&errOut)
+				cmd.SetArgs(args)
+				if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "context canceled") {
+					t.Fatalf("cancellation error=%v\n%s", err, &out)
+				}
+			} else {
+				code = Run(args, &out, &errOut)
+			}
+			if code != 1 {
 				t.Fatalf("failure exit=%d\n%s\n%s", code, &out, &errOut)
 			}
 			if failure == "terminal authority" && !strings.Contains(out.String(), "changed concurrently") {
@@ -464,6 +481,50 @@ func TestUpgradeV0961FailurePreservesSelectionAndRetryConverges(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+type legacyConfirmationErrorReader struct{ err error }
+
+func (r legacyConfirmationErrorReader) Read([]byte) (int, error) { return 0, r.err }
+
+func TestUpgradeV0961ConfirmationReadFailurePreservesState(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	home, stateRoot := t.TempDir(), t.TempDir()
+	origin, source := newContinuationRepo(t)
+	previous := state.InstalledSelection{Profiles: []string{"core"}, ExtraTags: []string{"extra", "core"}, ResolvedTags: []string{"core", "extra"}}
+	if err := state.Save(state.Path(stateRoot), state.Metadata{Version: state.CurrentVersion, InstalledSelection: &previous}); err != nil {
+		t.Fatal(err)
+	}
+	advanceContinuationRepo(t, origin)
+	args := legacyUpgradeArgs(home, source, stateRoot, "homebrew", "explicit")
+	args = withoutLegacyFlag(withoutLegacyFlag(args, "--yes", false), "--output", true)
+	readErr := errors.New("confirmation input unavailable")
+	cmd := NewRootCommand()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetIn(legacyConfirmationErrorReader{readErr})
+	cmd.SetArgs(args)
+	if err := cmd.Execute(); !errors.Is(err, readErr) {
+		t.Fatalf("confirmation error=%v", err)
+	}
+	meta, err := state.Load(state.Path(stateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(meta.InstalledSelection, &previous) {
+		t.Fatal("confirmation failure changed authority")
+	}
+	files, err := os.ReadDir(home)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("confirmation failure changed home: %v %v", files, err)
+	}
+	data, err := os.ReadFile(filepath.Join(source, "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "configs/new") {
+		t.Fatal("confirmation failure refreshed repository")
 	}
 }
 
