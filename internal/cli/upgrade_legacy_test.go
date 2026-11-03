@@ -214,6 +214,9 @@ func TestUpgradeV0961RejectsUnrecognizedContinuationBeforeEffects(t *testing.T) 
 			if code := Run(args, &out, &errOut); code != 1 {
 				t.Fatalf("exit=%d want rejection\n%s\n%s", code, &out, &errOut)
 			}
+			if tt.name == "dry run" && !strings.Contains(out.String(), "--dry-run") {
+				t.Fatalf("recovery changed preview into effects: %s", &out)
+			}
 			meta, err := state.Load(state.Path(stateRoot))
 			if err != nil {
 				t.Fatal(err)
@@ -536,6 +539,8 @@ func TestUpgradeMalformedContinuationRecoveryPreservesPublicRequest(t *testing.T
 				"--file", filepath.Join(source, "custom manifest.yaml"), "--home", home, "--source-root", source, "--state-root", stateRoot, "--yes", "--no-tui", "--output", "json"}
 			if mixed {
 				args = append(args, "--selection-source", "recorded", "--selection-profile", "other", "--selection-tag", "internal-extra")
+			} else {
+				args = append(args, "--dry-run")
 			}
 			var out, errOut bytes.Buffer
 			if code := Run(args, &out, &errOut); code != 1 {
@@ -551,6 +556,9 @@ func TestUpgradeMalformedContinuationRecoveryPreservesPublicRequest(t *testing.T
 					}
 				}
 			} else {
+				if !strings.Contains(out.String(), "--dry-run") {
+					t.Fatalf("recovery changed preview into effects: %s", &out)
+				}
 				for _, value := range []string{"--profile workstation --profile mobile --tag extra --exclude-tag official", "--file '" + filepath.Join(source, "custom manifest.yaml") + "'", "--home " + home, "--source-root " + source, "--state-root " + stateRoot, "--yes", "--no-tui", "--output json"} {
 					if !strings.Contains(out.String(), value) {
 						t.Errorf("public recovery lost %q: %s", value, &out)

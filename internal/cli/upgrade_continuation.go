@@ -71,6 +71,9 @@ func upgradeRecoveryCommand(cmd *cobra.Command, opts updateOptions, intent selec
 	if opts.stateRoot != "" {
 		args = append(args, "--state-root", opts.stateRoot)
 	}
+	if opts.dryRun {
+		args = append(args, "--dry-run")
+	}
 	if opts.yes {
 		args = append(args, "--yes", "--acknowledge-selection-change")
 	}

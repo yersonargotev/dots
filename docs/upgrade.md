@@ -56,6 +56,7 @@ Recovery for a recorded request continues to reuse recorded intent.
 Malformed continuations carrying only public selectors retain those selectors
 in recovery. If public and internal selection inputs are mixed, dots reports
 both and requires one complete public request without choosing a retry for you.
+A rejected continuation preview retains `--dry-run` in its recovery command.
 
 At that point the binary phase has already completed. A failed or declined
 continuation preserves the previous Installed Selection. Repository or
