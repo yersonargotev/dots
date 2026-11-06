@@ -135,7 +135,7 @@ printf '%s\n' "$*" >> "$HOME/herdr-test.log"
 	if err != nil {
 		t.Fatalf("Herdr Tag did not install Tabby configuration: %v", err)
 	}
-	for _, want := range []string{`additional_significant = ["pi", "agent"]`, `"agent" = "cursor"`, `command_format = "directory_and_command"`, `separator = "  "`} {
+	for _, want := range []string{`additional_significant = ["pi", "agent", "yazi"]`, `"agent" = "cursor"`, `command_format = "directory_and_command"`, `separator = "  "`} {
 		if !strings.Contains(string(tabbyConfig), want) {
 			t.Errorf("installed Tabby configuration omitted %q: %s", want, tabbyConfig)
 		}

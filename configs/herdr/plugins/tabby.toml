@@ -1,7 +1,7 @@
 version = 1
 
 [commands]
-additional_significant = ["pi", "agent"]
+additional_significant = ["pi", "agent", "yazi"]
 
 [labels]
 command_format = "directory_and_command"

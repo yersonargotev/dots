@@ -202,7 +202,7 @@ not copy its result. dots does not manage custom Pluck pattern files.
 The `herdr` Tag manages
 `~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml` on macOS using
 TOML Subset Ownership. The baseline sets configuration `version = 1`, adds `pi`,
-`agent`, and `opencode` to `commands.additional_significant`, maps the `agent`
+`agent`, and `yazi` to `commands.additional_significant`, maps the `agent`
 command to `cursor` in `commands.aliases`, sets `labels.command_format` to
 `directory_and_command`, and uses `  ` as `labels.separator`. Once managed,
 target-only settings remain intact. An existing unmanaged file that differs from
