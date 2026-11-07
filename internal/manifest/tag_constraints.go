@@ -39,6 +39,9 @@ func validateTagConflicts(m Manifest, tags []string) error {
 // selections supplied by a caller rather than resolved from profile arguments.
 // Empty architecture uses the current host, matching other planning APIs.
 func ValidateSelection(m Manifest, selected Selection, osName, arch string) error {
+	if err := rejectRetiredTags(selected.Tags); err != nil {
+		return err
+	}
 	if err := validateTagConflicts(m, selected.Tags); err != nil {
 		return err
 	}

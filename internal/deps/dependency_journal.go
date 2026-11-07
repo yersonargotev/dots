@@ -505,6 +505,9 @@ func pendingSelections(home, state string, selected []UserLocalSelection) (actio
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectRetiredPendingHome(home, ops); err != nil {
+		return nil, err
+	}
 	absolute, err := filepath.Abs(home)
 	if err != nil {
 		return nil, err

@@ -118,9 +118,6 @@ func CheckWithToolProbes(m manifest.Manifest, opts Options, look Lookup, fontLoo
 // DependencyPresent reports whether any declared detection mode satisfies a
 // Dependency in the selected environment.
 func DependencyPresent(dep manifest.Dependency, opts Options, look Lookup, fontLook FontLookup) bool {
-	if isHerdrCustom(dep) {
-		return look("herdr-custom") && herdrCustomPresent(dep, opts)
-	}
 	if dep.IsFont() {
 		return fontPresent(dep.FontMatches(), fontLook)
 	}
@@ -137,9 +134,6 @@ func checkResult(dep manifest.Dependency, opts Options, look Lookup, fontLook Fo
 	}
 	probes := dep.Probes()
 	result := Result{Name: dep.Name, Requirement: dep.RequirementValue(), Command: probeLabel(probes), Present: DependencyPresent(dep, opts, look, fontLook)}
-	if isHerdrCustom(dep) && !result.Present && look("herdr-custom") {
-		result.Hint = "herdr-custom must resolve to the verified dots-managed integration; remove a PATH shadow or migrate the existing custom installation explicitly"
-	}
 	return result
 }
 
@@ -270,10 +264,8 @@ func selectDependencies(m manifest.Manifest, opts Options) ([]manifest.Dependenc
 	}
 	selected := selectedsurface.EvaluateForPlatform(m, selection.Tags, opts.OS, arch).Dependencies
 	for _, dep := range selected {
-		if isHerdrCustom(dep) {
-			if _, _, err := herdrCustomArtifact(dep, opts); err != nil {
-				return nil, err
-			}
+		if err := dep.RetirementError(); err != nil {
+			return nil, err
 		}
 	}
 	return selected, nil

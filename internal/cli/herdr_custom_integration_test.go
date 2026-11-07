@@ -17,9 +17,9 @@ func TestCustomHerdrInstallRejectsInvalidSelectionBeforeMutation(t *testing.T) {
 		name, goos, arch, want string
 		tags                   []string
 	}{
-		{"both", "darwin", "arm64", "cannot be selected together", []string{"herdr", "herdr-custom"}},
-		{"apple intel", "darwin", "amd64", "does not support", []string{"herdr-custom"}},
-		{"linux arm", "linux", "arm64", "does not support", []string{"herdr-custom"}},
+		{"both", "darwin", "arm64", "herdr-custom is retired", []string{"herdr", "herdr-custom"}},
+		{"apple intel", "darwin", "amd64", "herdr-custom is retired", []string{"herdr-custom"}},
+		{"linux arm", "linux", "arm64", "herdr-custom is retired", []string{"herdr-custom"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home, stateRoot, bin := t.TempDir(), t.TempDir(), t.TempDir()

@@ -140,17 +140,8 @@ func Plan(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup, t
 // Dependency under a Tier, falling through ordered provider candidates before
 // returning manual guidance.
 func actionFor(dep manifest.Dependency, opts Options, tier Tier, look Lookup) (InstallAction, error) {
-	if isHerdrCustom(dep) {
-		a, _, err := herdrCustomArtifact(dep, opts)
-		if err != nil {
-			return InstallAction{}, err
-		}
-		if err := herdrCustomInstallGuard(opts.Home, a); err != nil {
-			return InstallAction{}, err
-		}
-		if _, managed := priorHerdrCustomArtifact(a); look("herdr-custom") && !managed {
-			return InstallAction{}, fmt.Errorf("herdr-custom is present but is not the dots-managed integration; remove its PATH shadow or migrate it explicitly before retrying")
-		}
+	if err := dep.RetirementError(); err != nil {
+		return InstallAction{}, err
 	}
 	fontMatches := dep.FontMatches()
 	fontMatch := ""
@@ -304,7 +295,7 @@ func providerCandidates(dep manifest.Dependency, opts Options, tier Tier, look L
 		return nil, nil
 	}
 
-	if (dep.RollingUserLocal != nil && (tier != TierHomebrew || dep.Brew == "")) || isHerdrCustom(dep) {
+	if dep.RollingUserLocal != nil && (tier != TierHomebrew || dep.Brew == "") {
 		artifact, ok, err := userLocalArtifact(dep, opts)
 		if err != nil {
 			return nil, err

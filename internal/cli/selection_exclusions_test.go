@@ -384,7 +384,7 @@ func TestSelectionExclusionTerminalCASPreservesConcurrentIntent(t *testing.T) {
 	}
 }
 
-func TestRepositoryWorkstationExcludesHerdrBeforeSelectingCustom(t *testing.T) {
+func TestRepositoryWorkstationCanExcludeHerdrAfterCustomRetirement(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -392,7 +392,7 @@ func TestRepositoryWorkstationExcludesHerdrBeforeSelectingCustom(t *testing.T) {
 	f := newExclusionFixture(t)
 	f.source = root
 	f.file = filepath.Join(root, "dots.yaml")
-	out := requireExclusionRun(t, f, []string{"plan"}, "--profile", "workstation", "--exclude-tag", "herdr", "--tag", "herdr-custom", "--output", "json")
+	out := requireExclusionRun(t, f, []string{"plan"}, "--profile", "workstation", "--exclude-tag", "herdr", "--output", "json")
 	var env struct {
 		Data struct {
 			Selection selection.Report `json:"selection"`
@@ -409,7 +409,7 @@ func TestRepositoryWorkstationExcludesHerdrBeforeSelectingCustom(t *testing.T) {
 			t.Fatal("official Herdr remained selected")
 		}
 	}
-	if _, err := f.run(t, []string{"plan"}, "--profile", "workstation", "--tag", "herdr-custom"); err == nil || !strings.Contains(err.Error(), "cannot be selected together") {
+	if _, err := f.run(t, []string{"plan"}, "--profile", "workstation", "--tag", "herdr-custom"); err == nil || !strings.Contains(err.Error(), "herdr-custom is retired") {
 		t.Fatalf("implicit replacement accepted: %v", err)
 	}
 }

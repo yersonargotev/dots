@@ -390,6 +390,9 @@ func runUpdateWorkflow(cmd *cobra.Command, opts updateOptions, emit bool) (resul
 			return updateReport{}, err
 		}
 		installedSelection := effective.InstalledSelection(state.CaptureProvenance(paths.SourceRoot, version.Value))
+		if err := cmd.Context().Err(); err != nil {
+			return updateReport{}, fmt.Errorf("commit installed selection: %w", err)
+		}
 		if err := commitInstallationMetadata(metadataCommit, meta.InstalledSelection, installedSelection); err != nil {
 			return updateReport{}, err
 		}

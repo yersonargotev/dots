@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yersonargotev/dots/internal/batcache"
+	"github.com/yersonargotev/dots/internal/manifest"
 )
 
 // provisionExecRunner executes an allowlisted provisioner command with HOME
@@ -29,6 +30,9 @@ type provisionExecRunner struct {
 }
 
 func (r provisionExecRunner) Run(executable string, args []string) error {
+	if executable == "herdr-custom" {
+		return manifest.ErrHerdrCustomRetired
+	}
 	if executable == "bat" && len(args) == 2 && args[0] == "cache" && args[1] == "--build" {
 		if r.batCacheInput == nil {
 			return fmt.Errorf("bat cache provisioner is missing its captured native input")
@@ -67,7 +71,7 @@ func (r provisionExecRunner) environment() []string {
 
 func (r provisionExecRunner) environmentFor(executable string) []string {
 	env := r.environment()
-	if executable == "herdr" || executable == "herdr-custom" {
+	if executable == "herdr" {
 		return envForHerdrProvisioner(env, r.home)
 	}
 	return env
