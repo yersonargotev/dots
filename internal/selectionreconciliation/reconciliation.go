@@ -646,23 +646,26 @@ func classifyPartial(action Action, previous, current targetGroup, ownership str
 	}
 
 	if allowSourceConflict && ownership == "toml-subset" && hasRetiredSources(previous, current) {
+		// Path authority is required even when the forward target already contains
+		// the desired values. Equality alone cannot claim a target-only path.
+		replacement, replaceErr := configsubset.ReplaceOwnedTOML(live, previousOwned, desired)
+		if replaceErr != nil {
+			return Action{}, fmt.Errorf("analyze owned TOML source switch: %w", replaceErr)
+		}
+		if !replacement.Compatible {
+			return blocked(action, ReasonAmbiguousPartialOwnership), nil
+		}
 		_, _, _, oldMatches, oldErr := configsubset.RemoveTOML(live, previousOwned)
 		if oldErr != nil {
 			return Action{}, fmt.Errorf("analyze previous owned TOML: %w", oldErr)
 		}
 		if forward == ForwardConflict || !oldMatches {
-			replacement, replaceErr := configsubset.ReplaceOwnedTOML(live, previousOwned, desired)
-			if replaceErr != nil {
-				return Action{}, fmt.Errorf("analyze owned TOML source switch: %w", replaceErr)
-			}
-			if !replacement.Compatible {
-				return blocked(action, ReasonAmbiguousPartialOwnership), nil
-			}
 			action.Outcome = OutcomeReconcile
 			action.Reason = ReasonOwnedSourceConflict
 			return action, nil
 		}
 	}
+
 	changed, compatible, reconcileErr := reconcilePartial(ownership, live, previousOwned, desired)
 	if reconcileErr != nil {
 		return Action{}, fmt.Errorf("reconcile partial contribution: %w", reconcileErr)

@@ -431,3 +431,46 @@ func (r *sourceSwitchPromptInput) Read(p []byte) (int, error) {
 	r.text = r.text[n:]
 	return n, nil
 }
+
+func TestConflictingTOMLSourceSwitchCannotClaimDesiredExternalPath(t *testing.T) {
+	for _, first := range []string{"alpha", "beta"} {
+		t.Run(first, func(t *testing.T) {
+			f := newSourceSwitchFixture(t, first)
+			next := "alpha"
+			if first == "alpha" {
+				next = "beta"
+			}
+			// All old owned values still match; the new path already belongs to the
+			// target's other owner. Desired-byte equality grants no new ownership.
+			desired := append(switchRead(t, f.target), []byte("external = true\n")...)
+			switchWrite(t, filepath.Join(f.sourceRoot, next+".toml"), desired)
+			switchWrite(t, f.target, desired)
+			metadata := switchRead(t, state.Path(f.stateRoot))
+			for _, command := range []string{"plan", "dry-run", "skip", "replace"} {
+				verb := "install"
+				args := []string{"--tag", next, "--output", "json"}
+				want := 1
+				switch command {
+				case "plan":
+					verb = "plan"
+					want = 2
+				case "dry-run":
+					args = append(args, "--dry-run", "--skip-deps")
+					want = 0
+				default:
+					args = append(args, "--yes", "--skip-deps", "--acknowledge-selection-change")
+					if command == "replace" {
+						args = append(args, "--backup-and-replace")
+					}
+				}
+				code, out := f.run(t, verb, args...)
+				if code != want || !strings.Contains(out, "ambiguous-partial-ownership") {
+					t.Fatalf("%s allowed external ownership: %d %s", command, code, out)
+				}
+				if !bytes.Equal(metadata, switchRead(t, state.Path(f.stateRoot))) || !bytes.Equal(desired, switchRead(t, f.target)) {
+					t.Fatal("unproven ownership changed state")
+				}
+			}
+		})
+	}
+}

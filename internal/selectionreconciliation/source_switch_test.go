@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildTOMLSourceSwitchRequiresExactAttribution(t *testing.T) {
-	for _, scenario := range []string{"old", "edited", "desired", "receipt", "legacy", "contradictory", "hash", "missing-record", "missing-bytes", "empty", "directory", "symlink"} {
+	for _, scenario := range []string{"old", "edited", "desired", "receipt", "desired-new-path", "receipt-new-path", "legacy", "contradictory", "hash", "missing-record", "missing-bytes", "empty", "directory", "symlink"} {
 		t.Run(scenario, func(t *testing.T) {
 			old := []byte("width=38\n")
 			next := []byte("width=26\n")
@@ -20,6 +20,11 @@ func TestBuildTOMLSourceSwitchRequiresExactAttribution(t *testing.T) {
 				live = next
 				status = ForwardUnchanged
 			}
+			if scenario == "desired-new-path" || scenario == "receipt-new-path" {
+				next = append(append([]byte{}, old...), []byte("external=true\n")...)
+				live = next
+				status = ForwardUnchanged
+			}
 			if scenario == "empty" {
 				old = []byte{}
 			}
@@ -27,7 +32,7 @@ func TestBuildTOMLSourceSwitchRequiresExactAttribution(t *testing.T) {
 			input.PreviousIntent.ExtraTags = []string{"old"}
 			input.RequestedIntent.ExtraTags = []string{"new"}
 			rec := state.Record{Target: "/home/test/.target", Source: "old.toml", Strategy: "copy", Ownership: "toml-subset", Hash: state.HashBytes(old), OwnedBytes: old, Contributions: []state.Contribution{{Source: "old.toml", Ownership: "toml-subset", EvidenceRecorded: true, Hash: state.HashBytes(old), OwnedBytes: old}}}
-			if scenario == "receipt" {
+			if scenario == "receipt" || scenario == "receipt-new-path" {
 				rec.PendingReconciliation = &state.ReconciliationReceipt{TargetHash: state.HashBytes(live), Sources: []string{"new.toml"}, SourceHashes: []string{state.HashBytes(next)}, Strategy: "copy", Ownership: "toml-subset"}
 			}
 			if scenario == "legacy" {
@@ -66,7 +71,7 @@ func TestBuildTOMLSourceSwitchRequiresExactAttribution(t *testing.T) {
 			case "old", "edited", "desired":
 				want = OutcomeReconcile
 				reason = ReasonOwnedSourceConflict
-			case "receipt":
+			case "receipt", "receipt-new-path":
 				want = OutcomePreserve
 				reason = ""
 			case "directory", "symlink":
