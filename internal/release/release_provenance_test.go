@@ -33,7 +33,7 @@ func TestBuildReleaseArtifactsPreservesTaggedProvenance(t *testing.T) {
 		}
 		return strings.TrimSpace(string(output))
 	}
-	write := func(path string, data []byte) {
+	write := func(t *testing.T, path string, data []byte) {
 		t.Helper()
 		path = filepath.Join(root, path)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -48,9 +48,9 @@ func TestBuildReleaseArtifactsPreservesTaggedProvenance(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		write(path, data)
+		write(t, path, data)
 	}
-	write("go.mod", []byte("module github.com/yersonargotev/dots\n\ngo 1.24.2\n"))
+	write(t, "go.mod", []byte("module github.com/yersonargotev/dots\n\ngo 1.24.2\n"))
 	source := []byte(`package main
 
 import (
@@ -60,8 +60,8 @@ import (
 
 func main() { fmt.Println("dots " + version.Value) }
 `)
-	write("cmd/dots/main.go", source)
-	write("internal/version/version.go", []byte("package version\n\nvar Value = \"dev\"\n"))
+	write(t, "cmd/dots/main.go", source)
+	write(t, "internal/version/version.go", []byte("package version\n\nvar Value = \"dev\"\n"))
 	run(t, nil, "git", "init", "--quiet")
 	run(t, nil, "git", "config", "user.name", "Release test")
 	run(t, nil, "git", "config", "user.email", "release-test@example.invalid")
@@ -120,11 +120,11 @@ func main() { fmt.Println("dots " + version.Value) }
 		checkBuild(t, external, false, []string{"RELEASE_VERSION=v0.99.0", "RELEASE_OUT_DIR=" + external})
 	})
 	t.Run("tracked source modification", func(t *testing.T) {
-		write("cmd/dots/main.go", append(append([]byte{}, source...), []byte("\n// Deliberate source modification.\n")...))
+		write(t, "cmd/dots/main.go", append(append([]byte{}, source...), []byte("\n// Deliberate source modification.\n")...))
 		checkBuild(t, dist, true, nil, "--version", "v0.99.0", "--out-dir", "dist")
 	})
 	t.Run("restored source", func(t *testing.T) {
-		write("cmd/dots/main.go", source)
+		write(t, "cmd/dots/main.go", source)
 		checkBuild(t, dist, false, nil, "--version", "v0.99.0", "--out-dir", "dist")
 	})
 }
