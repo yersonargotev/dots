@@ -206,7 +206,11 @@ func TestBuildReleaseArtifactsCreatesChecksummedSupportedPlatforms(t *testing.T)
 	if err != nil {
 		t.Fatalf("build release artifacts: %v\n%s", err, output)
 	}
+	assertReleaseArtifacts(t, outDir)
+}
 
+func assertReleaseArtifacts(t *testing.T, outDir string) {
+	t.Helper()
 	wantAssets := make([]string, 0, len(supportedReleasePlatforms))
 	for _, platform := range supportedReleasePlatforms {
 		parts := strings.Split(platform, "/")
