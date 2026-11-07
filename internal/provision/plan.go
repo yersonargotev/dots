@@ -60,6 +60,9 @@ func Select(m manifest.Manifest, opts Options) ([]manifest.Provisioner, error) {
 	}
 	provisioners := make([]manifest.Provisioner, 0, len(selected))
 	for _, item := range selected {
+		if item.Provisioner.Tool == "herdr-custom" {
+			return nil, manifest.ErrHerdrCustomRetired
+		}
 		provisioners = append(provisioners, item.Provisioner)
 	}
 	return provisioners, nil
@@ -191,7 +194,7 @@ func managedRoots(prov manifest.Provisioner) []string {
 		return []string{"~/.codex"}
 	case "codegraph":
 		return codeGraphRoots(prov.Spec.Agents)
-	case "herdr", "herdr-custom":
+	case "herdr":
 		return []string{
 			"~/.config/herdr",
 			"~/.local/state/herdr",

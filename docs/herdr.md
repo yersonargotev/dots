@@ -7,123 +7,104 @@ with `dots install --tag herdr` on a new installation, or include it in the
 selection you intend to retain. Review selection reconciliation before changing
 an existing installation's Tags.
 
-## Independent custom variant
+## Retiring an existing custom installation
 
-The opt-in `herdr-custom` Tag uses
-[`herdr-custom v0.9.5-custom.1`](https://github.com/yersonargotev/herdr-custom/releases/tag/v0.9.5-custom.1),
-based on upstream Herdr 0.9.5. Supported platforms are **macOS Apple Silicon**
-and **Linux x86_64**. Apple Intel and Linux ARM64 are rejected before installation.
-No Profile selects it. The official `herdr` Tag and its existing platform behavior
-remain unchanged.
+`herdr-custom` is retired from the offered Source of Truth. Catalog, completion,
+the Install Manifest, dependency installation and Provisioners no longer offer
+it. Explicit custom requests, including old manifests requesting the custom
+provider or Provisioner, fail with retirement guidance before provisioning.
+There is no replacement alias, implicit official installation, or uninstall.
 
-Select exactly one variant. Both own `~/.config/herdr/config.toml`, so selecting
-both Tags is an error, including through a Profile. `core` and `workstation`
-already select `herdr`; adding `--tag herdr-custom` to either Profile does not
-replace that selection. Use an explicit retained Tag selection without `herdr`
-or a separately authored Profile. Preview reconciliation before switching an
-existing installation:
+Historical Installed Selections, contribution evidence, Provisioner inventory,
+Dependency Installation Metadata and completed immutable receipts remain
+readable. `dots installed` can inspect this history. Selection-aware read-only
+commands using stale recorded custom intent return exit 1 with guidance; they
+do not repair metadata. Mutating commands also stop before applying that intent.
+Pending custom provider journals remain preserved and require manual remediation;
+dots will not resume them, download custom artifacts, publish executables, repair
+captured projections or acknowledge completion. Preserve their `dependencies.d/`
+operation directories and private staging alongside public paths for inspection.
+Do not delete a journal to bypass diagnosis. Recovery for retained providers
+continues under [ADR 0021](adr/0021-recover-user-local-provider-receipts.md).
+
+### Complete retained selection
+
+First inspect the saved Profiles, extra Tags and exclusions with `dots installed`.
+Submit the **complete** intent you want to retain, dropping custom. Repeat every
+retained Profile, extra Tag and exclusion. Profiles such as `core` and
+`workstation` expand to official `herdr`, so continue excluding it when preserving
+the custom environment. Do not copy a workstation example over a different saved
+selection. For an installation whose intended retained selection is exactly
+`workstation` with official Herdr excluded:
 
 ```sh
-CUSTOM_SANDBOX="$(mktemp -d)"
-dots install --dry-run --tag herdr-custom --file dots.yaml --source-root "$PWD" \
-  --home "$CUSTOM_SANDBOX/home" --state-root "$CUSTOM_SANDBOX/state"
+dots plan --profile workstation --exclude-tag herdr --output json
+dots install --dry-run --profile workstation --exclude-tag herdr
+dots install --profile workstation --exclude-tag herdr \
+  --yes --acknowledge-selection-change
 ```
 
-The reviewed User-Local Provider downloads the platform release with its pinned
-SHA-256, stages it under home-owned versioned storage, and exposes only
-`herdr-custom` in `~/.local/bin`. It does not install, replace, or alias the
-`herdr` command. Keep `~/.local/bin` on PATH. An unrelated existing custom command
-or a PATH entry shadowing the managed launcher needs explicit repair; it is not
-accepted as an integrated installation. Self-update is disabled in this
-custom distribution; updates go through reviewed Install Manifest version and
-checksum changes. Deselecting a Tag does not uninstall external Dependencies.
+On Linux, use the same complete-selection rule and keep official `herdr`
+excluded from such Profiles. Retirement installs nothing in its place; the
+retained official integration selects no Linux surface. On macOS ARM64, later
+adoption of official Herdr remains an explicit operator decision. Other platforms
+gain no official provisioning support through custom retirement. Existing
+platform restrictions, official theme variants, plugin pins and opt-in
+`herdr-metrics` remain unchanged.
 
-The dots integration launcher selects `~/.config/herdr/config.toml`, honoring an
-explicit `HERDR_CONFIG_PATH` override. Thus the base, `adaptive-theme`, and
-`theme-carbonfox` variants remain effective instead of being bypassed by the
-release's bundled configuration. Shared keybindings, Git colors, and theme
-palettes match the official variants. The compact UI adds:
+Interactive reductions require the existing separate selection acknowledgement.
+Non-interactive reductions require both `--yes` and
+`--acknowledge-selection-change`. If no capability should remain selected, use
+`--clear-selection` with its existing safeguards: type `clear` interactively, or
+supply both acknowledgement flags non-interactively (also for a dry run).
+A dry run, decline, error or cancellation preserves the prior Installed
+Selection; only successful terminal completion records retained intent.
 
-- One-row tabs without numbering, underline, or vertical padding; active tabs
-  keep their highlight, inactive tabs use the bar background, with separators.
-- Blue selection stripes for Spaces and Agents, and state dots.
-- Three Space rows: active tab name (`$tab_name`), Git branch, then Git status
-  or change counts. Empty Git rows disappear when their tokens are absent.
-- Space tab names use the theme accent for the navigation selection, or the
-  active Space outside navigation, and the original theme gray for other Spaces.
-  Cancelling navigation restores the active Space highlight. Explicit token
-  foreground overrides take precedence over these contextual colors.
-- Agent identity on the left and state on the right, followed by native tab
-  context when available.
-- Sidebar width 38, adapting between 18 and 44, with one blank row between
-  independent Spaces and between Agent entries. Space rows have no added
-  inner padding.
+Removed custom declarations and source files provide no retirement authority.
+Historical custom contributions recovered from inventory stay `retain` /
+`manifest-evolution-report-only`, including changed or unproven targets. Their
+ownership evidence remains historical. Completed custom dependency receipts and
+Provisioner inventory produce applicable `retained-external-state` reports.
+Installed packages, bundles, launchers, Provisioner effects, plugin configuration,
+sessions and history remain in place. This policy does not bypass normal
+acknowledged retirement for unrelated, still-declared Managed Entries.
 
-The patch owns native tab rendering, selection stripes, and state alignment;
-these are not unsupported TOML settings. No session is restarted or migrated
-by selecting this Tag. Use `herdr-custom` instead of `herdr` in the operator
-commands below, always selecting
-the intended existing session explicitly. The package contains server
-functionality too; starting a missing session may start its server.
+### Later official adoption and local cleanup
 
-### Runtime adoption and rollback
+Custom and official Herdr share `~/.config/herdr`, including configuration,
+plugin registry and plugin configuration. Also preserve the actual application
+state, sessions, history, caches and any paths selected by `HERDR_*` or `XDG_*`
+environment overrides. Do not assume that a different binary or command name
+isolates this environment. Before later adoption, inspect and preserve it, verify
+plugin compatibility, and use matching client/server versions. A new client does
+not replace a running server; switching a symlink does not migrate or downgrade
+state. Session restarts and state migration require separate operator authority.
 
-`v0.9.5-custom.1` supersedes `v0.9.3-custom.6`, which rejects the shared plugin's
-Herdr 0.9.5 requirement. The Install Manifest verifies the published archives:
+The dots custom-only paths are `~/.local/bin/herdr-custom` and versioned bundles
+under `~/.local/opt/herdr-custom/<version>/`. Inspect the actual launcher target,
+receipt evidence and references before deciding that a path is custom-only.
+An unrelated PATH shadow, user-modified launcher or unproven bundle must not be
+assumed to belong to dots. Shared `~/.config/herdr`, plugins and application data
+are **not** custom-only cleanup targets. Manifest retirement and acknowledged
+deselection remove none of these paths. Any cleanup is a separate, explicitly
+authorized procedure after preserving the environment and checking live sessions.
+Official installation must likewise be explicitly requested on a supported
+platform. Switching different sources on a shared partially owned target remains
+a separate concern tracked in #593; this transition does not fix or require it.
 
-| Platform | Archive SHA-256 |
-|---|---|
-| macOS ARM64 | `f9e2d5bdbc5eec0a7d632bfde46a6a30087a55b178eaa1145511acb912d2625d` |
-| Linux AMD64 | `cb58d07ef727d3ce330a82746768ecca20d30b8556e19aa34af43a8db7ca23dc` |
+Reusable prompt for a later Codex workstation session:
 
-Before an operator-authorized upgrade, preserve the complete pre-upgrade Herdr
-configuration, plugin registry and managed plugin directories, session state,
-and history. A new client does not replace an existing server; use matching
-0.9.5 clients and servers for attach/detach. Changing a launcher or symlink back
-to 0.9.3 does not downgrade state written by 0.9.5. A rollback requires the
-preserved pre-upgrade environment and compatible plugin pins, not just the old
-binary. Follow the [release's verified compatibility and rollback boundaries](https://github.com/yersonargotev/herdr-custom/blob/v0.9.5-custom.1/docs/verification-0.9.5.md).
-Selecting the Tag does not authorize restarting or migrating live sessions.
-
-### Custom plugins on macOS and Linux
-
-Both variants share the full plugin commit pins in the Install Manifest through
-YAML aliases. Custom Provisioners invoke `herdr-custom plugin install`; none
-requires Homebrew Herdr. Native plugin execution supplies `HERDR_BIN_PATH` for
-runtime subprocesses, with no global official-name alias.
-
-| Custom platform | Plugins |
-|---|---|
-| macOS Apple Silicon | Git Tokens, Tabby, Pluck |
-| Linux x86_64 | Git Tokens, Pluck |
-
-[Tabby's pinned installer](https://github.com/yersonargotev/tabby/blob/19031d668f0f8a79b58591db4ce8bc8f8846e329/scripts/install-herdr-plugin.py)
-rejects Linux. Linux therefore retains native/manual tab labels; it does not
-receive Tabby's automatic directory/command naming or its config baseline.
-Tabby's standalone installation/status paths still assume the official `herdr`
-command. Custom support covers its plugin runtime, not those standalone commands.
-The shared Tabby baseline is installed for custom only on macOS.
-
-[Pluck's pinned source](https://github.com/rmarganti/herdr-pluck/tree/d1eacb80956c3a23ab6f7428a9e83961fb86ba28)
-supports Linux x86_64 and uses `xdg-open` for URLs. Clipboard copying needs a
-working desktop clipboard command: `wl-copy` on Wayland or `xclip`/`xsel` on X11.
-These are declared as optional native packages because they are alternatives,
-not an AND requirement; choose a backend suited to the active desktop session.
-Their presence alone does not prove a display server or clipboard is available,
-and a headless server may provide neither copying nor desktop URL opening.
-The installer uses curl/tar and can fall back to Rust/Cargo with the declared
-C linker toolchain (`build-essential`, `gcc`, or `base-devel`); Git Tokens needs
-Node LTS through fnm. The Linux surface includes the same LazyGit/file-finder
-popup tools, with platform package policies.
-These platform declarations follow the pinned source; they do not claim a live
-Linux desktop/plugin session has been exercised. Pluck's upstream downloaded
-payload is not independently checksum-verified by its installer; the custom
-client's verified distribution does not change that
-existing plugin limitation.
-
-`herdr-metrics` remains a separate Apple Silicon opt-in. Custom never selects
-macmon implicitly. On Linux the hardware-monitor popup reports the missing
-command and the status entry remains empty.
+> Inspecciona mi instalación real de Herdr, los launchers y bundles, los recibos,
+> los journals pendientes y la Installed Selection guardada. `herdr-custom` fue
+> retirado de dots. Conserva la configuración compartida de `~/.config/herdr`,
+> plugins, sesiones, historial y estado de la aplicación, incluidos los paths
+> efectivos de HERDR/XDG. Explica una transición concreta para mi plataforma con
+> la selección completa retenida, sus exclusiones y la confirmación de reducción.
+> No supongas que Herdr oficial está instalado ni que #593 está resuelto. La
+> instalación oficial, la limpieza local y cualquier reinicio o migración de
+> sesiones son decisiones separadas: presenta los paths y efectos concretos y
+> solicita mi autorización explícita antes de eliminar artefactos custom o de
+> reiniciar o migrar sesiones. No ejecutes esos pasos durante la inspección.
 
 ## Plugins and prerequisites
 
@@ -141,9 +122,8 @@ no `$project` configuration change is needed. See the
 [upstream fix](https://github.com/yersonargotev/herdr-tab-git/pull/12).
 
 The project and Space/Git metadata integration was verified with official
-Herdr 0.9.5 and custom
-`v0.9.5-custom.1` on macOS ARM64. Automated installation coverage also retains
-custom Linux AMD64 selection; this does not claim a local Linux runtime smoke.
+Herdr 0.9.5 on macOS ARM64. Historical custom verification is not an
+offered installation path; the transition above preserves that existing state.
 The previous Spaces/Tabby bundle was verified with Herdr 0.9.1 on Apple Silicon
 macOS; Pluck declares Herdr 0.7.4 or newer but has not been exercised in that
 live session. Herdr, Git, Go, LazyGit, fzf, fd, bat,
@@ -251,7 +231,7 @@ routine dots installs do not uninstall external plugins.
 
 ## Official sidebar layout
 
-Both the `herdr` and `herdr-custom` Tags use three contiguous Space rows:
+The `herdr` Tag uses three contiguous Space rows:
 
 1. Semantic state icon and bold active tab name (`$tab_name`), without a prefix.
    Tabby presents contextual labels such as `dots > codex`; Git Tokens copies
@@ -265,10 +245,8 @@ Both the `herdr` and `herdr-custom` Tags use three contiguous Space rows:
    markers are omitted because Starship's configured format omits them too.
 
 Agents use two contiguous content rows: native state icon/engine/state, then
-pane-scoped project (`$project`) for `herdr` or native tab context (`tab`) for
-`herdr-custom`, such as `packy-catalog › codex`. The
-default, adaptive, and Carbonfox variants share this layout and use their
-corresponding Starship palette roles. The custom variants also keep branch and status on separate rows.
+pane-scoped project (`$project`). The default, adaptive, and Carbonfox variants
+share this layout and use their corresponding Starship palette roles.
 Inline Git colors are authored for their dark palettes; automatic light switching does not translate them.
 
 For the official Agent location, the plugin publishes the current checkout-root
@@ -279,20 +257,13 @@ directory basename is used; no directory clears the label. There is no Workspace
 or title fallback, and identical basenames intentionally produce identical short
 labels. Values are independent per agent pane, including panes in the same tab.
 The plugin updates through events and nominal three-second polling, including
-inactive tabs and Workspaces. The custom Tag deliberately retains its native tab
-context and dim styling rather than consuming `$project`.
+inactive tabs and Workspaces.
 
 Independent Spaces are separated by one blank terminal row (`row_gap = 1`) in
-both the `herdr` and `herdr-custom` Tags and all theme variants. This separates
+the `herdr` Tag and all theme variants. This separates
 entries without adding inner padding to each Space. Native worktree groups may
 keep parents and children packed. Agent entries also have one blank row between them (`row_gap = 1`); their
 two content rows remain contiguous.
-
-In `herdr-custom`, Agent names use the theme accent while their pane has focus
-and the same theme gray as inactive Spaces otherwise. The color follows existing
-Agent navigation; explicit token foregrounds can override it. Status dots and
-state text retain their status colors, and the secondary tab context stays muted.
-The official `herdr` Tag retains its configured Agent name color.
 
 The expanded sidebar prefers 26 columns and adapts between 18 and 36 columns.
 Herdr uses distinct semantic symbols for blocked, working, done, idle, and
@@ -426,8 +397,8 @@ fetch. The watcher exits if Herdr snapshots repeatedly fail; a later focus
 event or manual refresh restarts it. The poll costs a snapshot, up to five local
 Git commands, and one metadata write per cycle.
 
-The official `herdr` Tag selects Pluck v0.3.1 only on Apple Silicon macOS;
-the custom variant also selects its Linux x86_64 implementation. Its installer does not
+The official `herdr` Tag selects Pluck v0.3.1 only on Apple Silicon macOS.
+Its installer does not
 verify the release checksum sidecar and its Cargo fallback does not pass
 `--locked`; the full reviewed commit pin makes the checkout and build command
 reviewable but does not turn the downloaded release payload into a

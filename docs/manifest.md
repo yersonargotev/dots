@@ -62,9 +62,11 @@ including Tags contributed by Profiles. One declaration is sufficient; selection
 order does not change the result. Optional `supported_platforms` lists exact
 pairs (`darwin_arm64`, `linux_arm64`, `linux_amd64`). Install,
 dependency, and Provisioner plans reject unsupported selected capabilities before
-mutation. Omitted constraints preserve existing Tag behavior. For example,
-`herdr-custom` conflicts with `herdr` and supports only `darwin_arm64` and
-`linux_amd64`.
+mutation. Omitted constraints preserve existing Tag behavior.
+
+
+`herdr-custom` is retired and has no replacement alias. Historical evidence is
+retained; see [the preservation-first transition](herdr.md#retiring-an-existing-custom-installation).
 
 Each current Tag is the smallest capability that makes sense to install or stop
 managing independently. It may select Managed Entries, Dependencies,
@@ -139,7 +141,6 @@ from compact discovery unless `--all` is supplied.
 | `git` | surface | current | Portable Git configuration and native Git entrypoint. |  |
 | `go` | surface | current | Go language toolchain. |  |
 | `herdr` | surface | current | Herdr terminal layout and pinned workspace plugins on macOS. |  |
-| `herdr-custom` | surface | current | Compact custom Herdr on Apple Silicon macOS and Linux x86_64, independent of official Herdr. |  |
 | `herdr-metrics` | surface | current | Opt-in Herdr CPU, GPU, and RAM status from macmon on Apple Silicon macOS. |  |
 | `jq` | surface | current | jq command-line JSON processor. |  |
 | `lazygit` | surface | current | Lazygit terminal interface for Git. |  |
@@ -375,8 +376,7 @@ Current Managed Entries:
 | `configs/dots/adaptive-theme` | `~/.config/dots/adaptive-theme` | `symlink` | `adaptive-theme` | `darwin`, `linux` | None |
 | `configs/starship/starship.toml` (`theme-carbonfox` override: `configs/starship/starship-carbonfox.toml`) | `~/.config/starship.toml` | `symlink` | `starship` | `darwin`, `linux` | `starship` |
 | `configs/herdr/config.toml` (`theme-carbonfox` override: `configs/herdr/config-carbonfox.toml`; `adaptive-theme` override: `configs/herdr/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` (`toml-subset`) | `herdr` | `darwin` | `herdr` |
-| `configs/herdr-custom/config.toml` (`theme-carbonfox` override: `configs/herdr-custom/config-carbonfox.toml`; `adaptive-theme` override: `configs/herdr-custom/config-adaptive.toml`) | `~/.config/herdr/config.toml` | `copy` (`toml-subset`) | `herdr-custom` | `darwin`, `linux` | `herdr-custom` |
-| `configs/herdr/plugins/tabby.toml` | `~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml` | `copy` (`toml-subset`) | `herdr`, `herdr-custom` | `darwin` | None |
+| `configs/herdr/plugins/tabby.toml` | `~/.config/herdr/plugins/config/yersonargotev.tabby/config.toml` | `copy` (`toml-subset`) | `herdr` | `darwin` | None |
 | `configs/herdr/status.sh` | `~/.config/herdr/status.sh` | `copy` | `herdr-metrics` | `darwin` | None |
 | `configs/rex/init.lua` | `~/.config/rex/init.lua` | `copy` | `rex` | `darwin`, `linux` | `rex` |
 | `configs/rex/themes/Catppuccin Mocha Blue.ghostty` | `~/.config/rex/themes/Catppuccin Mocha Blue.ghostty` | `copy` | `rex` | `darwin`, `linux` | None |
@@ -425,7 +425,7 @@ Tag-scoped Dependency Sets use:
 | `toolchain` | No | Built-in runtime bootstrap flow. Supported values: `node-lts-fnm`, `rust-stable-rustup`. These values map to fixed argv commands, not arbitrary shell hooks. |
 | `brew` | No | Homebrew formula token. Mutually exclusive with `brew_cask`. |
 | `linux_homebrew` | No | Allows Linux distro tiers to fall back to the Homebrew formula when the distro provider is absent or unavailable. Keep this opt-in for reviewed CLI/runtime tools only. |
-| `user_local` | No | Opt-in for a reviewed User-Local Provider recipe; Linux-only except `herdr-custom` (Darwin ARM64/Linux AMD64). Requires `recipe`, `version`, and `checksum` or per-platform `checksums`; installs into `~/.local/bin` or `~/.local/opt/<tool>` without using system package managers. |
+| `user_local` | No | Opt-in for a reviewed User-Local Provider recipe; Linux-only. Requires `recipe`, `version`, and `checksum` or per-platform `checksums`; installs into `~/.local/bin` or `~/.local/opt/<tool>` without using system package managers. |
 | `rolling_user_local` | No | macOS/Linux opt-in for a closed Rolling User-Local Provider recipe. Accepts only `recipe`; dots resolves the latest stable official version, immutable platform artifact, and digest before the action is installable. |
 | `brew_cask` | No | Homebrew cask token. Renders as `brew install --cask <token>`. |
 | `apt` | No | Debian/Ubuntu package name. |
@@ -578,7 +578,7 @@ Constraints:
 - CodeGraph specs must not mix skill names, Claude plugin fields, MCP fields, or
   skills.sh-specific fields.
 
-### `herdr` and `herdr-custom` specs
+### `herdr` spec
 
 Supported fields: `plugin` (a GitHub `OWNER/REPO`) and `ref` (a full
 40-character hexadecimal commit). Other dialect fields are rejected. A Herdr
@@ -588,11 +588,9 @@ Provisioner renders exactly one direct invocation:
 herdr plugin install OWNER/REPO --ref COMMIT --yes
 ```
 
-`herdr-custom` uses the same constrained plugin/ref dialect and isolation, but
-renders `herdr-custom plugin install ...` and requires only the custom runtime.
-It never selects the official Herdr Dependency.
+The retained Provisioners declare official Herdr as a Dependency.
 
-`ref` is exclusive to these Herdr tools. The Install Plan discloses Herdr configuration/registry, state, data/cache,
+`ref` is specific to Herdr plugin Provisioners. The Install Plan discloses Herdr configuration/registry, state, data/cache,
 and Rust build roots affected by the command. Readiness only probes declared Dependencies; plan and
 doctor never install or contact plugins. Apply uses Herdr's native installer,
 including its reviewed build commands. Repeated installs may download and rebuild
@@ -602,8 +600,7 @@ and path overrides removed to avoid contacting another home's live server.
 
 The existing `herdr` Tag selects Git Tokens on macOS and adds Tabby plus Pluck
 on Apple Silicon through `arch: [arm64]`; core and workstation already include
-it. The independent `herdr-custom` Tag shares the supported plugin pins without
-selecting the official runtime. See [Herdr setup](herdr.md) for platform support,
+it. See [Herdr setup](herdr.md) for platform support,
 live-session activation, ownership, and known limitations.
 
 ### `skills` spec
@@ -657,10 +654,6 @@ Current Provisioners:
 | `herdr` | `herdr` | `darwin` | Install `yersonargotev/herdr-tab-git` at pinned revision `21b2baa278f571fafa7a1247851a17754fbeedf0`. | `herdr`, `git`, `Node LTS (fnm)` |
 | `herdr` | `herdr` | `darwin` (arm64) | Install `yersonargotev/tabby` at pinned revision `19031d668f0f8a79b58591db4ce8bc8f8846e329`. | `herdr`, `git`, `python3`, `Rust stable (rustup)` |
 | `herdr` | `herdr` | `darwin` (arm64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr`, `git`, `curl`, `tar`, `pbcopy`, `open`, `Rust stable (rustup)` |
-| `herdr-custom` | `herdr-custom` | `darwin`, `linux` | Install `yersonargotev/herdr-tab-git` at pinned revision `21b2baa278f571fafa7a1247851a17754fbeedf0`. | `herdr-custom`, `git`, `Node LTS (fnm)` |
-| `herdr-custom` | `herdr-custom` | `darwin` (arm64) | Install `yersonargotev/tabby` at pinned revision `19031d668f0f8a79b58591db4ce8bc8f8846e329`. | `herdr-custom`, `git`, `python3`, `Rust stable (rustup)` |
-| `herdr-custom` | `herdr-custom` | `darwin` (arm64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr-custom`, `git`, `curl`, `tar`, `pbcopy`, `open`, `Rust stable (rustup)` |
-| `herdr-custom` | `herdr-custom` | `linux` (amd64) | Install `rmarganti/herdr-pluck` at pinned revision `d1eacb80956c3a23ab6f7428a9e83961fb86ba28`. | `herdr-custom`, `git`, `curl`, `Rust stable (rustup)`, `C toolchain`, `tar`, `xdg-open`, `wl-copy`, `xclip`, `xsel` |
 
 ## Selection rules
 

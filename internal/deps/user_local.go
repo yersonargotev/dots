@@ -83,6 +83,7 @@ var userLocalRecipes = map[string]userLocalRecipe{
 		},
 		links: []string{"gh"},
 	},
+	// Receipt validation only: retired custom artifacts can never be installed or recovered.
 	"herdr-custom": {layout: userLocalLayoutBundle, command: "herdr-custom", archiveType: userLocalArchiveTarGzip, binaryPath: func(archive, _ string) string { return strings.TrimSuffix(archive, ".tar.gz") + "/dots/herdr-custom" }, links: []string{"herdr-custom"}},
 	"codex": {
 		archiveName: func(version, goarch string) (string, bool) { return "", false },
@@ -295,11 +296,11 @@ var userLocalRecipes = map[string]userLocalRecipe{
 }
 
 func userLocalArtifact(dep manifest.Dependency, opts Options) (UserLocalArtifact, bool, error) {
+	if err := dep.RetirementError(); err != nil {
+		return UserLocalArtifact{}, false, err
+	}
 	if dep.RollingUserLocal != nil {
 		return rollingUserLocalArtifact(dep, opts)
-	}
-	if isHerdrCustom(dep) {
-		return herdrCustomArtifact(dep, opts)
 	}
 	if opts.OS != "linux" || dep.UserLocal == nil {
 		return UserLocalArtifact{}, false, nil
@@ -378,6 +379,9 @@ func (a UserLocalArtifact) archiveName() string {
 // InstallUserLocal preserves the direct recipe entrypoint while using the same
 // pending/final lifecycle as CLI orchestration.
 func InstallUserLocal(home string, action InstallAction) error {
+	if err := retiredActionError(action); err != nil {
+		return err
+	}
 	if home == "" {
 		resolved, err := os.UserHomeDir()
 		if err != nil {
@@ -406,11 +410,6 @@ func InstallUserLocal(home string, action InstallAction) error {
 	if action.Requirement == "" {
 		action.Requirement = manifest.DependencyRequirementRequired
 	}
-	if a.Recipe == "herdr-custom" {
-		if err := herdrCustomInstallGuard(home, a); err != nil {
-			return err
-		}
-	}
 	installer := UserLocalInstaller{Home: home, StateRoot: filepath.Join(home, ".local", "state", "dots"), Download: downloadUserLocalArtifact}
 	return installer.RunUserLocal(action, func() bool {
 		recipe, ok := userLocalRecipes[a.Recipe]
@@ -433,7 +432,7 @@ func stageUserLocalArtifactAt(data []byte, archive string, recipe userLocalRecip
 		commands[recipe.binaryPath(archive, command)] = true
 	}
 	write := func(name string, mode os.FileMode, reader io.Reader) error {
-		if recipe.command != "herdr-custom" && commands[filepath.Clean(name)] {
+		if commands[filepath.Clean(name)] {
 			mode |= 0755
 		}
 		if check != nil {

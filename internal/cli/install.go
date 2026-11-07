@@ -367,6 +367,9 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			installedSelection.Provenance = state.CaptureProvenance(paths.SourceRoot, version.Value)
+			if err := cmd.Context().Err(); err != nil {
+				return fmt.Errorf("commit installed selection: %w", err)
+			}
 			if err := commitInstallationMetadata(metadataCommit, meta.InstalledSelection, installedSelection); err != nil {
 				return err
 			}

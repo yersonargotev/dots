@@ -46,6 +46,8 @@ func RenderCommand(p manifest.Provisioner) (executable string, args []string) {
 		return "sh", renderCodeGraphArgs(p.Spec)
 	case "codex":
 		return p.Tool, renderCodexArgs(p.Spec)
+	// Custom rendering is retained only for historical report identity. Select
+	// rejects it before any executable plan or Apply can consume it.
 	case "herdr", "herdr-custom":
 		return p.Tool, []string{
 			"plugin", "install", strings.TrimSpace(p.Spec.Plugin),

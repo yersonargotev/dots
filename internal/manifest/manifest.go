@@ -514,7 +514,7 @@ func discardPreviousProvisionerSpecs(document *yaml.Node) {
 func (m Manifest) validateEvolutionInventory() error {
 	current := m
 	current.Provisioners = nil
-	if err := current.Validate(); err != nil {
+	if err := current.validateStructure(); err != nil {
 		return err
 	}
 	for i, provisioner := range m.Provisioners {
@@ -553,6 +553,14 @@ func (m Manifest) validateEvolutionInventory() error {
 }
 
 func (m Manifest) Validate() error {
+	if err := m.validateRetiredExecution(); err != nil {
+		return err
+	}
+	return m.validateStructure()
+}
+
+// validateStructure is also used for historical, non-executable inventory.
+func (m Manifest) validateStructure() error {
 	if m.Version == 0 {
 		return fmt.Errorf("version is required")
 	}
@@ -688,7 +696,7 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("provisioners[%d].tool is required", i)
 		}
 		if !allowedProvisionerTool(prov.Tool) {
-			return fmt.Errorf("provisioners[%d].tool must be one of bat, claude, codegraph, codex, herdr, herdr-custom, skills, zimfw", i)
+			return fmt.Errorf("provisioners[%d].tool must be one of bat, claude, codegraph, codex, herdr, skills, zimfw", i)
 		}
 		if len(prov.Tags) == 0 {
 			return fmt.Errorf("provisioners[%d].tags is required", i)
@@ -738,7 +746,7 @@ func (m Manifest) Validate() error {
 			if err := validateCodeGraphSpec(prov.Spec, i); err != nil {
 				return err
 			}
-		case "herdr", "herdr-custom":
+		case "herdr":
 			if err := validateHerdrSpec(prov.Spec, i); err != nil {
 				return err
 			}
@@ -830,19 +838,6 @@ func (m Manifest) validateDeclaredTags(tags []string, path string) error {
 }
 
 func validateDependency(dep Dependency, path string) error {
-	if dep.UserLocal != nil && (dep.UserLocal.Recipe == "herdr-custom" || dep.UserLocal.Recipe == "" && dep.Name == "herdr-custom") {
-		if dep.RollingUserLocal != nil || dep.Command != "herdr-custom" || len(dep.Commands) != 0 || dep.UserLocal.Checksum != "" {
-			return fmt.Errorf("%s herdr-custom requires command herdr-custom and fixed per-platform checksums", path)
-		}
-		if !regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+-custom\.[0-9]+$`).MatchString(dep.UserLocal.Version) {
-			return fmt.Errorf("%s herdr-custom version must be a pinned vMAJOR.MINOR.PATCH-custom.N release", path)
-		}
-		for _, platform := range []string{"darwin_arm64", "linux_amd64"} {
-			if !regexp.MustCompile(`^[0-9a-fA-F]{64}$`).MatchString(dep.UserLocal.Checksums[platform]) {
-				return fmt.Errorf("%s herdr-custom requires SHA-256 for %s", path, platform)
-			}
-		}
-	}
 	if strings.TrimSpace(dep.Name) == "" {
 		return fmt.Errorf("%s.name is required", path)
 	}
@@ -1244,6 +1239,9 @@ type Selection struct {
 // evidence in first-use order. Both the resulting Tags and evidence are
 // de-duplicated without changing input or declaration order.
 func NormalizeTags(m Manifest, tags []string) ([]string, []TagReplacement, error) {
+	if err := rejectRetiredTags(tags); err != nil {
+		return nil, nil, err
+	}
 	normalized := make([]string, 0, len(tags))
 	seen := make(map[string]bool, len(tags))
 	add := func(tag string) {
@@ -1277,6 +1275,9 @@ func NormalizeTags(m Manifest, tags []string) ([]string, []TagReplacement, error
 			})
 		}
 		for _, replacement := range tag.ReplacedBy {
+			if err := rejectRetiredTags([]string{replacement}); err != nil {
+				return nil, nil, err
+			}
 			add(replacement)
 		}
 	}
@@ -1310,6 +1311,9 @@ func ResolveReadOnlySelection(m Manifest, profileNames []string, extraTags []str
 }
 
 func resolveSelection(m Manifest, profileNames []string, extraTags, excludedTags []string, allowDefault bool) (Selection, error) {
+	if err := rejectRetiredTags(extraTags); err != nil {
+		return Selection{}, err
+	}
 	profiles := make([]string, 0, len(profileNames))
 	profileSeen := make(map[string]bool, len(profileNames))
 	tags := make([]string, 0, len(extraTags))
@@ -1501,7 +1505,7 @@ func allowedArch(arch string) bool {
 // subcommands.
 func allowedProvisionerTool(tool string) bool {
 	switch strings.TrimSpace(tool) {
-	case "bat", "claude", "codex", "codegraph", "herdr", "herdr-custom", "skills", "zimfw":
+	case "bat", "claude", "codex", "codegraph", "herdr", "skills", "zimfw":
 		return true
 	default:
 		return false

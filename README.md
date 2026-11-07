@@ -98,13 +98,17 @@ dots install --profile workstation --tag theme-carbonfox
 
 Explicit Profile, Tag and exclusion flags are the complete selection for that
 invocation. Repeat `--exclude-tag` to subtract Tags supplied by the requested
-Profiles while keeping their identity. For example, choose Herdr custom instead
-of the official Herdr capability in workstation:
+Profiles while keeping their identity. For example, preserve an existing Herdr
+environment by excluding official Herdr from workstation:
 
 ```bash
-dots plan --profile workstation --exclude-tag herdr --tag herdr-custom
-dots install --profile workstation --exclude-tag herdr --tag herdr-custom
+dots plan --profile workstation --exclude-tag herdr
+dots install --profile workstation --exclude-tag herdr
 ```
+
+`herdr-custom` is retired. Existing installations must submit their complete
+retained selection and acknowledge reductions; nothing is substituted or
+uninstalled. See [the preservation-first transition](docs/herdr.md#retiring-an-existing-custom-installation).
 
 Exclusions apply before conflict validation. Unknown Tags, Tags not supplied by
 the requested Profiles, and Tags explicitly both added and excluded are errors.

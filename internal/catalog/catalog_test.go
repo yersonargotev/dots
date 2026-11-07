@@ -19,7 +19,7 @@ func TestRepositoryCatalogExposesFocusedAndMobileInventory(t *testing.T) {
 	}
 
 	wantCurrent := []string{
-		"codex", "claude", "ghostty", "rex", "codexbar", "herdr", "herdr-custom",
+		"codex", "claude", "ghostty", "rex", "codexbar", "herdr",
 		"dart-skills", "flutter-skills", "android-skills", "claude-dart-mcp",
 		"codex-dart-mcp", "vscode-mobile", "adaptive-theme", "theme-carbonfox", "herdr-metrics",
 	}
@@ -51,7 +51,7 @@ func TestRepositoryCatalogExposesFocusedAndMobileInventory(t *testing.T) {
 			t.Errorf("legacy-inclusive repository catalog omitted compatibility Tag %q", name)
 		}
 	}
-	for _, retired := range []string{"web", "tmux", "zellij", "tuicr", "warp", "zed", "copilot", "opencode", "antigravity", "codegraph", "playwright", "frontend-design", "vercel-web-skills", "claude-chrome-devtools", "codex-chrome-devtools", "opencode-chrome-devtools"} {
+	for _, retired := range []string{"herdr-custom", "web", "tmux", "zellij", "tuicr", "warp", "zed", "copilot", "opencode", "antigravity", "codegraph", "playwright", "frontend-design", "vercel-web-skills", "claude-chrome-devtools", "codex-chrome-devtools", "opencode-chrome-devtools"} {
 		if allNames[retired] {
 			t.Errorf("legacy-inclusive catalog offers retired Tag %q", retired)
 		}

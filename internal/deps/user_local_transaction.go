@@ -274,6 +274,9 @@ func (s *receiptSession) validate(c capturedReceipt) error {
 // RunUserLocal publishes AND finalizes; callers cannot report success between
 // those phases. Presence is checked again while the home mutation lock is held.
 func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() bool) (resultErr error) {
+	if err := retiredActionError(action); err != nil {
+		return err
+	}
 	s := i.active
 	owned := s == nil
 	var err error
@@ -300,6 +303,9 @@ func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() b
 	}
 	ops, err := readJournal(s.state)
 	if err != nil {
+		return err
+	}
+	if err := rejectRetiredPending(s.home, ops); err != nil {
 		return err
 	}
 	for _, op := range ops {
@@ -427,6 +433,9 @@ func (i *UserLocalInstaller) RunUserLocal(action InstallAction, present func() b
 // checks and dependency execution. The installer is scoped to one invocation.
 func (i *UserLocalInstaller) WithUserLocalBoundary(selected []UserLocalSelection, consume func([]InstallAction) error) (resultErr error) {
 	if len(selected) == 0 {
+		if _, err := pendingSelections(i.Home, i.StateRoot, nil); err != nil {
+			return err
+		}
 		return consume(nil)
 	}
 	if i.active != nil {
@@ -446,6 +455,9 @@ func (i *UserLocalInstaller) WithUserLocalBoundary(selected []UserLocalSelection
 	}
 	ops, err := readJournal(s.state)
 	if err != nil {
+		return err
+	}
+	if err := rejectRetiredPending(s.home, ops); err != nil {
 		return err
 	}
 	if err := i.check("after-recovery-read"); err != nil {
@@ -542,11 +554,6 @@ func (i *UserLocalInstaller) prepare(s *receiptSession, c capturedReceipt) (read
 	recipe := userLocalRecipes[a.Recipe]
 	if err := stageUserLocalArtifactAt(data, a.archiveName(), recipe, payload, func() error { return i.check("extract") }); err != nil {
 		return ready, err
-	}
-	if a.Recipe == "herdr-custom" {
-		if err := stageHerdrCustomAt(payload, *a); err != nil {
-			return ready, err
-		}
 	}
 	for _, command := range recipe.links {
 		node, err := payload.evidence(recipe.binaryPath(a.archiveName(), command), false)
@@ -728,6 +735,9 @@ func verifyPublished(s *receiptSession, c capturedReceipt, ready readyReceipt) e
 }
 
 func (i *UserLocalInstaller) resume(s *receiptSession, op journalOperation) error {
+	if err := retiredActionError(op.Captured.Action); err != nil {
+		return fmt.Errorf("pending custom provider journal %s requires manual remediation; preserve journal, staging and external paths: %w", op.Captured.ID, err)
+	}
 	c := op.Captured
 	if err := s.validate(c); err != nil {
 		return err

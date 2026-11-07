@@ -21,6 +21,17 @@ func TestApplicationWritableTargetsKeepInstalledRepositoryCleanAcrossLifecycle(t
 	sourceRoot := filepath.Join(repositoryFixture, "installed-repository")
 	runGit(t, "", "clone", "--local", repositoryRoot, sourceRoot)
 	gitIdentity(t, sourceRoot)
+	// Local clones contain committed files. Snapshot the candidate Install
+	// Manifest so this lifecycle also covers uncommitted manifest evolution.
+	candidate, err := os.ReadFile(filepath.Join(repositoryRoot, "dots.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "dots.yaml"), candidate, 0600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, sourceRoot, "add", "dots.yaml")
+	runGit(t, sourceRoot, "commit", "--allow-empty", "-m", "snapshot candidate manifest")
 	// CI checks out the repository at a detached commit. Give the Installed
 	// Repository a complete local upstream so update exercises the same branch
 	// discovery path on developer machines and detached CI runners.
@@ -46,8 +57,9 @@ func TestApplicationWritableTargetsKeepInstalledRepositoryCleanAcrossLifecycle(t
 	// lifecycle remains local; keep the real git executable for repository
 	// cleanliness and update verification.
 	stubDir := t.TempDir()
-	for _, command := range []string{"zsh", "curl", "herdr", "python3", "fnm", "node", "rustup", "rustc", "cargo"} {
-		writeExecStub(t, filepath.Join(stubDir, command), "#!/bin/sh\nexit 0\n")
+	writeManifestDependencyStubs(t, stubDir)
+	if err := os.Remove(filepath.Join(stubDir, "git")); err != nil {
+		t.Fatal(err)
 	}
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 

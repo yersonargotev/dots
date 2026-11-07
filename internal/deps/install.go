@@ -163,6 +163,11 @@ func Install(m manifest.Manifest, opts Options, look Lookup, fontLook FontLookup
 // may re-probe presence to avoid redundant work, but does not re-resolve an
 // action's provider, package, artifact, or command.
 func InstallPrepared(prepared PreparedInstall, opts Options, look Lookup, fontLook FontLookup, runner Runner) (report InstallReport, resultErr error) {
+	for _, action := range prepared.Plan.Actions {
+		if err := retiredActionError(action); err != nil {
+			return report, err
+		}
+	}
 	selected := prepared.Plan.selected
 	if len(selected) == 0 {
 		for _, action := range prepared.Plan.Actions {
@@ -171,7 +176,7 @@ func InstallPrepared(prepared PreparedInstall, opts Options, look Lookup, fontLo
 			}
 		}
 	}
-	if local, ok := runner.(UserLocalRunner); ok && len(selected) > 0 {
+	if local, ok := runner.(UserLocalRunner); ok {
 		report = InstallReport{Profile: prepared.Plan.Profile, Profiles: prepared.Plan.Profiles, Tags: prepared.Plan.Tags, Tier: prepared.Plan.Tier}
 		resultErr = local.WithUserLocalBoundary(selected, func(recovered []InstallAction) error {
 			var err error
@@ -415,9 +420,7 @@ func runBootstrap(action InstallAction, runner Runner) error {
 }
 
 func actionPresent(action InstallAction, opts Options, look Lookup, fontLook FontLookup) bool {
-	if action.UserLocal != nil && action.UserLocal.Recipe == "herdr-custom" {
-		return look("herdr-custom") && herdrCustomArtifactPresent(*action.UserLocal)
-	}
+
 	matches := action.FontMatches
 	if len(matches) == 0 && action.FontMatch != "" {
 		matches = []string{action.FontMatch}

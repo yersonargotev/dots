@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/yersonargotev/dots/internal/deps"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
@@ -29,6 +30,21 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 	previousSurface := selectedsurface.EvaluateForPlatform(m, installed.ResolvedTags, hostOS, hostArch)
 	currentSurface := selectedsurface.EvaluateForPlatform(m, effective.Selection.Tags, hostOS, hostArch)
 	previousSurface, manifestEvolutionTargets := supplementRecordedSurface(previousSurface, currentSurface, meta, *installed, paths)
+	// Removed declarations no longer supply dependency inventory. A historical
+	// custom receipt proves retained external state, without granting ownership
+	// or execution authority to the retired implementation.
+	if slices.Contains(installed.ResolvedTags, "herdr-custom") {
+		receipts, err := deps.LoadDependencyMetadata(deps.DependencyMetadataPath(paths.StateRoot))
+		if err != nil {
+			return nil, fmt.Errorf("read retained custom dependency evidence: %w", err)
+		}
+		for _, receipt := range receipts.Dependencies {
+			if receipt.Dependency == "herdr-custom" {
+				previousSurface.Dependencies = append(previousSurface.Dependencies, manifest.Dependency{Name: receipt.Dependency})
+				break
+			}
+		}
+	}
 	evidence, err := inspectSelectionReconciliation(previousSurface, currentSurface, installPlan, paths, sourceReadRoot)
 	if err != nil {
 		return nil, fmt.Errorf("inspect selection reconciliation: %w", err)

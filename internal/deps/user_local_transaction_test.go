@@ -1286,35 +1286,6 @@ func TestUserLocalOnDiskReceiptChainConflictsPreserveState(t *testing.T) {
 	}
 }
 
-func TestUserLocalDirectHerdrWrapperRecoversPendingReceipt(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("PATH", filepath.Join(home, ".local/bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
-	data, a := customFixture(t, false, false, false)
-	fakeCustomDownload(t, data)
-	a.Destination, a.InstalledPath = userLocalPaths(home, a.Recipe, a.Version, a.Layout, a.Command)
-	action := InstallAction{Dependency: "herdr-custom", Requirement: manifest.DependencyRequirementRequired, Status: InstallActionStatusInstallable, Provider: TierUserLocal, Probe: "herdr-custom", Probes: []string{"herdr-custom"}, UserLocal: &a}
-	installer := UserLocalInstaller{Home: home, StateRoot: filepath.Join(home, ".local/state/dots"), Download: func(string, string) ([]byte, error) { return data, nil }, Fault: func(point string) error {
-		if point == "final:before" {
-			return errors.New("receipt unavailable")
-		}
-		return nil
-	}}
-	if err := installer.RunUserLocal(action, nil); err == nil {
-		t.Fatal("expected pending receipt")
-	}
-	downloadUserLocalArtifact = func(string, string) ([]byte, error) { return nil, errors.New("direct retry redownloaded") }
-	if err := InstallUserLocal(home, action); err != nil {
-		t.Fatal(err)
-	}
-	meta, err := LoadDependencyMetadata(DependencyMetadataPath(installer.StateRoot))
-	if err != nil || len(meta.Dependencies) != 1 {
-		t.Fatalf("direct retry skipped receipt recovery %+v %v", meta, err)
-	}
-	if err := InstallUserLocal(home, action); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestUserLocalTransactionPostPublicationParentChange(t *testing.T) {
 	for _, point := range []string{"destination:after-publish", "after-unit-0"} {
 		t.Run(point, func(t *testing.T) {
