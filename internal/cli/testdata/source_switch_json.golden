@@ -1,0 +1,89 @@
+{
+  "schema_version": "10",
+  "command": "plan",
+  "status": "findings",
+  "data": {
+    "profile": "beta",
+    "profiles": [
+      "beta"
+    ],
+    "tags": [
+      "beta"
+    ],
+    "selection": {
+      "source": "explicit",
+      "profiles": [
+        "beta"
+      ],
+      "extra_tags": [],
+      "effective_tags": [
+        "beta"
+      ]
+    },
+    "selection_reconciliation": {
+      "previous_intent": {
+        "authority": "recorded",
+        "profiles": [
+          "alpha"
+        ],
+        "extra_tags": [],
+        "resolved_tags": [
+          "alpha"
+        ]
+      },
+      "requested_intent": {
+        "authority": "explicit-request",
+        "profiles": [
+          "beta"
+        ],
+        "extra_tags": [],
+        "resolved_tags": [
+          "beta"
+        ]
+      },
+      "actions": [
+        {
+          "scope": "selection",
+          "outcome": "remove",
+          "previous_sources": [],
+          "current_sources": [],
+          "names": [
+            "alpha"
+          ]
+        },
+        {
+          "scope": "selection",
+          "outcome": "create",
+          "previous_sources": [],
+          "current_sources": [],
+          "names": [
+            "beta"
+          ]
+        },
+        {
+          "scope": "managed-entry",
+          "outcome": "reconcile",
+          "reason": "owned-source-conflict",
+          "declarative_target": "~/.config/sample/config.toml",
+          "resolved_target": "<home>/.config/sample/config.toml",
+          "previous_sources": [
+            "alpha.toml"
+          ],
+          "current_sources": [
+            "beta.toml"
+          ],
+          "names": []
+        }
+      ]
+    },
+    "actions": [
+      {
+        "source": "beta.toml",
+        "target": "<home>/.config/sample/config.toml",
+        "strategy": "copy",
+        "status": "conflict",
+        "reason": "owned-source-conflict"
+      }
+    ]
+  }
+}

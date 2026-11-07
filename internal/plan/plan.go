@@ -59,6 +59,9 @@ type Action struct {
 	// PreviousContent is the last recorded dots-owned partial contribution. It
 	// is used only to revalidate a reversible update at apply time.
 	PreviousContent []byte `json:"-"`
+	// SourceSwitch is detached authority for a TOML subset Conflict. It never
+	// changes ordinary Replace semantics or appears in the output contract.
+	SourceSwitch *SourceSwitch `json:"-"`
 	// PreviousHash proves that a whole-target source override still matches the
 	// exact contribution recorded before switching back to a selected source.
 	PreviousHash string `json:"-"`
@@ -1224,4 +1227,12 @@ func subsetContent(ownership, target, sourceAbs string) (bool, error) {
 	default:
 		return false, nil
 	}
+}
+
+// SourceSwitch binds an attributable subset replacement to inspected bytes.
+// Non-nil empty content is captured content, not missing evidence.
+type SourceSwitch struct {
+	TargetIdentity os.FileInfo
+	LiveContent    []byte
+	SourceContent  []byte
 }

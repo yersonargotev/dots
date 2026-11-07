@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/yersonargotev/dots/internal/deps"
+	"github.com/yersonargotev/dots/internal/install"
 	"github.com/yersonargotev/dots/internal/manifest"
 	"github.com/yersonargotev/dots/internal/plan"
 	"github.com/yersonargotev/dots/internal/provision"
@@ -18,7 +19,7 @@ import (
 	"github.com/yersonargotev/dots/internal/state"
 )
 
-func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effective selection.Effective, installPlan plan.Plan, hostOS, hostArch string, paths resolvedPaths, sourceReadRoot string, explicitIntent bool) (*selectionreconciliation.Report, error) {
+func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effective selection.Effective, installPlan *plan.Plan, hostOS, hostArch string, paths resolvedPaths, sourceReadRoot string, explicitIntent bool) (*selectionreconciliation.Report, error) {
 	installed := meta.InstalledSelection
 	if installed == nil {
 		return nil, nil
@@ -45,7 +46,8 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 			}
 		}
 	}
-	evidence, err := inspectSelectionReconciliation(previousSurface, currentSurface, installPlan, paths, sourceReadRoot)
+	targetIdentities := make(map[string]os.FileInfo)
+	evidence, err := inspectSelectionReconciliation(previousSurface, currentSurface, installPlan, paths, sourceReadRoot, targetIdentities)
 	if err != nil {
 		return nil, fmt.Errorf("inspect selection reconciliation: %w", err)
 	}
@@ -84,6 +86,29 @@ func buildSelectionReconciliation(m manifest.Manifest, meta state.Metadata, effe
 	})
 	if err != nil {
 		return nil, err
+	}
+	for _, action := range report.Actions {
+		if action.Reason != selectionreconciliation.ReasonOwnedSourceConflict {
+			continue
+		}
+		for i := range installPlan.Actions {
+			forward := &installPlan.Actions[i]
+			if forward.Target != action.ResolvedTarget {
+				continue
+			}
+			forward.Status = plan.StatusConflict
+			forward.Reason = selectionreconciliation.ReasonOwnedSourceConflict
+			for _, target := range evidence.Targets {
+				if target.ResolvedTarget != action.ResolvedTarget {
+					continue
+				}
+				for _, source := range evidence.Sources {
+					if source.DeclarativeTarget == action.DeclarativeTarget && source.Source == forward.Source {
+						forward.SourceSwitch = &plan.SourceSwitch{TargetIdentity: targetIdentities[action.ResolvedTarget], LiveContent: append([]byte{}, target.Content...), SourceContent: append([]byte{}, source.Content...)}
+					}
+				}
+			}
+		}
 	}
 	return &report, nil
 }
@@ -225,7 +250,7 @@ func sharesSelectionTag(left, right []string) bool {
 	return false
 }
 
-func inspectSelectionReconciliation(previous, current selectedsurface.Surface, installPlan plan.Plan, paths resolvedPaths, sourceReadRoot string) (evidence selectionreconciliation.Evidence, err error) {
+func inspectSelectionReconciliation(previous, current selectedsurface.Surface, installPlan *plan.Plan, paths resolvedPaths, sourceReadRoot string, targetIdentities map[string]os.FileInfo) (evidence selectionreconciliation.Evidence, err error) {
 	paths.Home, err = filepath.Abs(paths.Home)
 	if err != nil {
 		return selectionreconciliation.Evidence{}, fmt.Errorf("resolve reconciliation home: %w", err)
@@ -267,7 +292,7 @@ func inspectSelectionReconciliation(previous, current selectedsurface.Surface, i
 	for _, selected := range entries {
 		declarativeTarget := selected.Entry.Target
 		if !seenTargets[declarativeTarget] {
-			target, inspectErr := inspectReconciliationTarget(selected.Entry, declarativeTarget, installPlan, paths, homeRoot)
+			target, inspectErr := inspectReconciliationTarget(selected.Entry, declarativeTarget, installPlan, paths, homeRoot, targetIdentities)
 			if inspectErr != nil {
 				return selectionreconciliation.Evidence{}, inspectErr
 			}
@@ -297,7 +322,7 @@ func orderedReconciliationEntries(groups ...[]selectedsurface.SelectedEntry) []s
 	return result
 }
 
-func inspectReconciliationTarget(entry manifest.Entry, declarativeTarget string, installPlan plan.Plan, paths resolvedPaths, root *os.Root) (selectionreconciliation.TargetEvidence, error) {
+func inspectReconciliationTarget(entry manifest.Entry, declarativeTarget string, installPlan *plan.Plan, paths resolvedPaths, root *os.Root, targetIdentities map[string]os.FileInfo) (selectionreconciliation.TargetEvidence, error) {
 	resolved, err := plan.ResolveEntryTarget(entry, paths.Home, paths.XDGStateHome)
 	if err != nil {
 		return selectionreconciliation.TargetEvidence{}, fmt.Errorf("resolve reconciliation target %s: %w", declarativeTarget, err)
@@ -352,12 +377,13 @@ func inspectReconciliationTarget(entry manifest.Entry, declarativeTarget string,
 		evidence.LinkDestination = destination
 	case info.Mode().IsRegular():
 		evidence.Kind = selectionreconciliation.TargetKindRegular
-		content, readErr := readReconciliationRootFile(root, relative)
-		if readErr != nil {
+		content, identity, readErr := readReconciliationRootFile(root, relative)
+		if readErr != nil || !os.SameFile(info, identity) {
 			evidence.Kind = selectionreconciliation.TargetKindOther
 			return evidence, nil
 		}
 		evidence.Content = content
+		targetIdentities[resolved] = identity
 	default:
 		evidence.Kind = selectionreconciliation.TargetKindOther
 	}
@@ -388,7 +414,7 @@ func inspectReconciliationSource(declarativeTarget, source, canonicalRoot, readR
 	if err != nil || !filepath.IsLocal(relative) {
 		return evidence, nil
 	}
-	content, err := readReconciliationRootFile(root, relative)
+	content, _, err := readReconciliationRootFile(root, relative)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return evidence, nil
@@ -400,20 +426,25 @@ func inspectReconciliationSource(declarativeTarget, source, canonicalRoot, readR
 	return evidence, nil
 }
 
-func readReconciliationRootFile(root *os.Root, name string) (content []byte, err error) {
+func readReconciliationRootFile(root *os.Root, name string) (content []byte, identity os.FileInfo, err error) {
 	file, err := root.Open(name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("close reconciliation file %s: %w", name, closeErr))
 		}
 	}()
-	return io.ReadAll(file)
+	identity, err = file.Stat()
+	if err != nil {
+		return nil, nil, fmt.Errorf("stat reconciliation file %s: %w", name, err)
+	}
+	content, err = io.ReadAll(file)
+	return content, identity, err
 }
 
-func reconciliationForwardStatus(installPlan plan.Plan, target string) selectionreconciliation.ForwardStatus {
+func reconciliationForwardStatus(installPlan *plan.Plan, target string) selectionreconciliation.ForwardStatus {
 	for _, action := range installPlan.Actions {
 		if action.Target != target {
 			continue
@@ -432,4 +463,23 @@ func reconciliationForwardStatus(installPlan plan.Plan, target string) selection
 		}
 	}
 	return ""
+}
+
+// A skipped attributable source switch leaves the complete selection unresolved.
+// Both install entry points stop before any mutating effect in that case.
+func skippedSourceSwitch(p plan.Plan, decisions map[string]install.ConflictDecision) (bool, error) {
+	skipped := false
+	for _, a := range p.Actions {
+		if a.SourceSwitch == nil {
+			continue
+		}
+		switch decisions[a.Target] {
+		case install.DecisionReplace:
+		case "", install.DecisionSkip:
+			skipped = true
+		default:
+			return false, fmt.Errorf("owned source switch for %s requires Skip or Replace", a.Target)
+		}
+	}
+	return skipped, nil
 }

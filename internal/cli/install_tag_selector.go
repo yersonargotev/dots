@@ -811,7 +811,7 @@ func buildInstallTagSelectorCandidate(m manifest.Manifest, meta state.Metadata, 
 		return installTagSelectorCandidate{}, fmt.Errorf("build Tag selector preview: %w", err)
 	}
 	p.Selection = &effective.Report
-	p.SelectionReconciliation, err = buildSelectionReconciliation(m, meta, effective, p, hostOS, depOptions.Arch, paths, sourceReadRoot, true)
+	p.SelectionReconciliation, err = buildSelectionReconciliation(m, meta, effective, &p, hostOS, depOptions.Arch, paths, sourceReadRoot, true)
 	if err != nil {
 		return installTagSelectorCandidate{}, fmt.Errorf("build Tag selector reconciliation preview: %w", err)
 	}
@@ -899,6 +899,7 @@ func buildInstallTagSelectorCandidate(m manifest.Manifest, meta state.Metadata, 
 }
 
 type tagSelectorPlanAuthority struct {
+	SourceSwitch                  *plan.SourceSwitch
 	ResolvedSource                string
 	ResolvedSources               []string
 	Contributions                 []plan.Contribution
@@ -915,8 +916,17 @@ type tagSelectorPlanAuthority struct {
 func tagSelectorPlanAuthorities(p plan.Plan) []tagSelectorPlanAuthority {
 	result := make([]tagSelectorPlanAuthority, 0, len(p.Actions))
 	for _, action := range p.Actions {
+		sourceSwitch := action.SourceSwitch
+		if sourceSwitch != nil {
+			detached := *sourceSwitch
+			// FileInfo may include access times changed by inspection. The installer
+			// validates the original identity and mode before dependencies and again
+			// at mutation; compare only detached semantic bytes here.
+			detached.TargetIdentity = nil
+			sourceSwitch = &detached
+		}
 		result = append(result, tagSelectorPlanAuthority{
-			ResolvedSource: action.ResolvedSource, ResolvedSources: action.ResolvedSources, Contributions: action.Contributions,
+			SourceSwitch: sourceSwitch, ResolvedSource: action.ResolvedSource, ResolvedSources: action.ResolvedSources, Contributions: action.Contributions,
 			Content: action.Content, PreviousContent: action.PreviousContent, PreviousHash: action.PreviousHash,
 			PreviousRecordFingerprint: action.PreviousRecordFingerprint, PreviousReconciliationReceipt: action.PreviousReconciliationReceipt,
 			Ownership: action.Ownership, Migration: action.Migration, LegacyParent: action.LegacyParent,
@@ -948,6 +958,14 @@ func applyInstallTagSelectorCandidate(cmd *cobra.Command, candidate installTagSe
 		return err
 	}
 	if !proceed {
+		return nil
+	}
+	skippedSwitch, err := skippedSourceSwitch(candidate.Plan, conflictDecisions)
+	if err != nil {
+		return err
+	}
+	if skippedSwitch {
+		renderPlan(cmd.OutOrStdout(), candidate.Plan)
 		return nil
 	}
 	currentMetadata, err := validateInstallTagSelectorAuthority(candidate)
@@ -1021,6 +1039,9 @@ func applyInstallTagSelectorCandidate(cmd *cobra.Command, candidate installTagSe
 	}
 
 	installedSelection := candidate.Effective.InstalledSelection(state.CaptureProvenance(candidate.Paths.SourceRoot, version.Value))
+	if err := cmd.Context().Err(); err != nil {
+		return fmt.Errorf("commit installed selection: %w", err)
+	}
 	if err := commitSelectorInstallationMetadata(metadataCommit, candidate.Metadata.InstalledSelection, installedSelection); err != nil {
 		return err
 	}

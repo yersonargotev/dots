@@ -12,6 +12,7 @@ import (
 
 	"github.com/yersonargotev/dots/internal/configsubset"
 	"github.com/yersonargotev/dots/internal/manifest"
+	"github.com/yersonargotev/dots/internal/ownershipevidence"
 	"github.com/yersonargotev/dots/internal/provision"
 	"github.com/yersonargotev/dots/internal/seededstate"
 	"github.com/yersonargotev/dots/internal/selectedsurface"
@@ -64,6 +65,7 @@ const (
 )
 
 const (
+	ReasonOwnedSourceConflict       = "owned-source-conflict"
 	ReasonWholeTargetDrift          = "whole-target-drift"
 	ReasonLostOwnership             = "lost-ownership"
 	ReasonAmbiguousPartialOwnership = "ambiguous-partial-ownership"
@@ -182,7 +184,7 @@ type Report struct {
 // Retained External State and manifest-evolution retention stay informational.
 func (r Report) HasFindings() bool {
 	for _, action := range r.Actions {
-		if action.Outcome == OutcomeBlocked {
+		if action.Outcome == OutcomeBlocked || action.Reason == ReasonOwnedSourceConflict {
 			return true
 		}
 		if action.Scope == ScopeManagedEntry && action.Outcome == OutcomeRetain &&
@@ -401,7 +403,7 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 	if current.target != "" && hasRetiredSources(previous, current) {
 		switch target.ForwardStatus {
 		case ForwardConflict:
-			if partialOwnership(ownership) {
+			if partialOwnership(ownership) && (ownership != "toml-subset" || !allowsOwnedSourceConflict(input)) {
 				return blocked(action, ReasonAmbiguousPartialOwnership), nil
 			}
 			// A whole-owned symlink whose selected source changes is expected to
@@ -410,7 +412,7 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 			// previous source. Mutation remains an explicit Conflict Resolution
 			// Replace; reconciliation only distinguishes that owned transition
 			// from lost ownership.
-			if strategy != "symlink" || ownership != "whole" {
+			if !partialOwnership(ownership) && (strategy != "symlink" || ownership != "whole") {
 				return classifyForward(action, ownership, target.ForwardStatus, target.ForwardReason), nil
 			}
 		case ForwardMissingSource:
@@ -461,7 +463,7 @@ func buildTargetAction(previous, current targetGroup, input Input) (Action, erro
 	if ownership == "seeded" {
 		return classifySeeded(action, previous, current, target.Content, currentContent, record, recorded), nil
 	}
-	return classifyPartial(action, previous, current, ownership, target.Content, currentContent, currentSources, record, recorded)
+	return classifyPartial(action, previous, current, ownership, target.Content, currentContent, currentSources, record, recorded, target.ForwardStatus, allowsOwnedSourceConflict(input))
 }
 
 func partialOwnership(ownership string) bool {
@@ -573,7 +575,7 @@ func classifySeeded(action Action, previous, current targetGroup, live, desired 
 	return action
 }
 
-func classifyPartial(action Action, previous, current targetGroup, ownership string, live, desired []byte, currentEvidence []SourceEvidence, record state.Record, recorded bool) (Action, error) {
+func classifyPartial(action Action, previous, current targetGroup, ownership string, live, desired []byte, currentEvidence []SourceEvidence, record state.Record, recorded bool, forward ForwardStatus, allowSourceConflict bool) (Action, error) {
 	if previous.target == "" {
 		outcome, err := analyzePartialAddition(ownership, live, desired)
 		if err != nil {
@@ -592,6 +594,14 @@ func classifyPartial(action Action, previous, current targetGroup, ownership str
 			return action, nil
 		}
 		return blocked(action, ReasonAmbiguousPartialOwnership), nil
+	}
+	// A source switch needs complete, self-consistent attribution, not merely
+	// target-wide compatibility fields or a claimed matching hash.
+	if allowSourceConflict && ownership == "toml-subset" && hasRetiredSources(previous, current) {
+		projected, projectionErr := ownershipevidence.ProjectRecord(record)
+		if projectionErr != nil || projected.Hash == "" || projected.Hash != state.HashBytes(projected.OwnedBytes) {
+			return blocked(action, ReasonAmbiguousPartialOwnership), nil
+		}
 	}
 	currentContents := make([][]byte, len(currentEvidence))
 	for i := range currentEvidence {
@@ -633,6 +643,27 @@ func classifyPartial(action Action, previous, current targetGroup, ownership str
 			action.Outcome = OutcomeRetain
 		}
 		return action, nil
+	}
+
+	if allowSourceConflict && ownership == "toml-subset" && hasRetiredSources(previous, current) {
+		// Path authority is required even when the forward target already contains
+		// the desired values. Equality alone cannot claim a target-only path.
+		replacement, replaceErr := configsubset.ReplaceOwnedTOML(live, previousOwned, desired)
+		if replaceErr != nil {
+			return Action{}, fmt.Errorf("analyze owned TOML source switch: %w", replaceErr)
+		}
+		if !replacement.Compatible {
+			return blocked(action, ReasonAmbiguousPartialOwnership), nil
+		}
+		_, _, _, oldMatches, oldErr := configsubset.RemoveTOML(live, previousOwned)
+		if oldErr != nil {
+			return Action{}, fmt.Errorf("analyze previous owned TOML: %w", oldErr)
+		}
+		if forward == ForwardConflict || !oldMatches {
+			action.Outcome = OutcomeReconcile
+			action.Reason = ReasonOwnedSourceConflict
+			return action, nil
+		}
 	}
 
 	changed, compatible, reconcileErr := reconcilePartial(ownership, live, previousOwned, desired)
@@ -1026,4 +1057,13 @@ func cloneBytes(value []byte) []byte {
 		return nil
 	}
 	return append([]byte(nil), value...)
+}
+
+// Only an explicit reduction may consume this conflict permission. Addition-
+// only source overrides retain their established forward Skip behavior.
+func allowsOwnedSourceConflict(input Input) bool {
+	return input.RequestedIntent.Authority == AuthorityExplicitRequest &&
+		(len(difference(input.PreviousIntent.Profiles, input.RequestedIntent.Profiles)) > 0 ||
+			len(difference(input.PreviousIntent.ExtraTags, input.RequestedIntent.ExtraTags)) > 0 ||
+			len(difference(input.RequestedIntent.ExcludedTags, input.PreviousIntent.ExcludedTags)) > 0)
 }
