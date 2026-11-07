@@ -288,6 +288,12 @@ prose the text surface prints:
   `remove`, `retain`, `blocked`, and `retained-external-state`. Reasons
   distinguish whole-target Drift, lost whole-target ownership, and ambiguous
   partial ownership rather than collapsing them into one unsafe-removal state.
+  The schema-compatible reason `owned-source-conflict` on a `reconcile`
+  action describes an exactly attributable TOML source switch requiring
+  explicit Conflict Resolution. The matching forward action has status
+  `conflict`; Replace requires a Backup Set, and Skip preserves prior evidence
+  and Installed Selection without applying the run. Desired bytes without an
+  exact recovery receipt do not authorize automatic recovery.
   Dependency and Provisioner reductions use `retained-external-state` because
   this report never removes or reverses their installed effects. Install
   Manifest evolution is report-only and does not authorize retirement or

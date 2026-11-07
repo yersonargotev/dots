@@ -180,6 +180,43 @@ func ReconcileTOML(targetData, previousData, currentData []byte) (TOMLReconcilia
 	return reconcileParsedTOML(targetData, previous, current)
 }
 
+// ReplaceOwnedTOML resolves an explicitly authorized source-switch Conflict.
+// It may replace/remove formerly owned atomic paths and add absent selected
+// paths. Existing target-only paths and structural ambiguity remain protected.
+func ReplaceOwnedTOML(targetData, previousData, currentData []byte) (TOMLReconciliation, error) {
+	previous, err := parseTOMLDocument(previousData)
+	if err != nil {
+		return TOMLReconciliation{}, fmt.Errorf("parse previous owned TOML: %w", err)
+	}
+	current, err := parseTOMLDocument(currentData)
+	if err != nil {
+		return TOMLReconciliation{}, fmt.Errorf("parse current owned TOML: %w", err)
+	}
+	if previous.hasArrayTables || current.hasArrayTables || len(previous.entries) == 0 {
+		return TOMLReconciliation{}, nil
+	}
+	// An atomic path cannot become a container (or the reverse) under Replace.
+	for _, old := range previous.entries {
+		for _, next := range current.entries {
+			n := len(old.path)
+			if len(next.path) < n {
+				n = len(next.path)
+			}
+			samePrefix := true
+			for i := 0; i < n; i++ {
+				if old.path[i] != next.path[i] {
+					samePrefix = false
+					break
+				}
+			}
+			if samePrefix && len(old.path) != len(next.path) {
+				return TOMLReconciliation{}, nil
+			}
+		}
+	}
+	return reconcileParsedTOMLWithReplacement(targetData, previous, current, true)
+}
+
 // RemoveTOML subtracts the exact recorded dots-owned TOML contribution. It
 // preserves target-only bytes and fails closed when a formerly owned value has
 // changed. Empty is false when comments remain, so uninstall never discards
@@ -213,6 +250,10 @@ func RemoveTOML(targetData, ownedData []byte) (content []byte, changed, empty, c
 }
 
 func reconcileParsedTOML(targetData []byte, previous, current *tomlDocument) (TOMLReconciliation, error) {
+	return reconcileParsedTOMLWithReplacement(targetData, previous, current, false)
+}
+
+func reconcileParsedTOMLWithReplacement(targetData []byte, previous, current *tomlDocument, replaceOwned bool) (TOMLReconciliation, error) {
 	target, err := parseTOMLDocument(targetData)
 	if err != nil {
 		return TOMLReconciliation{}, nil
@@ -232,12 +273,15 @@ func reconcileParsedTOML(targetData []byte, previous, current *tomlDocument) (TO
 		}
 		targetValue, targetExists := tomlValueAt(target.values, previousEntry.path)
 		targetEntry, targetHasExpression := target.entries[pathKey]
+		if !targetExists && replaceOwned {
+			continue
+		}
 		if !targetExists || !targetHasExpression {
 			return TOMLReconciliation{}, nil
 		}
 		currentEntry, remainsOwned := current.entries[pathKey]
 		if !remainsOwned {
-			if !tomlValuesEqual(targetValue, previousValue) {
+			if !replaceOwned && !tomlValuesEqual(targetValue, previousValue) {
 				return TOMLReconciliation{}, nil
 			}
 			edits = append(edits, tomlEdit{
@@ -254,7 +298,7 @@ func reconcileParsedTOML(targetData []byte, previous, current *tomlDocument) (TO
 		switch {
 		case tomlValuesEqual(targetValue, currentValue):
 			continue
-		case tomlValuesEqual(targetValue, previousValue):
+		case replaceOwned || tomlValuesEqual(targetValue, previousValue):
 			if targetEntry.tableKey != currentEntry.tableKey {
 				return TOMLReconciliation{}, nil
 			}
@@ -266,7 +310,12 @@ func reconcileParsedTOML(targetData []byte, previous, current *tomlDocument) (TO
 
 	for _, pathKey := range current.entryOrder {
 		if _, existed := previous.entries[pathKey]; existed {
-			continue
+			if !replaceOwned {
+				continue
+			}
+			if _, present := target.entries[pathKey]; present {
+				continue
+			}
 		}
 		currentEntry := current.entries[pathKey]
 		currentValue, ok := tomlValueAt(current.values, currentEntry.path)
@@ -275,7 +324,7 @@ func reconcileParsedTOML(targetData []byte, previous, current *tomlDocument) (TO
 		}
 		targetValue, targetExists := tomlValueAt(target.values, currentEntry.path)
 		if targetExists {
-			if !tomlValuesEqual(targetValue, currentValue) {
+			if replaceOwned || !tomlValuesEqual(targetValue, currentValue) {
 				return TOMLReconciliation{}, nil
 			}
 			continue

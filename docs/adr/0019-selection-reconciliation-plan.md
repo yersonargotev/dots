@@ -164,3 +164,32 @@ for a partial retirement as blocked, so reporting and mutation gates cannot
 disagree about authority. Seeded Runtime State keeps its existing
 whole-retirement rule: its physical bytes remain while dots releases only the
 ownership record.
+
+## Attributable TOML source-switch Conflict amendment
+
+Issue #593 permits an acknowledged explicit selection switch between distinct
+sources for a still-selected `copy` / `toml-subset` target when exact ordered
+contribution evidence and its target-wide projection agree. A forward Conflict
+may then be reported as `reconcile` with reason `owned-source-conflict`. Its
+forward action remains `conflict`: the report requires explicit Skip/Replace
+Conflict Resolution and does not authorize automatic replacement.
+
+Replace creates a Backup Set from the exact confined descriptor preimage, then
+updates that descriptor. It replaces/removes only formerly owned atomic paths
+and adds selected-source paths only when absent. Existing target-only paths,
+comments and untouched formatting remain preserved; collisions, structural
+ambiguity, unsafe types, missing or contradictory evidence still block. This
+permission does not broaden replacement for other partial ownership modes.
+Skip leaves the run unresolved without dependency or filesystem effects and
+preserves the previous Installed Selection and contribution evidence for retry.
+Adoption is not an alternative authorization for this transition.
+
+Source and target snapshots are revalidated before dependency mutation and at
+the locked receipt transaction. The existing exact reconciliation receipt is
+required for automatic retry; desired live bytes without that receipt still
+require explicit Conflict Resolution. Receipt persistence failure compensates
+only when both target identity and the exact generated postimage still match.
+A crash during in-place writing may require manual Backup Set restoration;
+malformed targets block, and completed bytes without a receipt never prove prior
+completion. This amendment adds no power-loss atomicity guarantee to the existing
+metadata storage protocol or new persisted format.

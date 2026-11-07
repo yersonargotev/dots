@@ -255,6 +255,10 @@ func validateForwardReconciliation(action selectionreconciliation.Action, record
 	if err != nil {
 		return nil, err
 	}
+	ownedConflict := action.Outcome == selectionreconciliation.OutcomeReconcile && action.Reason == selectionreconciliation.ReasonOwnedSourceConflict
+	if ownedConflict {
+		want = plan.StatusConflict
+	}
 	requiresReplace := action.Outcome == selectionreconciliation.OutcomeUpdate && matched.Status == plan.StatusConflict &&
 		matched.Strategy == "symlink" && normalizedOwnership(matched.Ownership) == "whole"
 	if matched.Status != want && !requiresReplace {
@@ -284,6 +288,15 @@ func validateForwardReconciliation(action selectionreconciliation.Action, record
 	recordFingerprint, err := state.RecordEvidenceFingerprint(record)
 	if err != nil || matched.PreviousRecordFingerprint == "" || matched.PreviousRecordFingerprint != recordFingerprint {
 		return nil, fmt.Errorf("forward action is not bound to the exact recorded contribution authority")
+	}
+	if ownedConflict {
+		if matched.Strategy != "copy" || matched.Ownership != "toml-subset" || matched.SourceSwitch == nil || !matchesPreviousEvidence(*matched, record, action.PreviousSources) {
+			return nil, fmt.Errorf("owned source conflict lacks exact TOML transition authority")
+		}
+		replacement, replaceErr := configsubset.ReplaceOwnedTOML(matched.SourceSwitch.LiveContent, matched.PreviousContent, matched.SourceSwitch.SourceContent)
+		if replaceErr != nil || !replacement.Compatible {
+			return nil, fmt.Errorf("owned source conflict has an unsafe TOML transition")
+		}
 	}
 	var expectedLinkDestination string
 	if requiresReplace {

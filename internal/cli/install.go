@@ -200,7 +200,7 @@ func newInstallCommand() *cobra.Command {
 				return err
 			}
 			p.Selection = &effective.Report
-			p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, p, hostOS, hostArch, paths, prep.SourceReadRoot, len(profiles) > 0 || len(extraTags) > 0 || len(excludedTags) > 0 || clearSelection)
+			p.SelectionReconciliation, err = buildSelectionReconciliation(*m, meta, effective, &p, hostOS, hostArch, paths, prep.SourceReadRoot, len(profiles) > 0 || len(extraTags) > 0 || len(excludedTags) > 0 || clearSelection)
 			if err != nil {
 				return err
 			}
@@ -227,6 +227,16 @@ func newInstallCommand() *cobra.Command {
 			}
 			if !proceed {
 				return nil
+			}
+			skippedSwitch, err := skippedSourceSwitch(p, conflictDecisions)
+			if err != nil {
+				return err
+			}
+			if skippedSwitch {
+				if wantsJSON(cmd) {
+					return emitOK(cmd, installReport{RepositoryRefresh: prep.Refresh, DryRun: false, Selection: effective.Report, PackageManagerSetup: packageManagerSetup, Dependencies: dependenciesReport, Plan: p, Provisioners: provPlan})
+				}
+				return renderInstallPlanAndProvisioners(cmd, *m, p, provPlan, selectedProfiles)
 			}
 			currentMetadata, err := loadInstallationMetadata(paths, stateRoot)
 			if err != nil {

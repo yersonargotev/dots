@@ -365,6 +365,7 @@ type managedActionResult struct {
 	PreviousTargetContent []byte
 	TargetContent         []byte
 	ExactTargetContent    bool
+	TargetIdentity        os.FileInfo
 }
 
 type managedActionApply func(plan.Action, string, Options) (managedActionResult, error)
@@ -456,6 +457,9 @@ func applyManagedAction(action plan.Action, source string, opts Options) (manage
 			// existing workstation target, but continue applying safe actions.
 			return managedActionResult{}, nil
 		case DecisionReplace:
+			if action.SourceSwitch != nil {
+				return applyOwnedSourceSwitch(action, opts)
+			}
 			return managedActionResult{}, applyReplace(action, source, opts)
 		case DecisionAdopt:
 			return managedActionResult{}, applyAdopt(action, source, opts)
@@ -527,7 +531,7 @@ func applyActionWithReconciliationReceipt(action plan.Action, source string, res
 	meta.Provenance = state.CaptureProvenance(opts.SourceRoot, version.Value)
 	setPendingReconciliation(&meta, action.Target, receipt)
 	if err := locked.Save(meta); err != nil {
-		rollbackErr := restoreConfinedRegularFile(action.Target, opts.Home, result.TargetContent, result.PreviousTargetContent)
+		rollbackErr := restoreConfinedRegularFileWithIdentity(action.Target, opts.Home, result.TargetContent, result.PreviousTargetContent, result.TargetIdentity)
 		return prepared, nil, errors.Join(fmt.Errorf("persist reconciliation receipt for %s: %w", action.Target, err), withoutCompletedActionMarker(applyErr), rollbackErr)
 	}
 	actionCompleted = true
@@ -538,7 +542,7 @@ func applyActionWithReconciliationReceipt(action plan.Action, source string, res
 }
 
 func requiresReconciliationReceipt(action plan.Action, opts Options) bool {
-	return opts.StateRoot != "" && action.Status == plan.StatusUpdate && action.Strategy == "copy" &&
+	return opts.StateRoot != "" && (action.Status == plan.StatusUpdate || (action.SourceSwitch != nil && conflictDecision(action, opts) == DecisionReplace)) && action.Strategy == "copy" &&
 		action.PreviousRecordFingerprint != "" && (len(action.PreviousContent) > 0 || action.PreviousHash != "")
 }
 
@@ -553,6 +557,9 @@ func snapshotReconciliationSources(action plan.Action, resolvedSources []string,
 	}
 	prepared := action
 	if len(action.Sources) == 0 {
+		if action.SourceSwitch != nil && !bytes.Equal(contents[0], action.SourceSwitch.SourceContent) {
+			return action, nil, fmt.Errorf("source-switch source changed after inspection for %s", action.Target)
+		}
 		prepared.Content = append([]byte{}, contents[0]...)
 		return prepared, contents, nil
 	}
@@ -1341,6 +1348,11 @@ func validatePlan(p plan.Plan, opts Options) ([][]string, error) {
 			}
 		}
 
+		if action.SourceSwitch != nil {
+			if err := validateOwnedSourceSwitch(action, source, opts); err != nil {
+				return nil, err
+			}
+		}
 		switch action.Status {
 		case plan.StatusCreate:
 			if !supportedStrategy(action.Strategy) {
@@ -2052,7 +2064,11 @@ func updateWholeTargetWithResult(action plan.Action, source, home string) (manag
 
 type confinedTransform func([]byte) ([]byte, bool, error)
 
-func updateConfinedRegularFile(target, home string, transform confinedTransform) (result managedActionResult, resultErr error) {
+func updateConfinedRegularFile(target, home string, transform confinedTransform) (managedActionResult, error) {
+	return updateConfinedRegularFileWithIdentity(target, home, nil, transform, nil)
+}
+
+func updateConfinedRegularFileWithIdentity(target, home string, expected os.FileInfo, transform confinedTransform, beforeWrite func([]byte, os.FileMode) error) (result managedActionResult, resultErr error) {
 	homeAbs, err := cleanAbs(home)
 	if err != nil {
 		return managedActionResult{}, fmt.Errorf("resolve home for target %s: %w", target, err)
@@ -2101,7 +2117,7 @@ func updateConfinedRegularFile(target, home string, transform confinedTransform)
 	if err != nil {
 		return managedActionResult{}, fmt.Errorf("stat confined target %s: %w", target, err)
 	}
-	if !info.Mode().IsRegular() || !os.SameFile(observed, info) {
+	if !info.Mode().IsRegular() || !os.SameFile(observed, info) || (expected != nil && (!os.SameFile(expected, info) || expected.Mode().Perm() != info.Mode().Perm())) {
 		return managedActionResult{}, fmt.Errorf("install plan is stale: target %s changed identity before update", target)
 	}
 	live, err := io.ReadAll(file)
@@ -2116,6 +2132,28 @@ func updateConfinedRegularFile(target, home string, transform confinedTransform)
 		PreviousTargetContent: append([]byte(nil), live...),
 		TargetContent:         append([]byte(nil), updated...),
 		ExactTargetContent:    true,
+		TargetIdentity:        info,
+	}
+	if beforeWrite != nil {
+		if err := beforeWrite(live, info.Mode()); err != nil {
+			return managedActionResult{}, err
+		}
+		// Backup creation is observable I/O. Recheck the same descriptor and its
+		// name before writing so a concurrent edit/substitution is preserved.
+		named, statErr := root.Lstat(relative)
+		if statErr != nil || (!os.SameFile(info, named) || info.Mode().Perm() != named.Mode().Perm()) {
+			return managedActionResult{}, fmt.Errorf("target %s changed identity during backup", target)
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return managedActionResult{}, fmt.Errorf("rewind target after backup: %w", err)
+		}
+		latest, err := io.ReadAll(file)
+		if err != nil {
+			return managedActionResult{}, fmt.Errorf("read target after backup: %w", err)
+		}
+		if !bytes.Equal(latest, live) {
+			return managedActionResult{}, fmt.Errorf("target %s changed during backup", target)
+		}
 	}
 	if !changed {
 		result.TargetContent = append([]byte(nil), live...)
@@ -2192,12 +2230,16 @@ func writeAll(writer io.Writer, data []byte) error {
 }
 
 func restoreConfinedRegularFile(target, home string, applied, previous []byte) error {
-	_, err := updateConfinedRegularFile(target, home, func(live []byte) ([]byte, bool, error) {
+	return restoreConfinedRegularFileWithIdentity(target, home, applied, previous, nil)
+}
+
+func restoreConfinedRegularFileWithIdentity(target, home string, applied, previous []byte, expected os.FileInfo) error {
+	_, err := updateConfinedRegularFileWithIdentity(target, home, expected, func(live []byte) ([]byte, bool, error) {
 		if !bytes.Equal(live, applied) {
 			return nil, false, fmt.Errorf("target changed after reconciliation; refusing rollback")
 		}
 		return previous, !bytes.Equal(live, previous), nil
-	})
+	}, nil)
 	if err != nil {
 		return fmt.Errorf("restore target %s after metadata failure: %w", target, err)
 	}
